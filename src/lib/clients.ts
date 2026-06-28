@@ -1,4 +1,6 @@
 export type ClientStatus = "Completed" | "Payment Due" | "Ending Soon" | "Active";
+export type SimpleStatus = "Payment Due" | "Not Scheduled" | "Active" | "Package Complete";
+export type PrimaryActionKind = "record_payment" | "mark_scheduled" | "renew_package" | "view_client";
 
 export interface Client {
   id: string;

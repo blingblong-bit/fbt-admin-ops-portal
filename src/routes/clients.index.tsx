@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/table";
 import { amountOwed, formatCurrency, fullName, progress, type Client } from "@/lib/clients";
 
-export const Route = createFileRoute("/clients")({
+export const Route = createFileRoute("/clients/")({
   head: () => ({ meta: [{ title: "All Clients · FIT Beyond Therapy Admin" }] }),
   component: ClientsListPage,
 });

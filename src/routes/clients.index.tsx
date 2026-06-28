@@ -30,6 +30,7 @@ function ClientsListPage() {
       const { data, error } = await supabase
         .from("clients")
         .select("*")
+        .is("deleted_at", null)
         .order("last_name");
       if (error) throw error;
       return data as Client[];

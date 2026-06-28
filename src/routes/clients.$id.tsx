@@ -19,6 +19,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import {
   amountOwed,
@@ -518,7 +519,32 @@ function EditDialog({
   onDone: () => void;
 }) {
   const [form, setForm] = useState(client);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const navigate = useNavigate();
   useEffect(() => setForm(client), [client, open]);
+
+  const deleteMutation = useMutation({
+    mutationFn: async () => {
+      const { error } = await supabase
+        .from("clients")
+        .update({ deleted_at: new Date().toISOString() } as never)
+        .eq("id", client.id);
+      if (error) throw error;
+      await supabase.from("client_activities").insert({
+        client_id: client.id,
+        activity_type: "deleted",
+        description: "Client moved to Deleted Clients",
+      });
+    },
+    onSuccess: () => {
+      toast.success("Moved to Deleted Clients");
+      setConfirmDelete(false);
+      onDone();
+      onClose();
+      navigate({ to: "/clients" });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
 
   const mutation = useMutation({
     mutationFn: async () => {
@@ -625,15 +651,46 @@ function EditDialog({
             </Field>
           </div>
         </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>
-            Cancel
+        <DialogFooter className="sm:justify-between">
+          <Button
+            variant="ghost"
+            className="text-red-600 hover:bg-red-50 hover:text-red-700"
+            onClick={() => setConfirmDelete(true)}
+          >
+            Delete Client
           </Button>
-          <Button onClick={() => mutation.mutate()} disabled={mutation.isPending}>
-            Save
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button onClick={() => mutation.mutate()} disabled={mutation.isPending}>
+              Save
+            </Button>
+          </div>
         </DialogFooter>
       </DialogContent>
+      <Dialog open={confirmDelete} onOpenChange={(v) => !v && setConfirmDelete(false)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Move to Deleted Clients?</DialogTitle>
+            <DialogDescription>
+              Move <strong>{fullName(client)}</strong> to Deleted Clients? You can restore them later.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmDelete(false)}>
+              Cancel
+            </Button>
+            <Button
+              className="bg-red-600 hover:bg-red-700"
+              onClick={() => deleteMutation.mutate()}
+              disabled={deleteMutation.isPending}
+            >
+              Move to Deleted
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Dialog>
   );
 }

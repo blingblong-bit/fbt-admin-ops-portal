@@ -36,6 +36,7 @@ function useClients() {
       const { data, error } = await supabase
         .from("clients")
         .select("*")
+        .is("deleted_at", null)
         .order("updated_at", { ascending: false });
       if (error) throw error;
       return data as unknown as Client[];

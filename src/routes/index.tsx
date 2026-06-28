@@ -1,11 +1,19 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
+import {
+  AlertTriangle,
+  CalendarClock,
+  CircleDollarSign,
+  CircleSlash,
+  Hourglass,
+  Users,
+} from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { AppShell } from "@/components/AppShell";
 import { StatusBadge } from "@/components/StatusBadge";
 import { SmartClientCard } from "@/components/SmartClientCard";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -35,79 +43,148 @@ function useClients() {
   });
 }
 
+type FilterKey =
+  | "all"
+  | "payment_due"
+  | "not_scheduled"
+  | "almost_finished"
+  | "critical"
+  | "package_complete";
+
+const FILTER_LABEL: Record<FilterKey, string> = {
+  all: "All Active",
+  payment_due: "Payment Due",
+  not_scheduled: "Not Scheduled",
+  almost_finished: "Almost Finished",
+  critical: "Critical",
+  package_complete: "Package Complete",
+};
+
+function matchesFilter(c: Client, f: FilterKey): boolean {
+  const owed = amountOwed(c);
+  const r = visitsRemaining(c);
+  switch (f) {
+    case "all":
+      return true;
+    case "payment_due":
+      return owed > 0;
+    case "not_scheduled":
+      return !c.is_scheduled;
+    case "almost_finished":
+      return r !== null && r > 0 && r <= 2;
+    case "critical":
+      return owed > 0 && r !== null && r <= 2;
+    case "package_complete":
+      return r !== null && c.package_total_visits > 0 && r === 0;
+  }
+}
+
 function Dashboard() {
   const { data: clients = [], isLoading } = useClients();
   const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState<FilterKey>("payment_due");
+
+  const counts = useMemo(() => {
+    const c = {
+      all: 0,
+      payment_due: 0,
+      payment_due_total: 0,
+      not_scheduled: 0,
+      almost_finished: 0,
+      critical: 0,
+      critical_total: 0,
+      package_complete: 0,
+    };
+    for (const cl of clients) {
+      const owed = amountOwed(cl);
+      const r = visitsRemaining(cl);
+      c.all += 1;
+      if (owed > 0) {
+        c.payment_due += 1;
+        c.payment_due_total += owed;
+      }
+      if (!cl.is_scheduled) c.not_scheduled += 1;
+      if (r !== null && r > 0 && r <= 2) c.almost_finished += 1;
+      if (owed > 0 && r !== null && r <= 2) {
+        c.critical += 1;
+        c.critical_total += owed;
+      }
+      if (r !== null && cl.package_total_visits > 0 && r === 0)
+        c.package_complete += 1;
+    }
+    return c;
+  }, [clients]);
 
   const filtered = useMemo(() => {
+    const list = clients.filter((c) => matchesFilter(c, filter));
     const q = search.trim().toLowerCase();
-    if (!q) return [];
-    return clients.filter((c) =>
-      `${c.first_name} ${c.last_name} ${c.phone ?? ""}`.toLowerCase().includes(q),
-    );
-  }, [search, clients]);
+    const searched = q
+      ? list.filter((c) =>
+          `${c.first_name} ${c.last_name} ${c.phone ?? ""}`
+            .toLowerCase()
+            .includes(q),
+        )
+      : list;
+    // Sort: payment-due-ish filters by balance desc; others by name
+    if (filter === "payment_due" || filter === "critical") {
+      return [...searched].sort((a, b) => amountOwed(b) - amountOwed(a));
+    }
+    if (filter === "almost_finished") {
+      return [...searched].sort(
+        (a, b) => (visitsRemaining(a) ?? 0) - (visitsRemaining(b) ?? 0),
+      );
+    }
+    return [...searched].sort((a, b) => fullName(a).localeCompare(fullName(b)));
+  }, [clients, filter, search]);
 
-  const critical = useMemo(
-    () =>
-      clients
-        .filter((c) => {
-          const r = visitsRemaining(c);
-          return amountOwed(c) > 0 && r !== null && r > 0 && r <= 2;
-        })
-        .sort((a, b) => amountOwed(b) - amountOwed(a)),
-    [clients],
-  );
-
-  const endingSoon = useMemo(
-    () =>
-      clients
-        .filter((c) => {
-          const r = visitsRemaining(c);
-          return r !== null && r > 0 && r <= 2 && amountOwed(c) === 0;
-        })
-        .sort((a, b) => (visitsRemaining(a) ?? 0) - (visitsRemaining(b) ?? 0)),
-    [clients],
-  );
-
-  const packageComplete = useMemo(
-    () =>
-      clients.filter((c) => {
-        const r = visitsRemaining(c);
-        return r !== null && c.package_total_visits > 0 && r === 0;
-      }),
-    [clients],
-  );
-
-  const criticalIds = useMemo(() => new Set(critical.map((c) => c.id)), [critical]);
-
-  const needsPayment = useMemo(
-    () =>
-      [...clients]
-        .filter((c) => amountOwed(c) > 0)
-        .sort((a, b) => {
-          const aCrit = criticalIds.has(a.id) ? 1 : 0;
-          const bCrit = criticalIds.has(b.id) ? 1 : 0;
-          if (aCrit !== bCrit) return bCrit - aCrit;
-          return amountOwed(b) - amountOwed(a);
-        }),
-    [clients, criticalIds],
-  );
-
-  const notScheduled = useMemo(
-    () =>
-      clients
-        .filter((c) => {
-          if (c.is_scheduled) return false;
-          if (amountOwed(c) > 0) return false; // already handled in Needs Payment
-          const r = visitsRemaining(c);
-          if (r === null) return true;
-          return r > 0;
-        })
-        .sort((a, b) => fullName(a).localeCompare(fullName(b))),
-    [clients],
-  );
-
-  const recent = useMemo(() => clients.slice(0, 6), [clients]);
+  const tiles: TileDef[] = [
+    {
+      key: "payment_due",
+      label: "Payment Due",
+      icon: <CircleDollarSign className="h-5 w-5" />,
+      count: counts.payment_due,
+      money: counts.payment_due_total,
+      moneyLabel: "outstanding",
+      tone: "red",
+    },
+    {
+      key: "not_scheduled",
+      label: "Not Scheduled",
+      icon: <CalendarClock className="h-5 w-5" />,
+      count: counts.not_scheduled,
+      tone: "amber",
+    },
+    {
+      key: "almost_finished",
+      label: "Almost Finished",
+      icon: <Hourglass className="h-5 w-5" />,
+      count: counts.almost_finished,
+      tone: "amber",
+    },
+    {
+      key: "critical",
+      label: "Critical",
+      icon: <AlertTriangle className="h-5 w-5" />,
+      count: counts.critical,
+      money: counts.critical_total,
+      moneyLabel: "outstanding",
+      tone: "red",
+    },
+    {
+      key: "package_complete",
+      label: "Package Complete",
+      icon: <CircleSlash className="h-5 w-5" />,
+      count: counts.package_complete,
+      tone: "slate",
+    },
+    {
+      key: "all",
+      label: "All Active",
+      icon: <Users className="h-5 w-5" />,
+      count: counts.all,
+      tone: "slate",
+    },
+  ];
 
   return (
     <AppShell>
@@ -123,147 +200,115 @@ function Dashboard() {
         </Link>
       </div>
 
-      {/* Search — always at top */}
-      <Card className="mb-8">
-        <CardContent className="pt-6">
-          <Input
-            placeholder="Search clients by name or phone…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="h-11 text-base"
+      {/* Tiles */}
+      <div className="mb-8 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+        {tiles.map((t) => (
+          <Tile
+            key={t.key}
+            tile={t}
+            active={filter === t.key}
+            onClick={() => setFilter(t.key)}
           />
-          {search && (
-            <div className="mt-4 divide-y rounded-lg border bg-white">
-              {filtered.length === 0 && (
-                <div className="p-4 text-sm text-slate-500">No matches.</div>
-              )}
-              {filtered.slice(0, 8).map((c) => (
-                <Link
-                  key={c.id}
-                  to="/clients/$id"
-                  params={{ id: c.id }}
-                  className="flex items-center justify-between p-4 hover:bg-slate-50"
-                >
-                  <div>
-                    <div className="font-medium">{fullName(c)}</div>
-                    <div className="text-xs text-slate-500">
-                      {c.phone ?? "no phone"} · {c.package_name ?? "no package"}
-                    </div>
-                  </div>
-                  <StatusBadge client={c} />
-                </Link>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+        ))}
+      </div>
 
-      {/* Alerts */}
-      <AlertSection
-        title="🚨 Critical"
-        tone="red"
-        items={critical}
-        renderLabel={(c) => {
-          const r = visitsRemaining(c) ?? 0;
-          return `${fullName(c)} has ${r} visit${r === 1 ? "" : "s"} left and still owes ${formatCurrency(amountOwed(c))}`;
-        }}
-        empty="No critical clients."
-      />
-
-      <AlertSection
-        title="⏳ Ending Soon"
-        tone="amber"
-        items={endingSoon}
-        renderLabel={(c) => {
-          const r = visitsRemaining(c) ?? 0;
-          return `${fullName(c)} has ${r} visit${r === 1 ? "" : "s"} left`;
-        }}
-        empty="No packages ending soon."
-      />
-
-      <AlertSection
-        title="🔄 Package Complete / Renew"
-        tone="slate"
-        items={packageComplete}
-        renderLabel={(c) => `${fullName(c)} package complete — renew needed`}
-        empty="No packages awaiting renewal."
-      />
-
-
-      {/* Needs Payment */}
-      <section className="mb-10">
+      {/* Filtered list */}
+      <section>
         <div className="mb-4 flex items-baseline justify-between">
           <h2 className="text-xl font-semibold tracking-tight">
-            💰 Needs Payment
+            Showing: {FILTER_LABEL[filter]}
           </h2>
-          <span className="text-sm text-slate-500">{needsPayment.length}</span>
+          <span className="text-sm text-slate-500">{filtered.length}</span>
         </div>
-        {needsPayment.length === 0 ? (
-          <p className="rounded-lg border border-dashed bg-white p-6 text-sm text-slate-500">
-            Everyone is paid up.
-          </p>
-        ) : (
-          <>
-            <PaymentTotals clients={needsPayment} />
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {needsPayment.map((c) => (
-                <SmartClientCard key={c.id} client={c} />
-              ))}
-            </div>
-          </>
+
+        <Card className="mb-4">
+          <CardContent className="pt-6">
+            <Input
+              placeholder="Search within this view by name or phone…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="h-11 text-base"
+            />
+          </CardContent>
+        </Card>
+
+        {filter === "payment_due" && filtered.length > 0 && (
+          <PaymentTotals clients={filtered} />
         )}
-      </section>
 
-      {/* Not Scheduled */}
-      <section className="mb-10">
-        <div className="mb-4 flex items-baseline justify-between">
-          <h2 className="text-xl font-semibold tracking-tight">
-            📅 Not Scheduled
-          </h2>
-          <span className="text-sm text-slate-500">{notScheduled.length}</span>
-        </div>
-        {notScheduled.length === 0 ? (
+        {filtered.length === 0 ? (
           <p className="rounded-lg border border-dashed bg-white p-6 text-sm text-slate-500">
-            Everyone is on the calendar.
+            {search
+              ? "No matches in this view."
+              : `No clients in “${FILTER_LABEL[filter]}”.`}
           </p>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {notScheduled.map((c) => (
+            {filtered.map((c) => (
               <SmartClientCard key={c.id} client={c} />
             ))}
           </div>
         )}
       </section>
-
-      {/* Recently Updated — compact */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base font-medium text-slate-600">
-            Recently Updated
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {recent.length === 0 ? (
-            <p className="text-sm text-slate-500">No clients yet.</p>
-          ) : (
-            <ul className="divide-y">
-              {recent.map((c) => (
-                <li key={c.id} className="flex items-center justify-between py-2.5">
-                  <Link
-                    to="/clients/$id"
-                    params={{ id: c.id }}
-                    className="text-sm font-medium hover:underline"
-                  >
-                    {fullName(c)}
-                  </Link>
-                  <StatusBadge client={c} />
-                </li>
-              ))}
-            </ul>
-          )}
-        </CardContent>
-      </Card>
     </AppShell>
+  );
+}
+
+type TileDef = {
+  key: FilterKey;
+  label: string;
+  icon: React.ReactNode;
+  count: number;
+  money?: number;
+  moneyLabel?: string;
+  tone: "red" | "amber" | "slate";
+};
+
+function Tile({
+  tile,
+  active,
+  onClick,
+}: {
+  tile: TileDef;
+  active: boolean;
+  onClick: () => void;
+}) {
+  const activeRing =
+    tile.tone === "red"
+      ? "ring-red-500 border-red-300 bg-red-50"
+      : tile.tone === "amber"
+        ? "ring-amber-500 border-amber-300 bg-amber-50"
+        : "ring-slate-900 border-slate-300 bg-slate-50";
+  const iconTone =
+    tile.tone === "red"
+      ? "text-red-600 bg-red-100"
+      : tile.tone === "amber"
+        ? "text-amber-600 bg-amber-100"
+        : "text-slate-700 bg-slate-100";
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex flex-col items-start gap-2 rounded-xl border bg-white p-4 text-left shadow-sm transition-all hover:border-slate-300 hover:shadow ${
+        active ? `ring-2 ${activeRing}` : ""
+      }`}
+    >
+      <div className={`flex h-9 w-9 items-center justify-center rounded-lg ${iconTone}`}>
+        {tile.icon}
+      </div>
+      <div className="text-sm font-medium text-slate-600">{tile.label}</div>
+      <div className="text-2xl font-semibold tracking-tight text-slate-900">
+        {tile.count}
+        <span className="ml-1 text-sm font-normal text-slate-500">
+          {tile.count === 1 ? "client" : "clients"}
+        </span>
+      </div>
+      {tile.money !== undefined && tile.money > 0 && (
+        <div className="text-xs font-medium text-slate-600">
+          {formatCurrency(tile.money)} {tile.moneyLabel}
+        </div>
+      )}
+    </button>
   );
 }
 
@@ -296,51 +341,5 @@ function PaymentTotals({ clients }: { clients: Client[] }) {
   );
 }
 
-function AlertSection({
-  title,
-  tone,
-  items,
-  renderLabel,
-  empty,
-}: {
-  title: string;
-  tone: "red" | "amber" | "slate";
-  items: Client[];
-  renderLabel: (c: Client) => string;
-  empty: string;
-}) {
-  const toneClasses =
-    tone === "red"
-      ? "border-red-200 bg-red-50"
-      : tone === "amber"
-        ? "border-amber-200 bg-amber-50"
-        : "border-slate-200 bg-slate-50";
-  if (items.length === 0) return null;
-  return (
-    <section className="mb-6">
-      <div className="mb-3 flex items-baseline justify-between">
-        <h2 className="text-lg font-semibold tracking-tight">{title}</h2>
-        <span className="text-sm text-slate-500">{items.length}</span>
-      </div>
-      <ul className={`divide-y rounded-lg border ${toneClasses}`}>
-        {items.map((c) => (
-          <li
-            key={c.id}
-            className="flex items-center justify-between gap-3 px-4 py-3"
-          >
-            <Link
-              to="/clients/$id"
-              params={{ id: c.id }}
-              className="text-sm font-medium text-slate-800 hover:underline"
-            >
-              {renderLabel(c)}
-            </Link>
-            <StatusBadge client={c} />
-          </li>
-        ))}
-      </ul>
-      <span className="sr-only">{empty}</span>
-    </section>
-  );
-}
-
+// Keep StatusBadge import used elsewhere referenced to avoid unused-import noise
+void StatusBadge;

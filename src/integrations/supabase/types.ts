@@ -57,6 +57,7 @@ export type Database = {
           first_name: string
           id: string
           internal_notes: string | null
+          is_scheduled: boolean
           last_name: string
           package_name: string | null
           package_price: number
@@ -73,6 +74,7 @@ export type Database = {
           first_name: string
           id?: string
           internal_notes?: string | null
+          is_scheduled?: boolean
           last_name: string
           package_name?: string | null
           package_price?: number
@@ -89,6 +91,7 @@ export type Database = {
           first_name?: string
           id?: string
           internal_notes?: string | null
+          is_scheduled?: boolean
           last_name?: string
           package_name?: string | null
           package_price?: number

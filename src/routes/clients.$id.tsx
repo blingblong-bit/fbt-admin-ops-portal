@@ -530,7 +530,11 @@ function EditDialog({
 
   const mutation = useMutation({
     mutationFn: async () => {
-      if (Number(form.visits_used) > Number(form.package_total_visits)) {
+      const visitsUsedVal =
+        form.visits_used === null || form.visits_used === undefined || (form.visits_used as unknown as string) === ""
+          ? null
+          : Number(form.visits_used);
+      if (visitsUsedVal !== null && visitsUsedVal > Number(form.package_total_visits)) {
         throw new Error("Visits used cannot exceed total visits");
       }
       if (Number(form.amount_paid) > Number(form.package_price)) {
@@ -547,10 +551,11 @@ function EditDialog({
           package_total_visits: Number(form.package_total_visits),
           package_price: Number(form.package_price),
           package_start_date: form.package_start_date || null,
-          visits_used: Number(form.visits_used),
+          visits_used: visitsUsedVal,
           amount_paid: Number(form.amount_paid),
           internal_notes: form.internal_notes || null,
-        })
+          square_visit_note: form.square_visit_note?.trim() || null,
+        } as never)
         .eq("id", client.id);
       if (error) throw error;
       await supabase.from("client_activities").insert({

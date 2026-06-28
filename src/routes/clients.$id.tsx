@@ -237,7 +237,7 @@ function ClientDetailPage() {
           </CardHeader>
           <CardContent className="grid gap-2 text-sm sm:grid-cols-2">
             <Row label="Name" value={c.package_name ?? "—"} />
-            <Row label="Start Date" value={c.package_start_date ?? "—"} />
+            <Row label="Start Date" value={formatDate(c.package_start_date)} />
             <Row label="Total Visits" value={c.package_total_visits} />
             <Row label="Visits Used" value={hasVisitData ? c.visits_used : "—"} />
             <Row label="Square Visit Note" value={c.square_visit_note?.trim() || "—"} />

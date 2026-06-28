@@ -651,15 +651,46 @@ function EditDialog({
             </Field>
           </div>
         </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>
-            Cancel
+        <DialogFooter className="sm:justify-between">
+          <Button
+            variant="ghost"
+            className="text-red-600 hover:bg-red-50 hover:text-red-700"
+            onClick={() => setConfirmDelete(true)}
+          >
+            Delete Client
           </Button>
-          <Button onClick={() => mutation.mutate()} disabled={mutation.isPending}>
-            Save
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button onClick={() => mutation.mutate()} disabled={mutation.isPending}>
+              Save
+            </Button>
+          </div>
         </DialogFooter>
       </DialogContent>
+      <Dialog open={confirmDelete} onOpenChange={(v) => !v && setConfirmDelete(false)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Move to Deleted Clients?</DialogTitle>
+            <DialogDescription>
+              Move <strong>{fullName(client)}</strong> to Deleted Clients? You can restore them later.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmDelete(false)}>
+              Cancel
+            </Button>
+            <Button
+              className="bg-red-600 hover:bg-red-700"
+              onClick={() => deleteMutation.mutate()}
+              disabled={deleteMutation.isPending}
+            >
+              Move to Deleted
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Dialog>
   );
 }

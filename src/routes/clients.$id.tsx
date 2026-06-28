@@ -23,6 +23,7 @@ import {
 import {
   amountOwed,
   formatCurrency,
+  formatDate,
   fullName,
   progress,
   visitsRemaining,

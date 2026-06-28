@@ -1,4 +1,6 @@
 export type ClientStatus = "Completed" | "Payment Due" | "Ending Soon" | "Active";
+export type SimpleStatus = "Payment Due" | "Not Scheduled" | "Active" | "Package Complete";
+export type PrimaryActionKind = "record_payment" | "mark_scheduled" | "renew_package" | "view_client";
 
 export interface Client {
   id: string;
@@ -63,6 +65,55 @@ export function statusClasses(s: ClientStatus): string {
     case "Completed":
       return "bg-slate-200 text-slate-700 border-slate-300";
   }
+}
+
+type SimpleClient = Pick<
+  Client,
+  "package_total_visits" | "visits_used" | "package_price" | "amount_paid" | "is_scheduled"
+>;
+
+export function simpleStatus(c: SimpleClient): SimpleStatus {
+  const owed = amountOwed(c);
+  const remaining = visitsRemaining(c);
+  if (remaining !== null && c.package_total_visits > 0 && remaining === 0) return "Package Complete";
+  if (owed > 0) return "Payment Due";
+  if (!c.is_scheduled) return "Not Scheduled";
+  return "Active";
+}
+
+export function simpleStatusClasses(s: SimpleStatus): string {
+  switch (s) {
+    case "Active":
+      return "bg-emerald-100 text-emerald-800 border-emerald-200";
+    case "Payment Due":
+      return "bg-red-100 text-red-800 border-red-200";
+    case "Not Scheduled":
+      return "bg-amber-100 text-amber-800 border-amber-200";
+    case "Package Complete":
+      return "bg-slate-200 text-slate-700 border-slate-300";
+  }
+}
+
+export function simpleStatusDot(s: SimpleStatus): string {
+  switch (s) {
+    case "Active":
+      return "🟢";
+    case "Payment Due":
+      return "🔴";
+    case "Not Scheduled":
+      return "🟡";
+    case "Package Complete":
+      return "⚫";
+  }
+}
+
+export function primaryAction(c: SimpleClient): PrimaryActionKind {
+  const owed = amountOwed(c);
+  const remaining = visitsRemaining(c);
+  if (remaining !== null && c.package_total_visits > 0 && remaining === 0) return "renew_package";
+  if (owed > 0) return "record_payment";
+  if (!c.is_scheduled) return "mark_scheduled";
+  return "view_client";
 }
 
 export function fullName(c: Pick<Client, "first_name" | "last_name">) {

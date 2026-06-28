@@ -603,11 +603,23 @@ function EditDialog({
           <Field label="Total Visits">
             <Input type="number" min={0} value={form.package_total_visits} onChange={(e) => up("package_total_visits", Number(e.target.value))} />
           </Field>
-          <Field label="Visits Used">
-            <Input type="number" min={0} value={form.visits_used} onChange={(e) => up("visits_used", Number(e.target.value))} />
+          <Field label="Visits Used (optional — Square is source of truth)">
+            <Input
+              type="number"
+              min={0}
+              value={form.visits_used ?? ""}
+              onChange={(e) =>
+                up("visits_used", e.target.value === "" ? null : Number(e.target.value))
+              }
+              placeholder="Leave blank to skip"
+            />
           </Field>
-          <Field label="Package Price">
-            <Input type="number" min={0} step="0.01" value={form.package_price} onChange={(e) => up("package_price", Number(e.target.value))} />
+          <Field label="Square Visit Note (e.g. 3/8)">
+            <Input
+              value={form.square_visit_note ?? ""}
+              onChange={(e) => up("square_visit_note", e.target.value)}
+              placeholder="Optional"
+            />
           </Field>
           <Field label="Amount Paid">
             <Input type="number" min={0} step="0.01" value={form.amount_paid} onChange={(e) => up("amount_paid", Number(e.target.value))} />

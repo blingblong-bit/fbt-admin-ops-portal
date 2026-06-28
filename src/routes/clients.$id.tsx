@@ -90,24 +90,45 @@ function ClientDetailPage() {
   const completeVisit = useMutation({
     mutationFn: async () => {
       if (!c) return;
-      if (c.visits_used >= c.package_total_visits) {
+      const current = c.visits_used ?? 0;
+      if (current >= c.package_total_visits) {
         throw new Error("All visits already used");
       }
+      const next = current + 1;
       const { error } = await supabase
         .from("clients")
-        .update({ visits_used: c.visits_used + 1 })
+        .update({ visits_used: next })
         .eq("id", id);
       if (error) throw error;
       await supabase.from("client_activities").insert({
         client_id: id,
         activity_type: "visit",
-        description: `Visit completed (${c.visits_used + 1}/${c.package_total_visits})`,
+        description: `Visit completed (${next}/${c.package_total_visits})`,
       });
     },
     onSuccess: () => {
       toast.success("Visit recorded");
       refresh();
     },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const toggleScheduled = useMutation({
+    mutationFn: async () => {
+      if (!c) return;
+      const next = !c.is_scheduled;
+      const { error } = await supabase
+        .from("clients")
+        .update({ is_scheduled: next })
+        .eq("id", id);
+      if (error) throw error;
+      await supabase.from("client_activities").insert({
+        client_id: id,
+        activity_type: "scheduled",
+        description: next ? "Marked scheduled" : "Marked not scheduled",
+      });
+    },
+    onSuccess: () => refresh(),
     onError: (e: Error) => toast.error(e.message),
   });
 
@@ -121,7 +142,11 @@ function ClientDetailPage() {
 
   const remaining = visitsRemaining(c);
   const owed = amountOwed(c);
-  const pct = c.package_total_visits > 0 ? (c.visits_used / c.package_total_visits) * 100 : 0;
+  const hasVisitData = c.visits_used !== null && c.visits_used !== undefined;
+  const pct =
+    hasVisitData && c.package_total_visits > 0
+      ? ((c.visits_used as number) / c.package_total_visits) * 100
+      : 0;
 
   return (
     <AppShell>
@@ -136,15 +161,29 @@ function ClientDetailPage() {
           <div className="flex items-center gap-3">
             <h1 className="text-3xl font-semibold tracking-tight">{fullName(c)}</h1>
             <StatusBadge client={c} />
+            <span
+              className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${
+                c.is_scheduled
+                  ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                  : "border-slate-200 bg-slate-50 text-slate-600"
+              }`}
+            >
+              {c.is_scheduled ? "✅ Scheduled" : "⭕ Not Scheduled"}
+            </span>
           </div>
           <p className="mt-1 text-sm text-slate-500">
             {c.phone ?? "no phone"} · {c.email ?? "no email"}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button onClick={() => completeVisit.mutate()} disabled={remaining === 0}>
-            Complete Visit
+          <Button variant="outline" onClick={() => toggleScheduled.mutate()}>
+            {c.is_scheduled ? "Mark Not Scheduled" : "Mark Scheduled"}
           </Button>
+          {hasVisitData && (
+            <Button onClick={() => completeVisit.mutate()} disabled={remaining === 0}>
+              Complete Visit
+            </Button>
+          )}
           <Button variant="outline" onClick={() => setPaymentOpen(true)} disabled={owed === 0}>
             Record Payment
           </Button>
@@ -163,11 +202,25 @@ function ClientDetailPage() {
             <CardTitle>Visit Progress</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="mb-2 flex items-end justify-between">
-              <div className="text-4xl font-semibold tracking-tight">{progress(c)}</div>
-              <div className="text-sm text-slate-500">{remaining} remaining</div>
-            </div>
-            <Progress value={pct} className="h-3" />
+            {hasVisitData ? (
+              <>
+                <div className="mb-2 flex items-end justify-between">
+                  <div className="text-4xl font-semibold tracking-tight">{progress(c)}</div>
+                  <div className="text-sm text-slate-500">{remaining} remaining</div>
+                </div>
+                <Progress value={pct} className="h-3" />
+              </>
+            ) : (
+              <div className="space-y-2">
+                <div className="text-4xl font-semibold tracking-tight text-slate-700">
+                  {c.square_visit_note?.trim() || "—"}
+                </div>
+                <p className="text-sm text-slate-500">
+                  Visit count is tracked in Square. Use the Square Visit Note field on Edit
+                  Client to mirror the current count.
+                </p>
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -194,7 +247,8 @@ function ClientDetailPage() {
             <Row label="Name" value={c.package_name ?? "—"} />
             <Row label="Start Date" value={c.package_start_date ?? "—"} />
             <Row label="Total Visits" value={c.package_total_visits} />
-            <Row label="Visits Used" value={c.visits_used} />
+            <Row label="Visits Used" value={hasVisitData ? c.visits_used : "—"} />
+            <Row label="Square Visit Note" value={c.square_visit_note?.trim() || "—"} />
           </CardContent>
         </Card>
 
@@ -208,6 +262,7 @@ function ClientDetailPage() {
             </p>
           </CardContent>
         </Card>
+
 
         <Card className="lg:col-span-3">
           <CardHeader>
@@ -475,7 +530,11 @@ function EditDialog({
 
   const mutation = useMutation({
     mutationFn: async () => {
-      if (Number(form.visits_used) > Number(form.package_total_visits)) {
+      const visitsUsedVal =
+        form.visits_used === null || form.visits_used === undefined || (form.visits_used as unknown as string) === ""
+          ? null
+          : Number(form.visits_used);
+      if (visitsUsedVal !== null && visitsUsedVal > Number(form.package_total_visits)) {
         throw new Error("Visits used cannot exceed total visits");
       }
       if (Number(form.amount_paid) > Number(form.package_price)) {
@@ -492,10 +551,11 @@ function EditDialog({
           package_total_visits: Number(form.package_total_visits),
           package_price: Number(form.package_price),
           package_start_date: form.package_start_date || null,
-          visits_used: Number(form.visits_used),
+          visits_used: visitsUsedVal,
           amount_paid: Number(form.amount_paid),
           internal_notes: form.internal_notes || null,
-        })
+          square_visit_note: form.square_visit_note?.trim() || null,
+        } as never)
         .eq("id", client.id);
       if (error) throw error;
       await supabase.from("client_activities").insert({
@@ -543,8 +603,23 @@ function EditDialog({
           <Field label="Total Visits">
             <Input type="number" min={0} value={form.package_total_visits} onChange={(e) => up("package_total_visits", Number(e.target.value))} />
           </Field>
-          <Field label="Visits Used">
-            <Input type="number" min={0} value={form.visits_used} onChange={(e) => up("visits_used", Number(e.target.value))} />
+          <Field label="Visits Used (optional — Square is source of truth)">
+            <Input
+              type="number"
+              min={0}
+              value={form.visits_used ?? ""}
+              onChange={(e) =>
+                up("visits_used", e.target.value === "" ? null : Number(e.target.value))
+              }
+              placeholder="Leave blank to skip"
+            />
+          </Field>
+          <Field label="Square Visit Note (e.g. 3/8)">
+            <Input
+              value={form.square_visit_note ?? ""}
+              onChange={(e) => up("square_visit_note", e.target.value)}
+              placeholder="Optional"
+            />
           </Field>
           <Field label="Package Price">
             <Input type="number" min={0} step="0.01" value={form.package_price} onChange={(e) => up("package_price", Number(e.target.value))} />

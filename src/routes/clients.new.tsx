@@ -27,7 +27,9 @@ function AddClientPage() {
     package_price: 0,
     package_start_date: new Date().toISOString().slice(0, 10),
     amount_paid: 0,
-    visits_used: 0,
+    visits_used: "" as number | "",
+    is_scheduled: false,
+    square_visit_note: "",
     internal_notes: "",
   });
 
@@ -36,7 +38,8 @@ function AddClientPage() {
       if (!form.first_name.trim() || !form.last_name.trim()) {
         throw new Error("First and last name are required");
       }
-      if (Number(form.visits_used) > Number(form.package_total_visits)) {
+      const visitsUsedVal = form.visits_used === "" ? null : Number(form.visits_used);
+      if (visitsUsedVal !== null && visitsUsedVal > Number(form.package_total_visits)) {
         throw new Error("Visits used cannot exceed total visits");
       }
       if (Number(form.amount_paid) > Number(form.package_price)) {
@@ -54,9 +57,11 @@ function AddClientPage() {
           package_price: Number(form.package_price),
           package_start_date: form.package_start_date || null,
           amount_paid: Number(form.amount_paid),
-          visits_used: Number(form.visits_used),
+          visits_used: visitsUsedVal,
+          is_scheduled: form.is_scheduled,
+          square_visit_note: form.square_visit_note.trim() || null,
           internal_notes: form.internal_notes.trim() || null,
-        })
+        } as never)
         .select()
         .single();
       if (error) throw error;
@@ -117,14 +122,49 @@ function AddClientPage() {
             <Field label="Total Visits">
               <Input type="number" min={0} value={form.package_total_visits} onChange={(e) => update("package_total_visits", Number(e.target.value))} />
             </Field>
-            <Field label="Visits Used">
-              <Input type="number" min={0} max={form.package_total_visits} value={form.visits_used} onChange={(e) => update("visits_used", Number(e.target.value))} />
+            <Field label="Visits Used (optional)">
+              <Input
+                type="number"
+                min={0}
+                max={form.package_total_visits}
+                value={form.visits_used}
+                onChange={(e) =>
+                  update("visits_used", e.target.value === "" ? "" : Number(e.target.value))
+                }
+                placeholder="Leave blank — Square tracks visits"
+              />
+            </Field>
+            <Field label="Square Visit Note (e.g. 3/8)">
+              <Input
+                value={form.square_visit_note}
+                onChange={(e) => update("square_visit_note", e.target.value)}
+                placeholder="Optional mirror of Square note"
+              />
             </Field>
             <Field label="Package Price ($)">
               <Input type="number" min={0} step="0.01" value={form.package_price} onChange={(e) => update("package_price", Number(e.target.value))} />
             </Field>
             <Field label="Amount Paid Today ($)">
               <Input type="number" min={0} step="0.01" max={form.package_price} value={form.amount_paid} onChange={(e) => update("amount_paid", Number(e.target.value))} />
+            </Field>
+            <Field label="Amount Owed (auto)">
+              <Input
+                type="text"
+                readOnly
+                value={`$${Math.max(0, Number(form.package_price) - Number(form.amount_paid)).toFixed(2)}`}
+                className="bg-slate-50"
+              />
+            </Field>
+            <Field label="Scheduled in Square?">
+              <label className="flex items-center gap-2 pt-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={form.is_scheduled}
+                  onChange={(e) => update("is_scheduled", e.target.checked)}
+                  className="h-4 w-4"
+                />
+                {form.is_scheduled ? "✅ Scheduled" : "⭕ Not Scheduled"}
+              </label>
             </Field>
 
             <div className="sm:col-span-2">

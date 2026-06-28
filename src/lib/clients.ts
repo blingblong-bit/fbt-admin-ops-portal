@@ -10,9 +10,11 @@ export interface Client {
   package_total_visits: number;
   package_price: number;
   package_start_date: string | null;
-  visits_used: number;
+  visits_used: number | null;
   amount_paid: number;
   internal_notes: string | null;
+  square_visit_note: string | null;
+  is_scheduled: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -26,20 +28,27 @@ export interface ClientActivity {
   created_at: string;
 }
 
-export function visitsRemaining(c: Pick<Client, "package_total_visits" | "visits_used">) {
-  return Math.max(0, (c.package_total_visits ?? 0) - (c.visits_used ?? 0));
+export function hasVisitTracking(c: Pick<Client, "visits_used">) {
+  return c.visits_used !== null && c.visits_used !== undefined;
+}
+
+export function visitsRemaining(c: Pick<Client, "package_total_visits" | "visits_used">): number | null {
+  if (c.visits_used === null || c.visits_used === undefined) return null;
+  return Math.max(0, (c.package_total_visits ?? 0) - c.visits_used);
 }
 
 export function amountOwed(c: Pick<Client, "package_price" | "amount_paid">) {
   return Math.max(0, Number(c.package_price ?? 0) - Number(c.amount_paid ?? 0));
 }
 
-export function computeStatus(c: Pick<Client, "package_total_visits" | "visits_used" | "package_price" | "amount_paid">): ClientStatus {
+export function computeStatus(
+  c: Pick<Client, "package_total_visits" | "visits_used" | "package_price" | "amount_paid">,
+): ClientStatus {
   const remaining = visitsRemaining(c);
   const owed = amountOwed(c);
-  if (c.package_total_visits > 0 && remaining === 0) return "Completed";
+  if (remaining !== null && c.package_total_visits > 0 && remaining === 0) return "Completed";
   if (owed > 0) return "Payment Due";
-  if (remaining <= 2) return "Ending Soon";
+  if (remaining !== null && remaining <= 2) return "Ending Soon";
   return "Active";
 }
 
@@ -65,6 +74,8 @@ export function formatCurrency(n: number | string | null | undefined) {
   return v.toLocaleString("en-US", { style: "currency", currency: "USD" });
 }
 
-export function progress(c: Pick<Client, "package_total_visits" | "visits_used">) {
+export function progress(c: Pick<Client, "package_total_visits" | "visits_used" | "square_visit_note">): string {
+  if (c.square_visit_note && c.square_visit_note.trim()) return c.square_visit_note.trim();
+  if (c.visits_used === null || c.visits_used === undefined) return "—";
   return `${c.visits_used} / ${c.package_total_visits}`;
 }

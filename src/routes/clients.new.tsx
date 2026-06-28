@@ -38,7 +38,8 @@ function AddClientPage() {
       if (!form.first_name.trim() || !form.last_name.trim()) {
         throw new Error("First and last name are required");
       }
-      if (Number(form.visits_used) > Number(form.package_total_visits)) {
+      const visitsUsedVal = form.visits_used === "" ? null : Number(form.visits_used);
+      if (visitsUsedVal !== null && visitsUsedVal > Number(form.package_total_visits)) {
         throw new Error("Visits used cannot exceed total visits");
       }
       if (Number(form.amount_paid) > Number(form.package_price)) {
@@ -56,9 +57,11 @@ function AddClientPage() {
           package_price: Number(form.package_price),
           package_start_date: form.package_start_date || null,
           amount_paid: Number(form.amount_paid),
-          visits_used: Number(form.visits_used),
+          visits_used: visitsUsedVal,
+          is_scheduled: form.is_scheduled,
+          square_visit_note: form.square_visit_note.trim() || null,
           internal_notes: form.internal_notes.trim() || null,
-        })
+        } as never)
         .select()
         .single();
       if (error) throw error;

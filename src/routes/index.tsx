@@ -133,11 +133,14 @@ function Dashboard() {
             Everyone is paid up.
           </p>
         ) : (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {needsPayment.map((c) => (
-              <SmartClientCard key={c.id} client={c} />
-            ))}
-          </div>
+          <>
+            <PaymentTotals clients={needsPayment} />
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {needsPayment.map((c) => (
+                <SmartClientCard key={c.id} client={c} />
+              ))}
+            </div>
+          </>
         )}
       </section>
 

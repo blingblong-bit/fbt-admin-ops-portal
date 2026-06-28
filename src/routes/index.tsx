@@ -47,12 +47,50 @@ function Dashboard() {
     );
   }, [search, clients]);
 
+  const critical = useMemo(
+    () =>
+      clients
+        .filter((c) => {
+          const r = visitsRemaining(c);
+          return amountOwed(c) > 0 && r !== null && r > 0 && r <= 2;
+        })
+        .sort((a, b) => amountOwed(b) - amountOwed(a)),
+    [clients],
+  );
+
+  const endingSoon = useMemo(
+    () =>
+      clients
+        .filter((c) => {
+          const r = visitsRemaining(c);
+          return r !== null && r > 0 && r <= 2 && amountOwed(c) === 0;
+        })
+        .sort((a, b) => (visitsRemaining(a) ?? 0) - (visitsRemaining(b) ?? 0)),
+    [clients],
+  );
+
+  const packageComplete = useMemo(
+    () =>
+      clients.filter((c) => {
+        const r = visitsRemaining(c);
+        return r !== null && c.package_total_visits > 0 && r === 0;
+      }),
+    [clients],
+  );
+
+  const criticalIds = useMemo(() => new Set(critical.map((c) => c.id)), [critical]);
+
   const needsPayment = useMemo(
     () =>
       [...clients]
         .filter((c) => amountOwed(c) > 0)
-        .sort((a, b) => amountOwed(b) - amountOwed(a)),
-    [clients],
+        .sort((a, b) => {
+          const aCrit = criticalIds.has(a.id) ? 1 : 0;
+          const bCrit = criticalIds.has(b.id) ? 1 : 0;
+          if (aCrit !== bCrit) return bCrit - aCrit;
+          return amountOwed(b) - amountOwed(a);
+        }),
+    [clients, criticalIds],
   );
 
   const notScheduled = useMemo(
@@ -119,6 +157,38 @@ function Dashboard() {
           )}
         </CardContent>
       </Card>
+
+      {/* Alerts */}
+      <AlertSection
+        title="🚨 Critical"
+        tone="red"
+        items={critical}
+        renderLabel={(c) => {
+          const r = visitsRemaining(c) ?? 0;
+          return `${fullName(c)} has ${r} visit${r === 1 ? "" : "s"} left and still owes ${formatCurrency(amountOwed(c))}`;
+        }}
+        empty="No critical clients."
+      />
+
+      <AlertSection
+        title="⏳ Ending Soon"
+        tone="amber"
+        items={endingSoon}
+        renderLabel={(c) => {
+          const r = visitsRemaining(c) ?? 0;
+          return `${fullName(c)} has ${r} visit${r === 1 ? "" : "s"} left`;
+        }}
+        empty="No packages ending soon."
+      />
+
+      <AlertSection
+        title="🔄 Package Complete / Renew"
+        tone="slate"
+        items={packageComplete}
+        renderLabel={(c) => `${fullName(c)} package complete — renew needed`}
+        empty="No packages awaiting renewal."
+      />
+
 
       {/* Needs Payment */}
       <section className="mb-10">
@@ -225,3 +295,52 @@ function PaymentTotals({ clients }: { clients: Client[] }) {
     </div>
   );
 }
+
+function AlertSection({
+  title,
+  tone,
+  items,
+  renderLabel,
+  empty,
+}: {
+  title: string;
+  tone: "red" | "amber" | "slate";
+  items: Client[];
+  renderLabel: (c: Client) => string;
+  empty: string;
+}) {
+  const toneClasses =
+    tone === "red"
+      ? "border-red-200 bg-red-50"
+      : tone === "amber"
+        ? "border-amber-200 bg-amber-50"
+        : "border-slate-200 bg-slate-50";
+  if (items.length === 0) return null;
+  return (
+    <section className="mb-6">
+      <div className="mb-3 flex items-baseline justify-between">
+        <h2 className="text-lg font-semibold tracking-tight">{title}</h2>
+        <span className="text-sm text-slate-500">{items.length}</span>
+      </div>
+      <ul className={`divide-y rounded-lg border ${toneClasses}`}>
+        {items.map((c) => (
+          <li
+            key={c.id}
+            className="flex items-center justify-between gap-3 px-4 py-3"
+          >
+            <Link
+              to="/clients/$id"
+              params={{ id: c.id }}
+              className="text-sm font-medium text-slate-800 hover:underline"
+            >
+              {renderLabel(c)}
+            </Link>
+            <StatusBadge client={c} />
+          </li>
+        ))}
+      </ul>
+      <span className="sr-only">{empty}</span>
+    </section>
+  );
+}
+

@@ -47,12 +47,50 @@ function Dashboard() {
     );
   }, [search, clients]);
 
+  const critical = useMemo(
+    () =>
+      clients
+        .filter((c) => {
+          const r = visitsRemaining(c);
+          return amountOwed(c) > 0 && r !== null && r > 0 && r <= 2;
+        })
+        .sort((a, b) => amountOwed(b) - amountOwed(a)),
+    [clients],
+  );
+
+  const endingSoon = useMemo(
+    () =>
+      clients
+        .filter((c) => {
+          const r = visitsRemaining(c);
+          return r !== null && r > 0 && r <= 2 && amountOwed(c) === 0;
+        })
+        .sort((a, b) => (visitsRemaining(a) ?? 0) - (visitsRemaining(b) ?? 0)),
+    [clients],
+  );
+
+  const packageComplete = useMemo(
+    () =>
+      clients.filter((c) => {
+        const r = visitsRemaining(c);
+        return r !== null && c.package_total_visits > 0 && r === 0;
+      }),
+    [clients],
+  );
+
+  const criticalIds = useMemo(() => new Set(critical.map((c) => c.id)), [critical]);
+
   const needsPayment = useMemo(
     () =>
       [...clients]
         .filter((c) => amountOwed(c) > 0)
-        .sort((a, b) => amountOwed(b) - amountOwed(a)),
-    [clients],
+        .sort((a, b) => {
+          const aCrit = criticalIds.has(a.id) ? 1 : 0;
+          const bCrit = criticalIds.has(b.id) ? 1 : 0;
+          if (aCrit !== bCrit) return bCrit - aCrit;
+          return amountOwed(b) - amountOwed(a);
+        }),
+    [clients, criticalIds],
   );
 
   const notScheduled = useMemo(

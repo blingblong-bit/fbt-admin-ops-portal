@@ -130,3 +130,39 @@ export function progress(c: Pick<Client, "package_total_visits" | "visits_used" 
   if (c.visits_used === null || c.visits_used === undefined) return "—";
   return `${c.visits_used} / ${c.package_total_visits}`;
 }
+
+/**
+ * Format an ISO date string (YYYY-MM-DD) or any Date-parseable value as MM/DD/YYYY.
+ * Returns "—" for null/empty values.
+ */
+export function formatDate(value: string | Date | null | undefined): string {
+  if (!value) return "—";
+  let y: number, m: number, d: number;
+  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}/.test(value)) {
+    // Parse as local date to avoid timezone shifts on YYYY-MM-DD strings.
+    [y, m, d] = value.slice(0, 10).split("-").map(Number);
+  } else {
+    const dt = new Date(value);
+    if (isNaN(dt.getTime())) return "—";
+    y = dt.getFullYear();
+    m = dt.getMonth() + 1;
+    d = dt.getDate();
+  }
+  return `${String(m).padStart(2, "0")}/${String(d).padStart(2, "0")}/${y}`;
+}
+
+/**
+ * Apple Notes import year rule: months 1–10 → 2026, months 11–12 → 2025.
+ * Accepts "M/D", "MM/DD", "M/D/YY", etc., and returns an ISO YYYY-MM-DD string,
+ * or null if it can't parse.
+ */
+export function importedAppleNotesDate(input: string | null | undefined): string | null {
+  if (!input) return null;
+  const m = input.trim().match(/^(\d{1,2})\/(\d{1,2})(?:\/\d{2,4})?$/);
+  if (!m) return null;
+  const month = Number(m[1]);
+  const day = Number(m[2]);
+  if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+  const year = month >= 11 ? 2025 : 2026;
+  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}

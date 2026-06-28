@@ -14,7 +14,113 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      client_activities: {
+        Row: {
+          activity_type: string
+          client_id: string
+          created_at: string
+          description: string
+          id: string
+          metadata: Json | null
+        }
+        Insert: {
+          activity_type: string
+          client_id: string
+          created_at?: string
+          description: string
+          id?: string
+          metadata?: Json | null
+        }
+        Update: {
+          activity_type?: string
+          client_id?: string
+          created_at?: string
+          description?: string
+          id?: string
+          metadata?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_activities_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      clients: {
+        Row: {
+          amount_paid: number
+          created_at: string
+          email: string | null
+          first_name: string
+          id: string
+          internal_notes: string | null
+          last_name: string
+          package_name: string | null
+          package_price: number
+          package_start_date: string | null
+          package_total_visits: number
+          phone: string | null
+          updated_at: string
+          visits_used: number
+        }
+        Insert: {
+          amount_paid?: number
+          created_at?: string
+          email?: string | null
+          first_name: string
+          id?: string
+          internal_notes?: string | null
+          last_name: string
+          package_name?: string | null
+          package_price?: number
+          package_start_date?: string | null
+          package_total_visits?: number
+          phone?: string | null
+          updated_at?: string
+          visits_used?: number
+        }
+        Update: {
+          amount_paid?: number
+          created_at?: string
+          email?: string | null
+          first_name?: string
+          id?: string
+          internal_notes?: string | null
+          last_name?: string
+          package_name?: string | null
+          package_price?: number
+          package_start_date?: string | null
+          package_total_visits?: number
+          phone?: string | null
+          updated_at?: string
+          visits_used?: number
+        }
+        Relationships: []
+      }
+      imports: {
+        Row: {
+          created_at: string
+          id: string
+          parsed: boolean
+          raw_text: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          parsed?: boolean
+          raw_text: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          parsed?: boolean
+          raw_text?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

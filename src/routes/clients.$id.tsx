@@ -161,15 +161,6 @@ function ClientDetailPage() {
           <div className="flex items-center gap-3">
             <h1 className="text-3xl font-semibold tracking-tight">{fullName(c)}</h1>
             <StatusBadge client={c} />
-            <span
-              className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${
-                c.is_scheduled
-                  ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                  : "border-slate-200 bg-slate-50 text-slate-600"
-              }`}
-            >
-              {c.is_scheduled ? "✅ Scheduled" : "⭕ Not Scheduled"}
-            </span>
           </div>
           <p className="mt-1 text-sm text-slate-500">
             {c.phone ?? "no phone"} · {c.email ?? "no email"}

@@ -158,6 +158,38 @@ function Dashboard() {
         </CardContent>
       </Card>
 
+      {/* Alerts */}
+      <AlertSection
+        title="🚨 Critical"
+        tone="red"
+        items={critical}
+        renderLabel={(c) => {
+          const r = visitsRemaining(c) ?? 0;
+          return `${fullName(c)} has ${r} visit${r === 1 ? "" : "s"} left and still owes ${formatCurrency(amountOwed(c))}`;
+        }}
+        empty="No critical clients."
+      />
+
+      <AlertSection
+        title="⏳ Ending Soon"
+        tone="amber"
+        items={endingSoon}
+        renderLabel={(c) => {
+          const r = visitsRemaining(c) ?? 0;
+          return `${fullName(c)} has ${r} visit${r === 1 ? "" : "s"} left`;
+        }}
+        empty="No packages ending soon."
+      />
+
+      <AlertSection
+        title="🔄 Package Complete / Renew"
+        tone="slate"
+        items={packageComplete}
+        renderLabel={(c) => `${fullName(c)} package complete — renew needed`}
+        empty="No packages awaiting renewal."
+      />
+
+
       {/* Needs Payment */}
       <section className="mb-10">
         <div className="mb-4 flex items-baseline justify-between">

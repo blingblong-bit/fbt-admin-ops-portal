@@ -90,24 +90,45 @@ function ClientDetailPage() {
   const completeVisit = useMutation({
     mutationFn: async () => {
       if (!c) return;
-      if (c.visits_used >= c.package_total_visits) {
+      const current = c.visits_used ?? 0;
+      if (current >= c.package_total_visits) {
         throw new Error("All visits already used");
       }
+      const next = current + 1;
       const { error } = await supabase
         .from("clients")
-        .update({ visits_used: c.visits_used + 1 })
+        .update({ visits_used: next })
         .eq("id", id);
       if (error) throw error;
       await supabase.from("client_activities").insert({
         client_id: id,
         activity_type: "visit",
-        description: `Visit completed (${c.visits_used + 1}/${c.package_total_visits})`,
+        description: `Visit completed (${next}/${c.package_total_visits})`,
       });
     },
     onSuccess: () => {
       toast.success("Visit recorded");
       refresh();
     },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const toggleScheduled = useMutation({
+    mutationFn: async () => {
+      if (!c) return;
+      const next = !c.is_scheduled;
+      const { error } = await supabase
+        .from("clients")
+        .update({ is_scheduled: next })
+        .eq("id", id);
+      if (error) throw error;
+      await supabase.from("client_activities").insert({
+        client_id: id,
+        activity_type: "scheduled",
+        description: next ? "Marked scheduled" : "Marked not scheduled",
+      });
+    },
+    onSuccess: () => refresh(),
     onError: (e: Error) => toast.error(e.message),
   });
 

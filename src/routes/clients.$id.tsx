@@ -519,7 +519,32 @@ function EditDialog({
   onDone: () => void;
 }) {
   const [form, setForm] = useState(client);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const navigate = useNavigate();
   useEffect(() => setForm(client), [client, open]);
+
+  const deleteMutation = useMutation({
+    mutationFn: async () => {
+      const { error } = await supabase
+        .from("clients")
+        .update({ deleted_at: new Date().toISOString() } as never)
+        .eq("id", client.id);
+      if (error) throw error;
+      await supabase.from("client_activities").insert({
+        client_id: client.id,
+        activity_type: "deleted",
+        description: "Client moved to Deleted Clients",
+      });
+    },
+    onSuccess: () => {
+      toast.success("Moved to Deleted Clients");
+      setConfirmDelete(false);
+      onDone();
+      onClose();
+      navigate({ to: "/clients" });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
 
   const mutation = useMutation({
     mutationFn: async () => {

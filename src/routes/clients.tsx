@@ -72,7 +72,8 @@ function ClientsListPage() {
                 <TableHead>Name</TableHead>
                 <TableHead>Phone</TableHead>
                 <TableHead>Package</TableHead>
-                <TableHead>Visits</TableHead>
+                <TableHead>Progress</TableHead>
+                <TableHead>Scheduled</TableHead>
                 <TableHead>Amount Owed</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
@@ -85,6 +86,7 @@ function ClientsListPage() {
                   <TableCell>{c.phone ?? "—"}</TableCell>
                   <TableCell>{c.package_name ?? "—"}</TableCell>
                   <TableCell>{progress(c)}</TableCell>
+                  <TableCell>{c.is_scheduled ? "✅" : "⭕"}</TableCell>
                   <TableCell className={amountOwed(c) > 0 ? "font-medium text-red-600" : ""}>
                     {formatCurrency(amountOwed(c))}
                   </TableCell>
@@ -107,7 +109,7 @@ function ClientsListPage() {
               ))}
               {filtered.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={7} className="py-10 text-center text-sm text-slate-500">
+                  <TableCell colSpan={8} className="py-10 text-center text-sm text-slate-500">
                     No clients found.
                   </TableCell>
                 </TableRow>

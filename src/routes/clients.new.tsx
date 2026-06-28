@@ -122,14 +122,49 @@ function AddClientPage() {
             <Field label="Total Visits">
               <Input type="number" min={0} value={form.package_total_visits} onChange={(e) => update("package_total_visits", Number(e.target.value))} />
             </Field>
-            <Field label="Visits Used">
-              <Input type="number" min={0} max={form.package_total_visits} value={form.visits_used} onChange={(e) => update("visits_used", Number(e.target.value))} />
+            <Field label="Visits Used (optional)">
+              <Input
+                type="number"
+                min={0}
+                max={form.package_total_visits}
+                value={form.visits_used}
+                onChange={(e) =>
+                  update("visits_used", e.target.value === "" ? "" : Number(e.target.value))
+                }
+                placeholder="Leave blank — Square tracks visits"
+              />
+            </Field>
+            <Field label="Square Visit Note (e.g. 3/8)">
+              <Input
+                value={form.square_visit_note}
+                onChange={(e) => update("square_visit_note", e.target.value)}
+                placeholder="Optional mirror of Square note"
+              />
             </Field>
             <Field label="Package Price ($)">
               <Input type="number" min={0} step="0.01" value={form.package_price} onChange={(e) => update("package_price", Number(e.target.value))} />
             </Field>
             <Field label="Amount Paid Today ($)">
               <Input type="number" min={0} step="0.01" max={form.package_price} value={form.amount_paid} onChange={(e) => update("amount_paid", Number(e.target.value))} />
+            </Field>
+            <Field label="Amount Owed (auto)">
+              <Input
+                type="text"
+                readOnly
+                value={`$${Math.max(0, Number(form.package_price) - Number(form.amount_paid)).toFixed(2)}`}
+                className="bg-slate-50"
+              />
+            </Field>
+            <Field label="Scheduled in Square?">
+              <label className="flex items-center gap-2 pt-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={form.is_scheduled}
+                  onChange={(e) => update("is_scheduled", e.target.checked)}
+                  className="h-4 w-4"
+                />
+                {form.is_scheduled ? "✅ Scheduled" : "⭕ Not Scheduled"}
+              </label>
             </Field>
 
             <div className="sm:col-span-2">

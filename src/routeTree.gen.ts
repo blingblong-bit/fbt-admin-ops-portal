@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as UnlockRouteImport } from './routes/unlock'
 import { Route as ImportRouteImport } from './routes/import'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ClientsIndexRouteImport } from './routes/clients.index'
@@ -16,6 +17,11 @@ import { Route as ClientsNewRouteImport } from './routes/clients.new'
 import { Route as ClientsDeletedRouteImport } from './routes/clients.deleted'
 import { Route as ClientsIdRouteImport } from './routes/clients.$id'
 
+const UnlockRoute = UnlockRouteImport.update({
+  id: '/unlock',
+  path: '/unlock',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ImportRoute = ImportRouteImport.update({
   id: '/import',
   path: '/import',
@@ -50,6 +56,7 @@ const ClientsIdRoute = ClientsIdRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/import': typeof ImportRoute
+  '/unlock': typeof UnlockRoute
   '/clients/$id': typeof ClientsIdRoute
   '/clients/deleted': typeof ClientsDeletedRoute
   '/clients/new': typeof ClientsNewRoute
@@ -58,6 +65,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/import': typeof ImportRoute
+  '/unlock': typeof UnlockRoute
   '/clients/$id': typeof ClientsIdRoute
   '/clients/deleted': typeof ClientsDeletedRoute
   '/clients/new': typeof ClientsNewRoute
@@ -67,6 +75,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/import': typeof ImportRoute
+  '/unlock': typeof UnlockRoute
   '/clients/$id': typeof ClientsIdRoute
   '/clients/deleted': typeof ClientsDeletedRoute
   '/clients/new': typeof ClientsNewRoute
@@ -77,6 +86,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/import'
+    | '/unlock'
     | '/clients/$id'
     | '/clients/deleted'
     | '/clients/new'
@@ -85,6 +95,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/import'
+    | '/unlock'
     | '/clients/$id'
     | '/clients/deleted'
     | '/clients/new'
@@ -93,6 +104,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/import'
+    | '/unlock'
     | '/clients/$id'
     | '/clients/deleted'
     | '/clients/new'
@@ -102,6 +114,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ImportRoute: typeof ImportRoute
+  UnlockRoute: typeof UnlockRoute
   ClientsIdRoute: typeof ClientsIdRoute
   ClientsDeletedRoute: typeof ClientsDeletedRoute
   ClientsNewRoute: typeof ClientsNewRoute
@@ -110,6 +123,13 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/unlock': {
+      id: '/unlock'
+      path: '/unlock'
+      fullPath: '/unlock'
+      preLoaderRoute: typeof UnlockRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/import': {
       id: '/import'
       path: '/import'
@@ -158,6 +178,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ImportRoute: ImportRoute,
+  UnlockRoute: UnlockRoute,
   ClientsIdRoute: ClientsIdRoute,
   ClientsDeletedRoute: ClientsDeletedRoute,
   ClientsNewRoute: ClientsNewRoute,

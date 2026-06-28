@@ -64,8 +64,9 @@ export type Database = {
           package_start_date: string | null
           package_total_visits: number
           phone: string | null
+          square_visit_note: string | null
           updated_at: string
-          visits_used: number
+          visits_used: number | null
         }
         Insert: {
           amount_paid?: number
@@ -81,8 +82,9 @@ export type Database = {
           package_start_date?: string | null
           package_total_visits?: number
           phone?: string | null
+          square_visit_note?: string | null
           updated_at?: string
-          visits_used?: number
+          visits_used?: number | null
         }
         Update: {
           amount_paid?: number
@@ -98,8 +100,9 @@ export type Database = {
           package_start_date?: string | null
           package_total_visits?: number
           phone?: string | null
+          square_visit_note?: string | null
           updated_at?: string
-          visits_used?: number
+          visits_used?: number | null
         }
         Relationships: []
       }

@@ -295,3 +295,52 @@ function PaymentTotals({ clients }: { clients: Client[] }) {
     </div>
   );
 }
+
+function AlertSection({
+  title,
+  tone,
+  items,
+  renderLabel,
+  empty,
+}: {
+  title: string;
+  tone: "red" | "amber" | "slate";
+  items: Client[];
+  renderLabel: (c: Client) => string;
+  empty: string;
+}) {
+  const toneClasses =
+    tone === "red"
+      ? "border-red-200 bg-red-50"
+      : tone === "amber"
+        ? "border-amber-200 bg-amber-50"
+        : "border-slate-200 bg-slate-50";
+  if (items.length === 0) return null;
+  return (
+    <section className="mb-6">
+      <div className="mb-3 flex items-baseline justify-between">
+        <h2 className="text-lg font-semibold tracking-tight">{title}</h2>
+        <span className="text-sm text-slate-500">{items.length}</span>
+      </div>
+      <ul className={`divide-y rounded-lg border ${toneClasses}`}>
+        {items.map((c) => (
+          <li
+            key={c.id}
+            className="flex items-center justify-between gap-3 px-4 py-3"
+          >
+            <Link
+              to="/clients/$id"
+              params={{ id: c.id }}
+              className="text-sm font-medium text-slate-800 hover:underline"
+            >
+              {renderLabel(c)}
+            </Link>
+            <StatusBadge client={c} />
+          </li>
+        ))}
+      </ul>
+      <span className="sr-only">{empty}</span>
+    </section>
+  );
+}
+

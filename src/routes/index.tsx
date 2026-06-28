@@ -196,3 +196,32 @@ function Dashboard() {
     </AppShell>
   );
 }
+
+function PaymentTotals({ clients }: { clients: Client[] }) {
+  const owed = clients.map((c) => amountOwed(c));
+  const total = owed.reduce((a, b) => a + b, 0);
+  const highest = owed.length ? Math.max(...owed) : 0;
+  const average = owed.length ? total / owed.length : 0;
+
+  const stats: { label: string; value: string }[] = [
+    { label: "Total Outstanding", value: formatCurrency(total) },
+    { label: "Clients Owing", value: String(clients.length) },
+    { label: "Highest Balance", value: formatCurrency(highest) },
+    { label: "Average Balance", value: formatCurrency(average) },
+  ];
+
+  return (
+    <div className="mb-4 grid grid-cols-2 gap-3 rounded-lg border bg-white p-4 sm:grid-cols-4">
+      {stats.map((s) => (
+        <div key={s.label}>
+          <div className="text-xs uppercase tracking-wide text-slate-500">
+            {s.label}
+          </div>
+          <div className="mt-1 text-xl font-semibold tracking-tight text-slate-900">
+            {s.value}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}

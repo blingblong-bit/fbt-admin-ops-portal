@@ -27,7 +27,9 @@ function AddClientPage() {
     package_price: 0,
     package_start_date: new Date().toISOString().slice(0, 10),
     amount_paid: 0,
-    visits_used: 0,
+    visits_used: "" as number | "",
+    is_scheduled: false,
+    square_visit_note: "",
     internal_notes: "",
   });
 

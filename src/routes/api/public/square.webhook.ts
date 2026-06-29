@@ -117,7 +117,7 @@ export const Route = createFileRoute("/api/public/square/webhook")({
 
           if (existing) {
             // UPDATE: only contact fields. Never touch package / pricing / visits / scheduled / notes.
-            const updates: Record<string, unknown> = {
+            const updates: { email: string | null; phone: string | null; first_name?: string; last_name?: string } = {
               email,
               phone,
             };

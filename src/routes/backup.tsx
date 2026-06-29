@@ -180,7 +180,7 @@ function BackupPage() {
             <StatCard label="Total Archived Clients" value={stats ? String(stats.archived) : "…"} />
             <StatCard label="Last Backup Date" value="Not Configured" muted />
             <StatCard
-              label="Last Export Date"
+              label="Last Manual Backup"
               value={lastExportAt ? formatDate(lastExportAt) : "Never"}
               muted={!lastExportAt}
             />

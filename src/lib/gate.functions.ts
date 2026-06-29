@@ -32,7 +32,7 @@ export const checkUnlocked = createServerFn({ method: "GET" }).handler(async () 
 });
 
 export const unlockSite = createServerFn({ method: "POST" })
-  .inputValidator((data: { username: string; password: string }) => data)
+  .validator((data: { username: string; password: string }) => data)
   .handler(async ({ data }) => {
     const expectedUser = process.env.SITE_USERNAME;
     const expectedPass = process.env.SITE_PASSWORD;

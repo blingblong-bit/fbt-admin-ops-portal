@@ -8,6 +8,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     { to: "/clients/new", label: "Add Client" },
     { to: "/clients/deleted", label: "Deleted" },
     { to: "/import", label: "Import" },
+    { to: "/backup", label: "Backup" },
   ] as const;
 
   return (

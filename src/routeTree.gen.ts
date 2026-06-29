@@ -12,12 +12,14 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/index'
+import { Route as AuthenticatedSyncLogRouteImport } from './routes/_authenticated/sync-log'
 import { Route as AuthenticatedImportRouteImport } from './routes/_authenticated/import'
 import { Route as AuthenticatedBackupRouteImport } from './routes/_authenticated/backup'
 import { Route as AuthenticatedClientsIndexRouteImport } from './routes/_authenticated/clients.index'
 import { Route as AuthenticatedClientsNewRouteImport } from './routes/_authenticated/clients.new'
 import { Route as AuthenticatedClientsDeletedRouteImport } from './routes/_authenticated/clients.deleted'
 import { Route as AuthenticatedClientsIdRouteImport } from './routes/_authenticated/clients.$id'
+import { Route as ApiPublicSquareWebhookRouteImport } from './routes/api/public/square.webhook'
 
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
@@ -31,6 +33,11 @@ const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
 const AuthenticatedIndexRoute = AuthenticatedIndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedSyncLogRoute = AuthenticatedSyncLogRouteImport.update({
+  id: '/sync-log',
+  path: '/sync-log',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedImportRoute = AuthenticatedImportRouteImport.update({
@@ -65,26 +72,35 @@ const AuthenticatedClientsIdRoute = AuthenticatedClientsIdRouteImport.update({
   path: '/clients/$id',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const ApiPublicSquareWebhookRoute = ApiPublicSquareWebhookRouteImport.update({
+  id: '/api/public/square/webhook',
+  path: '/api/public/square/webhook',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AuthenticatedIndexRoute
   '/auth': typeof AuthRoute
   '/backup': typeof AuthenticatedBackupRoute
   '/import': typeof AuthenticatedImportRoute
+  '/sync-log': typeof AuthenticatedSyncLogRoute
   '/clients/$id': typeof AuthenticatedClientsIdRoute
   '/clients/deleted': typeof AuthenticatedClientsDeletedRoute
   '/clients/new': typeof AuthenticatedClientsNewRoute
   '/clients/': typeof AuthenticatedClientsIndexRoute
+  '/api/public/square/webhook': typeof ApiPublicSquareWebhookRoute
 }
 export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
   '/backup': typeof AuthenticatedBackupRoute
   '/import': typeof AuthenticatedImportRoute
+  '/sync-log': typeof AuthenticatedSyncLogRoute
   '/': typeof AuthenticatedIndexRoute
   '/clients/$id': typeof AuthenticatedClientsIdRoute
   '/clients/deleted': typeof AuthenticatedClientsDeletedRoute
   '/clients/new': typeof AuthenticatedClientsNewRoute
   '/clients': typeof AuthenticatedClientsIndexRoute
+  '/api/public/square/webhook': typeof ApiPublicSquareWebhookRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -92,11 +108,13 @@ export interface FileRoutesById {
   '/auth': typeof AuthRoute
   '/_authenticated/backup': typeof AuthenticatedBackupRoute
   '/_authenticated/import': typeof AuthenticatedImportRoute
+  '/_authenticated/sync-log': typeof AuthenticatedSyncLogRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
   '/_authenticated/clients/$id': typeof AuthenticatedClientsIdRoute
   '/_authenticated/clients/deleted': typeof AuthenticatedClientsDeletedRoute
   '/_authenticated/clients/new': typeof AuthenticatedClientsNewRoute
   '/_authenticated/clients/': typeof AuthenticatedClientsIndexRoute
+  '/api/public/square/webhook': typeof ApiPublicSquareWebhookRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -105,36 +123,43 @@ export interface FileRouteTypes {
     | '/auth'
     | '/backup'
     | '/import'
+    | '/sync-log'
     | '/clients/$id'
     | '/clients/deleted'
     | '/clients/new'
     | '/clients/'
+    | '/api/public/square/webhook'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/auth'
     | '/backup'
     | '/import'
+    | '/sync-log'
     | '/'
     | '/clients/$id'
     | '/clients/deleted'
     | '/clients/new'
     | '/clients'
+    | '/api/public/square/webhook'
   id:
     | '__root__'
     | '/_authenticated'
     | '/auth'
     | '/_authenticated/backup'
     | '/_authenticated/import'
+    | '/_authenticated/sync-log'
     | '/_authenticated/'
     | '/_authenticated/clients/$id'
     | '/_authenticated/clients/deleted'
     | '/_authenticated/clients/new'
     | '/_authenticated/clients/'
+    | '/api/public/square/webhook'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRoute
+  ApiPublicSquareWebhookRoute: typeof ApiPublicSquareWebhookRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -158,6 +183,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof AuthenticatedIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/sync-log': {
+      id: '/_authenticated/sync-log'
+      path: '/sync-log'
+      fullPath: '/sync-log'
+      preLoaderRoute: typeof AuthenticatedSyncLogRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/import': {
@@ -202,12 +234,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedClientsIdRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/api/public/square/webhook': {
+      id: '/api/public/square/webhook'
+      path: '/api/public/square/webhook'
+      fullPath: '/api/public/square/webhook'
+      preLoaderRoute: typeof ApiPublicSquareWebhookRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedBackupRoute: typeof AuthenticatedBackupRoute
   AuthenticatedImportRoute: typeof AuthenticatedImportRoute
+  AuthenticatedSyncLogRoute: typeof AuthenticatedSyncLogRoute
   AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
   AuthenticatedClientsIdRoute: typeof AuthenticatedClientsIdRoute
   AuthenticatedClientsDeletedRoute: typeof AuthenticatedClientsDeletedRoute
@@ -218,6 +258,7 @@ interface AuthenticatedRouteRouteChildren {
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedBackupRoute: AuthenticatedBackupRoute,
   AuthenticatedImportRoute: AuthenticatedImportRoute,
+  AuthenticatedSyncLogRoute: AuthenticatedSyncLogRoute,
   AuthenticatedIndexRoute: AuthenticatedIndexRoute,
   AuthenticatedClientsIdRoute: AuthenticatedClientsIdRoute,
   AuthenticatedClientsDeletedRoute: AuthenticatedClientsDeletedRoute,
@@ -231,6 +272,7 @@ const AuthenticatedRouteRouteWithChildren =
 const rootRouteChildren: RootRouteChildren = {
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRoute,
+  ApiPublicSquareWebhookRoute: ApiPublicSquareWebhookRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

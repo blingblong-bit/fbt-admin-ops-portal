@@ -11,6 +11,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     { to: "/clients/deleted", label: "Deleted" },
     { to: "/import", label: "Import" },
     { to: "/backup", label: "Backup" },
+    { to: "/sync-log", label: "Sync Log" },
   ] as const;
 
   const navigate = useNavigate();

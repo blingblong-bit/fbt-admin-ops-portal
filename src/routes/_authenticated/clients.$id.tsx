@@ -36,7 +36,7 @@ const searchSchema = z.object({
   edit: fallback(z.number().optional(), undefined).default(undefined),
 });
 
-export const Route = createFileRoute("/clients/$id")({
+export const Route = createFileRoute("/_authenticated/clients/$id")({
   validateSearch: zodValidator(searchSchema),
   head: () => ({ meta: [{ title: "Client · FIT Beyond Therapy Admin" }] }),
   component: ClientDetailPage,

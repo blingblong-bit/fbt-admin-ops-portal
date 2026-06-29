@@ -9,201 +9,228 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as UnlockRouteImport } from './routes/unlock'
-import { Route as ImportRouteImport } from './routes/import'
-import { Route as BackupRouteImport } from './routes/backup'
-import { Route as IndexRouteImport } from './routes/index'
-import { Route as ClientsIndexRouteImport } from './routes/clients.index'
-import { Route as ClientsNewRouteImport } from './routes/clients.new'
-import { Route as ClientsDeletedRouteImport } from './routes/clients.deleted'
-import { Route as ClientsIdRouteImport } from './routes/clients.$id'
+import { Route as AuthRouteImport } from './routes/auth'
+import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
+import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/index'
+import { Route as AuthenticatedImportRouteImport } from './routes/_authenticated/import'
+import { Route as AuthenticatedBackupRouteImport } from './routes/_authenticated/backup'
+import { Route as AuthenticatedClientsIndexRouteImport } from './routes/_authenticated/clients.index'
+import { Route as AuthenticatedClientsNewRouteImport } from './routes/_authenticated/clients.new'
+import { Route as AuthenticatedClientsDeletedRouteImport } from './routes/_authenticated/clients.deleted'
+import { Route as AuthenticatedClientsIdRouteImport } from './routes/_authenticated/clients.$id'
 
-const UnlockRoute = UnlockRouteImport.update({
-  id: '/unlock',
-  path: '/unlock',
+const AuthRoute = AuthRouteImport.update({
+  id: '/auth',
+  path: '/auth',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ImportRoute = ImportRouteImport.update({
-  id: '/import',
-  path: '/import',
+const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
+  id: '/_authenticated',
   getParentRoute: () => rootRouteImport,
 } as any)
-const BackupRoute = BackupRouteImport.update({
-  id: '/backup',
-  path: '/backup',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const IndexRoute = IndexRouteImport.update({
+const AuthenticatedIndexRoute = AuthenticatedIndexRouteImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => rootRouteImport,
+  getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
-const ClientsIndexRoute = ClientsIndexRouteImport.update({
-  id: '/clients/',
-  path: '/clients/',
-  getParentRoute: () => rootRouteImport,
+const AuthenticatedImportRoute = AuthenticatedImportRouteImport.update({
+  id: '/import',
+  path: '/import',
+  getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
-const ClientsNewRoute = ClientsNewRouteImport.update({
+const AuthenticatedBackupRoute = AuthenticatedBackupRouteImport.update({
+  id: '/backup',
+  path: '/backup',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedClientsIndexRoute =
+  AuthenticatedClientsIndexRouteImport.update({
+    id: '/clients/',
+    path: '/clients/',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedClientsNewRoute = AuthenticatedClientsNewRouteImport.update({
   id: '/clients/new',
   path: '/clients/new',
-  getParentRoute: () => rootRouteImport,
+  getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
-const ClientsDeletedRoute = ClientsDeletedRouteImport.update({
-  id: '/clients/deleted',
-  path: '/clients/deleted',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ClientsIdRoute = ClientsIdRouteImport.update({
+const AuthenticatedClientsDeletedRoute =
+  AuthenticatedClientsDeletedRouteImport.update({
+    id: '/clients/deleted',
+    path: '/clients/deleted',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedClientsIdRoute = AuthenticatedClientsIdRouteImport.update({
   id: '/clients/$id',
   path: '/clients/$id',
-  getParentRoute: () => rootRouteImport,
+  getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 
 export interface FileRoutesByFullPath {
-  '/': typeof IndexRoute
-  '/backup': typeof BackupRoute
-  '/import': typeof ImportRoute
-  '/unlock': typeof UnlockRoute
-  '/clients/$id': typeof ClientsIdRoute
-  '/clients/deleted': typeof ClientsDeletedRoute
-  '/clients/new': typeof ClientsNewRoute
-  '/clients/': typeof ClientsIndexRoute
+  '/': typeof AuthenticatedIndexRoute
+  '/auth': typeof AuthRoute
+  '/backup': typeof AuthenticatedBackupRoute
+  '/import': typeof AuthenticatedImportRoute
+  '/clients/$id': typeof AuthenticatedClientsIdRoute
+  '/clients/deleted': typeof AuthenticatedClientsDeletedRoute
+  '/clients/new': typeof AuthenticatedClientsNewRoute
+  '/clients/': typeof AuthenticatedClientsIndexRoute
 }
 export interface FileRoutesByTo {
-  '/': typeof IndexRoute
-  '/backup': typeof BackupRoute
-  '/import': typeof ImportRoute
-  '/unlock': typeof UnlockRoute
-  '/clients/$id': typeof ClientsIdRoute
-  '/clients/deleted': typeof ClientsDeletedRoute
-  '/clients/new': typeof ClientsNewRoute
-  '/clients': typeof ClientsIndexRoute
+  '/auth': typeof AuthRoute
+  '/backup': typeof AuthenticatedBackupRoute
+  '/import': typeof AuthenticatedImportRoute
+  '/': typeof AuthenticatedIndexRoute
+  '/clients/$id': typeof AuthenticatedClientsIdRoute
+  '/clients/deleted': typeof AuthenticatedClientsDeletedRoute
+  '/clients/new': typeof AuthenticatedClientsNewRoute
+  '/clients': typeof AuthenticatedClientsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
-  '/': typeof IndexRoute
-  '/backup': typeof BackupRoute
-  '/import': typeof ImportRoute
-  '/unlock': typeof UnlockRoute
-  '/clients/$id': typeof ClientsIdRoute
-  '/clients/deleted': typeof ClientsDeletedRoute
-  '/clients/new': typeof ClientsNewRoute
-  '/clients/': typeof ClientsIndexRoute
+  '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
+  '/auth': typeof AuthRoute
+  '/_authenticated/backup': typeof AuthenticatedBackupRoute
+  '/_authenticated/import': typeof AuthenticatedImportRoute
+  '/_authenticated/': typeof AuthenticatedIndexRoute
+  '/_authenticated/clients/$id': typeof AuthenticatedClientsIdRoute
+  '/_authenticated/clients/deleted': typeof AuthenticatedClientsDeletedRoute
+  '/_authenticated/clients/new': typeof AuthenticatedClientsNewRoute
+  '/_authenticated/clients/': typeof AuthenticatedClientsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/auth'
     | '/backup'
     | '/import'
-    | '/unlock'
     | '/clients/$id'
     | '/clients/deleted'
     | '/clients/new'
     | '/clients/'
   fileRoutesByTo: FileRoutesByTo
   to:
-    | '/'
+    | '/auth'
     | '/backup'
     | '/import'
-    | '/unlock'
+    | '/'
     | '/clients/$id'
     | '/clients/deleted'
     | '/clients/new'
     | '/clients'
   id:
     | '__root__'
-    | '/'
-    | '/backup'
-    | '/import'
-    | '/unlock'
-    | '/clients/$id'
-    | '/clients/deleted'
-    | '/clients/new'
-    | '/clients/'
+    | '/_authenticated'
+    | '/auth'
+    | '/_authenticated/backup'
+    | '/_authenticated/import'
+    | '/_authenticated/'
+    | '/_authenticated/clients/$id'
+    | '/_authenticated/clients/deleted'
+    | '/_authenticated/clients/new'
+    | '/_authenticated/clients/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
-  IndexRoute: typeof IndexRoute
-  BackupRoute: typeof BackupRoute
-  ImportRoute: typeof ImportRoute
-  UnlockRoute: typeof UnlockRoute
-  ClientsIdRoute: typeof ClientsIdRoute
-  ClientsDeletedRoute: typeof ClientsDeletedRoute
-  ClientsNewRoute: typeof ClientsNewRoute
-  ClientsIndexRoute: typeof ClientsIndexRoute
+  AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
+  AuthRoute: typeof AuthRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/unlock': {
-      id: '/unlock'
-      path: '/unlock'
-      fullPath: '/unlock'
-      preLoaderRoute: typeof UnlockRouteImport
+    '/auth': {
+      id: '/auth'
+      path: '/auth'
+      fullPath: '/auth'
+      preLoaderRoute: typeof AuthRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/import': {
-      id: '/import'
-      path: '/import'
-      fullPath: '/import'
-      preLoaderRoute: typeof ImportRouteImport
+    '/_authenticated': {
+      id: '/_authenticated'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof AuthenticatedRouteRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/backup': {
-      id: '/backup'
-      path: '/backup'
-      fullPath: '/backup'
-      preLoaderRoute: typeof BackupRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/': {
-      id: '/'
+    '/_authenticated/': {
+      id: '/_authenticated/'
       path: '/'
       fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
-      parentRoute: typeof rootRouteImport
+      preLoaderRoute: typeof AuthenticatedIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/clients/': {
-      id: '/clients/'
+    '/_authenticated/import': {
+      id: '/_authenticated/import'
+      path: '/import'
+      fullPath: '/import'
+      preLoaderRoute: typeof AuthenticatedImportRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/backup': {
+      id: '/_authenticated/backup'
+      path: '/backup'
+      fullPath: '/backup'
+      preLoaderRoute: typeof AuthenticatedBackupRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/clients/': {
+      id: '/_authenticated/clients/'
       path: '/clients'
       fullPath: '/clients/'
-      preLoaderRoute: typeof ClientsIndexRouteImport
-      parentRoute: typeof rootRouteImport
+      preLoaderRoute: typeof AuthenticatedClientsIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/clients/new': {
-      id: '/clients/new'
+    '/_authenticated/clients/new': {
+      id: '/_authenticated/clients/new'
       path: '/clients/new'
       fullPath: '/clients/new'
-      preLoaderRoute: typeof ClientsNewRouteImport
-      parentRoute: typeof rootRouteImport
+      preLoaderRoute: typeof AuthenticatedClientsNewRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/clients/deleted': {
-      id: '/clients/deleted'
+    '/_authenticated/clients/deleted': {
+      id: '/_authenticated/clients/deleted'
       path: '/clients/deleted'
       fullPath: '/clients/deleted'
-      preLoaderRoute: typeof ClientsDeletedRouteImport
-      parentRoute: typeof rootRouteImport
+      preLoaderRoute: typeof AuthenticatedClientsDeletedRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/clients/$id': {
-      id: '/clients/$id'
+    '/_authenticated/clients/$id': {
+      id: '/_authenticated/clients/$id'
       path: '/clients/$id'
       fullPath: '/clients/$id'
-      preLoaderRoute: typeof ClientsIdRouteImport
-      parentRoute: typeof rootRouteImport
+      preLoaderRoute: typeof AuthenticatedClientsIdRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
     }
   }
 }
 
+interface AuthenticatedRouteRouteChildren {
+  AuthenticatedBackupRoute: typeof AuthenticatedBackupRoute
+  AuthenticatedImportRoute: typeof AuthenticatedImportRoute
+  AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
+  AuthenticatedClientsIdRoute: typeof AuthenticatedClientsIdRoute
+  AuthenticatedClientsDeletedRoute: typeof AuthenticatedClientsDeletedRoute
+  AuthenticatedClientsNewRoute: typeof AuthenticatedClientsNewRoute
+  AuthenticatedClientsIndexRoute: typeof AuthenticatedClientsIndexRoute
+}
+
+const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
+  AuthenticatedBackupRoute: AuthenticatedBackupRoute,
+  AuthenticatedImportRoute: AuthenticatedImportRoute,
+  AuthenticatedIndexRoute: AuthenticatedIndexRoute,
+  AuthenticatedClientsIdRoute: AuthenticatedClientsIdRoute,
+  AuthenticatedClientsDeletedRoute: AuthenticatedClientsDeletedRoute,
+  AuthenticatedClientsNewRoute: AuthenticatedClientsNewRoute,
+  AuthenticatedClientsIndexRoute: AuthenticatedClientsIndexRoute,
+}
+
+const AuthenticatedRouteRouteWithChildren =
+  AuthenticatedRouteRoute._addFileChildren(AuthenticatedRouteRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
-  IndexRoute: IndexRoute,
-  BackupRoute: BackupRoute,
-  ImportRoute: ImportRoute,
-  UnlockRoute: UnlockRoute,
-  ClientsIdRoute: ClientsIdRoute,
-  ClientsDeletedRoute: ClientsDeletedRoute,
-  ClientsNewRoute: ClientsNewRoute,
-  ClientsIndexRoute: ClientsIndexRoute,
+  AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
+  AuthRoute: AuthRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

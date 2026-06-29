@@ -13,7 +13,7 @@ import {
   type Client,
 } from "@/lib/clients";
 
-export const Route = createFileRoute("/backup")({
+export const Route = createFileRoute("/_authenticated/backup")({
   head: () => ({
     meta: [{ title: "Backup & Data Management — FIT Beyond Therapy" }],
   }),

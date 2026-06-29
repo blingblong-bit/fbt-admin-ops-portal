@@ -11,7 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { formatCurrency } from "@/lib/clients";
 
-export const Route = createFileRoute("/clients/new")({
+export const Route = createFileRoute("/_authenticated/clients/new")({
   head: () => ({ meta: [{ title: "Add Client · FIT Beyond Therapy Admin" }] }),
   component: AddClientPage,
 });

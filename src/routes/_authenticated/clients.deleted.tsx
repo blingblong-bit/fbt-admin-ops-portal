@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/dialog";
 import { amountOwed, formatCurrency, formatDate, fullName, type Client } from "@/lib/clients";
 
-export const Route = createFileRoute("/clients/deleted")({
+export const Route = createFileRoute("/_authenticated/clients/deleted")({
   head: () => ({ meta: [{ title: "Deleted Clients · FIT Beyond Therapy Admin" }] }),
   component: DeletedClientsPage,
 });

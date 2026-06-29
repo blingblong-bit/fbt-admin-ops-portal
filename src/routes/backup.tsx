@@ -222,6 +222,17 @@ function BackupPage() {
         </section>
 
         <section className="space-y-3">
+          <h2 className="text-lg font-semibold">Reminder</h2>
+          <Card>
+            <CardContent className="p-5">
+              <p className="text-sm text-slate-700">
+                Recommended: export CSV and JSON once per week before making major edits.
+              </p>
+            </CardContent>
+          </Card>
+        </section>
+
+        <section className="space-y-3">
           <h2 className="text-lg font-semibold">Backup Status</h2>
           <Card>
             <CardHeader>

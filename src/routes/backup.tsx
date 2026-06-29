@@ -182,7 +182,7 @@ function BackupPage() {
             <StatCard label="Last Backup Date" value="Not Configured" muted />
             <StatCard
               label="Last Manual Backup"
-              value={lastExportAt ? formatDate(lastExportAt) : "Never"}
+              value={lastExportAt ? formatDateTimeLocal(lastExportAt) : "Never"}
               muted={!lastExportAt}
             />
           </div>

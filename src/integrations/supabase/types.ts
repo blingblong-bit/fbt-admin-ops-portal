@@ -136,6 +136,68 @@ export type Database = {
         }
         Relationships: []
       }
+      square_payments: {
+        Row: {
+          amount_cents: number
+          applied: boolean
+          buyer_email: string | null
+          buyer_phone: string | null
+          client_id: string | null
+          created_at: string
+          currency: string
+          id: string
+          needs_review: boolean
+          note: string | null
+          raw_event: Json | null
+          square_customer_id: string | null
+          square_payment_id: string
+          status: string | null
+          updated_at: string
+        }
+        Insert: {
+          amount_cents?: number
+          applied?: boolean
+          buyer_email?: string | null
+          buyer_phone?: string | null
+          client_id?: string | null
+          created_at?: string
+          currency?: string
+          id?: string
+          needs_review?: boolean
+          note?: string | null
+          raw_event?: Json | null
+          square_customer_id?: string | null
+          square_payment_id: string
+          status?: string | null
+          updated_at?: string
+        }
+        Update: {
+          amount_cents?: number
+          applied?: boolean
+          buyer_email?: string | null
+          buyer_phone?: string | null
+          client_id?: string | null
+          created_at?: string
+          currency?: string
+          id?: string
+          needs_review?: boolean
+          note?: string | null
+          raw_event?: Json | null
+          square_customer_id?: string | null
+          square_payment_id?: string
+          status?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "square_payments_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       square_sync_log: {
         Row: {
           action: string | null

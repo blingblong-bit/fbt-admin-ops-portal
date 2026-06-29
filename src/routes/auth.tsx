@@ -39,17 +39,8 @@ function AuthPage() {
     e.preventDefault();
     setBusy(true);
     try {
-      if (mode === "signin") {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
-        if (error) throw error;
-      } else {
-        const { error } = await supabase.auth.signUp({
-          email,
-          password,
-          options: { emailRedirectTo: window.location.origin },
-        });
-        if (error) throw error;
-      }
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) throw error;
       await router.invalidate();
       navigate({ to: redirect ?? "/", replace: true });
     } catch (err) {
@@ -90,7 +81,7 @@ function AuthPage() {
               type="password"
               required
               minLength={8}
-              autoComplete={mode === "signin" ? "current-password" : "new-password"}
+              autoComplete="current-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-900 focus:outline-none"
@@ -101,34 +92,12 @@ function AuthPage() {
             disabled={busy}
             className="w-full rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-slate-800 disabled:opacity-50"
           >
-            {busy ? "Please wait…" : mode === "signin" ? "Sign in" : "Create account"}
+            {busy ? "Please wait…" : "Sign in"}
           </button>
         </form>
 
-        <div className="mt-4 text-center text-sm text-slate-600">
-          {mode === "signin" ? (
-            <>
-              No account?{" "}
-              <button
-                type="button"
-                onClick={() => setMode("signup")}
-                className="font-medium text-slate-900 underline-offset-2 hover:underline"
-              >
-                Create one
-              </button>
-            </>
-          ) : (
-            <>
-              Already have an account?{" "}
-              <button
-                type="button"
-                onClick={() => setMode("signin")}
-                className="font-medium text-slate-900 underline-offset-2 hover:underline"
-              >
-                Sign in
-              </button>
-            </>
-          )}
+        <div className="mt-6 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-center text-xs text-slate-600">
+          Please contact an administrator for access.
         </div>
       </div>
     </div>

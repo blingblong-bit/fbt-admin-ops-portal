@@ -85,7 +85,7 @@ export const Route = createFileRoute("/api/public/square/webhook")({
               square_customer_id: squareCustomerId,
               status: "skipped",
               message: "Event type not handled in this phase",
-              raw_event: event as unknown as Record<string, unknown>,
+              raw_event: event as unknown as never,
             });
             return new Response("ok");
           }
@@ -95,7 +95,7 @@ export const Route = createFileRoute("/api/public/square/webhook")({
               event_type: eventType,
               status: "error",
               message: "Event missing Square customer ID",
-              raw_event: event as unknown as Record<string, unknown>,
+              raw_event: event as unknown as never,
             });
             return new Response("ok");
           }
@@ -138,7 +138,7 @@ export const Route = createFileRoute("/api/public/square/webhook")({
               status: "success",
               action: "updated_contact",
               message: "Updated contact fields only",
-              raw_event: event as unknown as Record<string, unknown>,
+              raw_event: event as unknown as never,
             });
             return new Response("ok");
           }
@@ -169,7 +169,7 @@ export const Route = createFileRoute("/api/public/square/webhook")({
             message: hasName
               ? "Created client from Square customer"
               : "Created as 'Unnamed Square Customer' — flagged for review",
-            raw_event: event as unknown as Record<string, unknown>,
+            raw_event: event as unknown as never,
           });
           return new Response("ok");
         } catch (err) {
@@ -180,7 +180,7 @@ export const Route = createFileRoute("/api/public/square/webhook")({
               square_customer_id: squareCustomerId,
               status: "error",
               message,
-              raw_event: event as unknown as Record<string, unknown>,
+              raw_event: event as unknown as never,
             });
           } catch {
             // Swallow logging errors so we always return 200.

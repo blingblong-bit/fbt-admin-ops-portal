@@ -47,11 +47,6 @@ function verifySignature(notificationUrl: string, body: string, signature: strin
   }
 }
 
-function normalizePhone(p?: string | null): string | null {
-  if (!p) return null;
-  const digits = p.replace(/\D/g, "");
-  return digits.length >= 7 ? digits.slice(-10) : null;
-}
 
 export const Route = createFileRoute("/api/public/square/webhook")({
   server: {

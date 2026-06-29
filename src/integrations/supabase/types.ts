@@ -60,11 +60,13 @@ export type Database = {
           internal_notes: string | null
           is_scheduled: boolean
           last_name: string
+          needs_review: boolean
           package_name: string | null
           package_price: number
           package_start_date: string | null
           package_total_visits: number
           phone: string | null
+          square_customer_id: string | null
           square_visit_note: string | null
           updated_at: string
           visits_used: number | null
@@ -79,11 +81,13 @@ export type Database = {
           internal_notes?: string | null
           is_scheduled?: boolean
           last_name: string
+          needs_review?: boolean
           package_name?: string | null
           package_price?: number
           package_start_date?: string | null
           package_total_visits?: number
           phone?: string | null
+          square_customer_id?: string | null
           square_visit_note?: string | null
           updated_at?: string
           visits_used?: number | null
@@ -98,11 +102,13 @@ export type Database = {
           internal_notes?: string | null
           is_scheduled?: boolean
           last_name?: string
+          needs_review?: boolean
           package_name?: string | null
           package_price?: number
           package_start_date?: string | null
           package_total_visits?: number
           phone?: string | null
+          square_customer_id?: string | null
           square_visit_note?: string | null
           updated_at?: string
           visits_used?: number | null
@@ -129,6 +135,50 @@ export type Database = {
           raw_text?: string
         }
         Relationships: []
+      }
+      square_sync_log: {
+        Row: {
+          action: string | null
+          client_id: string | null
+          created_at: string
+          event_type: string
+          id: string
+          message: string | null
+          raw_event: Json | null
+          square_customer_id: string | null
+          status: string
+        }
+        Insert: {
+          action?: string | null
+          client_id?: string | null
+          created_at?: string
+          event_type: string
+          id?: string
+          message?: string | null
+          raw_event?: Json | null
+          square_customer_id?: string | null
+          status: string
+        }
+        Update: {
+          action?: string | null
+          client_id?: string | null
+          created_at?: string
+          event_type?: string
+          id?: string
+          message?: string | null
+          raw_event?: Json | null
+          square_customer_id?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "square_sync_log_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {

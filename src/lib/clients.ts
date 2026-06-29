@@ -133,6 +133,25 @@ export function progress(c: Pick<Client, "package_total_visits" | "visits_used" 
 }
 
 /**
+ * Format an ISO datetime string in the user's local timezone as MM/DD/YYYY, h:mm AM/PM.
+ * Returns "—" for null/empty values.
+ */
+export function formatDateTimeLocal(isoString: string | null | undefined): string {
+  if (!isoString) return "—";
+  const dt = new Date(isoString);
+  if (isNaN(dt.getTime())) return "—";
+  const month = String(dt.getMonth() + 1).padStart(2, "0");
+  const day = String(dt.getDate()).padStart(2, "0");
+  const year = dt.getFullYear();
+  let hours = dt.getHours();
+  const minutes = String(dt.getMinutes()).padStart(2, "0");
+  const ampm = hours >= 12 ? "PM" : "AM";
+  hours = hours % 12;
+  hours = hours ? hours : 12;
+  return `${month}/${day}/${year}, ${hours}:${minutes} ${ampm}`;
+}
+
+/**
  * Format an ISO date string (YYYY-MM-DD) or any Date-parseable value as MM/DD/YYYY.
  * Returns "—" for null/empty values.
  */

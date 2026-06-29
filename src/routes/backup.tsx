@@ -180,7 +180,7 @@ function BackupPage() {
             <StatCard label="Total Archived Clients" value={stats ? String(stats.archived) : "…"} />
             <StatCard label="Last Backup Date" value="Not Configured" muted />
             <StatCard
-              label="Last Export Date"
+              label="Last Manual Backup"
               value={lastExportAt ? formatDate(lastExportAt) : "Never"}
               muted={!lastExportAt}
             />
@@ -197,13 +197,37 @@ function BackupPage() {
                 notes, and timestamps for every client (including archived).
               </CardDescription>
             </CardHeader>
-            <CardContent className="flex flex-wrap gap-3">
-              <Button onClick={exportCsv} disabled={loading}>
-                {loading ? "Preparing…" : "Export All Clients (CSV)"}
-              </Button>
-              <Button variant="outline" onClick={exportJson} disabled={loading}>
-                {loading ? "Preparing…" : "Export All Clients (JSON)"}
-              </Button>
+            <CardContent className="space-y-4">
+              <ol className="list-decimal space-y-1 pl-5 text-sm text-slate-700">
+                <li>
+                  <strong>Export CSV</strong> for spreadsheet review and easy sharing.
+                </li>
+                <li>
+                  <strong>Export JSON</strong> for a complete data backup with all fields intact.
+                </li>
+                <li>
+                  Store both files in <strong>Google Drive</strong> weekly for safekeeping.
+                </li>
+              </ol>
+              <div className="flex flex-wrap gap-3">
+                <Button onClick={exportCsv} disabled={loading}>
+                  {loading ? "Preparing…" : "Export All Clients (CSV)"}
+                </Button>
+                <Button variant="outline" onClick={exportJson} disabled={loading}>
+                  {loading ? "Preparing…" : "Export All Clients (JSON)"}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </section>
+
+        <section className="space-y-3">
+          <h2 className="text-lg font-semibold">Reminder</h2>
+          <Card>
+            <CardContent className="p-5">
+              <p className="text-sm text-slate-700">
+                Recommended: export CSV and JSON once per week before making major edits.
+              </p>
             </CardContent>
           </Card>
         </section>

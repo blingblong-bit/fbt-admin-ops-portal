@@ -446,7 +446,9 @@ export const linkSquareReview = createServerFn({ method: "POST" })
       .eq("id", data.clientId)
       .maybeSingle();
 
-    const update: Record<string, unknown> = { square_customer_id: review.square_customer_id };
+    const update: { square_customer_id: string; email?: string; phone?: string } = {
+      square_customer_id: review.square_customer_id,
+    };
     if (review.email && !client?.email) update.email = review.email;
     if (review.phone && !client?.phone) update.phone = review.phone;
 

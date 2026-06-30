@@ -211,6 +211,11 @@ async function fetchServiceNames(
     for (const obj of json.objects ?? []) {
       const name = obj.item_variation_data?.name;
       if (name) out.set(obj.id, name);
+    }
+  } catch {
+    // ignore — service names are optional
+  }
+  return out;
 }
 
 async function fetchProductionCustomers(
@@ -222,7 +227,6 @@ async function fetchProductionCustomers(
   // eslint-disable-next-line no-control-regex
   const cleanToken = (token ?? "").replace(/[^\x20-\x7E]/g, "").trim();
   if (!cleanToken) return out;
-  // Square's Customers API doesn't support batch retrieve; fetch each (cap to avoid rate limit floods)
   const ids = customerIds.slice(0, 50);
   await Promise.all(
     ids.map(async (id) => {
@@ -256,11 +260,6 @@ async function fetchProductionCustomers(
       }
     }),
   );
-  return out;
-}
-  } catch {
-    // ignore — service names are optional
-  }
   return out;
 }
 

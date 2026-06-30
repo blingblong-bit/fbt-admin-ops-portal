@@ -190,7 +190,7 @@ function Dashboard() {
       );
     }
     return [...searched].sort((a, b) => fullName(a).localeCompare(fullName(b)));
-  }, [clients, filter, search, scheduledSet]);
+  }, [visibleClients, filter, search, scheduledSet]);
 
 
   const tiles: TileDef[] = [

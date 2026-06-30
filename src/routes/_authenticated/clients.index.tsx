@@ -27,6 +27,17 @@ export const Route = createFileRoute("/_authenticated/clients/")({
 
 function ClientsListPage() {
   const [search, setSearch] = useState("");
+  const fetchScheduledIds = useServerFn(getScheduledClientIds);
+  const scheduledQuery = useQuery({
+    queryKey: ["scheduled-client-ids"],
+    queryFn: () => fetchScheduledIds({ data: { days: 30 } }),
+    staleTime: 60_000,
+  });
+  const scheduledSet = useMemo(
+    () => new Set<string>(scheduledQuery.data?.client_ids ?? []),
+    [scheduledQuery.data],
+  );
+
   const { data: clients = [], isLoading } = useQuery({
     queryKey: ["clients"],
     queryFn: async () => {
@@ -47,6 +58,7 @@ function ClientsListPage() {
       `${c.first_name} ${c.last_name} ${c.phone ?? ""}`.toLowerCase().includes(q),
     );
   }, [search, clients]);
+
 
   return (
     <AppShell>

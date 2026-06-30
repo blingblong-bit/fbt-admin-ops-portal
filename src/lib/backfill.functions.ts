@@ -250,7 +250,9 @@ export const backfillProductionCustomers = createServerFn({ method: "POST" })
           if (autoLinkClient.square_customer_id && autoLinkClient.square_customer_id !== cust.id) {
             // Conflict — fall through to review queue
           } else {
-            const update: Record<string, unknown> = { square_customer_id: cust.id };
+            const update: { square_customer_id: string; email?: string; phone?: string } = {
+              square_customer_id: cust.id,
+            };
             if (cust.email_address && !autoLinkClient.email) update.email = cust.email_address;
             if (cust.phone_number && !autoLinkClient.phone) update.phone = cust.phone_number;
             const { error: uErr } = await context.supabase

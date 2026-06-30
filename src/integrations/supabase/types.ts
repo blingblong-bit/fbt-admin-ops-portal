@@ -151,6 +151,7 @@ export type Database = {
           id: string
           phone: string | null
           reason: string
+          relevance: string
           square_customer_id: string
           status: string
           suggested_client_id: string | null
@@ -164,6 +165,7 @@ export type Database = {
           id?: string
           phone?: string | null
           reason: string
+          relevance?: string
           square_customer_id: string
           status?: string
           suggested_client_id?: string | null
@@ -177,6 +179,7 @@ export type Database = {
           id?: string
           phone?: string | null
           reason?: string
+          relevance?: string
           square_customer_id?: string
           status?: string
           suggested_client_id?: string | null

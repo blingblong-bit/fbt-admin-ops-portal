@@ -24,13 +24,21 @@ type SquareBooking = {
 export type BackfillResult = {
   fetched_customers: number;
   fetched_bookings: number;
+  fetched_recent_payments: number;
   auto_linked: number;
   updated_contact: number;
   queued_for_review: number;
+  hidden_old: number;
   skipped_already_linked: number;
   skipped_deleted: number;
   errors: string[];
 };
+
+export type ReviewRelevance =
+  | "scheduled_future"
+  | "recent_payment"
+  | "possible_match"
+  | "hidden_old";
 
 function cleanToken(t: string | undefined | null): string {
   return (t ?? "")
@@ -122,6 +130,36 @@ async function fetchFutureBookings(token: string): Promise<Set<string>> {
   return out;
 }
 
+type SquarePayment = {
+  id: string;
+  customer_id?: string | null;
+  created_at?: string | null;
+};
+
+async function fetchRecentPaymentCustomerIds(token: string, days = 60): Promise<Set<string>> {
+  const out = new Set<string>();
+  const begin = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+  let cursor: string | undefined;
+  for (let i = 0; i < 50; i++) {
+    const url = new URL(`${SQUARE_BASE}/v2/payments`);
+    url.searchParams.set("limit", "100");
+    url.searchParams.set("begin_time", begin);
+    url.searchParams.set("sort_order", "DESC");
+    if (cursor) url.searchParams.set("cursor", cursor);
+    const r = await squareGet<{ payments?: SquarePayment[]; cursor?: string }>(
+      token,
+      url.toString(),
+    );
+    if (!r.ok) break;
+    for (const p of r.json?.payments ?? []) {
+      if (p.customer_id) out.add(p.customer_id);
+    }
+    cursor = r.json?.cursor;
+    if (!cursor) break;
+  }
+  return out;
+}
+
 export const backfillProductionCustomers = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }): Promise<BackfillResult> => {
@@ -129,9 +167,11 @@ export const backfillProductionCustomers = createServerFn({ method: "POST" })
     const result: BackfillResult = {
       fetched_customers: 0,
       fetched_bookings: 0,
+      fetched_recent_payments: 0,
       auto_linked: 0,
       updated_contact: 0,
       queued_for_review: 0,
+      hidden_old: 0,
       skipped_already_linked: 0,
       skipped_deleted: 0,
       errors: [],
@@ -141,13 +181,16 @@ export const backfillProductionCustomers = createServerFn({ method: "POST" })
       return result;
     }
 
-    const [{ customers, error: cErr }, futureCustomerIds] = await Promise.all([
-      fetchAllCustomers(token),
-      fetchFutureBookings(token),
-    ]);
+    const [{ customers, error: cErr }, futureCustomerIds, recentPaymentCustomerIds] =
+      await Promise.all([
+        fetchAllCustomers(token),
+        fetchFutureBookings(token),
+        fetchRecentPaymentCustomerIds(token, 60),
+      ]);
     if (cErr) result.errors.push(cErr);
     result.fetched_customers = customers.length;
     result.fetched_bookings = futureCustomerIds.size;
+    result.fetched_recent_payments = recentPaymentCustomerIds.size;
 
     const { data: existing, error: eErr } = await context.supabase
       .from("clients")
@@ -322,6 +365,17 @@ export const backfillProductionCustomers = createServerFn({ method: "POST" })
           continue;
         }
 
+        // Determine relevance — only mark for active review if this customer
+        // matters right now. Everything else is hidden by default.
+        const hasFutureBooking = futureCustomerIds.has(cust.id);
+        const hasRecentPayment = recentPaymentCustomerIds.has(cust.id);
+        const hasPossibleMatch = suggestedId !== null || allCandidateIds.size > 0;
+        let relevance: ReviewRelevance;
+        if (hasFutureBooking) relevance = "scheduled_future";
+        else if (hasRecentPayment) relevance = "recent_payment";
+        else if (hasPossibleMatch) relevance = "possible_match";
+        else relevance = "hidden_old";
+
         await context.supabase
           .from("square_customer_reviews")
           .upsert(
@@ -334,10 +388,12 @@ export const backfillProductionCustomers = createServerFn({ method: "POST" })
               suggested_client_id: suggestedId,
               reason,
               status: "pending",
+              relevance,
             },
             { onConflict: "square_customer_id" },
           );
-        result.queued_for_review++;
+        if (relevance === "hidden_old") result.hidden_old++;
+        else result.queued_for_review++;
       } catch (e) {
         result.errors.push(`${cust.id}: ${(e as Error).message}`);
       }
@@ -368,6 +424,7 @@ export type SquareCustomerReview = {
   suggested_client_id: string | null;
   reason: string;
   status: string;
+  relevance: ReviewRelevance;
   created_at: string;
   suggested_client: {
     id: string;
@@ -378,21 +435,32 @@ export type SquareCustomerReview = {
   } | null;
 };
 
+export type ReviewFilter = "relevant" | "hidden" | "all";
+
 export const listSquareCustomerReviews = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .handler(async ({ context }): Promise<SquareCustomerReview[]> => {
-    const { data, error } = await context.supabase
+  .inputValidator((d?: { filter?: ReviewFilter }) => ({
+    filter: (d?.filter ?? "relevant") as ReviewFilter,
+  }))
+  .handler(async ({ data, context }): Promise<SquareCustomerReview[]> => {
+    let q = context.supabase
       .from("square_customer_reviews")
       .select("*")
       .eq("status", "pending")
       .order("created_at", { ascending: false });
+    if (data.filter === "relevant") {
+      q = q.in("relevance", ["scheduled_future", "recent_payment", "possible_match"]);
+    } else if (data.filter === "hidden") {
+      q = q.eq("relevance", "hidden_old");
+    }
+    const { data: rows, error } = await q;
     if (error) throw error;
-    const reviews = data ?? [];
+    const reviews = rows ?? [];
 
     const ids = Array.from(
       new Set(reviews.map((r) => r.suggested_client_id).filter((x): x is string => !!x)),
     );
-    let suggestedMap = new Map<
+    const suggestedMap = new Map<
       string,
       { id: string; first_name: string; last_name: string; email: string | null; phone: string | null }
     >();

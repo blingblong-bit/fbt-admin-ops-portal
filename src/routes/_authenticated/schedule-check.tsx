@@ -85,7 +85,7 @@ function ScheduleCheckPage() {
     mutationFn: () => runBackfill({}),
     onSuccess: (r) => {
       toast.success(
-        `Backfill: ${r.auto_linked} auto-linked · ${r.queued_for_review} need review · ${r.updated_contact} contact updates · ${r.errors.length} errors`,
+        `Backfill: ${r.auto_linked} auto-linked · ${r.queued_for_review} need review · ${r.hidden_old} hidden (old) · ${r.updated_contact} contact updates · ${r.errors.length} errors`,
       );
       qc.invalidateQueries({ queryKey: ["schedule-check"] });
       qc.invalidateQueries({ queryKey: ["clients"] });
@@ -555,6 +555,7 @@ function ClientsNeedingCard({
 }
 
 function SquareReviewCard() {
+  const [filter, setFilter] = useState<"relevant" | "hidden" | "all">("relevant");
   const listFn = useServerFn(listSquareCustomerReviews);
   const linkClientsFn = useServerFn(listLinkableClients);
   const linkReviewFn = useServerFn(linkSquareReview);
@@ -563,8 +564,8 @@ function SquareReviewCard() {
   const qc = useQueryClient();
 
   const reviewsQuery = useQuery({
-    queryKey: ["square-reviews"],
-    queryFn: () => listFn(),
+    queryKey: ["square-reviews", filter],
+    queryFn: () => listFn({ data: { filter } }),
   });
 
   const clientsQuery = useQuery({
@@ -609,14 +610,33 @@ function SquareReviewCard() {
 
   const reviews = reviewsQuery.data ?? [];
 
+  const tabs: { key: typeof filter; label: string }[] = [
+    { key: "relevant", label: "Needs Review (Scheduled · Recent · Possible Match)" },
+    { key: "hidden", label: "Hidden Old Customers" },
+    { key: "all", label: "Show All" },
+  ];
+
   return (
     <Card>
       <CardHeader>
         <CardTitle>Needs Review ({reviews.length})</CardTitle>
         <CardDescription>
-          Production Square customers that couldn't be auto-linked. Confirm a match, create a new
-          Admin client, or ignore.
+          Production Square customers that couldn't be auto-linked. Only customers with a future
+          appointment, a payment in the last 60 days, or a possible email/phone match are shown by
+          default. Old, unmatched Square records are hidden — they aren't deleted.
         </CardDescription>
+        <div className="flex flex-wrap gap-2 pt-2">
+          {tabs.map((t) => (
+            <Button
+              key={t.key}
+              size="sm"
+              variant={filter === t.key ? "default" : "outline"}
+              onClick={() => setFilter(t.key)}
+            >
+              {t.label}
+            </Button>
+          ))}
+        </div>
       </CardHeader>
       <CardContent>
         {reviewsQuery.isLoading ? (
@@ -643,6 +663,13 @@ function SquareReviewCard() {
     </Card>
   );
 }
+
+const RELEVANCE_LABELS: Record<string, { label: string; className: string }> = {
+  scheduled_future: { label: "Scheduled", className: "bg-emerald-100 text-emerald-900" },
+  recent_payment: { label: "Recent Payment", className: "bg-blue-100 text-blue-900" },
+  possible_match: { label: "Possible Match", className: "bg-amber-100 text-amber-900" },
+  hidden_old: { label: "Hidden (Old)", className: "bg-slate-200 text-slate-700" },
+};
 
 function ReviewRow({
   review,
@@ -679,7 +706,15 @@ function ReviewRow({
           <div className="font-mono text-[11px] text-slate-500">
             Square ID: {review.square_customer_id}
           </div>
-          <div className="text-xs">
+          <div className="text-xs flex flex-wrap gap-1">
+            {(() => {
+              const rel = RELEVANCE_LABELS[review.relevance] ?? RELEVANCE_LABELS.possible_match;
+              return (
+                <span className={`rounded-full px-2 py-0.5 font-medium ${rel.className}`}>
+                  {rel.label}
+                </span>
+              );
+            })()}
             <span className="rounded-full bg-amber-100 px-2 py-0.5 font-medium text-amber-900">
               {review.reason}
             </span>

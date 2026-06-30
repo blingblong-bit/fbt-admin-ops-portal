@@ -1,7 +1,9 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
-const SQUARE_BASE = "https://connect.squareupsandbox.com";
+// Production Square is used ONLY for read-only appointment testing.
+// Customer sync and payment sync remain on Sandbox (see square.webhook.ts).
+const SQUARE_BASE = "https://connect.squareup.com";
 const SQUARE_VERSION = "2024-10-17";
 
 type SquareBookingSegment = {

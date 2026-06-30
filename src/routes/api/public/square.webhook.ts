@@ -419,32 +419,73 @@ async function handleBookingEvent(supabaseAdmin: any, eventType: string, event: 
     return;
   }
 
-  // Match to client by square_customer_id (read-only match)
+  // Match to client by square_customer_id (read-only match) — include archived/inactive
+  // so a new booking can auto-restore them.
   let matchedClientId: string | null = null;
+  let matchedStatus: string | null = null;
   if (squareCustomerId) {
     const { data: client } = await supabaseAdmin
       .from("clients")
-      .select("id")
+      .select("id, status")
       .eq("square_customer_id", squareCustomerId)
       .is("deleted_at", null)
       .maybeSingle();
-    if (client) matchedClientId = client.id;
+    if (client) {
+      matchedClientId = client.id;
+      matchedStatus = (client as { status?: string | null }).status ?? null;
+    }
   }
 
   const isCancelled = /^(CANCELLED|CANCELED|DECLINED|NO_SHOW)$/.test(status);
   const isDeleted = eventType === "booking.updated" && /^DELETED$/.test(status);
   const treatAsNotScheduled = isCancelled || isDeleted;
+  const isActiveBooking = !treatAsNotScheduled;
 
-  const action = treatAsNotScheduled
-    ? "booking_not_scheduled"
-    : status === "ACCEPTED" || status === "PENDING"
-      ? "booking_active"
-      : `booking_status_${status.toLowerCase() || "unknown"}`;
+  // Auto-restore from archive when a new active booking is created/updated.
+  let restored = false;
+  if (
+    matchedClientId &&
+    isActiveBooking &&
+    (matchedStatus === "archived" || matchedStatus === "assessment")
+  ) {
+    // Decide target: if there's a package, treat as active; otherwise assessment.
+    const { data: full } = await supabaseAdmin
+      .from("clients")
+      .select("package_total_visits")
+      .eq("id", matchedClientId)
+      .maybeSingle();
+    const target =
+      ((full as { package_total_visits?: number | null } | null)?.package_total_visits ?? 0) > 0
+        ? "active"
+        : "assessment";
+    if (target !== matchedStatus) {
+      await supabaseAdmin
+        .from("clients")
+        .update({ status: target })
+        .eq("id", matchedClientId);
+      await supabaseAdmin.from("client_activities").insert({
+        client_id: matchedClientId,
+        activity_type: "restored",
+        description: `Restored from archive due to new Square appointment (now ${target}).`,
+        metadata: { source: "square_booking", booking_id: bookingId, status, target } as unknown as never,
+      });
+      restored = true;
+    }
+  }
+
+  const action = restored
+    ? "booking_restored_from_archive"
+    : treatAsNotScheduled
+      ? "booking_not_scheduled"
+      : status === "ACCEPTED" || status === "PENDING"
+        ? "booking_active"
+        : `booking_status_${status.toLowerCase() || "unknown"}`;
 
   const startDisplay = startAt ? new Date(startAt).toISOString() : "unknown time";
-  const message = matchedClientId
+  const baseMsg = matchedClientId
     ? `Booking ${bookingId} (${startDisplay}) status=${status || "UNKNOWN"}${treatAsNotScheduled ? " — treated as not scheduled" : ""}`
     : `Booking ${bookingId} (${startDisplay}) status=${status || "UNKNOWN"} — no matching client (unmatched)`;
+  const message = restored ? `${baseMsg} — auto-restored from archive` : baseMsg;
 
   await supabaseAdmin.from("square_sync_log").insert({
     event_type: eventType,
@@ -456,3 +497,4 @@ async function handleBookingEvent(supabaseAdmin: any, eventType: string, event: 
     raw_event: event as unknown as never,
   });
 }
+

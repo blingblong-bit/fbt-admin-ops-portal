@@ -16,7 +16,15 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { amountOwed, formatCurrency, fullName, progress, type Client } from "@/lib/clients";
+import {
+  amountOwed,
+  effectiveStatus,
+  formatCurrency,
+  fullName,
+  progress,
+  type Client,
+  type LifecycleStatus,
+} from "@/lib/clients";
 import { getScheduledClientIds } from "@/lib/schedule.functions";
 
 
@@ -25,8 +33,37 @@ export const Route = createFileRoute("/_authenticated/clients/")({
   component: ClientsListPage,
 });
 
+type StatusFilter = "active_assessment" | "active" | "assessment" | "archived" | "deleted" | "all";
+
+const STATUS_FILTER_LABEL: Record<StatusFilter, string> = {
+  active_assessment: "Active + Assessment",
+  active: "Active only",
+  assessment: "Assessment only",
+  archived: "Archived",
+  deleted: "Deleted",
+  all: "All (incl. archived)",
+};
+
+function matchesStatusFilter(eff: LifecycleStatus, f: StatusFilter): boolean {
+  switch (f) {
+    case "active_assessment":
+      return eff === "active" || eff === "assessment";
+    case "active":
+      return eff === "active";
+    case "assessment":
+      return eff === "assessment";
+    case "archived":
+      return eff === "archived";
+    case "deleted":
+      return false; // handled by data fetch
+    case "all":
+      return true;
+  }
+}
+
 function ClientsListPage() {
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("active_assessment");
   const fetchScheduledIds = useServerFn(getScheduledClientIds);
   const scheduledQuery = useQuery({
     queryKey: ["scheduled-client-ids"],
@@ -39,12 +76,11 @@ function ClientsListPage() {
   );
 
   const { data: clients = [], isLoading } = useQuery({
-    queryKey: ["clients"],
+    queryKey: ["clients", "all-with-deleted"],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("clients")
         .select("*")
-        .is("deleted_at", null)
         .order("last_name");
       if (error) throw error;
       return data as Client[];
@@ -53,26 +89,49 @@ function ClientsListPage() {
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return clients;
-    return clients.filter((c) =>
-      `${c.first_name} ${c.last_name} ${c.phone ?? ""}`.toLowerCase().includes(q),
-    );
-  }, [search, clients]);
+    const byStatus = clients.filter((c) => {
+      if (statusFilter === "deleted") return c.deleted_at !== null;
+      if (c.deleted_at !== null) return false;
+      const eff = effectiveStatus(c, scheduledSet.has(c.id));
+      return matchesStatusFilter(eff, statusFilter);
+    });
+    return q
+      ? byStatus.filter((c) =>
+          `${c.first_name} ${c.last_name} ${c.phone ?? ""}`.toLowerCase().includes(q),
+        )
+      : byStatus;
+  }, [search, clients, statusFilter, scheduledSet]);
+
+
 
 
   return (
     <AppShell>
-      <div className="mb-6 flex items-end justify-between">
+      <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-3xl font-semibold tracking-tight">All Clients</h1>
           <p className="mt-1 text-sm text-slate-500">
             {isLoading ? "Loading…" : `${filtered.length} of ${clients.length}`}
           </p>
         </div>
-        <Link to="/clients/new">
-          <Button>+ Add Client</Button>
-        </Link>
+        <div className="flex flex-wrap items-center gap-2">
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
+            className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+          >
+            {(Object.keys(STATUS_FILTER_LABEL) as StatusFilter[]).map((k) => (
+              <option key={k} value={k}>
+                {STATUS_FILTER_LABEL[k]}
+              </option>
+            ))}
+          </select>
+          <Link to="/clients/new">
+            <Button>+ Add Client</Button>
+          </Link>
+        </div>
       </div>
+
 
       <Card>
         <CardContent className="pt-6">

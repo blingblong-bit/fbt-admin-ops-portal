@@ -1,6 +1,7 @@
 export type ClientStatus = "Completed" | "Payment Due" | "Ending Soon" | "Active";
 export type SimpleStatus = "Payment Due" | "Not Scheduled" | "Active" | "Package Complete";
 export type PrimaryActionKind = "record_payment" | "mark_scheduled" | "renew_package" | "view_client";
+export type LifecycleStatus = "active" | "assessment" | "archived";
 
 export interface Client {
   id: string;
@@ -17,10 +18,14 @@ export interface Client {
   internal_notes: string | null;
   square_visit_note: string | null;
   is_scheduled: boolean;
+  status: LifecycleStatus | string;
+  manual_active: boolean;
+  square_customer_id: string | null;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
 }
+
 
 export interface ClientActivity {
   id: string;
@@ -86,6 +91,37 @@ export function simpleStatus(c: SimpleClient, isScheduled: boolean): SimpleStatu
   if (!isScheduled) return "Not Scheduled";
   return "Active";
 }
+
+/**
+ * Effective lifecycle classification (Active / Assessment / Archived).
+ * Derived live from package state + live Square booking + manual pin.
+ * Does NOT trust c.status alone — that column is just the persisted default.
+ */
+export function effectiveStatus(
+  c: Pick<
+    Client,
+    | "package_total_visits"
+    | "visits_used"
+    | "package_price"
+    | "amount_paid"
+    | "manual_active"
+    | "status"
+  >,
+  isScheduled: boolean,
+): LifecycleStatus {
+  if (c.manual_active) return "active";
+  const owed = amountOwed(c);
+  const remaining = visitsRemaining(c);
+  const visitsLeft = remaining ?? 0;
+  if (visitsLeft > 0 || owed > 0) return "active";
+  if (isScheduled) {
+    return (c.package_total_visits ?? 0) > 0 ? "active" : "assessment";
+  }
+  if (c.status === "archived") return "archived";
+  if (c.status === "assessment") return "assessment";
+  return "active";
+}
+
 
 export function simpleStatusClasses(s: SimpleStatus): string {
   switch (s) {

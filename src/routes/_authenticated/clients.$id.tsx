@@ -569,8 +569,11 @@ function EditDialog({
           amount_paid: Number(form.amount_paid),
           internal_notes: form.internal_notes || null,
           square_visit_note: form.square_visit_note?.trim() || null,
+          manual_active: Boolean(form.manual_active),
+          status: form.manual_active ? "active" : form.status,
         } as never)
         .eq("id", client.id);
+
       if (error) throw error;
       await supabase.from("client_activities").insert({
         client_id: client.id,
@@ -646,7 +649,23 @@ function EditDialog({
               <Textarea rows={3} value={form.internal_notes ?? ""} onChange={(e) => up("internal_notes", e.target.value)} />
             </Field>
           </div>
+          <div className="sm:col-span-2 flex items-start gap-3 rounded-md border border-slate-200 bg-slate-50 p-3">
+            <input
+              id="manual-active"
+              type="checkbox"
+              className="mt-1 h-4 w-4"
+              checked={Boolean(form.manual_active)}
+              onChange={(e) => up("manual_active", e.target.checked)}
+            />
+            <label htmlFor="manual-active" className="text-sm">
+              <span className="font-medium text-slate-800">Pin as Active</span>
+              <span className="block text-xs text-slate-500">
+                Keep this client visible on the dashboard even with no upcoming booking, no balance, and no visits remaining. Prevents the inactive-cleanup tool from archiving them.
+              </span>
+            </label>
+          </div>
         </div>
+
         <DialogFooter className="sm:justify-between">
           <Button
             variant="ghost"

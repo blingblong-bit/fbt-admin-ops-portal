@@ -1,5 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
+import { useServerFn } from "@tanstack/react-start";
 import { AppShell } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,6 +14,8 @@ import {
   visitsRemaining,
   type Client,
 } from "@/lib/clients";
+import { archiveInactiveSquareImports } from "@/lib/cleanup.functions";
+
 
 export const Route = createFileRoute("/_authenticated/backup")({
   head: () => ({
@@ -32,6 +36,33 @@ function BackupPage() {
     if (typeof window === "undefined") return null;
     return window.localStorage.getItem("fbt:lastExportAt");
   });
+  const runArchive = useServerFn(archiveInactiveSquareImports);
+  const [archiving, setArchiving] = useState(false);
+  const [archiveSummary, setArchiveSummary] = useState<string | null>(null);
+
+  async function handleArchiveInactive() {
+    if (
+      !window.confirm(
+        "Archive all inactive Square imports? Clients with a future booking, balance owed, visits remaining, or pinned active will be skipped.",
+      )
+    ) {
+      return;
+    }
+    setArchiving(true);
+    setArchiveSummary(null);
+    try {
+      const r = await runArchive();
+      const msg = `Archived ${r.archived} of ${r.evaluated} evaluated · skipped ${r.skipped_scheduled} scheduled, ${r.skipped_has_balance} owed, ${r.skipped_has_visits} with visits, ${r.skipped_manual_active} pinned, ${r.skipped_recent_activity} recent`;
+      setArchiveSummary(msg);
+      toast.success(`Archived ${r.archived} inactive Square imports`);
+      loadStats();
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setArchiving(false);
+    }
+  }
+
 
   async function loadStats() {
     const [{ count: active }, { count: archived }] = await Promise.all([
@@ -221,6 +252,34 @@ function BackupPage() {
             </CardContent>
           </Card>
         </section>
+
+        <section className="space-y-3">
+          <h2 className="text-lg font-semibold">Cleanup</h2>
+          <Card>
+            <CardHeader>
+              <CardTitle>Archive inactive Square imports</CardTitle>
+              <CardDescription>
+                Moves Square-imported clients to <strong>Archived</strong> when they have no future
+                booking, no balance owed, no visits remaining, are not pinned active, and have had
+                no activity in the last 30 days. Deleted clients and clients with active packages
+                are never touched.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <Button onClick={handleArchiveInactive} disabled={archiving}>
+                {archiving ? "Archiving…" : "Archive inactive Square imports"}
+              </Button>
+              {archiveSummary && (
+                <p className="text-xs text-slate-600">{archiveSummary}</p>
+              )}
+              <p className="text-xs text-slate-500">
+                Archived clients automatically restore to Active/Assessment if Square sends a new
+                booking for them.
+              </p>
+            </CardContent>
+          </Card>
+        </section>
+
 
         <section className="space-y-3">
           <h2 className="text-lg font-semibold">Reminder</h2>

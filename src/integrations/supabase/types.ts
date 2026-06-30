@@ -60,6 +60,7 @@ export type Database = {
           internal_notes: string | null
           is_scheduled: boolean
           last_name: string
+          manual_active: boolean
           needs_review: boolean
           package_name: string | null
           package_price: number
@@ -82,6 +83,7 @@ export type Database = {
           internal_notes?: string | null
           is_scheduled?: boolean
           last_name: string
+          manual_active?: boolean
           needs_review?: boolean
           package_name?: string | null
           package_price?: number
@@ -104,6 +106,7 @@ export type Database = {
           internal_notes?: string | null
           is_scheduled?: boolean
           last_name?: string
+          manual_active?: boolean
           needs_review?: boolean
           package_name?: string | null
           package_price?: number

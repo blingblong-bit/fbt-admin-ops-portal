@@ -19,10 +19,12 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
   amountOwed,
+  effectiveStatus,
   formatCurrency,
   fullName,
   visitsRemaining,
   type Client,
+  type LifecycleStatus,
 } from "@/lib/clients";
 import { getScheduledClientIds } from "@/lib/schedule.functions";
 
@@ -64,6 +66,31 @@ const FILTER_LABEL: Record<FilterKey, string> = {
   package_complete: "Package Complete",
 };
 
+type StatusFilter = "active_assessment" | "active" | "assessment" | "archived" | "all";
+
+const STATUS_FILTER_LABEL: Record<StatusFilter, string> = {
+  active_assessment: "Active + Assessment",
+  active: "Active only",
+  assessment: "Assessment only",
+  archived: "Archived only",
+  all: "All (incl. archived)",
+};
+
+function matchesStatus(eff: LifecycleStatus, f: StatusFilter): boolean {
+  switch (f) {
+    case "active_assessment":
+      return eff === "active" || eff === "assessment";
+    case "active":
+      return eff === "active";
+    case "assessment":
+      return eff === "assessment";
+    case "archived":
+      return eff === "archived";
+    case "all":
+      return true;
+  }
+}
+
 function matchesFilter(c: Client, f: FilterKey, isScheduled: boolean): boolean {
   const owed = amountOwed(c);
   const r = visitsRemaining(c);
@@ -84,6 +111,7 @@ function matchesFilter(c: Client, f: FilterKey, isScheduled: boolean): boolean {
 }
 
 
+
 function Dashboard() {
   const { data: clients = [], isLoading } = useClients();
   const fetchScheduledIds = useServerFn(getScheduledClientIds);
@@ -100,6 +128,14 @@ function Dashboard() {
 
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<FilterKey>("payment_due");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("active_assessment");
+
+  // Apply lifecycle status filter first — by default this hides archived clients.
+  const visibleClients = useMemo(() => {
+    return clients.filter((c) =>
+      matchesStatus(effectiveStatus(c, isScheduled(c.id)), statusFilter),
+    );
+  }, [clients, statusFilter, scheduledSet]);
 
   const counts = useMemo(() => {
     const c = {
@@ -112,7 +148,7 @@ function Dashboard() {
       critical_total: 0,
       package_complete: 0,
     };
-    for (const cl of clients) {
+    for (const cl of visibleClients) {
       const owed = amountOwed(cl);
       const r = visitsRemaining(cl);
       c.all += 1;
@@ -130,11 +166,13 @@ function Dashboard() {
         c.package_complete += 1;
     }
     return c;
-  }, [clients, scheduledSet]);
+  }, [visibleClients, scheduledSet]);
+
 
   const filtered = useMemo(() => {
-    const list = clients.filter((c) => matchesFilter(c, filter, isScheduled(c.id)));
+    const list = visibleClients.filter((c) => matchesFilter(c, filter, isScheduled(c.id)));
     const q = search.trim().toLowerCase();
+
     const searched = q
       ? list.filter((c) =>
           `${c.first_name} ${c.last_name} ${c.phone ?? ""}`
@@ -152,7 +190,7 @@ function Dashboard() {
       );
     }
     return [...searched].sort((a, b) => fullName(a).localeCompare(fullName(b)));
-  }, [clients, filter, search, scheduledSet]);
+  }, [visibleClients, filter, search, scheduledSet]);
 
 
   const tiles: TileDef[] = [
@@ -206,17 +244,36 @@ function Dashboard() {
 
   return (
     <AppShell>
-      <div className="mb-8 flex items-end justify-between">
+      <div className="mb-8 flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-3xl font-semibold tracking-tight">Today</h1>
           <p className="mt-1 text-sm text-slate-500">
-            {isLoading ? "Loading…" : `${clients.length} clients tracked`}
+            {isLoading
+              ? "Loading…"
+              : `${visibleClients.length} shown · ${clients.length} total`}
           </p>
         </div>
-        <Link to="/clients/new">
-          <Button>+ Add Client</Button>
-        </Link>
+        <div className="flex flex-wrap items-center gap-2">
+          <label className="text-xs font-medium uppercase tracking-wide text-slate-500">
+            Status
+          </label>
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
+            className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+          >
+            {(Object.keys(STATUS_FILTER_LABEL) as StatusFilter[]).map((k) => (
+              <option key={k} value={k}>
+                {STATUS_FILTER_LABEL[k]}
+              </option>
+            ))}
+          </select>
+          <Link to="/clients/new">
+            <Button>+ Add Client</Button>
+          </Link>
+        </div>
       </div>
+
 
       {/* Tiles */}
       <div className="mb-8 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">

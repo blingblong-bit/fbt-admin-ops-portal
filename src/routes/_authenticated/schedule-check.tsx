@@ -32,7 +32,14 @@ import {
   type NeedsScheduleClient,
   type ScheduleAppointment,
 } from "@/lib/schedule.functions";
-import { backfillProductionCustomers } from "@/lib/backfill.functions";
+import {
+  backfillProductionCustomers,
+  createClientFromSquareReview,
+  ignoreSquareReview,
+  linkSquareReview,
+  listSquareCustomerReviews,
+  type SquareCustomerReview,
+} from "@/lib/backfill.functions";
 
 export const Route = createFileRoute("/_authenticated/schedule-check")({
   head: () => ({ meta: [{ title: "Schedule Check — FIT Beyond Therapy" }] }),
@@ -78,10 +85,11 @@ function ScheduleCheckPage() {
     mutationFn: () => runBackfill({}),
     onSuccess: (r) => {
       toast.success(
-        `Backfill done: ${r.created} created, ${r.updated_contact} contact updates, ${r.skipped_active_package} active skipped, ${r.errors.length} errors`,
+        `Backfill: ${r.auto_linked} auto-linked · ${r.queued_for_review} need review · ${r.updated_contact} contact updates · ${r.errors.length} errors`,
       );
       qc.invalidateQueries({ queryKey: ["schedule-check"] });
       qc.invalidateQueries({ queryKey: ["clients"] });
+      qc.invalidateQueries({ queryKey: ["square-reviews"] });
     },
     onError: (e: Error) => toast.error(`Backfill failed: ${e.message}`),
   });
@@ -110,12 +118,15 @@ function ScheduleCheckPage() {
               {backfillMut.isPending ? "Running backfill…" : "Backfill Square Customers"}
             </Button>
             <p className="mt-1 text-xs text-slate-500">
-              Pulls all Production Square customers. Matches by Square ID only — never by name.
-              Active packages and deleted clients are preserved. New imports default to
-              <em> Archived</em>, or <em>Assessment</em> if they have a future appointment.
+              Pulls all Production Square customers. Auto-links to Admin clients only on a
+              high-confidence email/phone match. Uncertain matches are sent to <em>Needs Review</em>{" "}
+              below.
             </p>
           </div>
         </header>
+
+        <SquareReviewCard />
+
 
         <Card>
           <CardHeader>
@@ -540,5 +551,186 @@ function ClientsNeedingCard({
         )}
       </CardContent>
     </Card>
+  );
+}
+
+function SquareReviewCard() {
+  const listFn = useServerFn(listSquareCustomerReviews);
+  const linkClientsFn = useServerFn(listLinkableClients);
+  const linkReviewFn = useServerFn(linkSquareReview);
+  const createFn = useServerFn(createClientFromSquareReview);
+  const ignoreFn = useServerFn(ignoreSquareReview);
+  const qc = useQueryClient();
+
+  const reviewsQuery = useQuery({
+    queryKey: ["square-reviews"],
+    queryFn: () => listFn(),
+  });
+
+  const clientsQuery = useQuery({
+    queryKey: ["linkable-clients"],
+    queryFn: () => linkClientsFn(),
+    enabled: (reviewsQuery.data?.length ?? 0) > 0,
+  });
+
+  const invalidate = () => {
+    qc.invalidateQueries({ queryKey: ["square-reviews"] });
+    qc.invalidateQueries({ queryKey: ["linkable-clients"] });
+    qc.invalidateQueries({ queryKey: ["schedule-check"] });
+    qc.invalidateQueries({ queryKey: ["clients"] });
+  };
+
+  const linkMut = useMutation({
+    mutationFn: (vars: { reviewId: string; clientId: string }) => linkReviewFn({ data: vars }),
+    onSuccess: () => {
+      toast.success("Linked to Square customer");
+      invalidate();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const createMut = useMutation({
+    mutationFn: (reviewId: string) => createFn({ data: { reviewId } }),
+    onSuccess: () => {
+      toast.success("New client created and linked");
+      invalidate();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const ignoreMut = useMutation({
+    mutationFn: (reviewId: string) => ignoreFn({ data: { reviewId } }),
+    onSuccess: () => {
+      toast.success("Ignored");
+      invalidate();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const reviews = reviewsQuery.data ?? [];
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Needs Review ({reviews.length})</CardTitle>
+        <CardDescription>
+          Production Square customers that couldn't be auto-linked. Confirm a match, create a new
+          Admin client, or ignore.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {reviewsQuery.isLoading ? (
+          <div className="text-sm text-slate-500">Loading…</div>
+        ) : reviews.length === 0 ? (
+          <EmptyState text="Nothing waiting for review." />
+        ) : (
+          <div className="space-y-3">
+            {reviews.map((r) => (
+              <ReviewRow
+                key={r.id}
+                review={r}
+                clients={clientsQuery.data ?? []}
+                clientsLoading={clientsQuery.isLoading}
+                busy={linkMut.isPending || createMut.isPending || ignoreMut.isPending}
+                onLink={(clientId) => linkMut.mutate({ reviewId: r.id, clientId })}
+                onCreate={() => createMut.mutate(r.id)}
+                onIgnore={() => ignoreMut.mutate(r.id)}
+              />
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function ReviewRow({
+  review,
+  clients,
+  clientsLoading,
+  busy,
+  onLink,
+  onCreate,
+  onIgnore,
+}: {
+  review: SquareCustomerReview;
+  clients: LinkableClient[];
+  clientsLoading: boolean;
+  busy: boolean;
+  onLink: (clientId: string) => void;
+  onCreate: () => void;
+  onIgnore: () => void;
+}) {
+  const fullName = [review.given_name, review.family_name].filter(Boolean).join(" ").trim();
+  const suggested = review.suggested_client;
+  return (
+    <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="space-y-1">
+          <div className="font-medium text-slate-900">
+            {fullName || <span className="text-slate-500">Unknown name</span>}
+          </div>
+          <div className="text-xs text-slate-600">
+            {review.email && <span>{review.email}</span>}
+            {review.email && review.phone && " · "}
+            {review.phone && <span>{review.phone}</span>}
+            {!review.email && !review.phone && <span className="italic">No email or phone</span>}
+          </div>
+          <div className="font-mono text-[11px] text-slate-500">
+            Square ID: {review.square_customer_id}
+          </div>
+          <div className="text-xs">
+            <span className="rounded-full bg-amber-100 px-2 py-0.5 font-medium text-amber-900">
+              {review.reason}
+            </span>
+          </div>
+          {suggested && (
+            <div className="text-xs text-slate-700">
+              Suggested match:{" "}
+              <Link
+                to="/clients/$id"
+                params={{ id: suggested.id }}
+                className="font-medium text-slate-900 underline"
+              >
+                {suggested.first_name} {suggested.last_name}
+              </Link>
+              {(suggested.email || suggested.phone) && (
+                <span className="text-slate-500">
+                  {" "}
+                  · {suggested.email ?? ""}
+                  {suggested.email && suggested.phone ? " · " : ""}
+                  {suggested.phone ?? ""}
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+        <div className="flex flex-col items-end gap-2">
+          {suggested && (
+            <Button
+              size="sm"
+              disabled={busy}
+              onClick={() => onLink(suggested.id)}
+            >
+              Link to {suggested.first_name} {suggested.last_name}
+            </Button>
+          )}
+          <LinkClientControl
+            clients={clients}
+            loading={clientsLoading}
+            disabled={busy}
+            onLink={onLink}
+          />
+          <div className="flex gap-2">
+            <Button size="sm" variant="outline" disabled={busy} onClick={onCreate}>
+              Create New Admin Client
+            </Button>
+            <Button size="sm" variant="ghost" disabled={busy} onClick={onIgnore}>
+              Ignore
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }

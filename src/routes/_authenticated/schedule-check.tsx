@@ -478,14 +478,16 @@ function AppointmentsCard({
                         )}
                       </TableCell>
 
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
         )}
       </CardContent>
     </Card>
+
   );
 }
 

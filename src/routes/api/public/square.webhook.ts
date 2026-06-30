@@ -24,12 +24,29 @@ type SquarePayment = {
   note?: string | null;
 };
 
+type SquareBookingSegment = {
+  service_variation_id?: string | null;
+  duration_minutes?: number | null;
+};
+
+type SquareBooking = {
+  id?: string;
+  status?: string | null;
+  start_at?: string | null;
+  customer_id?: string | null;
+  appointment_segments?: SquareBookingSegment[] | null;
+};
+
 type SquareEvent = {
   type?: string;
   event_id?: string;
   data?: {
     id?: string;
-    object?: { customer?: SquareCustomer; payment?: SquarePayment };
+    object?: {
+      customer?: SquareCustomer;
+      payment?: SquarePayment;
+      booking?: SquareBooking;
+    };
   };
 };
 

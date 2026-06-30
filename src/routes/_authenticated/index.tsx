@@ -38,13 +38,32 @@ function useClients() {
   return useQuery({
     queryKey: ["clients"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("clients")
-        .select("*")
-        .is("deleted_at", null)
-        .order("updated_at", { ascending: false });
-      if (error) throw error;
-      return data as unknown as Client[];
+      // PostgREST caps a single response at 1000 rows. Page through with
+      // .range() so dashboard tiles (Payment Due, etc.) see every client,
+      // not just the most recently updated 1000.
+      const PAGE_SIZE = 1000;
+      const all: Client[] = [];
+      for (let from = 0; ; from += PAGE_SIZE) {
+        const to = from + PAGE_SIZE - 1;
+        const { data, error } = await supabase
+          .from("clients")
+          .select("*")
+          .is("deleted_at", null)
+          .order("updated_at", { ascending: false })
+          .range(from, to);
+        if (error) {
+          // If a later page fails, surface the error rather than silently
+          // showing a partial dashboard.
+          if (all.length === 0) throw error;
+          throw new Error(
+            `Loaded ${all.length} clients before pagination failed: ${error.message}`,
+          );
+        }
+        const batch = (data ?? []) as unknown as Client[];
+        all.push(...batch);
+        if (batch.length < PAGE_SIZE) break;
+      }
+      return all;
     },
   });
 }

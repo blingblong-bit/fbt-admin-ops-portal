@@ -19,10 +19,12 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
   amountOwed,
+  effectiveStatus,
   formatCurrency,
   fullName,
   visitsRemaining,
   type Client,
+  type LifecycleStatus,
 } from "@/lib/clients";
 import { getScheduledClientIds } from "@/lib/schedule.functions";
 
@@ -64,6 +66,31 @@ const FILTER_LABEL: Record<FilterKey, string> = {
   package_complete: "Package Complete",
 };
 
+type StatusFilter = "active_assessment" | "active" | "assessment" | "archived" | "all";
+
+const STATUS_FILTER_LABEL: Record<StatusFilter, string> = {
+  active_assessment: "Active + Assessment",
+  active: "Active only",
+  assessment: "Assessment only",
+  archived: "Archived only",
+  all: "All (incl. archived)",
+};
+
+function matchesStatus(eff: LifecycleStatus, f: StatusFilter): boolean {
+  switch (f) {
+    case "active_assessment":
+      return eff === "active" || eff === "assessment";
+    case "active":
+      return eff === "active";
+    case "assessment":
+      return eff === "assessment";
+    case "archived":
+      return eff === "archived";
+    case "all":
+      return true;
+  }
+}
+
 function matchesFilter(c: Client, f: FilterKey, isScheduled: boolean): boolean {
   const owed = amountOwed(c);
   const r = visitsRemaining(c);
@@ -82,6 +109,7 @@ function matchesFilter(c: Client, f: FilterKey, isScheduled: boolean): boolean {
       return r !== null && c.package_total_visits > 0 && r === 0;
   }
 }
+
 
 
 function Dashboard() {

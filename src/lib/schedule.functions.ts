@@ -134,12 +134,6 @@ async function fetchSquareBookings(
         },
       });
       console.log(`[schedule] Square responded ${res.status} ${res.statusText}`);
-        headers: {
-          Authorization: `Bearer ${cleanToken}`,
-          "Square-Version": SQUARE_VERSION,
-          "Content-Type": "application/json",
-        },
-      });
       if (!res.ok) {
         const body = await res.text();
         let friendly = `Square ${res.status}: ${body.slice(0, 300)}`;

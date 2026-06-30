@@ -569,8 +569,11 @@ function EditDialog({
           amount_paid: Number(form.amount_paid),
           internal_notes: form.internal_notes || null,
           square_visit_note: form.square_visit_note?.trim() || null,
+          manual_active: Boolean(form.manual_active),
+          status: form.manual_active ? "active" : form.status,
         } as never)
         .eq("id", client.id);
+
       if (error) throw error;
       await supabase.from("client_activities").insert({
         client_id: client.id,

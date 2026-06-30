@@ -141,61 +141,64 @@ function ClientsListPage() {
             onChange={(e) => setSearch(e.target.value)}
             className="mb-4 max-w-md"
           />
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Phone</TableHead>
-                <TableHead>Package</TableHead>
-                <TableHead>Progress</TableHead>
-                <TableHead>Scheduled</TableHead>
-                <TableHead>Amount Owed</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filtered.map((c) => (
-                <TableRow key={c.id}>
-                  <TableCell className="font-medium">{fullName(c)}</TableCell>
-                  <TableCell>{c.phone ?? "—"}</TableCell>
-                  <TableCell>{c.package_name ?? "—"}</TableCell>
-                  <TableCell>{progress(c)}</TableCell>
-                  <TableCell>
-                    {scheduledSet.has(c.id) ? "✅" : "⭕"}
-                  </TableCell>
-                  <TableCell className={amountOwed(c) > 0 ? "font-medium text-red-600" : ""}>
-                    {formatCurrency(amountOwed(c))}
-                  </TableCell>
-                  <TableCell>
-                    <StatusBadge client={c} isScheduled={scheduledSet.has(c.id)} />
-                  </TableCell>
-
-                  <TableCell className="text-right">
-                    <Link to="/clients/$id" params={{ id: c.id }}>
-                      <Button variant="ghost" size="sm">
-                        View
-                      </Button>
-                    </Link>
-                    <Link to="/clients/$id" params={{ id: c.id }} search={{ edit: 1 }}>
-                      <Button variant="ghost" size="sm">
-                        Edit
-                      </Button>
-                    </Link>
-                  </TableCell>
-                </TableRow>
-              ))}
-              {filtered.length === 0 && (
+          <div className="-mx-6 overflow-x-auto px-6">
+            <Table>
+              <TableHeader>
                 <TableRow>
-                  <TableCell colSpan={8} className="py-10 text-center text-sm text-slate-500">
-                    No clients found.
-                  </TableCell>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Phone</TableHead>
+                  <TableHead>Package</TableHead>
+                  <TableHead>Progress</TableHead>
+                  <TableHead>Scheduled</TableHead>
+                  <TableHead>Amount Owed</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
-              )}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {filtered.map((c) => (
+                  <TableRow key={c.id}>
+                    <TableCell className="font-medium whitespace-nowrap">{fullName(c)}</TableCell>
+                    <TableCell className="whitespace-nowrap">{c.phone ?? "—"}</TableCell>
+                    <TableCell className="whitespace-nowrap">{c.package_name ?? "—"}</TableCell>
+                    <TableCell className="whitespace-nowrap">{progress(c)}</TableCell>
+                    <TableCell>
+                      {scheduledSet.has(c.id) ? "✅" : "⭕"}
+                    </TableCell>
+                    <TableCell className={amountOwed(c) > 0 ? "font-medium text-red-600 whitespace-nowrap" : "whitespace-nowrap"}>
+                      {formatCurrency(amountOwed(c))}
+                    </TableCell>
+                    <TableCell>
+                      <StatusBadge client={c} isScheduled={scheduledSet.has(c.id)} />
+                    </TableCell>
+
+                    <TableCell className="text-right whitespace-nowrap">
+                      <Link to="/clients/$id" params={{ id: c.id }}>
+                        <Button variant="ghost" size="sm">
+                          View
+                        </Button>
+                      </Link>
+                      <Link to="/clients/$id" params={{ id: c.id }} search={{ edit: 1 }}>
+                        <Button variant="ghost" size="sm">
+                          Edit
+                        </Button>
+                      </Link>
+                    </TableCell>
+                  </TableRow>
+                ))}
+                {filtered.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={8} className="py-10 text-center text-sm text-slate-500">
+                      No clients found.
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
         </CardContent>
       </Card>
+
     </AppShell>
   );
 }

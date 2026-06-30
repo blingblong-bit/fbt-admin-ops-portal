@@ -418,72 +418,76 @@ function AppointmentsCard({
         {appointments.length === 0 ? (
           <EmptyState text="No appointments." />
         ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>When</TableHead>
-                <TableHead>Client</TableHead>
-                <TableHead>Service</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {appointments.map((a) => {
-                const remaining = a.client ? visitsRemaining(a.client) : 0;
-                return (
-                  <TableRow key={a.booking_id}>
-                    <TableCell className="whitespace-nowrap text-sm">
-                      {formatDateTimeLocal(a.start_at)}
-                    </TableCell>
-                    <TableCell className="text-sm">
-                      {a.client ? (
-                        <div>
-                          <div className="font-medium">
-                            {a.client.first_name} {a.client.last_name}
+          <div className="-mx-6 overflow-x-auto px-6">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>When</TableHead>
+                  <TableHead>Client</TableHead>
+                  <TableHead>Service</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {appointments.map((a) => {
+                  const remaining = a.client ? visitsRemaining(a.client) : 0;
+                  return (
+                    <TableRow key={a.booking_id}>
+                      <TableCell className="whitespace-nowrap text-sm">
+                        {formatDateTimeLocal(a.start_at)}
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        {a.client ? (
+                          <div>
+                            <div className="font-medium whitespace-nowrap">
+                              {a.client.first_name} {a.client.last_name}
+                            </div>
+                            <div className="text-xs text-slate-500">
+                              {remaining} visits left
+                            </div>
                           </div>
-                          <div className="text-xs text-slate-500">
-                            {remaining} visits left
-                          </div>
-                        </div>
-                      ) : (
-                        <span className="text-amber-700">Unmatched</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-sm">
-                      {a.service_name ?? (a.duration_minutes ? `${a.duration_minutes} min` : "—")}
-                    </TableCell>
-                    <TableCell className="text-xs">{a.status}</TableCell>
-                    <TableCell className="text-right">
-                      {a.client ? (
-                        <div className="inline-flex gap-2">
-                          <Button asChild size="sm" variant="outline">
-                            <Link to="/clients/$id" params={{ id: a.client.id }}>
-                              View Client
-                            </Link>
-                          </Button>
-                          {showCompleteVisit && remaining > 0 && onCompleteVisit && (
-                            <Button
-                              size="sm"
-                              disabled={completing === a.client.id}
-                              onClick={() => onCompleteVisit(a.client!.id)}
-                            >
-                              {completing === a.client.id ? "Recording…" : "Complete Visit"}
+                        ) : (
+                          <span className="text-amber-700">Unmatched</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-sm whitespace-nowrap">
+                        {a.service_name ?? (a.duration_minutes ? `${a.duration_minutes} min` : "—")}
+                      </TableCell>
+                      <TableCell className="text-xs whitespace-nowrap">{a.status}</TableCell>
+                      <TableCell className="text-right whitespace-nowrap">
+                        {a.client ? (
+                          <div className="inline-flex gap-2">
+                            <Button asChild size="sm" variant="outline">
+                              <Link to="/clients/$id" params={{ id: a.client.id }}>
+                                View Client
+                              </Link>
                             </Button>
-                          )}
-                        </div>
-                      ) : (
-                        <span className="text-xs text-slate-400">—</span>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
+                            {showCompleteVisit && remaining > 0 && onCompleteVisit && (
+                              <Button
+                                size="sm"
+                                disabled={completing === a.client.id}
+                                onClick={() => onCompleteVisit(a.client!.id)}
+                              >
+                                {completing === a.client.id ? "Recording…" : "Complete Visit"}
+                              </Button>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-xs text-slate-400">—</span>
+                        )}
+                      </TableCell>
+
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
         )}
       </CardContent>
     </Card>
+
   );
 }
 

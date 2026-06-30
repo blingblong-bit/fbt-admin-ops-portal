@@ -706,7 +706,15 @@ function ReviewRow({
           <div className="font-mono text-[11px] text-slate-500">
             Square ID: {review.square_customer_id}
           </div>
-          <div className="text-xs">
+          <div className="text-xs flex flex-wrap gap-1">
+            {(() => {
+              const rel = RELEVANCE_LABELS[review.relevance] ?? RELEVANCE_LABELS.possible_match;
+              return (
+                <span className={`rounded-full px-2 py-0.5 font-medium ${rel.className}`}>
+                  {rel.label}
+                </span>
+              );
+            })()}
             <span className="rounded-full bg-amber-100 px-2 py-0.5 font-medium text-amber-900">
               {review.reason}
             </span>

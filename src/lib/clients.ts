@@ -92,6 +92,37 @@ export function simpleStatus(c: SimpleClient, isScheduled: boolean): SimpleStatu
   return "Active";
 }
 
+/**
+ * Effective lifecycle classification (Active / Assessment / Archived).
+ * Derived live from package state + live Square booking + manual pin.
+ * Does NOT trust c.status alone — that column is just the persisted default.
+ */
+export function effectiveStatus(
+  c: Pick<
+    Client,
+    | "package_total_visits"
+    | "visits_used"
+    | "package_price"
+    | "amount_paid"
+    | "manual_active"
+    | "status"
+  >,
+  isScheduled: boolean,
+): LifecycleStatus {
+  if (c.manual_active) return "active";
+  const owed = amountOwed(c);
+  const remaining = visitsRemaining(c);
+  const visitsLeft = remaining ?? 0;
+  if (visitsLeft > 0 || owed > 0) return "active";
+  if (isScheduled) {
+    return (c.package_total_visits ?? 0) > 0 ? "active" : "assessment";
+  }
+  if (c.status === "archived") return "archived";
+  if (c.status === "assessment") return "assessment";
+  return "active";
+}
+
+
 export function simpleStatusClasses(s: SimpleStatus): string {
   switch (s) {
     case "Active":

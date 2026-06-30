@@ -283,10 +283,9 @@ export const backfillProductionCustomers = createServerFn({ method: "POST" })
             autoLinkClient = candidate;
             confidence = "exact email match";
           }
-        } else if (emailIds.size === 0 && phoneIds.size === 1) {
-          autoLinkClient = phoneMatches[0];
-          confidence = "exact phone match";
         }
+        // Phone-only matches intentionally do NOT auto-link — they go to Needs Review
+        // (families often share a phone number).
 
         if (autoLinkClient) {
           // Make sure this client isn't already linked to a different Square customer
@@ -529,7 +528,7 @@ export const linkSquareReview = createServerFn({ method: "POST" })
     await context.supabase.from("client_activities").insert({
       client_id: data.clientId,
       activity_type: "square_link",
-      description: "Linked to Square customer (manual review)",
+      description: "Linked to Square customer",
       metadata: { square_customer_id: review.square_customer_id, source: "review_queue" },
     });
 
@@ -580,7 +579,7 @@ export const createClientFromSquareReview = createServerFn({ method: "POST" })
     await context.supabase.from("client_activities").insert({
       client_id: created.id,
       activity_type: "square_link",
-      description: "Client created from Square review queue and linked",
+      description: "Created and linked from Square customer",
       metadata: { square_customer_id: review.square_customer_id },
     });
 

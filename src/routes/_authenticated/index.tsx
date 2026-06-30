@@ -86,6 +86,18 @@ function matchesFilter(c: Client, f: FilterKey, isScheduled: boolean): boolean {
 
 function Dashboard() {
   const { data: clients = [], isLoading } = useClients();
+  const fetchScheduledIds = useServerFn(getScheduledClientIds);
+  const scheduledQuery = useQuery({
+    queryKey: ["scheduled-client-ids"],
+    queryFn: () => fetchScheduledIds({ data: { days: 30 } }),
+    staleTime: 60_000,
+  });
+  const scheduledSet = useMemo(
+    () => new Set<string>(scheduledQuery.data?.client_ids ?? []),
+    [scheduledQuery.data],
+  );
+  const isScheduled = (id: string) => scheduledSet.has(id);
+
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<FilterKey>("payment_due");
 
@@ -108,7 +120,7 @@ function Dashboard() {
         c.payment_due += 1;
         c.payment_due_total += owed;
       }
-      if (!cl.is_scheduled) c.not_scheduled += 1;
+      if (!isScheduled(cl.id)) c.not_scheduled += 1;
       if (r !== null && r > 0 && r <= 2) c.almost_finished += 1;
       if (owed > 0 && r !== null && r <= 2) {
         c.critical += 1;
@@ -118,10 +130,10 @@ function Dashboard() {
         c.package_complete += 1;
     }
     return c;
-  }, [clients]);
+  }, [clients, scheduledSet]);
 
   const filtered = useMemo(() => {
-    const list = clients.filter((c) => matchesFilter(c, filter));
+    const list = clients.filter((c) => matchesFilter(c, filter, isScheduled(c.id)));
     const q = search.trim().toLowerCase();
     const searched = q
       ? list.filter((c) =>
@@ -140,7 +152,8 @@ function Dashboard() {
       );
     }
     return [...searched].sort((a, b) => fullName(a).localeCompare(fullName(b)));
-  }, [clients, filter, search]);
+  }, [clients, filter, search, scheduledSet]);
+
 
   const tiles: TileDef[] = [
     {

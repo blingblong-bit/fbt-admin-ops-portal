@@ -144,6 +144,23 @@ async function fetchSquareBookings(
       console.log(`[schedule] Square responded ${res.status} ${res.statusText}`);
       if (!res.ok) {
         const body = await res.text();
+        console.log(`[schedule] Square error body (raw): ${body.slice(0, 600)}`);
+        console.log(
+          `[schedule] Token shape check → prefix3=${cleanToken.slice(0, 3)} ` +
+            `looks_like=${
+              cleanToken.startsWith("EAAAl")
+                ? "production_personal_access_token"
+                : cleanToken.startsWith("EAAAE")
+                  ? "SANDBOX_personal_access_token"
+                  : cleanToken.startsWith("sq0csp-")
+                    ? "OAUTH_CLIENT_SECRET (NOT an access token)"
+                    : cleanToken.startsWith("sq0atp-")
+                      ? "oauth_access_token"
+                      : cleanToken.startsWith("sq0idp-")
+                        ? "OAUTH_APPLICATION_ID (NOT an access token)"
+                        : "unknown_format"
+            }`,
+        );
         let friendly = `Square ${res.status}: ${body.slice(0, 300)}`;
         try {
           const parsed = JSON.parse(body) as {

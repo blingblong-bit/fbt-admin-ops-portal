@@ -73,6 +73,19 @@ function ScheduleCheckPage() {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  const runBackfill = useServerFn(backfillProductionCustomers);
+  const backfillMut = useMutation({
+    mutationFn: () => runBackfill({}),
+    onSuccess: (r) => {
+      toast.success(
+        `Backfill done: ${r.created} created, ${r.updated_contact} contact updates, ${r.skipped_active_package} active skipped, ${r.errors.length} errors`,
+      );
+      qc.invalidateQueries({ queryKey: ["schedule-check"] });
+      qc.invalidateQueries({ queryKey: ["clients"] });
+    },
+    onError: (e: Error) => toast.error(`Backfill failed: ${e.message}`),
+  });
+
   const data = query.data;
 
   return (

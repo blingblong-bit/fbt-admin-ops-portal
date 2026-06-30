@@ -126,24 +126,8 @@ function ClientDetailPage() {
     onError: (e: Error) => toast.error(e.message),
   });
 
-  const toggleScheduled = useMutation({
-    mutationFn: async () => {
-      if (!c) return;
-      const next = !c.is_scheduled;
-      const { error } = await supabase
-        .from("clients")
-        .update({ is_scheduled: next })
-        .eq("id", id);
-      if (error) throw error;
-      await supabase.from("client_activities").insert({
-        client_id: id,
-        activity_type: "scheduled",
-        description: next ? "Marked scheduled" : "Marked not scheduled",
-      });
-    },
-    onSuccess: () => refresh(),
-    onError: (e: Error) => toast.error(e.message),
-  });
+  // Scheduling is derived from live Square bookings — no manual toggle.
+
 
   if (isLoading || !c) {
     return (

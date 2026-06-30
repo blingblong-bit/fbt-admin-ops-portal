@@ -32,7 +32,14 @@ import {
   type NeedsScheduleClient,
   type ScheduleAppointment,
 } from "@/lib/schedule.functions";
-import { backfillProductionCustomers } from "@/lib/backfill.functions";
+import {
+  backfillProductionCustomers,
+  createClientFromSquareReview,
+  ignoreSquareReview,
+  linkSquareReview,
+  listSquareCustomerReviews,
+  type SquareCustomerReview,
+} from "@/lib/backfill.functions";
 
 export const Route = createFileRoute("/_authenticated/schedule-check")({
   head: () => ({ meta: [{ title: "Schedule Check — FIT Beyond Therapy" }] }),

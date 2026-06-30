@@ -1,0 +1,2 @@
+ALTER TABLE public.clients ADD COLUMN IF NOT EXISTS status text NOT NULL DEFAULT 'active' CHECK (status IN ('active','assessment','archived'));
+CREATE INDEX IF NOT EXISTS idx_clients_status ON public.clients(status) WHERE deleted_at IS NULL;

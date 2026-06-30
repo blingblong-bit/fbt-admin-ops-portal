@@ -68,6 +68,7 @@ export type Database = {
           phone: string | null
           square_customer_id: string | null
           square_visit_note: string | null
+          status: string
           updated_at: string
           visits_used: number | null
         }
@@ -89,6 +90,7 @@ export type Database = {
           phone?: string | null
           square_customer_id?: string | null
           square_visit_note?: string | null
+          status?: string
           updated_at?: string
           visits_used?: number | null
         }
@@ -110,6 +112,7 @@ export type Database = {
           phone?: string | null
           square_customer_id?: string | null
           square_visit_note?: string | null
+          status?: string
           updated_at?: string
           visits_used?: number | null
         }

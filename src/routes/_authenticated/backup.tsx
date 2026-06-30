@@ -1,5 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
+import { useServerFn } from "@tanstack/react-start";
 import { AppShell } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,6 +14,8 @@ import {
   visitsRemaining,
   type Client,
 } from "@/lib/clients";
+import { archiveInactiveSquareImports } from "@/lib/cleanup.functions";
+
 
 export const Route = createFileRoute("/_authenticated/backup")({
   head: () => ({

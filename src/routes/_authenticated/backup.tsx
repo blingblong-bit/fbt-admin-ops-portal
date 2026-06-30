@@ -36,6 +36,33 @@ function BackupPage() {
     if (typeof window === "undefined") return null;
     return window.localStorage.getItem("fbt:lastExportAt");
   });
+  const runArchive = useServerFn(archiveInactiveSquareImports);
+  const [archiving, setArchiving] = useState(false);
+  const [archiveSummary, setArchiveSummary] = useState<string | null>(null);
+
+  async function handleArchiveInactive() {
+    if (
+      !window.confirm(
+        "Archive all inactive Square imports? Clients with a future booking, balance owed, visits remaining, or pinned active will be skipped.",
+      )
+    ) {
+      return;
+    }
+    setArchiving(true);
+    setArchiveSummary(null);
+    try {
+      const r = await runArchive();
+      const msg = `Archived ${r.archived} of ${r.evaluated} evaluated · skipped ${r.skipped_scheduled} scheduled, ${r.skipped_has_balance} owed, ${r.skipped_has_visits} with visits, ${r.skipped_manual_active} pinned, ${r.skipped_recent_activity} recent`;
+      setArchiveSummary(msg);
+      toast.success(`Archived ${r.archived} inactive Square imports`);
+      loadStats();
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setArchiving(false);
+    }
+  }
+
 
   async function loadStats() {
     const [{ count: active }, { count: archived }] = await Promise.all([

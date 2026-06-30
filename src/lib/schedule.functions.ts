@@ -224,10 +224,9 @@ export const getScheduleCheck = createServerFn({ method: "GET" })
     const nextWeekStart = addDays(weekEnd, 1);
     const nextWeekEnd = addDays(nextWeekStart, 6);
 
-    // Fetch window: from start of selected day through end of next week (covers selected/this/next week)
-    // Also fetch a bit past next week to detect "any appointment after selected date" — extend +60 days.
-    const fetchStart = new Date(Math.min(weekStart.getTime(), selected.getTime()));
-    const fetchEnd = addDays(nextWeekEnd, 60);
+    // Fetch window: beginning of selected week through end of next week (max ~14 days, well under Square's 31-day limit)
+    const fetchStart = weekStart;
+    const fetchEnd = nextWeekEnd;
     const startIso = fetchStart.toISOString();
     const endIso = fetchEnd.toISOString();
 

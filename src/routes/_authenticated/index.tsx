@@ -64,7 +64,7 @@ const FILTER_LABEL: Record<FilterKey, string> = {
   package_complete: "Package Complete",
 };
 
-function matchesFilter(c: Client, f: FilterKey): boolean {
+function matchesFilter(c: Client, f: FilterKey, isScheduled: boolean): boolean {
   const owed = amountOwed(c);
   const r = visitsRemaining(c);
   switch (f) {
@@ -73,7 +73,7 @@ function matchesFilter(c: Client, f: FilterKey): boolean {
     case "payment_due":
       return owed > 0;
     case "not_scheduled":
-      return !c.is_scheduled;
+      return !isScheduled;
     case "almost_finished":
       return r !== null && r > 0 && r <= 2;
     case "critical":
@@ -82,6 +82,7 @@ function matchesFilter(c: Client, f: FilterKey): boolean {
       return r !== null && c.package_total_visits > 0 && r === 0;
   }
 }
+
 
 function Dashboard() {
   const { data: clients = [], isLoading } = useClients();

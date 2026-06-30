@@ -283,10 +283,9 @@ export const backfillProductionCustomers = createServerFn({ method: "POST" })
             autoLinkClient = candidate;
             confidence = "exact email match";
           }
-        } else if (emailIds.size === 0 && phoneIds.size === 1) {
-          autoLinkClient = phoneMatches[0];
-          confidence = "exact phone match";
         }
+        // Phone-only matches intentionally do NOT auto-link — they go to Needs Review
+        // (families often share a phone number).
 
         if (autoLinkClient) {
           // Make sure this client isn't already linked to a different Square customer

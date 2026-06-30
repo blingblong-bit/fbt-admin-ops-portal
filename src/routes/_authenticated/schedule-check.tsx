@@ -85,7 +85,7 @@ function ScheduleCheckPage() {
     mutationFn: () => runBackfill({}),
     onSuccess: (r) => {
       toast.success(
-        `Backfill: ${r.auto_linked} auto-linked · ${r.queued_for_review} need review · ${r.updated_contact} contact updates · ${r.errors.length} errors`,
+        `Backfill: ${r.auto_linked} auto-linked · ${r.queued_for_review} need review · ${r.hidden_old} hidden (old) · ${r.updated_contact} contact updates · ${r.errors.length} errors`,
       );
       qc.invalidateQueries({ queryKey: ["schedule-check"] });
       qc.invalidateQueries({ queryKey: ["clients"] });

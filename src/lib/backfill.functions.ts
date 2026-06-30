@@ -192,10 +192,37 @@ export const backfillProductionCustomers = createServerFn({ method: "POST" })
     result.fetched_bookings = futureCustomerIds.size;
     result.fetched_recent_payments = recentPaymentCustomerIds.size;
 
-    const { data: existing, error: eErr } = await context.supabase
-      .from("clients")
-      .select("id, first_name, last_name, email, phone, square_customer_id, deleted_at, status");
-    if (eErr) throw eErr;
+    // Paginate to bypass PostgREST's 1000-row default cap
+    type ExistingClient = {
+      id: string;
+      first_name: string | null;
+      last_name: string | null;
+      email: string | null;
+      phone: string | null;
+      square_customer_id: string | null;
+      deleted_at: string | null;
+      status: string | null;
+    };
+    const existing: ExistingClient[] = [];
+    {
+      const pageSize = 1000;
+      let from = 0;
+      // Safety cap at 100k rows
+      for (let i = 0; i < 100; i++) {
+        const { data: page, error: eErr } = await context.supabase
+          .from("clients")
+          .select("id, first_name, last_name, email, phone, square_customer_id, deleted_at, status")
+          .is("deleted_at", null)
+          .range(from, from + pageSize - 1);
+        if (eErr) throw eErr;
+        if (!page || page.length === 0) break;
+        existing.push(...(page as ExistingClient[]));
+        if (page.length < pageSize) break;
+        from += pageSize;
+      }
+    }
+
+
 
     const bySquareId = new Map<string, NonNullable<typeof existing>[number]>();
     const byEmail = new Map<string, NonNullable<typeof existing>[number][]>();
@@ -392,22 +419,34 @@ export const backfillProductionCustomers = createServerFn({ method: "POST" })
         else if (hasPossibleMatch) relevance = "possible_match";
         else relevance = "hidden_old";
 
-        await context.supabase
-          .from("square_customer_reviews")
-          .upsert(
-            {
+        const reviewPayload = {
+          given_name: first || null,
+          family_name: last || null,
+          email: cust.email_address ?? null,
+          phone: cust.phone_number ?? null,
+          suggested_client_id: suggestedId,
+          reason,
+          relevance,
+        };
+        if (prior === undefined) {
+          // New review row
+          await context.supabase
+            .from("square_customer_reviews")
+            .insert({
               square_customer_id: cust.id,
-              given_name: first || null,
-              family_name: last || null,
-              email: cust.email_address ?? null,
-              phone: cust.phone_number ?? null,
-              suggested_client_id: suggestedId,
-              reason,
               status: "pending",
-              relevance,
-            },
-            { onConflict: "square_customer_id" },
-          );
+              ...reviewPayload,
+            });
+        } else if (prior === "pending") {
+          // Refresh metadata but never touch status
+          await context.supabase
+            .from("square_customer_reviews")
+            .update(reviewPayload)
+            .eq("square_customer_id", cust.id)
+            .eq("status", "pending");
+        }
+        // prior in {linked, ignored, created} was already short-circuited above.
+
         if (relevance === "hidden_old") result.hidden_old++;
         else result.queued_for_review++;
       } catch (e) {

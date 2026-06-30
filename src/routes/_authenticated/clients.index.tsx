@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { AppShell } from "@/components/AppShell";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -16,6 +17,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { amountOwed, formatCurrency, fullName, progress, type Client } from "@/lib/clients";
+import { getScheduledClientIds } from "@/lib/schedule.functions";
+
 
 export const Route = createFileRoute("/_authenticated/clients/")({
   head: () => ({ meta: [{ title: "All Clients · FIT Beyond Therapy Admin" }] }),
@@ -24,6 +27,17 @@ export const Route = createFileRoute("/_authenticated/clients/")({
 
 function ClientsListPage() {
   const [search, setSearch] = useState("");
+  const fetchScheduledIds = useServerFn(getScheduledClientIds);
+  const scheduledQuery = useQuery({
+    queryKey: ["scheduled-client-ids"],
+    queryFn: () => fetchScheduledIds({ data: { days: 30 } }),
+    staleTime: 60_000,
+  });
+  const scheduledSet = useMemo(
+    () => new Set<string>(scheduledQuery.data?.client_ids ?? []),
+    [scheduledQuery.data],
+  );
+
   const { data: clients = [], isLoading } = useQuery({
     queryKey: ["clients"],
     queryFn: async () => {
@@ -44,6 +58,7 @@ function ClientsListPage() {
       `${c.first_name} ${c.last_name} ${c.phone ?? ""}`.toLowerCase().includes(q),
     );
   }, [search, clients]);
+
 
   return (
     <AppShell>
@@ -87,13 +102,16 @@ function ClientsListPage() {
                   <TableCell>{c.phone ?? "—"}</TableCell>
                   <TableCell>{c.package_name ?? "—"}</TableCell>
                   <TableCell>{progress(c)}</TableCell>
-                  <TableCell>{c.is_scheduled ? "✅" : "⭕"}</TableCell>
+                  <TableCell>
+                    {scheduledSet.has(c.id) ? "✅" : "⭕"}
+                  </TableCell>
                   <TableCell className={amountOwed(c) > 0 ? "font-medium text-red-600" : ""}>
                     {formatCurrency(amountOwed(c))}
                   </TableCell>
                   <TableCell>
-                    <StatusBadge client={c} />
+                    <StatusBadge client={c} isScheduled={scheduledSet.has(c.id)} />
                   </TableCell>
+
                   <TableCell className="text-right">
                     <Link to="/clients/$id" params={{ id: c.id }}>
                       <Button variant="ghost" size="sm">

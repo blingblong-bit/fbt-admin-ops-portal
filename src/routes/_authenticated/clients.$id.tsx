@@ -4,10 +4,13 @@ import { useEffect, useState } from "react";
 import { z } from "zod";
 import { toast } from "sonner";
 import { fallback, zodValidator } from "@tanstack/zod-adapter";
+import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { AppShell } from "@/components/AppShell";
 import { StatusBadge } from "@/components/StatusBadge";
+import { getScheduledClientIds } from "@/lib/schedule.functions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -73,11 +76,19 @@ function ClientDetailPage() {
   const { edit } = Route.useSearch();
   const { data: c, isLoading } = useClient(id);
   const { data: activities = [] } = useActivities(id);
+  const fetchScheduledIds = useServerFn(getScheduledClientIds);
+  const scheduledQuery = useQuery({
+    queryKey: ["scheduled-client-ids"],
+    queryFn: () => fetchScheduledIds({ data: { days: 30 } }),
+    staleTime: 60_000,
+  });
+  const isScheduled = scheduledQuery.data?.client_ids.includes(id) ?? false;
   const qc = useQueryClient();
   const navigate = useNavigate();
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [renewOpen, setRenewOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+
 
   useEffect(() => {
     if (edit) setEditOpen(true);
@@ -115,24 +126,8 @@ function ClientDetailPage() {
     onError: (e: Error) => toast.error(e.message),
   });
 
-  const toggleScheduled = useMutation({
-    mutationFn: async () => {
-      if (!c) return;
-      const next = !c.is_scheduled;
-      const { error } = await supabase
-        .from("clients")
-        .update({ is_scheduled: next })
-        .eq("id", id);
-      if (error) throw error;
-      await supabase.from("client_activities").insert({
-        client_id: id,
-        activity_type: "scheduled",
-        description: next ? "Marked scheduled" : "Marked not scheduled",
-      });
-    },
-    onSuccess: () => refresh(),
-    onError: (e: Error) => toast.error(e.message),
-  });
+  // Scheduling is derived from live Square bookings — no manual toggle.
+
 
   if (isLoading || !c) {
     return (
@@ -162,16 +157,17 @@ function ClientDetailPage() {
         <div>
           <div className="flex items-center gap-3">
             <h1 className="text-3xl font-semibold tracking-tight">{fullName(c)}</h1>
-            <StatusBadge client={c} />
+            <StatusBadge client={c} isScheduled={isScheduled} />
           </div>
           <p className="mt-1 text-sm text-slate-500">
             {c.phone ?? "no phone"} · {c.email ?? "no email"}
           </p>
+          <p className="mt-1 text-xs text-slate-400">
+            Schedule status is read live from Square — manage appointments in Square.
+          </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button variant="outline" onClick={() => toggleScheduled.mutate()}>
-            {c.is_scheduled ? "Mark Not Scheduled" : "Mark Scheduled"}
-          </Button>
+
           {hasVisitData && (
             <Button onClick={() => completeVisit.mutate()} disabled={remaining === 0}>
               Complete Visit

@@ -70,15 +70,20 @@ export function statusClasses(s: ClientStatus): string {
 
 type SimpleClient = Pick<
   Client,
-  "package_total_visits" | "visits_used" | "package_price" | "amount_paid" | "is_scheduled"
+  "package_total_visits" | "visits_used" | "package_price" | "amount_paid"
 >;
 
-export function simpleStatus(c: SimpleClient): SimpleStatus {
+/**
+ * Schedule status is derived entirely from live Square bookings. Callers must
+ * pass `isScheduled` based on the current Square booking window — the legacy
+ * clients.is_scheduled column is not consulted anywhere.
+ */
+export function simpleStatus(c: SimpleClient, isScheduled: boolean): SimpleStatus {
   const owed = amountOwed(c);
   const remaining = visitsRemaining(c);
   if (remaining !== null && c.package_total_visits > 0 && remaining === 0) return "Package Complete";
   if (owed > 0) return "Payment Due";
-  if (!c.is_scheduled) return "Not Scheduled";
+  if (!isScheduled) return "Not Scheduled";
   return "Active";
 }
 
@@ -108,14 +113,15 @@ export function simpleStatusDot(s: SimpleStatus): string {
   }
 }
 
-export function primaryAction(c: SimpleClient): PrimaryActionKind {
+export function primaryAction(c: SimpleClient, isScheduled: boolean): PrimaryActionKind {
   const owed = amountOwed(c);
   const remaining = visitsRemaining(c);
   if (remaining !== null && c.package_total_visits > 0 && remaining === 0) return "renew_package";
   if (owed > 0) return "record_payment";
-  if (!c.is_scheduled) return "mark_scheduled";
+  if (!isScheduled) return "mark_scheduled";
   return "view_client";
 }
+
 
 export function fullName(c: Pick<Client, "first_name" | "last_name">) {
   return `${c.first_name} ${c.last_name}`.trim();

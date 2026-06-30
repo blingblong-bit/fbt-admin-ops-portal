@@ -22,36 +22,23 @@ import {
   type Client,
 } from "@/lib/clients";
 
-export function SmartClientCard({ client }: { client: Client }) {
+export function SmartClientCard({
+  client,
+  isScheduled,
+}: {
+  client: Client;
+  /** Derived from live Square bookings. */
+  isScheduled: boolean;
+}) {
   const qc = useQueryClient();
   const owed = amountOwed(client);
-  const action = primaryAction(client);
+  const action = primaryAction(client, isScheduled);
   const [paymentOpen, setPaymentOpen] = useState(false);
 
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ["clients"] });
     qc.invalidateQueries({ queryKey: ["client", client.id] });
   };
-
-  const markScheduled = useMutation({
-    mutationFn: async () => {
-      const { error } = await supabase
-        .from("clients")
-        .update({ is_scheduled: true })
-        .eq("id", client.id);
-      if (error) throw error;
-      await supabase.from("client_activities").insert({
-        client_id: client.id,
-        activity_type: "scheduled",
-        description: "Marked scheduled",
-      });
-    },
-    onSuccess: () => {
-      toast.success(`${fullName(client)} marked scheduled`);
-      refresh();
-    },
-    onError: (e: Error) => toast.error(e.message),
-  });
 
   const primary = (() => {
     switch (action) {
@@ -62,15 +49,14 @@ export function SmartClientCard({ client }: { client: Client }) {
           </Button>
         );
       case "mark_scheduled":
+        // Scheduling is read-only from Square. Staff schedule the client in Square,
+        // and this card will flip to Active on the next refresh.
         return (
-          <Button
-            size="lg"
-            className="w-full"
-            onClick={() => markScheduled.mutate()}
-            disabled={markScheduled.isPending}
-          >
-            📅 Mark Scheduled
-          </Button>
+          <Link to="/clients/$id" params={{ id: client.id }} className="block">
+            <Button size="lg" variant="outline" className="w-full">
+              📅 Schedule in Square
+            </Button>
+          </Link>
         );
       case "renew_package":
         return (
@@ -106,7 +92,7 @@ export function SmartClientCard({ client }: { client: Client }) {
             <div className="mt-0.5 text-sm text-slate-500">📞 {client.phone}</div>
           )}
         </div>
-        <StatusBadge client={client} />
+        <StatusBadge client={client} isScheduled={isScheduled} />
       </div>
 
       <dl className="mb-4 space-y-1.5 text-sm">

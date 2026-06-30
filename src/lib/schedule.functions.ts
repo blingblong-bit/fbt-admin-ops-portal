@@ -590,4 +590,65 @@ export const unlinkSquareCustomer = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+/**
+ * Single source of truth for "is this client scheduled?".
+ *
+ * A client is scheduled iff at least one ACTIVE Square booking exists for their
+ * linked square_customer_id within the lookahead window (today → +days). The
+ * legacy clients.is_scheduled column is NOT consulted.
+ */
+export const getScheduledClientIds = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { days?: number } | undefined) => ({
+    days: Math.min(60, Math.max(1, Number(d?.days ?? 30))),
+  }))
+  .handler(
+    async ({
+      data,
+      context,
+    }): Promise<{ client_ids: string[]; fetched_count: number; error: string | null }> => {
+      const token = process.env.SQUARE_PRODUCTION_ACCESS_TOKEN;
+      if (!token) {
+        return {
+          client_ids: [],
+          fetched_count: 0,
+          error: "SQUARE_PRODUCTION_ACCESS_TOKEN is not configured",
+        };
+      }
+      const now = new Date();
+      const end = new Date(now.getTime() + data.days * 24 * 60 * 60 * 1000);
+      const { bookings, error } = await fetchSquareBookings(
+        token,
+        now.toISOString(),
+        end.toISOString(),
+      );
+      if (error) {
+        return { client_ids: [], fetched_count: bookings.length, error };
+      }
+
+      const customerIds = new Set<string>();
+      for (const b of bookings) {
+        const status = (b.status ?? "").toString().toUpperCase();
+        if (/CANCEL|DECLINE|NO_SHOW/.test(status)) continue;
+        if (b.customer_id) customerIds.add(b.customer_id);
+      }
+      if (customerIds.size === 0) {
+        return { client_ids: [], fetched_count: bookings.length, error: null };
+      }
+
+      const { data: rows, error: cErr } = await context.supabase
+        .from("clients")
+        .select("id, square_customer_id")
+        .is("deleted_at", null)
+        .in("square_customer_id", Array.from(customerIds));
+      if (cErr) throw cErr;
+
+      const ids = (rows ?? [])
+        .map((r) => (r as { id: string }).id)
+        .filter(Boolean);
+      return { client_ids: ids, fetched_count: bookings.length, error: null };
+    },
+  );
+
+
 

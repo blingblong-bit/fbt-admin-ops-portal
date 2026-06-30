@@ -9,6 +9,7 @@ import {
   Hourglass,
   Users,
 } from "lucide-react";
+import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { AppShell } from "@/components/AppShell";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -23,6 +24,8 @@ import {
   visitsRemaining,
   type Client,
 } from "@/lib/clients";
+import { getScheduledClientIds } from "@/lib/schedule.functions";
+
 
 export const Route = createFileRoute("/_authenticated/")({
   head: () => ({ meta: [{ title: "Dashboard · FIT Beyond Therapy Admin" }] }),
@@ -61,7 +64,7 @@ const FILTER_LABEL: Record<FilterKey, string> = {
   package_complete: "Package Complete",
 };
 
-function matchesFilter(c: Client, f: FilterKey): boolean {
+function matchesFilter(c: Client, f: FilterKey, isScheduled: boolean): boolean {
   const owed = amountOwed(c);
   const r = visitsRemaining(c);
   switch (f) {
@@ -70,7 +73,7 @@ function matchesFilter(c: Client, f: FilterKey): boolean {
     case "payment_due":
       return owed > 0;
     case "not_scheduled":
-      return !c.is_scheduled;
+      return !isScheduled;
     case "almost_finished":
       return r !== null && r > 0 && r <= 2;
     case "critical":
@@ -80,8 +83,21 @@ function matchesFilter(c: Client, f: FilterKey): boolean {
   }
 }
 
+
 function Dashboard() {
   const { data: clients = [], isLoading } = useClients();
+  const fetchScheduledIds = useServerFn(getScheduledClientIds);
+  const scheduledQuery = useQuery({
+    queryKey: ["scheduled-client-ids"],
+    queryFn: () => fetchScheduledIds({ data: { days: 30 } }),
+    staleTime: 60_000,
+  });
+  const scheduledSet = useMemo(
+    () => new Set<string>(scheduledQuery.data?.client_ids ?? []),
+    [scheduledQuery.data],
+  );
+  const isScheduled = (id: string) => scheduledSet.has(id);
+
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<FilterKey>("payment_due");
 
@@ -104,7 +120,7 @@ function Dashboard() {
         c.payment_due += 1;
         c.payment_due_total += owed;
       }
-      if (!cl.is_scheduled) c.not_scheduled += 1;
+      if (!isScheduled(cl.id)) c.not_scheduled += 1;
       if (r !== null && r > 0 && r <= 2) c.almost_finished += 1;
       if (owed > 0 && r !== null && r <= 2) {
         c.critical += 1;
@@ -114,10 +130,10 @@ function Dashboard() {
         c.package_complete += 1;
     }
     return c;
-  }, [clients]);
+  }, [clients, scheduledSet]);
 
   const filtered = useMemo(() => {
-    const list = clients.filter((c) => matchesFilter(c, filter));
+    const list = clients.filter((c) => matchesFilter(c, filter, isScheduled(c.id)));
     const q = search.trim().toLowerCase();
     const searched = q
       ? list.filter((c) =>
@@ -136,7 +152,8 @@ function Dashboard() {
       );
     }
     return [...searched].sort((a, b) => fullName(a).localeCompare(fullName(b)));
-  }, [clients, filter, search]);
+  }, [clients, filter, search, scheduledSet]);
+
 
   const tiles: TileDef[] = [
     {
@@ -246,7 +263,7 @@ function Dashboard() {
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {filtered.map((c) => (
-              <SmartClientCard key={c.id} client={c} />
+              <SmartClientCard key={c.id} client={c} isScheduled={isScheduled(c.id)} />
             ))}
           </div>
         )}

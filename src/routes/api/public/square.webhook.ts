@@ -78,11 +78,20 @@ export const Route = createFileRoute("/api/public/square/webhook")({
           request.headers.get("X-Square-HmacSHA256-Signature") ??
           "";
 
+        // Temporary debug logging (no secrets) — environment is Production read-only mirror
+        console.log(
+          `[square-webhook] env=production base=https://connect.squareup.com ` +
+            `secret_name=SQUARE_WEBHOOK_SIGNATURE_KEY url_name=SQUARE_WEBHOOK_NOTIFICATION_URL ` +
+            `sig_present=${Boolean(signature)} sig_key_present=${Boolean(sigKey)} url_present=${Boolean(notificationUrl)}`,
+        );
+
         if (!sigKey || !notificationUrl) {
           return new Response("Webhook not configured", { status: 503 });
         }
 
-        if (!signature || !verifySignature(notificationUrl, rawBody, signature, sigKey)) {
+        const verified = signature ? verifySignature(notificationUrl, rawBody, signature, sigKey) : false;
+        console.log(`[square-webhook] signature_verified=${verified}`);
+        if (!verified) {
           return new Response("Invalid signature", { status: 401 });
         }
 
@@ -101,6 +110,13 @@ export const Route = createFileRoute("/api/public/square/webhook")({
         }
 
         const eventType = event.type ?? "unknown";
+        const obj = event.data?.object ?? {};
+        console.log(
+          `[square-webhook] event_type=${eventType} ` +
+            `customer_id=${obj.customer?.id ?? obj.payment?.customer_id ?? obj.booking?.customer_id ?? "none"} ` +
+            `payment_id=${obj.payment?.id ?? "none"} booking_id=${obj.booking?.id ?? "none"}`,
+        );
+
 
         try {
           if (eventType === "customer.created" || eventType === "customer.updated") {

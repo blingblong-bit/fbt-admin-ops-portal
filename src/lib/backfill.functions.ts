@@ -424,6 +424,7 @@ export type SquareCustomerReview = {
   suggested_client_id: string | null;
   reason: string;
   status: string;
+  relevance: ReviewRelevance;
   created_at: string;
   suggested_client: {
     id: string;
@@ -434,21 +435,32 @@ export type SquareCustomerReview = {
   } | null;
 };
 
+export type ReviewFilter = "relevant" | "hidden" | "all";
+
 export const listSquareCustomerReviews = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .handler(async ({ context }): Promise<SquareCustomerReview[]> => {
-    const { data, error } = await context.supabase
+  .inputValidator((d?: { filter?: ReviewFilter }) => ({
+    filter: (d?.filter ?? "relevant") as ReviewFilter,
+  }))
+  .handler(async ({ data, context }): Promise<SquareCustomerReview[]> => {
+    let q = context.supabase
       .from("square_customer_reviews")
       .select("*")
       .eq("status", "pending")
       .order("created_at", { ascending: false });
+    if (data.filter === "relevant") {
+      q = q.in("relevance", ["scheduled_future", "recent_payment", "possible_match"]);
+    } else if (data.filter === "hidden") {
+      q = q.eq("relevance", "hidden_old");
+    }
+    const { data: rows, error } = await q;
     if (error) throw error;
-    const reviews = data ?? [];
+    const reviews = rows ?? [];
 
     const ids = Array.from(
       new Set(reviews.map((r) => r.suggested_client_id).filter((x): x is string => !!x)),
     );
-    let suggestedMap = new Map<
+    const suggestedMap = new Map<
       string,
       { id: string; first_name: string; last_name: string; email: string | null; phone: string | null }
     >();

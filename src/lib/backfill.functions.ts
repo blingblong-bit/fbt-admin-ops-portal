@@ -528,7 +528,7 @@ export const linkSquareReview = createServerFn({ method: "POST" })
     await context.supabase.from("client_activities").insert({
       client_id: data.clientId,
       activity_type: "square_link",
-      description: "Linked to Square customer (manual review)",
+      description: "Linked to Square customer",
       metadata: { square_customer_id: review.square_customer_id, source: "review_queue" },
     });
 

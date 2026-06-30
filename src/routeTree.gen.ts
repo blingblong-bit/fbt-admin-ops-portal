@@ -13,6 +13,7 @@ import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/index'
 import { Route as AuthenticatedSyncLogRouteImport } from './routes/_authenticated/sync-log'
+import { Route as AuthenticatedScheduleCheckRouteImport } from './routes/_authenticated/schedule-check'
 import { Route as AuthenticatedImportRouteImport } from './routes/_authenticated/import'
 import { Route as AuthenticatedBackupRouteImport } from './routes/_authenticated/backup'
 import { Route as AuthenticatedClientsIndexRouteImport } from './routes/_authenticated/clients.index'
@@ -40,6 +41,12 @@ const AuthenticatedSyncLogRoute = AuthenticatedSyncLogRouteImport.update({
   path: '/sync-log',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedScheduleCheckRoute =
+  AuthenticatedScheduleCheckRouteImport.update({
+    id: '/schedule-check',
+    path: '/schedule-check',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedImportRoute = AuthenticatedImportRouteImport.update({
   id: '/import',
   path: '/import',
@@ -83,6 +90,7 @@ export interface FileRoutesByFullPath {
   '/auth': typeof AuthRoute
   '/backup': typeof AuthenticatedBackupRoute
   '/import': typeof AuthenticatedImportRoute
+  '/schedule-check': typeof AuthenticatedScheduleCheckRoute
   '/sync-log': typeof AuthenticatedSyncLogRoute
   '/clients/$id': typeof AuthenticatedClientsIdRoute
   '/clients/deleted': typeof AuthenticatedClientsDeletedRoute
@@ -94,6 +102,7 @@ export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
   '/backup': typeof AuthenticatedBackupRoute
   '/import': typeof AuthenticatedImportRoute
+  '/schedule-check': typeof AuthenticatedScheduleCheckRoute
   '/sync-log': typeof AuthenticatedSyncLogRoute
   '/': typeof AuthenticatedIndexRoute
   '/clients/$id': typeof AuthenticatedClientsIdRoute
@@ -108,6 +117,7 @@ export interface FileRoutesById {
   '/auth': typeof AuthRoute
   '/_authenticated/backup': typeof AuthenticatedBackupRoute
   '/_authenticated/import': typeof AuthenticatedImportRoute
+  '/_authenticated/schedule-check': typeof AuthenticatedScheduleCheckRoute
   '/_authenticated/sync-log': typeof AuthenticatedSyncLogRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
   '/_authenticated/clients/$id': typeof AuthenticatedClientsIdRoute
@@ -123,6 +133,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/backup'
     | '/import'
+    | '/schedule-check'
     | '/sync-log'
     | '/clients/$id'
     | '/clients/deleted'
@@ -134,6 +145,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/backup'
     | '/import'
+    | '/schedule-check'
     | '/sync-log'
     | '/'
     | '/clients/$id'
@@ -147,6 +159,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/_authenticated/backup'
     | '/_authenticated/import'
+    | '/_authenticated/schedule-check'
     | '/_authenticated/sync-log'
     | '/_authenticated/'
     | '/_authenticated/clients/$id'
@@ -190,6 +203,13 @@ declare module '@tanstack/react-router' {
       path: '/sync-log'
       fullPath: '/sync-log'
       preLoaderRoute: typeof AuthenticatedSyncLogRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/schedule-check': {
+      id: '/_authenticated/schedule-check'
+      path: '/schedule-check'
+      fullPath: '/schedule-check'
+      preLoaderRoute: typeof AuthenticatedScheduleCheckRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/import': {
@@ -247,6 +267,7 @@ declare module '@tanstack/react-router' {
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedBackupRoute: typeof AuthenticatedBackupRoute
   AuthenticatedImportRoute: typeof AuthenticatedImportRoute
+  AuthenticatedScheduleCheckRoute: typeof AuthenticatedScheduleCheckRoute
   AuthenticatedSyncLogRoute: typeof AuthenticatedSyncLogRoute
   AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
   AuthenticatedClientsIdRoute: typeof AuthenticatedClientsIdRoute
@@ -258,6 +279,7 @@ interface AuthenticatedRouteRouteChildren {
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedBackupRoute: AuthenticatedBackupRoute,
   AuthenticatedImportRoute: AuthenticatedImportRoute,
+  AuthenticatedScheduleCheckRoute: AuthenticatedScheduleCheckRoute,
   AuthenticatedSyncLogRoute: AuthenticatedSyncLogRoute,
   AuthenticatedIndexRoute: AuthenticatedIndexRoute,
   AuthenticatedClientsIdRoute: AuthenticatedClientsIdRoute,

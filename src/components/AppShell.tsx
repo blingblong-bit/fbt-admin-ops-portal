@@ -8,6 +8,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     { to: "/", label: "Dashboard" },
     { to: "/clients", label: "All Clients" },
     { to: "/clients/new", label: "Add Client" },
+    { to: "/schedule-check", label: "Schedule Check" },
     { to: "/clients/deleted", label: "Deleted" },
     { to: "/import", label: "Import" },
     { to: "/backup", label: "Backup" },

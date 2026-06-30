@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
@@ -15,10 +15,20 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { formatCurrency, formatDate, formatDateTimeLocal } from "@/lib/clients";
 import {
   completeVisitForClient,
   getScheduleCheck,
+  linkProductionCustomer,
+  listLinkableClients,
+  type LinkableClient,
   type NeedsScheduleClient,
   type ScheduleAppointment,
 } from "@/lib/schedule.functions";

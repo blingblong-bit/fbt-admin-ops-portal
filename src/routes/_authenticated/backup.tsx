@@ -254,6 +254,34 @@ function BackupPage() {
         </section>
 
         <section className="space-y-3">
+          <h2 className="text-lg font-semibold">Cleanup</h2>
+          <Card>
+            <CardHeader>
+              <CardTitle>Archive inactive Square imports</CardTitle>
+              <CardDescription>
+                Moves Square-imported clients to <strong>Archived</strong> when they have no future
+                booking, no balance owed, no visits remaining, are not pinned active, and have had
+                no activity in the last 30 days. Deleted clients and clients with active packages
+                are never touched.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <Button onClick={handleArchiveInactive} disabled={archiving}>
+                {archiving ? "Archiving…" : "Archive inactive Square imports"}
+              </Button>
+              {archiveSummary && (
+                <p className="text-xs text-slate-600">{archiveSummary}</p>
+              )}
+              <p className="text-xs text-slate-500">
+                Archived clients automatically restore to Active/Assessment if Square sends a new
+                booking for them.
+              </p>
+            </CardContent>
+          </Card>
+        </section>
+
+
+        <section className="space-y-3">
           <h2 className="text-lg font-semibold">Reminder</h2>
           <Card>
             <CardContent className="p-5">

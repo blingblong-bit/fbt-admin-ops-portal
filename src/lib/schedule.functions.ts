@@ -498,3 +498,83 @@ export const completeVisitForClient = createServerFn({ method: "POST" })
     });
     return { ok: true, visits_used: next };
   });
+
+export type LinkableClient = {
+  id: string;
+  first_name: string;
+  last_name: string;
+  phone: string | null;
+  email: string | null;
+  production_square_customer_id: string | null;
+};
+
+export const listLinkableClients = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }): Promise<LinkableClient[]> => {
+    const { data, error } = await context.supabase
+      .from("clients")
+      .select("id, first_name, last_name, phone, email, production_square_customer_id")
+      .is("deleted_at", null)
+      .order("first_name", { ascending: true });
+    if (error) throw error;
+    return (data ?? []) as LinkableClient[];
+  });
+
+export const linkProductionCustomer = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { clientId: string; productionSquareCustomerId: string }) => {
+    if (!d?.clientId) throw new Error("clientId required");
+    if (!d?.productionSquareCustomerId) throw new Error("productionSquareCustomerId required");
+    return d;
+  })
+  .handler(async ({ data, context }) => {
+    // Prevent linking the same production customer ID to two different clients
+    const { data: existing, error: eErr } = await context.supabase
+      .from("clients")
+      .select("id, first_name, last_name")
+      .eq("production_square_customer_id", data.productionSquareCustomerId)
+      .is("deleted_at", null)
+      .neq("id", data.clientId)
+      .maybeSingle();
+    if (eErr) throw eErr;
+    if (existing) {
+      throw new Error(
+        `Production customer is already linked to ${existing.first_name} ${existing.last_name}. Unlink them first.`,
+      );
+    }
+
+    const { error } = await context.supabase
+      .from("clients")
+      .update({ production_square_customer_id: data.productionSquareCustomerId })
+      .eq("id", data.clientId);
+    if (error) throw error;
+
+    await context.supabase.from("client_activities").insert({
+      client_id: data.clientId,
+      activity_type: "square_link",
+      description: `Linked Production Square customer ${data.productionSquareCustomerId}`,
+      metadata: { production_square_customer_id: data.productionSquareCustomerId },
+    });
+    return { ok: true };
+  });
+
+export const unlinkProductionCustomer = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { clientId: string }) => {
+    if (!d?.clientId) throw new Error("clientId required");
+    return d;
+  })
+  .handler(async ({ data, context }) => {
+    const { error } = await context.supabase
+      .from("clients")
+      .update({ production_square_customer_id: null })
+      .eq("id", data.clientId);
+    if (error) throw error;
+    await context.supabase.from("client_activities").insert({
+      client_id: data.clientId,
+      activity_type: "square_unlink",
+      description: "Unlinked Production Square customer",
+    });
+    return { ok: true };
+  });
+

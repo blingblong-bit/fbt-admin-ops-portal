@@ -419,22 +419,34 @@ export const backfillProductionCustomers = createServerFn({ method: "POST" })
         else if (hasPossibleMatch) relevance = "possible_match";
         else relevance = "hidden_old";
 
-        await context.supabase
-          .from("square_customer_reviews")
-          .upsert(
-            {
+        const reviewPayload = {
+          given_name: first || null,
+          family_name: last || null,
+          email: cust.email_address ?? null,
+          phone: cust.phone_number ?? null,
+          suggested_client_id: suggestedId,
+          reason,
+          relevance,
+        };
+        if (prior === undefined) {
+          // New review row
+          await context.supabase
+            .from("square_customer_reviews")
+            .insert({
               square_customer_id: cust.id,
-              given_name: first || null,
-              family_name: last || null,
-              email: cust.email_address ?? null,
-              phone: cust.phone_number ?? null,
-              suggested_client_id: suggestedId,
-              reason,
               status: "pending",
-              relevance,
-            },
-            { onConflict: "square_customer_id" },
-          );
+              ...reviewPayload,
+            });
+        } else if (prior === "pending") {
+          // Refresh metadata but never touch status
+          await context.supabase
+            .from("square_customer_reviews")
+            .update(reviewPayload)
+            .eq("square_customer_id", cust.id)
+            .eq("status", "pending");
+        }
+        // prior in {linked, ignored, created} was already short-circuited above.
+
         if (relevance === "hidden_old") result.hidden_old++;
         else result.queued_for_review++;
       } catch (e) {

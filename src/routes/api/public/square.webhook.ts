@@ -384,3 +384,59 @@ async function handlePaymentEvent(supabaseAdmin: any, eventType: string, event: 
     raw_event: event as unknown as never,
   });
 }
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function handleBookingEvent(supabaseAdmin: any, eventType: string, event: SquareEvent) {
+  const booking = event.data?.object?.booking;
+  const bookingId = booking?.id ?? event.data?.id ?? null;
+  const status = (booking?.status ?? "").toString().toUpperCase();
+  const squareCustomerId = booking?.customer_id ?? null;
+  const startAt = booking?.start_at ?? null;
+
+  if (!bookingId) {
+    await supabaseAdmin.from("square_sync_log").insert({
+      event_type: eventType,
+      status: "error",
+      message: "Event missing Square booking ID",
+      raw_event: event as unknown as never,
+    });
+    return;
+  }
+
+  // Match to client by square_customer_id (read-only match)
+  let matchedClientId: string | null = null;
+  if (squareCustomerId) {
+    const { data: client } = await supabaseAdmin
+      .from("clients")
+      .select("id")
+      .eq("square_customer_id", squareCustomerId)
+      .is("deleted_at", null)
+      .maybeSingle();
+    if (client) matchedClientId = client.id;
+  }
+
+  const isCancelled = /^(CANCELLED|CANCELED|DECLINED|NO_SHOW)$/.test(status);
+  const isDeleted = eventType === "booking.updated" && /^DELETED$/.test(status);
+  const treatAsNotScheduled = isCancelled || isDeleted;
+
+  const action = treatAsNotScheduled
+    ? "booking_not_scheduled"
+    : status === "ACCEPTED" || status === "PENDING"
+      ? "booking_active"
+      : `booking_status_${status.toLowerCase() || "unknown"}`;
+
+  const startDisplay = startAt ? new Date(startAt).toISOString() : "unknown time";
+  const message = matchedClientId
+    ? `Booking ${bookingId} (${startDisplay}) status=${status || "UNKNOWN"}${treatAsNotScheduled ? " — treated as not scheduled" : ""}`
+    : `Booking ${bookingId} (${startDisplay}) status=${status || "UNKNOWN"} — no matching client (unmatched)`;
+
+  await supabaseAdmin.from("square_sync_log").insert({
+    event_type: eventType,
+    square_customer_id: squareCustomerId,
+    client_id: matchedClientId,
+    status: matchedClientId ? "success" : "skipped",
+    action,
+    message,
+    raw_event: event as unknown as never,
+  });
+}

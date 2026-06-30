@@ -365,6 +365,17 @@ export const backfillProductionCustomers = createServerFn({ method: "POST" })
           continue;
         }
 
+        // Determine relevance — only mark for active review if this customer
+        // matters right now. Everything else is hidden by default.
+        const hasFutureBooking = futureCustomerIds.has(cust.id);
+        const hasRecentPayment = recentPaymentCustomerIds.has(cust.id);
+        const hasPossibleMatch = suggestedId !== null || allCandidateIds.size > 0;
+        let relevance: ReviewRelevance;
+        if (hasFutureBooking) relevance = "scheduled_future";
+        else if (hasRecentPayment) relevance = "recent_payment";
+        else if (hasPossibleMatch) relevance = "possible_match";
+        else relevance = "hidden_old";
+
         await context.supabase
           .from("square_customer_reviews")
           .upsert(
@@ -377,10 +388,12 @@ export const backfillProductionCustomers = createServerFn({ method: "POST" })
               suggested_client_id: suggestedId,
               reason,
               status: "pending",
+              relevance,
             },
             { onConflict: "square_customer_id" },
           );
-        result.queued_for_review++;
+        if (relevance === "hidden_old") result.hidden_old++;
+        else result.queued_for_review++;
       } catch (e) {
         result.errors.push(`${cust.id}: ${(e as Error).message}`);
       }

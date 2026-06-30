@@ -284,8 +284,25 @@ export const backfillProductionCustomers = createServerFn({ method: "POST" })
             confidence = "exact email match";
           }
         }
-        // Phone-only matches intentionally do NOT auto-link — they go to Needs Review
-        // (families often share a phone number).
+        if (!autoLinkClient && sqPhone && nameKey) {
+          // Name + phone match — high confidence if exactly one Admin client
+          // matches BOTH the full name and the phone, with no conflicting email.
+          const nameMatches = byName.get(nameKey) ?? [];
+          const nameIds = new Set(nameMatches.map((c) => c.id));
+          const namePhoneIds = [...phoneIds].filter((id) => nameIds.has(id));
+          if (namePhoneIds.length === 1) {
+            const candidate = nameMatches.find((c) => c.id === namePhoneIds[0]) ?? null;
+            const candidateEmail = normEmail(candidate?.email);
+            const emailConflict = !!sqEmail && !!candidateEmail && sqEmail !== candidateEmail;
+            if (candidate && !emailConflict) {
+              autoLinkClient = candidate;
+              confidence = "name + phone exact match";
+            }
+          }
+        }
+        // Phone-only matches (no name match) intentionally do NOT auto-link —
+        // they go to Needs Review (families often share a phone number).
+
 
         if (autoLinkClient) {
           // Make sure this client isn't already linked to a different Square customer

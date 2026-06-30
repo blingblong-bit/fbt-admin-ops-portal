@@ -110,7 +110,34 @@ async function fetchSquareBookings(
       });
       if (!res.ok) {
         const body = await res.text();
-        return { bookings: all, error: `Square ${res.status}: ${body.slice(0, 200)}` };
+        let friendly = `Square ${res.status}: ${body.slice(0, 300)}`;
+        try {
+          const parsed = JSON.parse(body) as {
+            errors?: Array<{ code?: string; detail?: string; category?: string }>;
+          };
+          const first = parsed.errors?.[0];
+          const detail = first?.detail ?? "";
+          const code = first?.code ?? "";
+          if (
+            code === "FORBIDDEN" ||
+            code === "INSUFFICIENT_SCOPES" ||
+            code === "AUTHENTICATION_ERROR" ||
+            /Appointments|Bookings/i.test(detail)
+          ) {
+            friendly =
+              "Square Bookings API is not authorized for this access token. " +
+              "In the Square Developer Dashboard → your app → OAuth, enable " +
+              "APPOINTMENTS_READ (and APPOINTMENTS_BUSINESS_SETTINGS_READ if needed). " +
+              "Then in the Sandbox Test Account, make sure the Appointments app is " +
+              "installed/enabled for that seller, regenerate the Sandbox access token, " +
+              `and update SQUARE_SANDBOX_ACCESS_TOKEN. Original: ${code} — ${detail}`;
+          } else if (first) {
+            friendly = `Square ${res.status} ${code}: ${detail || body.slice(0, 200)}`;
+          }
+        } catch {
+          // keep original friendly
+        }
+        return { bookings: all, error: friendly };
       }
       const json = (await res.json()) as { bookings?: SquareBooking[]; cursor?: string };
       if (json.bookings?.length) all.push(...json.bookings);

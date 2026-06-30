@@ -96,6 +96,22 @@ async function fetchSquareBookings(
 ): Promise<{ bookings: SquareBooking[]; error: string | null }> {
   const all: SquareBooking[] = [];
   let cursor: string | undefined;
+  // Sanitize token: trim, strip wrapping straight/curly quotes, and remove any non-ASCII chars
+  // (smart quotes pasted into the secret cause "ByteString" errors when used in a header).
+  const rawToken = token ?? "";
+  const cleanToken = rawToken
+    .replace(/^[\s"'\u201C\u201D\u2018\u2019`]+|[\s"'\u201C\u201D\u2018\u2019`]+$/g, "")
+    .trim()
+    // eslint-disable-next-line no-control-regex
+    .replace(/[^\x20-\x7E]/g, "");
+  if (cleanToken !== rawToken.trim()) {
+    console.warn(
+      `[schedule] SQUARE_PRODUCTION_ACCESS_TOKEN was sanitized (orig len ${rawToken.length}, clean len ${cleanToken.length}) — check the secret for smart quotes or stray characters.`,
+    );
+  }
+  if (!cleanToken) {
+    return { bookings: all, error: "SQUARE_PRODUCTION_ACCESS_TOKEN is empty after sanitization" };
+  }
   try {
     for (let i = 0; i < 10; i++) {
       const url = new URL(`${SQUARE_BASE}/v2/bookings`);
@@ -105,7 +121,7 @@ async function fetchSquareBookings(
       if (cursor) url.searchParams.set("cursor", cursor);
       const res = await fetch(url.toString(), {
         headers: {
-          Authorization: `Bearer ${token}`,
+          Authorization: `Bearer ${cleanToken}`,
           "Square-Version": SQUARE_VERSION,
           "Content-Type": "application/json",
         },

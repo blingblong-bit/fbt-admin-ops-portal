@@ -263,7 +263,7 @@ function Dashboard() {
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {filtered.map((c) => (
-              <SmartClientCard key={c.id} client={c} />
+              <SmartClientCard key={c.id} client={c} isScheduled={isScheduled(c.id)} />
             ))}
           </div>
         )}

@@ -1,0 +1,378 @@
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
+import { useState } from "react";
+import { toast } from "sonner";
+import { AppShell } from "@/components/AppShell";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { formatCurrency, formatDate, formatDateTimeLocal } from "@/lib/clients";
+import {
+  completeVisitForClient,
+  getScheduleCheck,
+  type NeedsScheduleClient,
+  type ScheduleAppointment,
+} from "@/lib/schedule.functions";
+
+export const Route = createFileRoute("/_authenticated/schedule-check")({
+  head: () => ({ meta: [{ title: "Schedule Check — FIT Beyond Therapy" }] }),
+  component: ScheduleCheckPage,
+});
+
+function todayYmd(): string {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function visitsRemaining(c: { package_total_visits: number; visits_used: number | null }) {
+  if (c.visits_used === null || c.visits_used === undefined) return c.package_total_visits;
+  return Math.max(0, c.package_total_visits - c.visits_used);
+}
+
+function ScheduleCheckPage() {
+  const [date, setDate] = useState<string>(todayYmd());
+  const fetchSchedule = useServerFn(getScheduleCheck);
+  const completeVisit = useServerFn(completeVisitForClient);
+  const qc = useQueryClient();
+
+  const query = useQuery({
+    queryKey: ["schedule-check", date],
+    queryFn: () => fetchSchedule({ data: { date } }),
+  });
+
+  const completeMut = useMutation({
+    mutationFn: (clientId: string) => completeVisit({ data: { clientId } }),
+    onSuccess: () => {
+      toast.success("Visit recorded");
+      qc.invalidateQueries({ queryKey: ["schedule-check"] });
+      qc.invalidateQueries({ queryKey: ["clients"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const data = query.data;
+
+  return (
+    <AppShell>
+      <div className="space-y-6">
+        <header className="space-y-1">
+          <h1 className="text-3xl font-semibold tracking-tight">Schedule Check</h1>
+          <p className="text-slate-600">
+            Read-only view of Square appointments. Therapy Admin never writes back to Square.
+          </p>
+        </header>
+
+        <Card>
+          <CardHeader>
+            <div className="flex flex-wrap items-end justify-between gap-4">
+              <div>
+                <CardTitle>Selected Date</CardTitle>
+                <CardDescription>
+                  Week of {data ? `${formatDate(data.week_start)} – ${formatDate(data.week_end)}` : "—"}
+                  {data && (
+                    <>
+                      {" "}· Next week {formatDate(data.next_week_start)} – {formatDate(data.next_week_end)}
+                    </>
+                  )}
+                </CardDescription>
+              </div>
+              <div className="flex items-end gap-2">
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-600">Date</label>
+                  <Input
+                    type="date"
+                    value={date}
+                    onChange={(e) => setDate(e.target.value || todayYmd())}
+                    className="w-44"
+                  />
+                </div>
+                <Button variant="outline" onClick={() => setDate(todayYmd())}>
+                  Today
+                </Button>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="text-sm text-slate-600">
+            {query.isLoading && <div>Loading…</div>}
+            {query.error && (
+              <div className="rounded-md border border-red-200 bg-red-50 p-3 text-red-800">
+                Failed to load: {(query.error as Error).message}
+              </div>
+            )}
+            {data?.error && (
+              <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-amber-900">
+                Square API: {data.error}
+              </div>
+            )}
+            {data && (
+              <div>
+                Fetched {data.fetched_count} bookings · {data.unmatched.length} unmatched
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <AppointmentsCard
+          title="Scheduled on Selected Date"
+          description={data ? formatDate(data.selected_date) : ""}
+          appointments={data?.selected_day ?? []}
+          showCompleteVisit
+          onCompleteVisit={(clientId) => completeMut.mutate(clientId)}
+          completing={completeMut.isPending ? completeMut.variables ?? null : null}
+        />
+
+        <AppointmentsCard
+          title="Scheduled This Week"
+          description={data ? `${formatDate(data.week_start)} – ${formatDate(data.week_end)}` : ""}
+          appointments={data?.this_week ?? []}
+        />
+
+        <AppointmentsCard
+          title="Scheduled Next Week"
+          description={
+            data ? `${formatDate(data.next_week_start)} – ${formatDate(data.next_week_end)}` : ""
+          }
+          appointments={data?.next_week ?? []}
+        />
+
+        <ClientsNeedingCard
+          title="Needs Next Week Scheduling"
+          description="Active clients with appointments this week but none next week."
+          clients={data?.needs_next_week_scheduling ?? []}
+        />
+
+        <ClientsNeedingCard
+          title="Not Scheduled After Selected Date"
+          description="Active clients with visits remaining and no Square appointment after this date."
+          clients={data?.not_scheduled_after ?? []}
+        />
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Unmatched Appointments</CardTitle>
+            <CardDescription>
+              Square bookings whose customer ID doesn't match any Admin client.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {(data?.unmatched ?? []).length === 0 ? (
+              <EmptyState text="All bookings match an Admin client." />
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>When</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Service</TableHead>
+                    <TableHead>Square Customer ID</TableHead>
+                    <TableHead>Booking ID</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {(data?.unmatched ?? []).map((a) => (
+                    <TableRow key={a.booking_id}>
+                      <TableCell className="whitespace-nowrap text-sm">
+                        {formatDateTimeLocal(a.start_at)}
+                      </TableCell>
+                      <TableCell className="text-xs">{a.status}</TableCell>
+                      <TableCell className="text-sm">
+                        {a.service_name ?? (a.duration_minutes ? `${a.duration_minutes} min` : "—")}
+                      </TableCell>
+                      <TableCell className="font-mono text-xs text-slate-600">
+                        {a.square_customer_id ?? "—"}
+                      </TableCell>
+                      <TableCell className="font-mono text-xs text-slate-600">
+                        {a.booking_id}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    </AppShell>
+  );
+}
+
+function EmptyState({ text }: { text: string }) {
+  return (
+    <div className="rounded-md border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500">
+      {text}
+    </div>
+  );
+}
+
+function AppointmentsCard({
+  title,
+  description,
+  appointments,
+  showCompleteVisit = false,
+  onCompleteVisit,
+  completing,
+}: {
+  title: string;
+  description: string;
+  appointments: ScheduleAppointment[];
+  showCompleteVisit?: boolean;
+  onCompleteVisit?: (clientId: string) => void;
+  completing?: string | null;
+}) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>{title}</CardTitle>
+        <CardDescription>{description}</CardDescription>
+      </CardHeader>
+      <CardContent>
+        {appointments.length === 0 ? (
+          <EmptyState text="No appointments." />
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>When</TableHead>
+                <TableHead>Client</TableHead>
+                <TableHead>Service</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {appointments.map((a) => {
+                const remaining = a.client ? visitsRemaining(a.client) : 0;
+                return (
+                  <TableRow key={a.booking_id}>
+                    <TableCell className="whitespace-nowrap text-sm">
+                      {formatDateTimeLocal(a.start_at)}
+                    </TableCell>
+                    <TableCell className="text-sm">
+                      {a.client ? (
+                        <div>
+                          <div className="font-medium">
+                            {a.client.first_name} {a.client.last_name}
+                          </div>
+                          <div className="text-xs text-slate-500">
+                            {remaining} visits left
+                          </div>
+                        </div>
+                      ) : (
+                        <span className="text-amber-700">Unmatched</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-sm">
+                      {a.service_name ?? (a.duration_minutes ? `${a.duration_minutes} min` : "—")}
+                    </TableCell>
+                    <TableCell className="text-xs">{a.status}</TableCell>
+                    <TableCell className="text-right">
+                      {a.client ? (
+                        <div className="inline-flex gap-2">
+                          <Button asChild size="sm" variant="outline">
+                            <Link to="/clients/$id" params={{ id: a.client.id }}>
+                              View Client
+                            </Link>
+                          </Button>
+                          {showCompleteVisit && remaining > 0 && onCompleteVisit && (
+                            <Button
+                              size="sm"
+                              disabled={completing === a.client.id}
+                              onClick={() => onCompleteVisit(a.client!.id)}
+                            >
+                              {completing === a.client.id ? "Recording…" : "Complete Visit"}
+                            </Button>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-xs text-slate-400">—</span>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function ClientsNeedingCard({
+  title,
+  description,
+  clients,
+}: {
+  title: string;
+  description: string;
+  clients: NeedsScheduleClient[];
+}) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>{title}</CardTitle>
+        <CardDescription>{description}</CardDescription>
+      </CardHeader>
+      <CardContent>
+        {clients.length === 0 ? (
+          <EmptyState text="Nothing to follow up on." />
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Client</TableHead>
+                <TableHead>Phone</TableHead>
+                <TableHead>Visits Left</TableHead>
+                <TableHead>Owed</TableHead>
+                <TableHead>Last Appt</TableHead>
+                <TableHead>Notes</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {clients.map((c) => {
+                const remaining = visitsRemaining(c);
+                const owed = Math.max(0, Number(c.package_price ?? 0) - Number(c.amount_paid ?? 0));
+                return (
+                  <TableRow key={c.id}>
+                    <TableCell className="font-medium">
+                      {c.first_name} {c.last_name}
+                    </TableCell>
+                    <TableCell className="text-sm text-slate-600">{c.phone ?? "—"}</TableCell>
+                    <TableCell className="text-sm">{remaining}</TableCell>
+                    <TableCell className="text-sm">{formatCurrency(owed)}</TableCell>
+                    <TableCell className="text-sm">
+                      {c.last_appointment_at ? formatDate(c.last_appointment_at.slice(0, 10)) : "—"}
+                    </TableCell>
+                    <TableCell className="max-w-xs truncate text-xs text-slate-600">
+                      {c.internal_notes ?? "—"}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button asChild size="sm" variant="outline">
+                        <Link to="/clients/$id" params={{ id: c.id }}>
+                          View Client
+                        </Link>
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        )}
+      </CardContent>
+    </Card>
+  );
+}

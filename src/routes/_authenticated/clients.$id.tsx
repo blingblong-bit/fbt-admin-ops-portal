@@ -76,11 +76,19 @@ function ClientDetailPage() {
   const { edit } = Route.useSearch();
   const { data: c, isLoading } = useClient(id);
   const { data: activities = [] } = useActivities(id);
+  const fetchScheduledIds = useServerFn(getScheduledClientIds);
+  const scheduledQuery = useQuery({
+    queryKey: ["scheduled-client-ids"],
+    queryFn: () => fetchScheduledIds({ data: { days: 30 } }),
+    staleTime: 60_000,
+  });
+  const isScheduled = scheduledQuery.data?.client_ids.includes(id) ?? false;
   const qc = useQueryClient();
   const navigate = useNavigate();
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [renewOpen, setRenewOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+
 
   useEffect(() => {
     if (edit) setEditOpen(true);

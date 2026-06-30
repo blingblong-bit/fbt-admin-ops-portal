@@ -1,0 +1,2 @@
+ALTER TABLE public.clients ADD COLUMN IF NOT EXISTS production_square_customer_id text;
+CREATE INDEX IF NOT EXISTS clients_production_square_customer_id_idx ON public.clients (production_square_customer_id) WHERE production_square_customer_id IS NOT NULL;

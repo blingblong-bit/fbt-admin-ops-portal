@@ -111,6 +111,13 @@ export const Route = createFileRoute("/api/public/square/webhook")({
             await handlePaymentEvent(supabaseAdmin, eventType, event);
             return new Response("ok");
           }
+          if (
+            eventType === "booking.created" ||
+            eventType === "booking.updated"
+          ) {
+            await handleBookingEvent(supabaseAdmin, eventType, event);
+            return new Response("ok");
+          }
 
           await supabaseAdmin.from("square_sync_log").insert({
             event_type: eventType,

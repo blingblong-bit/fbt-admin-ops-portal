@@ -226,27 +226,13 @@ function AddClientPage() {
             </div>
 
             <div className="sm:col-span-2">
-              <Field label="Scheduled Status">
-                <div className="flex gap-2 pt-1">
-                  <Button
-                    type="button"
-                    variant={form.is_scheduled ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => update("is_scheduled", true)}
-                  >
-                    ✅ Scheduled
-                  </Button>
-                  <Button
-                    type="button"
-                    variant={!form.is_scheduled ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => update("is_scheduled", false)}
-                  >
-                    ⭕ Not Scheduled
-                  </Button>
-                </div>
-              </Field>
+              <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                📅 Schedule status is read live from Square — new clients show as
+                <em> Not Scheduled</em> until an appointment is booked in Square.
+              </div>
             </div>
+
+
 
             <div className="sm:col-span-2">
               <Field label="Internal Notes (optional)">

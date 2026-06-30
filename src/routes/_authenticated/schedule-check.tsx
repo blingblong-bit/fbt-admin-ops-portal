@@ -118,12 +118,15 @@ function ScheduleCheckPage() {
               {backfillMut.isPending ? "Running backfill…" : "Backfill Square Customers"}
             </Button>
             <p className="mt-1 text-xs text-slate-500">
-              Pulls all Production Square customers. Matches by Square ID only — never by name.
-              Active packages and deleted clients are preserved. New imports default to
-              <em> Archived</em>, or <em>Assessment</em> if they have a future appointment.
+              Pulls all Production Square customers. Auto-links to Admin clients only on a
+              high-confidence email/phone match. Uncertain matches are sent to <em>Needs Review</em>{" "}
+              below.
             </p>
           </div>
         </header>
+
+        <SquareReviewCard />
+
 
         <Card>
           <CardHeader>

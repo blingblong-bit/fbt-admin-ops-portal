@@ -170,8 +170,9 @@ function Dashboard() {
 
 
   const filtered = useMemo(() => {
-    const list = clients.filter((c) => matchesFilter(c, filter, isScheduled(c.id)));
+    const list = visibleClients.filter((c) => matchesFilter(c, filter, isScheduled(c.id)));
     const q = search.trim().toLowerCase();
+
     const searched = q
       ? list.filter((c) =>
           `${c.first_name} ${c.last_name} ${c.phone ?? ""}`

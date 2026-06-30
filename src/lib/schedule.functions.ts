@@ -1,8 +1,8 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
-// Production Square is used ONLY for read-only appointment testing.
-// Customer sync and payment sync remain on Sandbox (see square.webhook.ts).
+// Read-only Square Production integration. Webhooks (customer/payment/booking)
+// are also handled against Production — see src/routes/api/public/square.webhook.ts.
 const SQUARE_BASE = "https://connect.squareup.com";
 const SQUARE_VERSION = "2024-10-17";
 
@@ -162,10 +162,8 @@ async function fetchSquareBookings(
             friendly =
               "Square Bookings API is not authorized for this access token. " +
               "In the Square Developer Dashboard → your app → OAuth, enable " +
-              "APPOINTMENTS_READ (and APPOINTMENTS_BUSINESS_SETTINGS_READ if needed). " +
-              "Then in the Sandbox Test Account, make sure the Appointments app is " +
-              "installed/enabled for that seller, regenerate the Sandbox access token, " +
-              `and update SQUARE_PRODUCTION_ACCESS_TOKEN. Original: ${code} — ${detail}`;
+              "APPOINTMENTS_READ (and APPOINTMENTS_BUSINESS_SETTINGS_READ if needed), " +
+              `regenerate the Production access token, and update SQUARE_PRODUCTION_ACCESS_TOKEN. Original: ${code} — ${detail}`;
           } else if (first) {
             friendly = `Square ${res.status} ${code}: ${detail || body.slice(0, 200)}`;
           }
@@ -316,16 +314,17 @@ export const getScheduleCheck = createServerFn({ method: "GET" })
       .is("deleted_at", null);
     if (cErr) throw cErr;
 
-    // Production customer ID is the primary match; fall back to sandbox square_customer_id.
+    // Match by production_square_customer_id (manual link) or square_customer_id
+    // (auto-populated by the Square webhook). Both columns hold Production IDs.
     const byProdId = new Map<string, ScheduleClientLite>();
-    const bySandboxId = new Map<string, ScheduleClientLite>();
+    const byWebhookId = new Map<string, ScheduleClientLite>();
     for (const c of (clients ?? []) as ScheduleClientLite[]) {
       if (c.production_square_customer_id) byProdId.set(c.production_square_customer_id, c);
-      if (c.square_customer_id) bySandboxId.set(c.square_customer_id, c);
+      if (c.square_customer_id) byWebhookId.set(c.square_customer_id, c);
     }
     const matchClient = (customerId: string | null | undefined): ScheduleClientLite | null => {
       if (!customerId) return null;
-      return byProdId.get(customerId) ?? bySandboxId.get(customerId) ?? null;
+      return byProdId.get(customerId) ?? byWebhookId.get(customerId) ?? null;
     };
 
     // Resolve service names (best-effort)

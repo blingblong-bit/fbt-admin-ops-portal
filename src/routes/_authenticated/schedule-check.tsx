@@ -67,10 +67,17 @@ function ScheduleCheckPage() {
   return (
     <AppShell>
       <div className="space-y-6">
-        <header className="space-y-1">
+        <header className="space-y-2">
+          <div className="inline-flex items-center gap-2 rounded-full border border-amber-300 bg-amber-50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-amber-800">
+            Production Appointment Test Mode
+          </div>
           <h1 className="text-3xl font-semibold tracking-tight">Schedule Check</h1>
           <p className="text-slate-600">
-            Read-only view of Square appointments. Therapy Admin never writes back to Square.
+            Read-only view of Square appointments from the <strong>Production</strong> Square
+            account (appointments only). Customer sync and payment sync remain on Sandbox.
+            Therapy Admin never writes back to Square. Production booking customer IDs will not
+            match Sandbox-synced clients, so production appointments may appear under
+            “Unmatched Appointments”.
           </p>
         </header>
 

@@ -1,7 +1,9 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
-const SQUARE_BASE = "https://connect.squareupsandbox.com";
+// Production Square is used ONLY for read-only appointment testing.
+// Customer sync and payment sync remain on Sandbox (see square.webhook.ts).
+const SQUARE_BASE = "https://connect.squareup.com";
 const SQUARE_VERSION = "2024-10-17";
 
 type SquareBookingSegment = {
@@ -130,7 +132,7 @@ async function fetchSquareBookings(
               "APPOINTMENTS_READ (and APPOINTMENTS_BUSINESS_SETTINGS_READ if needed). " +
               "Then in the Sandbox Test Account, make sure the Appointments app is " +
               "installed/enabled for that seller, regenerate the Sandbox access token, " +
-              `and update SQUARE_SANDBOX_ACCESS_TOKEN. Original: ${code} — ${detail}`;
+              `and update SQUARE_PRODUCTION_ACCESS_TOKEN. Original: ${code} — ${detail}`;
           } else if (first) {
             friendly = `Square ${res.status} ${code}: ${detail || body.slice(0, 200)}`;
           }
@@ -189,7 +191,7 @@ export const getScheduleCheck = createServerFn({ method: "GET" })
     return d;
   })
   .handler(async ({ data, context }): Promise<ScheduleCheckResult> => {
-    const token = process.env.SQUARE_SANDBOX_ACCESS_TOKEN;
+    const token = process.env.SQUARE_PRODUCTION_ACCESS_TOKEN;
     const selected = parseYmdUTC(data.date);
     const { start: weekStart, end: weekEnd } = weekRange(selected);
     const nextWeekStart = addDays(weekEnd, 1);
@@ -219,7 +221,7 @@ export const getScheduleCheck = createServerFn({ method: "GET" })
     };
 
     if (!token) {
-      empty.error = "SQUARE_SANDBOX_ACCESS_TOKEN is not configured";
+      empty.error = "SQUARE_PRODUCTION_ACCESS_TOKEN is not configured";
       return empty;
     }
 

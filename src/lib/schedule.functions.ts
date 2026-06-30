@@ -31,6 +31,14 @@ export type ScheduleClientLite = {
   amount_paid: number;
   internal_notes: string | null;
   square_customer_id: string | null;
+  production_square_customer_id: string | null;
+};
+
+export type ProductionCustomerInfo = {
+  given_name: string | null;
+  family_name: string | null;
+  email: string | null;
+  phone: string | null;
 };
 
 export type ScheduleAppointment = {
@@ -40,6 +48,7 @@ export type ScheduleAppointment = {
   duration_minutes: number | null;
   service_name: string | null;
   square_customer_id: string | null;
+  customer_info: ProductionCustomerInfo | null;
   client: ScheduleClientLite | null;
 };
 

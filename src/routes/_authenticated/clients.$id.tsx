@@ -157,16 +157,17 @@ function ClientDetailPage() {
         <div>
           <div className="flex items-center gap-3">
             <h1 className="text-3xl font-semibold tracking-tight">{fullName(c)}</h1>
-            <StatusBadge client={c} />
+            <StatusBadge client={c} isScheduled={isScheduled} />
           </div>
           <p className="mt-1 text-sm text-slate-500">
             {c.phone ?? "no phone"} · {c.email ?? "no email"}
           </p>
+          <p className="mt-1 text-xs text-slate-400">
+            Schedule status is read live from Square — manage appointments in Square.
+          </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button variant="outline" onClick={() => toggleScheduled.mutate()}>
-            {c.is_scheduled ? "Mark Not Scheduled" : "Mark Scheduled"}
-          </Button>
+
           {hasVisitData && (
             <Button onClick={() => completeVisit.mutate()} disabled={remaining === 0}>
               Complete Visit

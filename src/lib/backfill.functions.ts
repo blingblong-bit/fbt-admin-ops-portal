@@ -157,7 +157,7 @@ export const backfillProductionCustomers = createServerFn({ method: "POST" })
           const hasActivePackage = visitsLeft > 0;
 
           // Update contact info only; never overwrite active package data
-          const update: Record<string, unknown> = {};
+          const update: { email?: string; phone?: string } = {};
           if (cust.email_address) update.email = cust.email_address;
           if (cust.phone_number) update.phone = cust.phone_number;
           if (Object.keys(update).length > 0) {

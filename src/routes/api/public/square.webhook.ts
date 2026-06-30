@@ -78,7 +78,7 @@ export const Route = createFileRoute("/api/public/square/webhook")({
           request.headers.get("X-Square-HmacSHA256-Signature") ??
           "";
 
-        // Temporary debug logging (no secrets) — environment is Production read-only mirror
+        // Production read-only webhook receiver. Log non-secret diagnostics only.
         console.log(
           `[square-webhook] env=production base=https://connect.squareup.com ` +
             `secret_name=SQUARE_WEBHOOK_SIGNATURE_KEY url_name=SQUARE_WEBHOOK_NOTIFICATION_URL ` +

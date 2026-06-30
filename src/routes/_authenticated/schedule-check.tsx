@@ -189,7 +189,7 @@ function UnmatchedAppointmentsCard({ appointments }: { appointments: ScheduleApp
 
   const clientsQuery = useQuery({
     queryKey: ["linkable-clients"],
-    queryFn: () => listFn({}),
+    queryFn: () => listFn(),
     enabled: appointments.length > 0,
   });
 

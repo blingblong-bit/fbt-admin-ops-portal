@@ -142,6 +142,56 @@ export type Database = {
         }
         Relationships: []
       }
+      square_customer_reviews: {
+        Row: {
+          created_at: string
+          email: string | null
+          family_name: string | null
+          given_name: string | null
+          id: string
+          phone: string | null
+          reason: string
+          square_customer_id: string
+          status: string
+          suggested_client_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          email?: string | null
+          family_name?: string | null
+          given_name?: string | null
+          id?: string
+          phone?: string | null
+          reason: string
+          square_customer_id: string
+          status?: string
+          suggested_client_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          email?: string | null
+          family_name?: string | null
+          given_name?: string | null
+          id?: string
+          phone?: string | null
+          reason?: string
+          square_customer_id?: string
+          status?: string
+          suggested_client_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "square_customer_reviews_suggested_client_id_fkey"
+            columns: ["suggested_client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       square_payments: {
         Row: {
           amount_cents: number

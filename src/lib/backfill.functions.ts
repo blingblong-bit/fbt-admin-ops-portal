@@ -24,13 +24,21 @@ type SquareBooking = {
 export type BackfillResult = {
   fetched_customers: number;
   fetched_bookings: number;
+  fetched_recent_payments: number;
   auto_linked: number;
   updated_contact: number;
   queued_for_review: number;
+  hidden_old: number;
   skipped_already_linked: number;
   skipped_deleted: number;
   errors: string[];
 };
+
+export type ReviewRelevance =
+  | "scheduled_future"
+  | "recent_payment"
+  | "possible_match"
+  | "hidden_old";
 
 function cleanToken(t: string | undefined | null): string {
   return (t ?? "")

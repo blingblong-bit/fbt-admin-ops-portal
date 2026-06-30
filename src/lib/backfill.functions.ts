@@ -192,10 +192,37 @@ export const backfillProductionCustomers = createServerFn({ method: "POST" })
     result.fetched_bookings = futureCustomerIds.size;
     result.fetched_recent_payments = recentPaymentCustomerIds.size;
 
-    const { data: existing, error: eErr } = await context.supabase
-      .from("clients")
-      .select("id, first_name, last_name, email, phone, square_customer_id, deleted_at, status");
-    if (eErr) throw eErr;
+    // Paginate to bypass PostgREST's 1000-row default cap
+    type ExistingClient = {
+      id: string;
+      first_name: string | null;
+      last_name: string | null;
+      email: string | null;
+      phone: string | null;
+      square_customer_id: string | null;
+      deleted_at: string | null;
+      status: string | null;
+    };
+    const existing: ExistingClient[] = [];
+    {
+      const pageSize = 1000;
+      let from = 0;
+      // Safety cap at 100k rows
+      for (let i = 0; i < 100; i++) {
+        const { data: page, error: eErr } = await context.supabase
+          .from("clients")
+          .select("id, first_name, last_name, email, phone, square_customer_id, deleted_at, status")
+          .is("deleted_at", null)
+          .range(from, from + pageSize - 1);
+        if (eErr) throw eErr;
+        if (!page || page.length === 0) break;
+        existing.push(...(page as ExistingClient[]));
+        if (page.length < pageSize) break;
+        from += pageSize;
+      }
+    }
+
+
 
     const bySquareId = new Map<string, NonNullable<typeof existing>[number]>();
     const byEmail = new Map<string, NonNullable<typeof existing>[number][]>();

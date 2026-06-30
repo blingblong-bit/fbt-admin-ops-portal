@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
@@ -15,10 +15,20 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { formatCurrency, formatDate, formatDateTimeLocal } from "@/lib/clients";
 import {
   completeVisitForClient,
   getScheduleCheck,
+  linkProductionCustomer,
+  listLinkableClients,
+  type LinkableClient,
   type NeedsScheduleClient,
   type ScheduleAppointment,
 } from "@/lib/schedule.functions";
@@ -166,52 +176,175 @@ function ScheduleCheckPage() {
           clients={data?.not_scheduled_after ?? []}
         />
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Unmatched Appointments</CardTitle>
-            <CardDescription>
-              Square bookings whose customer ID doesn't match any Admin client.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {(data?.unmatched ?? []).length === 0 ? (
-              <EmptyState text="All bookings match an Admin client." />
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>When</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Service</TableHead>
-                    <TableHead>Square Customer ID</TableHead>
-                    <TableHead>Booking ID</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {(data?.unmatched ?? []).map((a) => (
-                    <TableRow key={a.booking_id}>
-                      <TableCell className="whitespace-nowrap text-sm">
-                        {formatDateTimeLocal(a.start_at)}
-                      </TableCell>
-                      <TableCell className="text-xs">{a.status}</TableCell>
-                      <TableCell className="text-sm">
-                        {a.service_name ?? (a.duration_minutes ? `${a.duration_minutes} min` : "—")}
-                      </TableCell>
-                      <TableCell className="font-mono text-xs text-slate-600">
-                        {a.square_customer_id ?? "—"}
-                      </TableCell>
-                      <TableCell className="font-mono text-xs text-slate-600">
-                        {a.booking_id}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            )}
-          </CardContent>
-        </Card>
+        <UnmatchedAppointmentsCard appointments={data?.unmatched ?? []} />
       </div>
     </AppShell>
+  );
+}
+
+function UnmatchedAppointmentsCard({ appointments }: { appointments: ScheduleAppointment[] }) {
+  const listFn = useServerFn(listLinkableClients);
+  const linkFn = useServerFn(linkProductionCustomer);
+  const qc = useQueryClient();
+
+  const clientsQuery = useQuery({
+    queryKey: ["linkable-clients"],
+    queryFn: () => listFn(),
+    enabled: appointments.length > 0,
+  });
+
+  const linkMut = useMutation({
+    mutationFn: (vars: { clientId: string; productionSquareCustomerId: string }) =>
+      linkFn({ data: vars }),
+    onSuccess: () => {
+      toast.success("Production customer linked");
+      qc.invalidateQueries({ queryKey: ["schedule-check"] });
+      qc.invalidateQueries({ queryKey: ["linkable-clients"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  // Group appointments by Square customer ID so the same person isn't linked twice in a row.
+  const grouped = useMemo(() => {
+    const m = new Map<string, ScheduleAppointment[]>();
+    for (const a of appointments) {
+      const key = a.square_customer_id ?? `__no_id_${a.booking_id}`;
+      const arr = m.get(key) ?? [];
+      arr.push(a);
+      m.set(key, arr);
+    }
+    return Array.from(m.entries());
+  }, [appointments]);
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Unmatched Appointments</CardTitle>
+        <CardDescription>
+          Production Square bookings whose customer ID isn't linked to an Admin client. Link them
+          here — the production customer ID is saved separately from the sandbox one.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {appointments.length === 0 ? (
+          <EmptyState text="All bookings match an Admin client." />
+        ) : (
+          <div className="space-y-3">
+            {grouped.map(([key, group]) => {
+              const first = group[0];
+              const info = first.customer_info;
+              const fullName = [info?.given_name, info?.family_name].filter(Boolean).join(" ").trim();
+              return (
+                <div
+                  key={key}
+                  className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm"
+                >
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="space-y-1">
+                      <div className="font-medium text-slate-900">
+                        {fullName || <span className="text-slate-500">Unknown name</span>}
+                      </div>
+                      <div className="text-xs text-slate-600">
+                        {info?.email && <span>{info.email}</span>}
+                        {info?.email && info?.phone && " · "}
+                        {info?.phone && <span>{info.phone}</span>}
+                      </div>
+                      <div className="font-mono text-[11px] text-slate-500">
+                        Square ID: {first.square_customer_id ?? "—"}
+                      </div>
+                      <div className="text-xs text-slate-700">
+                        {group.length} appointment{group.length === 1 ? "" : "s"} ·{" "}
+                        {group
+                          .slice(0, 3)
+                          .map((g) => formatDateTimeLocal(g.start_at))
+                          .join(", ")}
+                        {group.length > 3 && ` +${group.length - 3} more`}
+                      </div>
+                    </div>
+                    {first.square_customer_id && (
+                      <LinkClientControl
+                        clients={clientsQuery.data ?? []}
+                        loading={clientsQuery.isLoading}
+                        disabled={linkMut.isPending}
+                        onLink={(clientId) =>
+                          linkMut.mutate({
+                            clientId,
+                            productionSquareCustomerId: first.square_customer_id!,
+                          })
+                        }
+                      />
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function LinkClientControl({
+  clients,
+  loading,
+  disabled,
+  onLink,
+}: {
+  clients: LinkableClient[];
+  loading: boolean;
+  disabled: boolean;
+  onLink: (clientId: string) => void;
+}) {
+  const [selected, setSelected] = useState<string>("");
+  const [query, setQuery] = useState<string>("");
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return clients.slice(0, 50);
+    return clients
+      .filter((c) =>
+        `${c.first_name} ${c.last_name} ${c.email ?? ""} ${c.phone ?? ""}`
+          .toLowerCase()
+          .includes(q),
+      )
+      .slice(0, 50);
+  }, [clients, query]);
+
+  return (
+    <div className="flex flex-col items-end gap-2">
+      <Input
+        placeholder="Search clients…"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        className="h-8 w-56 text-xs"
+      />
+      <div className="flex items-center gap-2">
+        <Select value={selected} onValueChange={setSelected} disabled={loading}>
+          <SelectTrigger className="h-8 w-56 text-xs">
+            <SelectValue placeholder={loading ? "Loading…" : "Select a client"} />
+          </SelectTrigger>
+          <SelectContent>
+            {filtered.map((c) => (
+              <SelectItem key={c.id} value={c.id} className="text-xs">
+                {c.first_name} {c.last_name}
+                {c.production_square_customer_id ? " (already linked)" : ""}
+              </SelectItem>
+            ))}
+            {filtered.length === 0 && (
+              <div className="px-2 py-1 text-xs text-slate-500">No matches</div>
+            )}
+          </SelectContent>
+        </Select>
+        <Button
+          size="sm"
+          disabled={!selected || disabled}
+          onClick={() => selected && onLink(selected)}
+        >
+          Link
+        </Button>
+      </div>
+    </div>
   );
 }
 

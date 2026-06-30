@@ -31,6 +31,14 @@ export type ScheduleClientLite = {
   amount_paid: number;
   internal_notes: string | null;
   square_customer_id: string | null;
+  production_square_customer_id: string | null;
+};
+
+export type ProductionCustomerInfo = {
+  given_name: string | null;
+  family_name: string | null;
+  email: string | null;
+  phone: string | null;
 };
 
 export type ScheduleAppointment = {
@@ -40,6 +48,7 @@ export type ScheduleAppointment = {
   duration_minutes: number | null;
   service_name: string | null;
   square_customer_id: string | null;
+  customer_info: ProductionCustomerInfo | null;
   client: ScheduleClientLite | null;
 };
 
@@ -209,6 +218,51 @@ async function fetchServiceNames(
   return out;
 }
 
+async function fetchProductionCustomers(
+  token: string,
+  customerIds: string[],
+): Promise<Map<string, ProductionCustomerInfo>> {
+  const out = new Map<string, ProductionCustomerInfo>();
+  if (customerIds.length === 0) return out;
+  // eslint-disable-next-line no-control-regex
+  const cleanToken = (token ?? "").replace(/[^\x20-\x7E]/g, "").trim();
+  if (!cleanToken) return out;
+  const ids = customerIds.slice(0, 50);
+  await Promise.all(
+    ids.map(async (id) => {
+      try {
+        const res = await fetch(`${SQUARE_BASE}/v2/customers/${encodeURIComponent(id)}`, {
+          headers: {
+            Authorization: `Bearer ${cleanToken}`,
+            "Square-Version": SQUARE_VERSION,
+            "Content-Type": "application/json",
+          },
+        });
+        if (!res.ok) return;
+        const json = (await res.json()) as {
+          customer?: {
+            given_name?: string | null;
+            family_name?: string | null;
+            email_address?: string | null;
+            phone_number?: string | null;
+          };
+        };
+        const c = json.customer;
+        if (!c) return;
+        out.set(id, {
+          given_name: c.given_name ?? null,
+          family_name: c.family_name ?? null,
+          email: c.email_address ?? null,
+          phone: c.phone_number ?? null,
+        });
+      } catch {
+        // ignore per-customer failures
+      }
+    }),
+  );
+  return out;
+}
+
 export const getScheduleCheck = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { date: string }) => {
@@ -257,15 +311,22 @@ export const getScheduleCheck = createServerFn({ method: "GET" })
     const { data: clients, error: cErr } = await context.supabase
       .from("clients")
       .select(
-        "id, first_name, last_name, phone, package_total_visits, visits_used, package_price, amount_paid, internal_notes, square_customer_id",
+        "id, first_name, last_name, phone, package_total_visits, visits_used, package_price, amount_paid, internal_notes, square_customer_id, production_square_customer_id",
       )
       .is("deleted_at", null);
     if (cErr) throw cErr;
 
-    const byCustomerId = new Map<string, ScheduleClientLite>();
+    // Production customer ID is the primary match; fall back to sandbox square_customer_id.
+    const byProdId = new Map<string, ScheduleClientLite>();
+    const bySandboxId = new Map<string, ScheduleClientLite>();
     for (const c of (clients ?? []) as ScheduleClientLite[]) {
-      if (c.square_customer_id) byCustomerId.set(c.square_customer_id, c);
+      if (c.production_square_customer_id) byProdId.set(c.production_square_customer_id, c);
+      if (c.square_customer_id) bySandboxId.set(c.square_customer_id, c);
     }
+    const matchClient = (customerId: string | null | undefined): ScheduleClientLite | null => {
+      if (!customerId) return null;
+      return byProdId.get(customerId) ?? bySandboxId.get(customerId) ?? null;
+    };
 
     // Resolve service names (best-effort)
     const variationIds = Array.from(
@@ -283,10 +344,20 @@ export const getScheduleCheck = createServerFn({ method: "GET" })
       .filter((b) => b.start_at)
       .sort((a, b) => (a.start_at ?? "").localeCompare(b.start_at ?? ""));
 
+    // Fetch production customer info for unmatched booking customer IDs (best effort, to help linking)
+    const unmatchedCustomerIds = Array.from(
+      new Set(
+        sorted
+          .map((b) => b.customer_id ?? "")
+          .filter((id) => id && !matchClient(id)),
+      ),
+    );
+    const customerInfoMap = await fetchProductionCustomers(token, unmatchedCustomerIds);
+
     const all: ScheduleAppointment[] = sorted.map((b) => {
       const seg = b.appointment_segments?.[0];
       const svc = seg?.service_variation_id ? serviceNames.get(seg.service_variation_id) : null;
-      const client = b.customer_id ? byCustomerId.get(b.customer_id) ?? null : null;
+      const client = matchClient(b.customer_id);
       return {
         booking_id: b.id,
         start_at: b.start_at as string,
@@ -294,6 +365,7 @@ export const getScheduleCheck = createServerFn({ method: "GET" })
         duration_minutes: seg?.duration_minutes ?? null,
         service_name: svc ?? null,
         square_customer_id: b.customer_id ?? null,
+        customer_info: b.customer_id ? customerInfoMap.get(b.customer_id) ?? null : null,
         client,
       };
     });
@@ -426,3 +498,83 @@ export const completeVisitForClient = createServerFn({ method: "POST" })
     });
     return { ok: true, visits_used: next };
   });
+
+export type LinkableClient = {
+  id: string;
+  first_name: string;
+  last_name: string;
+  phone: string | null;
+  email: string | null;
+  production_square_customer_id: string | null;
+};
+
+export const listLinkableClients = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }): Promise<LinkableClient[]> => {
+    const { data, error } = await context.supabase
+      .from("clients")
+      .select("id, first_name, last_name, phone, email, production_square_customer_id")
+      .is("deleted_at", null)
+      .order("first_name", { ascending: true });
+    if (error) throw error;
+    return (data ?? []) as LinkableClient[];
+  });
+
+export const linkProductionCustomer = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { clientId: string; productionSquareCustomerId: string }) => {
+    if (!d?.clientId) throw new Error("clientId required");
+    if (!d?.productionSquareCustomerId) throw new Error("productionSquareCustomerId required");
+    return d;
+  })
+  .handler(async ({ data, context }) => {
+    // Prevent linking the same production customer ID to two different clients
+    const { data: existing, error: eErr } = await context.supabase
+      .from("clients")
+      .select("id, first_name, last_name")
+      .eq("production_square_customer_id", data.productionSquareCustomerId)
+      .is("deleted_at", null)
+      .neq("id", data.clientId)
+      .maybeSingle();
+    if (eErr) throw eErr;
+    if (existing) {
+      throw new Error(
+        `Production customer is already linked to ${existing.first_name} ${existing.last_name}. Unlink them first.`,
+      );
+    }
+
+    const { error } = await context.supabase
+      .from("clients")
+      .update({ production_square_customer_id: data.productionSquareCustomerId })
+      .eq("id", data.clientId);
+    if (error) throw error;
+
+    await context.supabase.from("client_activities").insert({
+      client_id: data.clientId,
+      activity_type: "square_link",
+      description: `Linked Production Square customer ${data.productionSquareCustomerId}`,
+      metadata: { production_square_customer_id: data.productionSquareCustomerId },
+    });
+    return { ok: true };
+  });
+
+export const unlinkProductionCustomer = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { clientId: string }) => {
+    if (!d?.clientId) throw new Error("clientId required");
+    return d;
+  })
+  .handler(async ({ data, context }) => {
+    const { error } = await context.supabase
+      .from("clients")
+      .update({ production_square_customer_id: null })
+      .eq("id", data.clientId);
+    if (error) throw error;
+    await context.supabase.from("client_activities").insert({
+      client_id: data.clientId,
+      activity_type: "square_unlink",
+      description: "Unlinked Production Square customer",
+    });
+    return { ok: true };
+  });
+

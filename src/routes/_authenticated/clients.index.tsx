@@ -107,17 +107,31 @@ function ClientsListPage() {
 
   return (
     <AppShell>
-      <div className="mb-6 flex items-end justify-between">
+      <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-3xl font-semibold tracking-tight">All Clients</h1>
           <p className="mt-1 text-sm text-slate-500">
             {isLoading ? "Loading…" : `${filtered.length} of ${clients.length}`}
           </p>
         </div>
-        <Link to="/clients/new">
-          <Button>+ Add Client</Button>
-        </Link>
+        <div className="flex flex-wrap items-center gap-2">
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
+            className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+          >
+            {(Object.keys(STATUS_FILTER_LABEL) as StatusFilter[]).map((k) => (
+              <option key={k} value={k}>
+                {STATUS_FILTER_LABEL[k]}
+              </option>
+            ))}
+          </select>
+          <Link to="/clients/new">
+            <Button>+ Add Client</Button>
+          </Link>
+        </div>
       </div>
+
 
       <Card>
         <CardContent className="pt-6">

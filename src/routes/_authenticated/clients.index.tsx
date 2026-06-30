@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { AppShell } from "@/components/AppShell";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -16,6 +17,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { amountOwed, formatCurrency, fullName, progress, type Client } from "@/lib/clients";
+import { getScheduledClientIds } from "@/lib/schedule.functions";
+
 
 export const Route = createFileRoute("/_authenticated/clients/")({
   head: () => ({ meta: [{ title: "All Clients · FIT Beyond Therapy Admin" }] }),

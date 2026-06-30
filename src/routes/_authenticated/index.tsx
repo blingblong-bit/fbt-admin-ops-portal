@@ -128,6 +128,14 @@ function Dashboard() {
 
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<FilterKey>("payment_due");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("active_assessment");
+
+  // Apply lifecycle status filter first — by default this hides archived clients.
+  const visibleClients = useMemo(() => {
+    return clients.filter((c) =>
+      matchesStatus(effectiveStatus(c, isScheduled(c.id)), statusFilter),
+    );
+  }, [clients, statusFilter, scheduledSet]);
 
   const counts = useMemo(() => {
     const c = {
@@ -140,7 +148,7 @@ function Dashboard() {
       critical_total: 0,
       package_complete: 0,
     };
-    for (const cl of clients) {
+    for (const cl of visibleClients) {
       const owed = amountOwed(cl);
       const r = visitsRemaining(cl);
       c.all += 1;
@@ -158,7 +166,8 @@ function Dashboard() {
         c.package_complete += 1;
     }
     return c;
-  }, [clients, scheduledSet]);
+  }, [visibleClients, scheduledSet]);
+
 
   const filtered = useMemo(() => {
     const list = clients.filter((c) => matchesFilter(c, filter, isScheduled(c.id)));

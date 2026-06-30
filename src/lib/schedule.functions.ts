@@ -112,6 +112,12 @@ async function fetchSquareBookings(
   if (!cleanToken) {
     return { bookings: all, error: "SQUARE_PRODUCTION_ACCESS_TOKEN is empty after sanitization" };
   }
+  console.log(
+    `[schedule] Square request → env=PRODUCTION base=${SQUARE_BASE} ` +
+      `token_len=${cleanToken.length} token_first4=${cleanToken.slice(0, 4)} ` +
+      `token_last4=${cleanToken.slice(-4)} ` +
+      `secret_name=SQUARE_PRODUCTION_ACCESS_TOKEN`,
+  );
   try {
     for (let i = 0; i < 10; i++) {
       const url = new URL(`${SQUARE_BASE}/v2/bookings`);
@@ -119,6 +125,7 @@ async function fetchSquareBookings(
       url.searchParams.set("start_at_min", startIso);
       url.searchParams.set("start_at_max", endIso);
       if (cursor) url.searchParams.set("cursor", cursor);
+      console.log(`[schedule] GET ${url.toString()}`);
       const res = await fetch(url.toString(), {
         headers: {
           Authorization: `Bearer ${cleanToken}`,
@@ -126,6 +133,7 @@ async function fetchSquareBookings(
           "Content-Type": "application/json",
         },
       });
+      console.log(`[schedule] Square responded ${res.status} ${res.statusText}`);
       if (!res.ok) {
         const body = await res.text();
         let friendly = `Square ${res.status}: ${body.slice(0, 300)}`;

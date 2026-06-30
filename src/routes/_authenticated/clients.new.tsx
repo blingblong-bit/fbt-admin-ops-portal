@@ -40,9 +40,9 @@ function AddClientPage() {
     package_price: "" as number | "",
     package_total_visits: 8 as number | "",
     payment_today: "" as number | "",
-    is_scheduled: false,
     internal_notes: "",
   });
+
 
   const price = Number(form.package_price || 0);
   const paid = Number(form.payment_today || 0);

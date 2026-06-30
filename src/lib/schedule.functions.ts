@@ -266,15 +266,22 @@ export const getScheduleCheck = createServerFn({ method: "GET" })
     const { data: clients, error: cErr } = await context.supabase
       .from("clients")
       .select(
-        "id, first_name, last_name, phone, package_total_visits, visits_used, package_price, amount_paid, internal_notes, square_customer_id",
+        "id, first_name, last_name, phone, package_total_visits, visits_used, package_price, amount_paid, internal_notes, square_customer_id, production_square_customer_id",
       )
       .is("deleted_at", null);
     if (cErr) throw cErr;
 
-    const byCustomerId = new Map<string, ScheduleClientLite>();
+    // Production customer ID is the primary match; fall back to sandbox square_customer_id.
+    const byProdId = new Map<string, ScheduleClientLite>();
+    const bySandboxId = new Map<string, ScheduleClientLite>();
     for (const c of (clients ?? []) as ScheduleClientLite[]) {
-      if (c.square_customer_id) byCustomerId.set(c.square_customer_id, c);
+      if (c.production_square_customer_id) byProdId.set(c.production_square_customer_id, c);
+      if (c.square_customer_id) bySandboxId.set(c.square_customer_id, c);
     }
+    const matchClient = (customerId: string | null | undefined): ScheduleClientLite | null => {
+      if (!customerId) return null;
+      return byProdId.get(customerId) ?? bySandboxId.get(customerId) ?? null;
+    };
 
     // Resolve service names (best-effort)
     const variationIds = Array.from(
@@ -292,10 +299,20 @@ export const getScheduleCheck = createServerFn({ method: "GET" })
       .filter((b) => b.start_at)
       .sort((a, b) => (a.start_at ?? "").localeCompare(b.start_at ?? ""));
 
+    // Fetch production customer info for unmatched booking customer IDs (best effort, to help linking)
+    const unmatchedCustomerIds = Array.from(
+      new Set(
+        sorted
+          .map((b) => b.customer_id ?? "")
+          .filter((id) => id && !matchClient(id)),
+      ),
+    );
+    const customerInfoMap = await fetchProductionCustomers(token, unmatchedCustomerIds);
+
     const all: ScheduleAppointment[] = sorted.map((b) => {
       const seg = b.appointment_segments?.[0];
       const svc = seg?.service_variation_id ? serviceNames.get(seg.service_variation_id) : null;
-      const client = b.customer_id ? byCustomerId.get(b.customer_id) ?? null : null;
+      const client = matchClient(b.customer_id);
       return {
         booking_id: b.id,
         start_at: b.start_at as string,
@@ -303,6 +320,7 @@ export const getScheduleCheck = createServerFn({ method: "GET" })
         duration_minutes: seg?.duration_minutes ?? null,
         service_name: svc ?? null,
         square_customer_id: b.customer_id ?? null,
+        customer_info: b.customer_id ? customerInfoMap.get(b.customer_id) ?? null : null,
         client,
       };
     });

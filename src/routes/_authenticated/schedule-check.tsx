@@ -26,7 +26,7 @@ import { formatCurrency, formatDate, formatDateTimeLocal } from "@/lib/clients";
 import {
   completeVisitForClient,
   getScheduleCheck,
-  linkProductionCustomer,
+  linkSquareCustomer,
   listLinkableClients,
   type LinkableClient,
   type NeedsScheduleClient,
@@ -79,15 +79,13 @@ function ScheduleCheckPage() {
       <div className="space-y-6">
         <header className="space-y-2">
           <div className="inline-flex items-center gap-2 rounded-full border border-amber-300 bg-amber-50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-amber-800">
-            Production Appointment Test Mode
+            Production Read-Only
           </div>
           <h1 className="text-3xl font-semibold tracking-tight">Schedule Check</h1>
           <p className="text-slate-600">
             Read-only view of Square appointments from the <strong>Production</strong> Square
-            account (appointments only). Customer sync and payment sync remain on Sandbox.
-            Therapy Admin never writes back to Square. Production booking customer IDs will not
-            match Sandbox-synced clients, so production appointments may appear under
-            “Unmatched Appointments”.
+            account. Therapy Admin never writes back to Square. Bookings whose customer ID
+            isn't linked to an Admin client appear under "Unmatched Appointments".
           </p>
         </header>
 
@@ -184,7 +182,7 @@ function ScheduleCheckPage() {
 
 function UnmatchedAppointmentsCard({ appointments }: { appointments: ScheduleAppointment[] }) {
   const listFn = useServerFn(listLinkableClients);
-  const linkFn = useServerFn(linkProductionCustomer);
+  const linkFn = useServerFn(linkSquareCustomer);
   const qc = useQueryClient();
 
   const clientsQuery = useQuery({
@@ -194,10 +192,10 @@ function UnmatchedAppointmentsCard({ appointments }: { appointments: ScheduleApp
   });
 
   const linkMut = useMutation({
-    mutationFn: (vars: { clientId: string; productionSquareCustomerId: string }) =>
+    mutationFn: (vars: { clientId: string; squareCustomerId: string }) =>
       linkFn({ data: vars }),
     onSuccess: () => {
-      toast.success("Production customer linked");
+      toast.success("Square customer linked");
       qc.invalidateQueries({ queryKey: ["schedule-check"] });
       qc.invalidateQueries({ queryKey: ["linkable-clients"] });
     },
@@ -222,7 +220,7 @@ function UnmatchedAppointmentsCard({ appointments }: { appointments: ScheduleApp
         <CardTitle>Unmatched Appointments</CardTitle>
         <CardDescription>
           Production Square bookings whose customer ID isn't linked to an Admin client. Link them
-          here — the production customer ID is saved separately from the sandbox one.
+          here so future appointments and payments match automatically.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -269,7 +267,7 @@ function UnmatchedAppointmentsCard({ appointments }: { appointments: ScheduleApp
                         onLink={(clientId) =>
                           linkMut.mutate({
                             clientId,
-                            productionSquareCustomerId: first.square_customer_id!,
+                            squareCustomerId: first.square_customer_id!,
                           })
                         }
                       />
@@ -328,7 +326,7 @@ function LinkClientControl({
             {filtered.map((c) => (
               <SelectItem key={c.id} value={c.id} className="text-xs">
                 {c.first_name} {c.last_name}
-                {c.production_square_customer_id ? " (already linked)" : ""}
+                {c.square_customer_id ? " (already linked)" : ""}
               </SelectItem>
             ))}
             {filtered.length === 0 && (

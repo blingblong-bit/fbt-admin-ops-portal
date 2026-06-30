@@ -31,7 +31,6 @@ export type ScheduleClientLite = {
   amount_paid: number;
   internal_notes: string | null;
   square_customer_id: string | null;
-  production_square_customer_id: string | null;
 };
 
 export type ProductionCustomerInfo = {
@@ -309,22 +308,19 @@ export const getScheduleCheck = createServerFn({ method: "GET" })
     const { data: clients, error: cErr } = await context.supabase
       .from("clients")
       .select(
-        "id, first_name, last_name, phone, package_total_visits, visits_used, package_price, amount_paid, internal_notes, square_customer_id, production_square_customer_id",
+        "id, first_name, last_name, phone, package_total_visits, visits_used, package_price, amount_paid, internal_notes, square_customer_id",
       )
       .is("deleted_at", null);
     if (cErr) throw cErr;
 
-    // Match by production_square_customer_id (manual link) or square_customer_id
-    // (auto-populated by the Square webhook). Both columns hold Production IDs.
-    const byProdId = new Map<string, ScheduleClientLite>();
-    const byWebhookId = new Map<string, ScheduleClientLite>();
+    // Match bookings to clients by Square customer ID.
+    const byCustomerId = new Map<string, ScheduleClientLite>();
     for (const c of (clients ?? []) as ScheduleClientLite[]) {
-      if (c.production_square_customer_id) byProdId.set(c.production_square_customer_id, c);
-      if (c.square_customer_id) byWebhookId.set(c.square_customer_id, c);
+      if (c.square_customer_id) byCustomerId.set(c.square_customer_id, c);
     }
     const matchClient = (customerId: string | null | undefined): ScheduleClientLite | null => {
       if (!customerId) return null;
-      return byProdId.get(customerId) ?? byWebhookId.get(customerId) ?? null;
+      return byCustomerId.get(customerId) ?? null;
     };
 
     // Resolve service names (best-effort)
@@ -504,7 +500,7 @@ export type LinkableClient = {
   last_name: string;
   phone: string | null;
   email: string | null;
-  production_square_customer_id: string | null;
+  square_customer_id: string | null;
 };
 
 export const listLinkableClients = createServerFn({ method: "GET" })
@@ -512,52 +508,52 @@ export const listLinkableClients = createServerFn({ method: "GET" })
   .handler(async ({ context }): Promise<LinkableClient[]> => {
     const { data, error } = await context.supabase
       .from("clients")
-      .select("id, first_name, last_name, phone, email, production_square_customer_id")
+      .select("id, first_name, last_name, phone, email, square_customer_id")
       .is("deleted_at", null)
       .order("first_name", { ascending: true });
     if (error) throw error;
     return (data ?? []) as LinkableClient[];
   });
 
-export const linkProductionCustomer = createServerFn({ method: "POST" })
+export const linkSquareCustomer = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { clientId: string; productionSquareCustomerId: string }) => {
+  .inputValidator((d: { clientId: string; squareCustomerId: string }) => {
     if (!d?.clientId) throw new Error("clientId required");
-    if (!d?.productionSquareCustomerId) throw new Error("productionSquareCustomerId required");
+    if (!d?.squareCustomerId) throw new Error("squareCustomerId required");
     return d;
   })
   .handler(async ({ data, context }) => {
-    // Prevent linking the same production customer ID to two different clients
+    // Prevent linking the same Square customer ID to two different clients
     const { data: existing, error: eErr } = await context.supabase
       .from("clients")
       .select("id, first_name, last_name")
-      .eq("production_square_customer_id", data.productionSquareCustomerId)
+      .eq("square_customer_id", data.squareCustomerId)
       .is("deleted_at", null)
       .neq("id", data.clientId)
       .maybeSingle();
     if (eErr) throw eErr;
     if (existing) {
       throw new Error(
-        `Production customer is already linked to ${existing.first_name} ${existing.last_name}. Unlink them first.`,
+        `Square customer is already linked to ${existing.first_name} ${existing.last_name}. Unlink them first.`,
       );
     }
 
     const { error } = await context.supabase
       .from("clients")
-      .update({ production_square_customer_id: data.productionSquareCustomerId })
+      .update({ square_customer_id: data.squareCustomerId })
       .eq("id", data.clientId);
     if (error) throw error;
 
     await context.supabase.from("client_activities").insert({
       client_id: data.clientId,
       activity_type: "square_link",
-      description: `Linked Production Square customer ${data.productionSquareCustomerId}`,
-      metadata: { production_square_customer_id: data.productionSquareCustomerId },
+      description: `Linked Square customer ${data.squareCustomerId}`,
+      metadata: { square_customer_id: data.squareCustomerId },
     });
     return { ok: true };
   });
 
-export const unlinkProductionCustomer = createServerFn({ method: "POST" })
+export const unlinkSquareCustomer = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { clientId: string }) => {
     if (!d?.clientId) throw new Error("clientId required");
@@ -566,14 +562,15 @@ export const unlinkProductionCustomer = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { error } = await context.supabase
       .from("clients")
-      .update({ production_square_customer_id: null })
+      .update({ square_customer_id: null })
       .eq("id", data.clientId);
     if (error) throw error;
     await context.supabase.from("client_activities").insert({
       client_id: data.clientId,
       activity_type: "square_unlink",
-      description: "Unlinked Production Square customer",
+      description: "Unlinked Square customer",
     });
     return { ok: true };
   });
+
 

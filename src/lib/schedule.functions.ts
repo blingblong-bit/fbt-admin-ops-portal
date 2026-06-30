@@ -174,11 +174,14 @@ async function fetchServiceNames(
 ): Promise<Map<string, string>> {
   const out = new Map<string, string>();
   if (variationIds.length === 0) return out;
+  // eslint-disable-next-line no-control-regex
+  const cleanToken = (token ?? "").replace(/[^\x20-\x7E]/g, "").trim();
+  if (!cleanToken) return out;
   try {
     const res = await fetch(`${SQUARE_BASE}/v2/catalog/batch-retrieve`, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${token}`,
+        Authorization: `Bearer ${cleanToken}`,
         "Square-Version": SQUARE_VERSION,
         "Content-Type": "application/json",
       },

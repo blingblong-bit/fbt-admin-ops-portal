@@ -130,6 +130,36 @@ async function fetchFutureBookings(token: string): Promise<Set<string>> {
   return out;
 }
 
+type SquarePayment = {
+  id: string;
+  customer_id?: string | null;
+  created_at?: string | null;
+};
+
+async function fetchRecentPaymentCustomerIds(token: string, days = 60): Promise<Set<string>> {
+  const out = new Set<string>();
+  const begin = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+  let cursor: string | undefined;
+  for (let i = 0; i < 50; i++) {
+    const url = new URL(`${SQUARE_BASE}/v2/payments`);
+    url.searchParams.set("limit", "100");
+    url.searchParams.set("begin_time", begin);
+    url.searchParams.set("sort_order", "DESC");
+    if (cursor) url.searchParams.set("cursor", cursor);
+    const r = await squareGet<{ payments?: SquarePayment[]; cursor?: string }>(
+      token,
+      url.toString(),
+    );
+    if (!r.ok) break;
+    for (const p of r.json?.payments ?? []) {
+      if (p.customer_id) out.add(p.customer_id);
+    }
+    cursor = r.json?.cursor;
+    if (!cursor) break;
+  }
+  return out;
+}
+
 export const backfillProductionCustomers = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }): Promise<BackfillResult> => {
@@ -137,9 +167,11 @@ export const backfillProductionCustomers = createServerFn({ method: "POST" })
     const result: BackfillResult = {
       fetched_customers: 0,
       fetched_bookings: 0,
+      fetched_recent_payments: 0,
       auto_linked: 0,
       updated_contact: 0,
       queued_for_review: 0,
+      hidden_old: 0,
       skipped_already_linked: 0,
       skipped_deleted: 0,
       errors: [],
@@ -149,13 +181,16 @@ export const backfillProductionCustomers = createServerFn({ method: "POST" })
       return result;
     }
 
-    const [{ customers, error: cErr }, futureCustomerIds] = await Promise.all([
-      fetchAllCustomers(token),
-      fetchFutureBookings(token),
-    ]);
+    const [{ customers, error: cErr }, futureCustomerIds, recentPaymentCustomerIds] =
+      await Promise.all([
+        fetchAllCustomers(token),
+        fetchFutureBookings(token),
+        fetchRecentPaymentCustomerIds(token, 60),
+      ]);
     if (cErr) result.errors.push(cErr);
     result.fetched_customers = customers.length;
     result.fetched_bookings = futureCustomerIds.size;
+    result.fetched_recent_payments = recentPaymentCustomerIds.size;
 
     const { data: existing, error: eErr } = await context.supabase
       .from("clients")

@@ -101,6 +101,20 @@ function ScheduleCheckPage() {
             account. Therapy Admin never writes back to Square. Bookings whose customer ID
             isn't linked to an Admin client appear under "Unmatched Appointments".
           </p>
+          <div className="pt-2">
+            <Button
+              variant="outline"
+              onClick={() => backfillMut.mutate()}
+              disabled={backfillMut.isPending}
+            >
+              {backfillMut.isPending ? "Running backfill…" : "Backfill Square Customers"}
+            </Button>
+            <p className="mt-1 text-xs text-slate-500">
+              Pulls all Production Square customers. Matches by Square ID only — never by name.
+              Active packages and deleted clients are preserved. New imports default to
+              <em> Archived</em>, or <em>Assessment</em> if they have a future appointment.
+            </p>
+          </div>
         </header>
 
         <Card>

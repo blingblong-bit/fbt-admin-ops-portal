@@ -211,7 +211,53 @@ async function fetchServiceNames(
     for (const obj of json.objects ?? []) {
       const name = obj.item_variation_data?.name;
       if (name) out.set(obj.id, name);
-    }
+}
+
+async function fetchProductionCustomers(
+  token: string,
+  customerIds: string[],
+): Promise<Map<string, ProductionCustomerInfo>> {
+  const out = new Map<string, ProductionCustomerInfo>();
+  if (customerIds.length === 0) return out;
+  // eslint-disable-next-line no-control-regex
+  const cleanToken = (token ?? "").replace(/[^\x20-\x7E]/g, "").trim();
+  if (!cleanToken) return out;
+  // Square's Customers API doesn't support batch retrieve; fetch each (cap to avoid rate limit floods)
+  const ids = customerIds.slice(0, 50);
+  await Promise.all(
+    ids.map(async (id) => {
+      try {
+        const res = await fetch(`${SQUARE_BASE}/v2/customers/${encodeURIComponent(id)}`, {
+          headers: {
+            Authorization: `Bearer ${cleanToken}`,
+            "Square-Version": SQUARE_VERSION,
+            "Content-Type": "application/json",
+          },
+        });
+        if (!res.ok) return;
+        const json = (await res.json()) as {
+          customer?: {
+            given_name?: string | null;
+            family_name?: string | null;
+            email_address?: string | null;
+            phone_number?: string | null;
+          };
+        };
+        const c = json.customer;
+        if (!c) return;
+        out.set(id, {
+          given_name: c.given_name ?? null,
+          family_name: c.family_name ?? null,
+          email: c.email_address ?? null,
+          phone: c.phone_number ?? null,
+        });
+      } catch {
+        // ignore per-customer failures
+      }
+    }),
+  );
+  return out;
+}
   } catch {
     // ignore — service names are optional
   }

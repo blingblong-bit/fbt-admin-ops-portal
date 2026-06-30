@@ -102,13 +102,16 @@ function ClientsListPage() {
                   <TableCell>{c.phone ?? "—"}</TableCell>
                   <TableCell>{c.package_name ?? "—"}</TableCell>
                   <TableCell>{progress(c)}</TableCell>
-                  <TableCell>{c.is_scheduled ? "✅" : "⭕"}</TableCell>
+                  <TableCell>
+                    {scheduledSet.has(c.id) ? "✅" : "⭕"}
+                  </TableCell>
                   <TableCell className={amountOwed(c) > 0 ? "font-medium text-red-600" : ""}>
                     {formatCurrency(amountOwed(c))}
                   </TableCell>
                   <TableCell>
-                    <StatusBadge client={c} />
+                    <StatusBadge client={c} isScheduled={scheduledSet.has(c.id)} />
                   </TableCell>
+
                   <TableCell className="text-right">
                     <Link to="/clients/$id" params={{ id: c.id }}>
                       <Button variant="ghost" size="sm">

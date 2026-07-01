@@ -739,6 +739,9 @@ function AppointmentsCard({
               <TableBody>
                 {appointments.map((a) => {
                   const remaining = a.client ? visitsRemaining(a.client) : 0;
+                  const hasPackage = !!a.client && (a.client.package_total_visits ?? 0) > 0;
+                  const visitsUnknown = hasPackage && remaining === null;
+                  const visitsZero = hasPackage && remaining === 0;
                   return (
                     <TableRow key={a.booking_id}>
                       <TableCell className="whitespace-nowrap text-sm">
@@ -751,7 +754,7 @@ function AppointmentsCard({
                               {a.client.first_name} {a.client.last_name}
                             </div>
                             <div className="text-xs text-slate-500">
-                              {remaining} visits left
+                              {remaining === null ? "Visits unknown" : `${remaining} visits left`}
                             </div>
                           </div>
                         ) : (
@@ -782,20 +785,37 @@ function AppointmentsCard({
                       <TableCell className="text-xs whitespace-nowrap">{a.status}</TableCell>
                       <TableCell className="text-right whitespace-nowrap">
                         {a.client ? (
-                          <div className="inline-flex gap-2">
-                            <Button asChild size="sm" variant="outline">
-                              <Link to="/clients/$id" params={{ id: a.client.id }}>
-                                View Client
-                              </Link>
-                            </Button>
-                            {showCompleteVisit && remaining > 0 && onCompleteVisit && (
-                              <Button
-                                size="sm"
-                                disabled={completing === a.client.id}
-                                onClick={() => onCompleteVisit(a.client!.id)}
-                              >
-                                {completing === a.client.id ? "Recording…" : "Complete Visit"}
+                          <div className="inline-flex flex-col items-end gap-1">
+                            <div className="inline-flex gap-2">
+                              <Button asChild size="sm" variant="outline">
+                                <Link to="/clients/$id" params={{ id: a.client.id }}>
+                                  View Client
+                                </Link>
                               </Button>
+                              {showCompleteVisit && onCompleteVisit && !visitsZero && (
+                                <Button
+                                  size="sm"
+                                  disabled={completing === a.client.id}
+                                  onClick={() => onCompleteVisit(a.client!.id)}
+                                  title={
+                                    visitsUnknown
+                                      ? "Visits unknown — verify before completing."
+                                      : undefined
+                                  }
+                                >
+                                  {completing === a.client.id ? "Recording…" : "Complete Visit"}
+                                </Button>
+                              )}
+                            </div>
+                            {visitsUnknown && (
+                              <span className="text-[11px] text-amber-700">
+                                ⚠ Visits unknown — verify before completing.
+                              </span>
+                            )}
+                            {visitsZero && (
+                              <span className="text-[11px] text-amber-700">
+                                ⚠ Visits show 0 — verify in Square before completing.
+                              </span>
                             )}
                           </div>
                         ) : (
@@ -806,6 +826,7 @@ function AppointmentsCard({
                     </TableRow>
                   );
                 })}
+
               </TableBody>
             </Table>
           </div>

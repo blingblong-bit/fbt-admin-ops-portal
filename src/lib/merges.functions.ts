@@ -407,12 +407,30 @@ export const mergeDuplicatePair = createServerFn({ method: "POST" })
       if (uErr) throw uErr;
     }
 
-    // Archive legacy client
+    // If this is a legacy → square-linked merge (one side has square_customer_id
+    // and the other does not), reactivate the kept Square-linked client. It may
+    // have been archived by cleanup before the merge and would otherwise stay
+    // archived after copying the legacy data over.
+    const keptIsSquare = !!kept.square_customer_id && !archive.square_customer_id;
+    const archiveIsSquare = !!archive.square_customer_id && !kept.square_customer_id;
+    if (keptIsSquare) {
+      const { error: reErr } = await supabaseAdmin
+        .from("clients")
+        .update({ status: "active", manual_active: true, deleted_at: null })
+        .eq("id", kept.id);
+      if (reErr) throw reErr;
+    }
+
+    // Archive legacy client (only when the archive side is the non-Square one).
+    // If somehow the archive side is the Square-linked one, still mark archived
+    // per existing behavior but do not clear its Square linkage.
     const { error: aErr } = await supabaseAdmin
       .from("clients")
       .update({ status: "archived", manual_active: false })
       .eq("id", archive.id);
     if (aErr) throw aErr;
+    void archiveIsSquare;
+
 
     const keptName = `${kept.first_name} ${kept.last_name}`.trim();
     const archName = `${archive.first_name} ${archive.last_name}`.trim();

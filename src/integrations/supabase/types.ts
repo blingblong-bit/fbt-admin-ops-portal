@@ -121,6 +121,74 @@ export type Database = {
         }
         Relationships: []
       }
+      duplicate_client_reviews: {
+        Row: {
+          archived_client_id: string | null
+          client_a_id: string
+          client_b_id: string
+          created_at: string
+          id: string
+          kept_client_id: string | null
+          reason: string | null
+          resolved_at: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          archived_client_id?: string | null
+          client_a_id: string
+          client_b_id: string
+          created_at?: string
+          id?: string
+          kept_client_id?: string | null
+          reason?: string | null
+          resolved_at?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          archived_client_id?: string | null
+          client_a_id?: string
+          client_b_id?: string
+          created_at?: string
+          id?: string
+          kept_client_id?: string | null
+          reason?: string | null
+          resolved_at?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "duplicate_client_reviews_archived_client_id_fkey"
+            columns: ["archived_client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "duplicate_client_reviews_client_a_id_fkey"
+            columns: ["client_a_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "duplicate_client_reviews_client_b_id_fkey"
+            columns: ["client_b_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "duplicate_client_reviews_kept_client_id_fkey"
+            columns: ["kept_client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       imports: {
         Row: {
           created_at: string

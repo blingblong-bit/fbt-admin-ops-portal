@@ -154,7 +154,7 @@ export const findDuplicatePairs = createServerFn({ method: "GET" })
       involved.add(cand.b);
     }
     const clientIds = Array.from(involved);
-    const activitiesByClient = new Map<string, ClientActivity[]>();
+    const activitiesByClient = new Map<string, ActivityLite[]>();
     if (clientIds.length > 0) {
       const { data: acts, error: aErr } = await context.supabase
         .from("client_activities")
@@ -398,7 +398,7 @@ export const mergeDuplicatePair = createServerFn({ method: "POST" })
     if (Object.keys(patch).length > 0) {
       const { error: uErr } = await supabaseAdmin
         .from("clients")
-        .update(patch)
+        .update(patch as never)
         .eq("id", kept.id);
       if (uErr) throw uErr;
     }

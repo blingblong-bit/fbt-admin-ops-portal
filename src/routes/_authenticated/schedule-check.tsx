@@ -94,7 +94,94 @@ function ScheduleCheckPage() {
     onError: (e: Error) => toast.error(`Backfill failed: ${e.message}`),
   });
 
-  const data = query.data;
+  // Load linkable clients up-front so we can reconcile any Unmatched appointments
+  // whose square_customer_id has since been linked to an Admin client.
+  const listClientsFn = useServerFn(listLinkableClients);
+  const linkableQuery = useQuery({
+    queryKey: ["linkable-clients"],
+    queryFn: () => listClientsFn(),
+  });
+
+  const rawData = query.data;
+  const linkable = linkableQuery.data;
+
+  const data = useMemo(() => {
+    if (!rawData) return rawData;
+    if (!linkable || linkable.length === 0) return rawData;
+
+    // Build map: square_customer_id -> linkable client
+    const bySquare = new Map<string, LinkableClient>();
+    for (const c of linkable) {
+      if (c.square_customer_id) bySquare.set(c.square_customer_id, c);
+    }
+
+    // Find unmatched appts that now resolve
+    const resolvedIds = new Set<string>();
+    const promoted: ScheduleAppointment[] = [];
+    for (const a of rawData.unmatched) {
+      if (!a.square_customer_id) continue;
+      const c = bySquare.get(a.square_customer_id);
+      if (!c) continue;
+      resolvedIds.add(a.booking_id);
+      promoted.push({
+        ...a,
+        client: {
+          id: c.id,
+          first_name: c.first_name,
+          last_name: c.last_name,
+          phone: c.phone,
+          package_total_visits: 0,
+          visits_used: null,
+          package_price: 0,
+          amount_paid: 0,
+          internal_notes: null,
+          square_customer_id: c.square_customer_id,
+        },
+      });
+    }
+
+    if (resolvedIds.size === 0) return rawData;
+
+    const dayOf = (iso: string) => iso.slice(0, 10);
+    const inRange = (iso: string, a: string, b: string) => {
+      const d = dayOf(iso);
+      return d >= a && d <= b;
+    };
+    const mergeInto = (list: ScheduleAppointment[], extras: ScheduleAppointment[]) =>
+      [...list, ...extras].sort((x, y) => x.start_at.localeCompare(y.start_at));
+
+    const forSelected = promoted.filter((a) => dayOf(a.start_at) === rawData.selected_date);
+    const forThisWeek = promoted.filter((a) =>
+      inRange(a.start_at, rawData.week_start, rawData.week_end),
+    );
+    const forNextWeek = promoted.filter((a) =>
+      inRange(a.start_at, rawData.next_week_start, rawData.next_week_end),
+    );
+
+    return {
+      ...rawData,
+      selected_day: mergeInto(rawData.selected_day, forSelected),
+      this_week: mergeInto(rawData.this_week, forThisWeek),
+      next_week: mergeInto(rawData.next_week, forNextWeek),
+      unmatched: rawData.unmatched.filter((a) => !resolvedIds.has(a.booking_id)),
+    };
+  }, [rawData, linkable]);
+
+  // If reconciliation found stale unmatched entries, ask the server to rebuild
+  // its matched booking list so the enriched client data (visits, balance) shows up.
+  useEffect(() => {
+    if (!rawData || !linkable) return;
+    const bySquare = new Set(
+      linkable.filter((c) => c.square_customer_id).map((c) => c.square_customer_id as string),
+    );
+    const stale = rawData.unmatched.some(
+      (a) => a.square_customer_id && bySquare.has(a.square_customer_id),
+    );
+    if (stale) {
+      qc.invalidateQueries({ queryKey: ["schedule-check"] });
+    }
+  }, [rawData, linkable, qc]);
+
 
   return (
     <AppShell>

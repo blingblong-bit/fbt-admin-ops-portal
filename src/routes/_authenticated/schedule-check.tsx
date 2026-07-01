@@ -448,7 +448,25 @@ function AppointmentsCard({
                             </div>
                           </div>
                         ) : (
-                          <span className="text-amber-700">Unmatched</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const key = a.square_customer_id ?? a.booking_id;
+                              const el = document.getElementById(`unmatched-${key}`);
+                              if (el) {
+                                el.scrollIntoView({ behavior: "smooth", block: "start" });
+                                el.classList.add("ring-2", "ring-amber-400");
+                                setTimeout(
+                                  () => el.classList.remove("ring-2", "ring-amber-400"),
+                                  1600,
+                                );
+                              }
+                            }}
+                            className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800 underline-offset-2 hover:bg-amber-200 hover:underline"
+                            title="Jump to Unmatched Appointments"
+                          >
+                            Unmatched ↓
+                          </button>
                         )}
                       </TableCell>
                       <TableCell className="text-sm whitespace-nowrap">

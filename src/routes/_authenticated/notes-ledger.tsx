@@ -14,6 +14,7 @@ import {
   applyNotesLedger,
   type PreviewResult,
   type AutoUpdateRow,
+  type ApplyRowResult,
 } from "@/lib/notesLedger.functions";
 
 export const Route = createFileRoute("/_authenticated/notes-ledger")({

@@ -100,8 +100,7 @@ function NotesLedgerPage() {
     onError: (e: Error) => toast.error(e.message),
   });
 
-    onError: (e: Error) => toast.error(e.message),
-  });
+
 
   const applyMut = useMutation({
     mutationFn: async () => {

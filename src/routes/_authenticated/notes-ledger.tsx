@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useMutation } from "@tanstack/react-query";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,6 +12,7 @@ import { formatCurrency, formatDate, fullName } from "@/lib/clients";
 import {
   previewNotesLedger,
   applyNotesLedger,
+  undoNotesLedgerApply,
   noteAlreadyExists,
   REVIEW_CATEGORY_LABELS,
   type PreviewResult,
@@ -22,6 +23,34 @@ import {
   type MatchClient,
 } from "@/lib/notesLedger.functions";
 
+const RECENTLY_APPLIED_TTL_MS = 12000;
+
+type RecentlyApplied = {
+  id: string;
+  line_number: number;
+  client_id: string;
+  client_name: string;
+  applied_at: number;
+  before: {
+    package_price: number;
+    package_total_visits: number;
+    package_start_date: string | null;
+    amount_paid: number;
+    internal_notes: string | null;
+  };
+  after: {
+    package_price: number;
+    package_total_visits: number;
+    package_start_date: string | null;
+    amount_paid: number;
+    internal_notes: string | null;
+  };
+  appended_note: string | null;
+  note_status: "append" | "already_exists" | "no_note";
+  undone: boolean;
+};
+
+
 export const Route = createFileRoute("/_authenticated/notes-ledger")({
   head: () => ({ meta: [{ title: "Notes Ledger Import · FBT Admin" }] }),
   component: NotesLedgerPage,
@@ -30,6 +59,7 @@ export const Route = createFileRoute("/_authenticated/notes-ledger")({
 function NotesLedgerPage() {
   const previewFn = useServerFn(previewNotesLedger);
   const applyFn = useServerFn(applyNotesLedger);
+  const undoFn = useServerFn(undoNotesLedgerApply);
   const [text, setText] = useState("");
   const [preview, setPreview] = useState<PreviewResult | null>(null);
   const [applied, setApplied] = useState<{ updated: number; errors: number } | null>(null);
@@ -39,6 +69,19 @@ function NotesLedgerPage() {
   const [resolvedReviews, setResolvedReviews] = useState<Set<number>>(new Set());
   const [skippedReviews, setSkippedReviews] = useState<Set<number>>(new Set());
   const [activeCategories, setActiveCategories] = useState<Set<ReviewCategory>>(new Set());
+  const [recentlyApplied, setRecentlyApplied] = useState<RecentlyApplied[]>([]);
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (recentlyApplied.length === 0) return;
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [recentlyApplied.length]);
+
+  const visibleRecent = recentlyApplied.filter(
+    (r) => now - r.applied_at < RECENTLY_APPLIED_TTL_MS,
+  );
+
 
   const previewMut = useMutation({
     mutationFn: async () => previewFn({ data: { text } }),
@@ -51,10 +94,13 @@ function NotesLedgerPage() {
       setResolvedReviews(new Set());
       setSkippedReviews(new Set());
       setActiveCategories(new Set());
+      setRecentlyApplied([]);
       toast.success(`Parsed ${r.parsed_count} rows`);
     },
     onError: (e: Error) => toast.error(e.message),
   });
+
+
 
   const applyMut = useMutation({
     mutationFn: async () => {
@@ -124,16 +170,80 @@ function NotesLedgerPage() {
       return { res, lineNumber: row.line_number };
     },
     onSuccess: ({ res, lineNumber }) => {
-      const failed = res.rows.find((r) => r.status === "error");
-      if (failed) {
-        toast.error(`Apply failed: ${failed.error ?? "Unknown error"}`);
-      } else {
-        toast.success("Row applied");
-        setResolvedReviews((prev) => new Set(prev).add(lineNumber));
+      const row = res.rows[0];
+      if (!row || row.status === "error") {
+        toast.error(`Apply failed: ${row?.error ?? "Unknown error"}`);
+        return;
       }
+      const before = row.before ?? {
+        package_price: 0,
+        package_total_visits: 0,
+        package_start_date: null,
+        amount_paid: 0,
+        internal_notes: null,
+      };
+      const after = {
+        package_price: row.fields.package_price,
+        package_total_visits: row.fields.package_total_visits,
+        package_start_date: row.fields.package_start_date,
+        amount_paid: row.fields.amount_paid,
+        internal_notes: row.fields.internal_notes_after,
+      };
+      const appended = row.fields.appended_note;
+      const noteStatus: RecentlyApplied["note_status"] = appended
+        ? "append"
+        : before.internal_notes && before.internal_notes.length > 0
+          ? "already_exists"
+          : "no_note";
+      setRecentlyApplied((prev) => [
+        {
+          id: `${lineNumber}-${Date.now()}`,
+          line_number: lineNumber,
+          client_id: row.client_id,
+          client_name: row.client_name,
+          applied_at: Date.now(),
+          before,
+          after,
+          appended_note: appended,
+          note_status: noteStatus,
+          undone: false,
+        },
+        ...prev,
+      ]);
+      setNow(Date.now());
+      // Immediately remove from Needs Review and clear selection.
+      setResolvedReviews((prev) => new Set(prev).add(lineNumber));
+      setReviewSelection((prev) => {
+        const next = new Map(prev);
+        next.delete(lineNumber);
+        return next;
+      });
+      toast.success(`Applied to ${row.client_name}`);
     },
+
     onError: (e: Error) => toast.error(e.message),
   });
+
+  const undoMut = useMutation({
+    mutationFn: async (entry: RecentlyApplied) => {
+      await undoFn({ data: { client_id: entry.client_id, before: entry.before } });
+      return entry;
+    },
+    onSuccess: (entry) => {
+      setRecentlyApplied((prev) =>
+        prev.map((r) => (r.id === entry.id ? { ...r, undone: true } : r)),
+      );
+      // Restore into Needs Review so the row can be re-applied.
+      setResolvedReviews((prev) => {
+        const next = new Set(prev);
+        next.delete(entry.line_number);
+        return next;
+      });
+      toast.success(`Reverted changes to ${entry.client_name}`);
+    },
+    onError: (e: Error) => toast.error(`Undo failed: ${e.message}`),
+  });
+
 
   const autoCount = preview ? preview.auto_updates.length - excluded.size : 0;
 
@@ -344,6 +454,33 @@ function NotesLedgerPage() {
               })}
             </CardContent>
           </Card>
+
+          {visibleRecent.length > 0 && (
+            <Card className="mb-6 border-emerald-200 bg-emerald-50/60">
+              <CardHeader>
+                <CardTitle className="text-base">
+                  Recently Applied ({visibleRecent.length})
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <p className="text-xs text-slate-600">
+                  Confirmation of the changes committed to the database. Undo is
+                  available for a few seconds after each apply.
+                </p>
+                {visibleRecent.map((entry) => (
+                  <RecentlyAppliedCard
+                    key={entry.id}
+                    entry={entry}
+                    now={now}
+                    ttlMs={RECENTLY_APPLIED_TTL_MS}
+                    onUndo={() => undoMut.mutate(entry)}
+                    undoing={undoMut.isPending}
+                  />
+                ))}
+              </CardContent>
+            </Card>
+          )}
+
 
           <Card className="mb-6">
             <CardHeader>
@@ -792,3 +929,114 @@ function ReviewCard({
     </div>
   );
 }
+
+function RecentlyAppliedCard({
+  entry,
+  now,
+  ttlMs,
+  onUndo,
+  undoing,
+}: {
+  entry: RecentlyApplied;
+  now: number;
+  ttlMs: number;
+  onUndo: () => void;
+  undoing: boolean;
+}) {
+  const secondsLeft = Math.max(0, Math.ceil((ttlMs - (now - entry.applied_at)) / 1000));
+  const { before, after } = entry;
+  const changes: { label: string; before: string; after: string; changed: boolean }[] = [
+    {
+      label: "Package price",
+      before: formatCurrency(before.package_price),
+      after: formatCurrency(after.package_price),
+      changed: before.package_price !== after.package_price,
+    },
+    {
+      label: "Visits",
+      before: String(before.package_total_visits),
+      after: String(after.package_total_visits),
+      changed: before.package_total_visits !== after.package_total_visits,
+    },
+    {
+      label: "Start date",
+      before: formatDate(before.package_start_date),
+      after: formatDate(after.package_start_date),
+      changed: (before.package_start_date ?? null) !== (after.package_start_date ?? null),
+    },
+    {
+      label: "Amount paid",
+      before: formatCurrency(before.amount_paid),
+      after: formatCurrency(after.amount_paid),
+      changed: before.amount_paid !== after.amount_paid,
+    },
+  ];
+  const noteLine =
+    entry.note_status === "append" && entry.appended_note
+      ? `Appended — ${entry.appended_note}`
+      : entry.note_status === "already_exists"
+        ? "Note already exists — no append needed"
+        : "No new notes";
+  return (
+    <div
+      className={`rounded border p-3 text-sm ${
+        entry.undone ? "border-slate-200 bg-slate-50 opacity-70" : "border-emerald-300 bg-white"
+      }`}
+    >
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-emerald-700">✓</span>
+          <span className="font-semibold">
+            {entry.undone ? "Reverted — " : "Applied to "}
+            {entry.client_name}
+          </span>
+          <Badge variant="outline" className="text-xs">
+            Line {entry.line_number}
+          </Badge>
+        </div>
+        {!entry.undone && (
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-slate-500">Undo in {secondsLeft}s</span>
+            <Button size="sm" variant="outline" onClick={onUndo} disabled={undoing}>
+              {undoing ? "Undoing…" : "Undo"}
+            </Button>
+          </div>
+        )}
+      </div>
+      <div className="text-xs text-slate-600">Changes made:</div>
+      <ul className="mt-1 space-y-0.5 text-xs">
+        {changes.map((c) => (
+          <li key={c.label}>
+            •{" "}
+            {c.changed ? (
+              <>
+                <span className="font-medium">{c.label}:</span>{" "}
+                <span className="text-slate-500 line-through">{c.before}</span>{" "}
+                <span className="font-semibold text-emerald-700">→ {c.after}</span>
+              </>
+            ) : (
+              <>
+                <span className="font-medium">{c.label}:</span>{" "}
+                <span className="text-slate-500">No change</span>
+              </>
+            )}
+          </li>
+        ))}
+        <li>
+          • <span className="font-medium">Notes:</span>{" "}
+          <span
+            className={
+              entry.note_status === "append" ? "text-emerald-700" : "text-slate-500"
+            }
+          >
+            {noteLine}
+          </span>
+        </li>
+        <li>
+          • <span className="text-slate-500">Ledger row marked as imported/resolved</span>
+        </li>
+      </ul>
+    </div>
+  );
+}
+

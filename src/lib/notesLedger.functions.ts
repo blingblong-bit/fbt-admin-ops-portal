@@ -478,7 +478,15 @@ export type ApplyRowResult = {
     appended_note: string | null;
     internal_notes_after: string | null;
   };
+  before: {
+    package_price: number;
+    package_total_visits: number;
+    package_start_date: string | null;
+    amount_paid: number;
+    internal_notes: string | null;
+  } | null;
 };
+
 
 export type ApplyResult = {
   updated: number;
@@ -536,15 +544,25 @@ export const applyNotesLedger = createServerFn({ method: "POST" })
           step: "read",
           error: readErr.message,
           fields: baseFields,
+          before: null,
         });
         continue;
       }
+
+      const beforeSnapshot = {
+        package_price: Number(current?.package_price ?? 0),
+        package_total_visits: Number(current?.package_total_visits ?? 0),
+        package_start_date: (current?.package_start_date as string | null) ?? null,
+        amount_paid: Number(current?.amount_paid ?? 0),
+        internal_notes: (current?.internal_notes as string | null) ?? null,
+      };
 
       let newNotes = current?.internal_notes ?? null;
       if (u.appended_note && (!newNotes || !newNotes.includes(u.appended_note))) {
         newNotes = newNotes ? `${newNotes}\n${u.appended_note}` : u.appended_note;
       }
       baseFields.internal_notes_after = newNotes;
+
 
       const { error: updErr } = await supabase
         .from("clients")
@@ -569,6 +587,8 @@ export const applyNotesLedger = createServerFn({ method: "POST" })
           step: "update",
           error: detail,
           fields: baseFields,
+          before: beforeSnapshot,
+
         });
         continue;
       }
@@ -596,6 +616,8 @@ export const applyNotesLedger = createServerFn({ method: "POST" })
           step: "activity",
           error: `Client update succeeded, but activity log insert failed: ${actErr.message}`,
           fields: baseFields,
+          before: beforeSnapshot,
+
         });
         continue;
       }
@@ -610,8 +632,46 @@ export const applyNotesLedger = createServerFn({ method: "POST" })
         step: "ok",
         error: null,
         fields: baseFields,
+        before: beforeSnapshot,
       });
     }
 
     return { updated, errors, rows };
   });
+
+export const undoNotesLedgerApply = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    (input: {
+      client_id: string;
+      before: {
+        package_price: number;
+        package_total_visits: number;
+        package_start_date: string | null;
+        amount_paid: number;
+        internal_notes: string | null;
+      };
+    }) => input,
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase } = context;
+    const { error: updErr } = await supabase
+      .from("clients")
+      .update({
+        package_price: data.before.package_price,
+        package_total_visits: data.before.package_total_visits,
+        package_start_date: data.before.package_start_date,
+        amount_paid: data.before.amount_paid,
+        internal_notes: data.before.internal_notes,
+      })
+      .eq("id", data.client_id);
+    if (updErr) throw new Error(updErr.message);
+    await supabase.from("client_activities").insert({
+      client_id: data.client_id,
+      activity_type: "notes_ledger_import_undo",
+      description: "Reverted a Notes Ledger import (undo)",
+      metadata: data.before,
+    });
+    return { ok: true };
+  });
+

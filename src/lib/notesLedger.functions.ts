@@ -111,7 +111,7 @@ export type AutoUpdateRow = {
     package_start_date: { before: string | null; after: string | null; changed: boolean };
     amount_paid: { before: number; after: number; changed: boolean };
     amount_owed: { before: number; after: number; changed: boolean };
-    internal_notes: { before: string | null; after: string | null; changed: boolean; appended: string | null };
+    internal_notes: { before: string | null; after: string | null; changed: boolean; appended: string | null; note_status: NoteStatus };
   };
 };
 

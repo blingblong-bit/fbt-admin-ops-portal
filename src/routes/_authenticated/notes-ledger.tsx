@@ -1034,6 +1034,15 @@ function RecentlyAppliedCard({
             {noteLine}
           </span>
         </li>
+        {appendedCount > 0 && (
+          <li className="pl-4">
+            <ul className="space-y-0.5">
+              {appendedLines.map((l, i) => (
+                <li key={i} className="text-emerald-700">— {l}</li>
+              ))}
+            </ul>
+          </li>
+        )}
         <li>
           • <span className="text-slate-500">Ledger row marked as imported/resolved</span>
         </li>

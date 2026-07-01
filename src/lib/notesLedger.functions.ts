@@ -616,6 +616,8 @@ export const applyNotesLedger = createServerFn({ method: "POST" })
           step: "activity",
           error: `Client update succeeded, but activity log insert failed: ${actErr.message}`,
           fields: baseFields,
+          before: beforeSnapshot,
+
         });
         continue;
       }

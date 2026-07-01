@@ -77,14 +77,39 @@ function NotesLedgerPage() {
 
       <Card className="mb-6">
         <CardHeader>
-          <CardTitle>Paste Ledger</CardTitle>
+          <CardTitle>Paste Ledger or Upload .txt</CardTitle>
         </CardHeader>
         <CardContent>
+          <div className="mb-3 flex items-center gap-3">
+            <input
+              type="file"
+              accept=".txt,text/plain"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = () => {
+                  const result = typeof reader.result === "string" ? reader.result : "";
+                  setText(result);
+                  setPreview(null);
+                  setApplied(null);
+                  toast.success(`Loaded ${file.name} (${result.length.toLocaleString()} chars)`);
+                };
+                reader.onerror = () => toast.error("Could not read file");
+                reader.readAsText(file, "utf-8");
+                e.target.value = "";
+              }}
+              className="text-sm"
+            />
+            <span className="text-xs text-slate-500">
+              UTF-8 .txt recommended for Apple Notes exports. Pasting also works.
+            </span>
+          </div>
           <Textarea
             rows={12}
             value={text}
             onChange={(e) => setText(e.target.value)}
-            placeholder="Paste Apple Notes content…"
+            placeholder="Paste Apple Notes content, or upload a .txt file above…"
             className="font-mono text-xs"
           />
           <div className="mt-4 flex justify-end gap-2">

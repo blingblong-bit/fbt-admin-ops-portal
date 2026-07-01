@@ -22,7 +22,37 @@ export type ParsedRow = {
   review_reason: string | null;
 };
 
-const BULLET_RE = /^[\s\-*•●◦·✓✔☑︎☑\u2022\u25E6\u2713\u2714\u2611]+/;
+// Decorative markers to strip anywhere on the line (Apple Notes bullets/checks).
+// Includes common Unicode bullets/checkmarks and their mojibake forms (e.g. "%" or "◦"
+// after mis-decoded UTF-8). Treated as visual only, never data.
+const DECORATIVE_RE = /[\-*•●◦·✓✔☑︎☑◘◙■□▪▫◆◇○◯\u2022\u25E6\u2713\u2714\u2611\u25A0-\u25FF\u2600-\u26FF]/g;
+const LEADING_JUNK_RE = /^[\s\-*•●◦·✓✔☑︎☑%\u2022\u25E6\u2713\u2714\u2611]+/;
+
+/** Normalize raw ledger text: line endings, Unicode form, smart quotes, tabs, decorative glyphs. */
+export function normalizeLedgerText(input: string): string {
+  if (!input) return "";
+  let s = input;
+  // Strip UTF-8 BOM
+  if (s.charCodeAt(0) === 0xfeff) s = s.slice(1);
+  // Unicode normalize (compose accents)
+  s = s.normalize("NFC");
+  // Normalize line endings
+  s = s.replace(/\r\n?/g, "\n");
+  // Smart quotes → ASCII
+  s = s
+    .replace(/[\u2018\u2019\u201A\u201B\u2032]/g, "'")
+    .replace(/[\u201C\u201D\u201E\u201F\u2033]/g, '"')
+    .replace(/[\u2013\u2014\u2212]/g, "-");
+  // Non-breaking / zero-width spaces
+  s = s.replace(/[\u00A0\u2007\u202F]/g, " ").replace(/[\u200B-\u200D\uFEFF]/g, "");
+  // Tabs → spaces
+  s = s.replace(/\t/g, " ");
+  // Strip decorative bullet/check glyphs entirely (visual only)
+  s = s.replace(DECORATIVE_RE, " ");
+  // Collapse runs of spaces (preserve newlines)
+  s = s.replace(/[ \f\v]+/g, " ");
+  return s;
+}
 const PHONE_RE = /(\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4})/;
 const PRICE_RE = /\$\s?(\d{1,3}(?:,\d{3})*|\d+)(?:\.(\d{2}))?/;
 const VISITS_RE = /(\d{1,2})\s*(?:V\b|visits?\b)/i;
@@ -63,10 +93,11 @@ function isHeadingLike(line: string): boolean {
 
 export function parseLedger(text: string): ParsedRow[] {
   const rows: ParsedRow[] = [];
-  const lines = text.split(/\r?\n/);
+  const normalized = normalizeLedgerText(text);
+  const lines = normalized.split("\n");
   for (let i = 0; i < lines.length; i++) {
     const raw = lines[i];
-    let line = raw.replace(BULLET_RE, "").trim();
+    let line = raw.replace(LEADING_JUNK_RE, "").trim();
     if (!line) continue;
     if (isHeadingLike(line)) continue;
 

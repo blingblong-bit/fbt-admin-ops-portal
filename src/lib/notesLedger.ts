@@ -177,21 +177,42 @@ export function parseLedger(text: string): ParsedRow[] {
       }
     }
 
-    // Name extraction: everything before the first "signal" token
-    const signals: number[] = [];
-    if (phoneMatch) signals.push(line.indexOf(phoneMatch[0]));
-    if (priceMatch) signals.push(line.indexOf(priceMatch[0]));
-    if (visitsMatch) signals.push(line.indexOf(visitsMatch[0]));
-    if (dateMatch) signals.push(line.indexOf(dateMatch[0]));
-    const pdIdx = line.search(PD_RE);
-    if (pdIdx >= 0) signals.push(pdIdx);
-    const owedIdx = line.search(/owe/i);
-    if (owedIdx >= 0) signals.push(owedIdx);
-    const positive = signals.filter((n) => n > 0);
-    const cutoff = positive.length ? Math.min(...positive) : line.length;
-    let namePart = line.slice(0, cutoff).trim();
-    // Trim trailing punctuation
-    namePart = namePart.replace(/[,\-–—:;]+$/, "").trim();
+    // Name extraction: prefer first parenthesized group that looks like a name
+    // (letters/space/period/hyphen/apostrophe, no $ or digits at start).
+    let namePart = "";
+    const parenRe = /\(([^()]+)\)/g;
+    let pm: RegExpExecArray | null;
+    while ((pm = parenRe.exec(line)) !== null) {
+      const inner = pm[1].trim();
+      if (!inner) continue;
+      if (/^\$/.test(inner)) continue; // package data like "$360 8V 5/15"
+      if (/\d/.test(inner)) continue; // skip anything with digits (visits, dates)
+      if (/^[A-Za-z][A-Za-z .'\-]*$/.test(inner)) {
+        namePart = inner;
+        break;
+      }
+    }
+    // Fallback: everything before the first "signal" token
+    if (!namePart) {
+      const signals: number[] = [];
+      if (phoneMatch) signals.push(line.indexOf(phoneMatch[0]));
+      if (priceMatch) signals.push(line.indexOf(priceMatch[0]));
+      if (visitsMatch) signals.push(line.indexOf(visitsMatch[0]));
+      if (dateMatch) signals.push(line.indexOf(dateMatch[0]));
+      const pdIdx = line.search(PD_RE);
+      if (pdIdx >= 0) signals.push(pdIdx);
+      const owedIdx = line.search(/owe/i);
+      if (owedIdx >= 0) signals.push(owedIdx);
+      const positive = signals.filter((n) => n > 0);
+      const cutoff = positive.length ? Math.min(...positive) : line.length;
+      namePart = line.slice(0, cutoff).trim();
+    }
+    // Strip leading amounts/bullets/junk and trailing parens/punctuation
+    namePart = namePart
+      .replace(/^[\s\d$.,()\-*•●◦·✓✔☑%]+/, "")
+      .replace(/[()]+/g, "")
+      .replace(/[,\-–—:;]+$/, "")
+      .trim();
     if (namePart) {
       row.name = namePart;
       const parts = namePart.split(/\s+/);

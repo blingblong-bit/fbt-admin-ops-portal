@@ -39,6 +39,7 @@ type FilterKey =
   | "pending_phone"
   | "balance_conflict"
   | "blocked"
+  | "shared_phone"
   | "resolved"
   | "all";
 
@@ -47,7 +48,8 @@ const FILTERS: { key: FilterKey; label: string }[] = [
   { key: "pending_name", label: "Name only" },
   { key: "pending_phone", label: "Phone only" },
   { key: "balance_conflict", label: "Balance conflict" },
-  { key: "blocked", label: "Blocked (different Square IDs)" },
+  { key: "blocked", label: "Blocked (same name, different Square IDs)" },
+  { key: "shared_phone", label: "Shared phone (different names)" },
   { key: "resolved", label: "Merged / Ignored" },
   { key: "all", label: "All pairs" },
 ];

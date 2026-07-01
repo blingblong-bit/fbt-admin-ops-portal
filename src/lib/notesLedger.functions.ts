@@ -634,7 +634,44 @@ export const applyNotesLedger = createServerFn({ method: "POST" })
         fields: baseFields,
         before: beforeSnapshot,
 
-      });
+  });
+
+export const undoNotesLedgerApply = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    (input: {
+      client_id: string;
+      before: {
+        package_price: number;
+        package_total_visits: number;
+        package_start_date: string | null;
+        amount_paid: number;
+        internal_notes: string | null;
+      };
+    }) => input,
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase } = context;
+    const { error: updErr } = await supabase
+      .from("clients")
+      .update({
+        package_price: data.before.package_price,
+        package_total_visits: data.before.package_total_visits,
+        package_start_date: data.before.package_start_date,
+        amount_paid: data.before.amount_paid,
+        internal_notes: data.before.internal_notes,
+      })
+      .eq("id", data.client_id);
+    if (updErr) throw new Error(updErr.message);
+    await supabase.from("client_activities").insert({
+      client_id: data.client_id,
+      activity_type: "notes_ledger_import_undo",
+      description: "Reverted a Notes Ledger import (undo)",
+      metadata: data.before,
+    });
+    return { ok: true };
+  });
+
     }
 
     return { updated, errors, rows };

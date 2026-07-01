@@ -262,12 +262,15 @@ function buildChanges(parsed: ParsedRow, client: MatchClient): AutoUpdateRow["ch
 
   const currentNotes = client.internal_notes ?? "";
   let appendedNote: string | null = null;
+  let appendedCount = 0;
   let noteStatus: NoteStatus = "no_note";
   if (parsed.internal_notes && parsed.internal_notes.trim()) {
-    if (noteAlreadyExists(currentNotes, parsed.internal_notes)) {
+    const dedup = dedupeNoteLines(currentNotes, parsed.internal_notes);
+    if (dedup.count === 0) {
       noteStatus = "already_exists";
     } else {
-      appendedNote = parsed.internal_notes;
+      appendedNote = dedup.appended;
+      appendedCount = dedup.count;
       noteStatus = "append";
     }
   }
@@ -306,6 +309,7 @@ function buildChanges(parsed: ParsedRow, client: MatchClient): AutoUpdateRow["ch
       after: newNotes,
       changed: appendedNote !== null,
       appended: appendedNote,
+      appended_count: appendedCount,
       note_status: noteStatus,
     },
   };

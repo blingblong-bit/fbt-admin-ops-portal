@@ -251,13 +251,26 @@ export const backfillProductionCustomers = createServerFn({ method: "POST" })
       }
     }
 
-    // Existing pending reviews — used to avoid duplicates
-    const { data: existingReviews } = await context.supabase
-      .from("square_customer_reviews")
-      .select("square_customer_id, status");
+    // Existing reviews — used to avoid duplicates and to preserve resolved status.
+    // Paginate in 1000-row chunks so resolved reviews past the default cap are
+    // not re-queued as pending.
     const reviewStatusById = new Map<string, string>();
-    for (const r of existingReviews ?? []) {
-      reviewStatusById.set(r.square_customer_id, r.status);
+    {
+      const pageSize = 1000;
+      let from = 0;
+      for (let i = 0; i < 100; i++) {
+        const { data: page } = await context.supabase
+          .from("square_customer_reviews")
+          .select("square_customer_id, status")
+          .range(from, from + pageSize - 1);
+        const chunk = page ?? [];
+        if (chunk.length === 0) break;
+        for (const r of chunk) {
+          reviewStatusById.set(r.square_customer_id, r.status);
+        }
+        if (chunk.length < pageSize) break;
+        from += pageSize;
+      }
     }
 
     for (const cust of customers) {

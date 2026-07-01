@@ -544,15 +544,25 @@ export const applyNotesLedger = createServerFn({ method: "POST" })
           step: "read",
           error: readErr.message,
           fields: baseFields,
+          before: null,
         });
         continue;
       }
+
+      const beforeSnapshot = {
+        package_price: Number(current?.package_price ?? 0),
+        package_total_visits: Number(current?.package_total_visits ?? 0),
+        package_start_date: (current?.package_start_date as string | null) ?? null,
+        amount_paid: Number(current?.amount_paid ?? 0),
+        internal_notes: (current?.internal_notes as string | null) ?? null,
+      };
 
       let newNotes = current?.internal_notes ?? null;
       if (u.appended_note && (!newNotes || !newNotes.includes(u.appended_note))) {
         newNotes = newNotes ? `${newNotes}\n${u.appended_note}` : u.appended_note;
       }
       baseFields.internal_notes_after = newNotes;
+
 
       const { error: updErr } = await supabase
         .from("clients")

@@ -109,6 +109,7 @@ export function effectiveStatus(
   >,
   isScheduled: boolean,
 ): LifecycleStatus {
+  if (c.status === "archived") return "archived";
   if (c.manual_active) return "active";
   const owed = amountOwed(c);
   const remaining = visitsRemaining(c);
@@ -117,7 +118,6 @@ export function effectiveStatus(
   if (isScheduled) {
     return (c.package_total_visits ?? 0) > 0 ? "active" : "assessment";
   }
-  if (c.status === "archived") return "archived";
   if (c.status === "assessment") return "assessment";
   return "active";
 }

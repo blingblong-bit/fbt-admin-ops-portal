@@ -219,6 +219,7 @@ function SyncLogPage() {
   const customers = useLogs("customer.%");
   const payments = useLogs("payment.%");
   const review = usePaymentsNeedingReview();
+  const pending = usePendingApprovedPayments();
 
   const renderState = (q: ReturnType<typeof useLogs>) => {
     if (q.error)

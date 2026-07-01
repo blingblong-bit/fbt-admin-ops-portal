@@ -123,6 +123,27 @@ function usePaymentsNeedingReview() {
   });
 }
 
+function usePendingApprovedPayments() {
+  return useQuery({
+    queryKey: ["square_payments_pending"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("square_payments")
+        .select(
+          "id, square_payment_id, square_customer_id, client_id, amount_cents, currency, status, applied, needs_review, buyer_email, note, created_at, clients(first_name, last_name)",
+        )
+        .eq("applied", false)
+        .eq("needs_review", false)
+        .not("client_id", "is", null)
+        .order("created_at", { ascending: false })
+        .limit(100);
+      if (error) throw error;
+      return (data ?? []) as unknown as PaymentRow[];
+    },
+    refetchInterval: 10_000,
+  });
+}
+
 function LogsTable({ rows }: { rows: LogWithClient[] }) {
   if (rows.length === 0) {
     return (

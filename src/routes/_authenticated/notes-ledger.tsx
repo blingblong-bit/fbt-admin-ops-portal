@@ -750,8 +750,29 @@ function ReviewCard({
           })}
         </div>
       ) : (
-        <div className="mt-3 text-xs text-slate-500">No candidate clients found for this row.</div>
+        <div className="mt-3 text-xs text-slate-500">No active candidate clients found for this row.</div>
       )}
+
+      {row.archived_candidates.length > 0 && (
+        <details className="mt-3 rounded border border-slate-200 bg-white p-2 text-xs">
+          <summary className="cursor-pointer text-slate-600">
+            Archived matches ({row.archived_candidates.length}) — not counted as active candidates
+          </summary>
+          <div className="mt-2 space-y-1">
+            {row.archived_candidates.map((c) => (
+              <div key={c.id} className="flex flex-wrap items-center gap-2 border-t pt-1 text-slate-600">
+                <span className="font-medium">{fullName(c)}</span>
+                <Badge variant="secondary" className="bg-slate-200 text-slate-700">archived</Badge>
+                <span className="font-mono">{c.phone ?? "no phone"}</span>
+                {c.square_customer_id && (
+                  <Badge variant="secondary" className="bg-blue-100 text-blue-800">Square</Badge>
+                )}
+              </div>
+            ))}
+          </div>
+        </details>
+      )}
+
 
       <div className="mt-3 flex flex-wrap gap-2">
         <Button

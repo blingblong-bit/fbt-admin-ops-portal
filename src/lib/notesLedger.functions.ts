@@ -45,10 +45,57 @@ export type DiagnosticSummary = {
   auto_updates: number;
 };
 
+export type ReviewCategory =
+  | "duplicate_ledger_entry"
+  | "multiple_square_linked"
+  | "missing_package_information"
+  | "missing_phone"
+  | "credit_special_balance"
+  | "multiple_names_on_line"
+  | "no_match"
+  | "ambiguous_match"
+  | "other";
+
 export type ReviewRow = ParsedRow & {
   candidates: MatchClient[];
   reason: string;
+  categories: ReviewCategory[];
 };
+
+export const REVIEW_CATEGORY_LABELS: Record<ReviewCategory, string> = {
+  duplicate_ledger_entry: "Duplicate ledger entry",
+  multiple_square_linked: "Multiple Square-linked clients",
+  missing_package_information: "Missing package information",
+  missing_phone: "Missing phone",
+  credit_special_balance: "Credit / special balance",
+  multiple_names_on_line: "Multiple names on one line",
+  no_match: "No match found",
+  ambiguous_match: "Ambiguous match",
+  other: "Other",
+};
+
+function classifyReview(
+  row: ParsedRow,
+  reason: string,
+  squareLinkedCount: number,
+  combinedCount: number,
+  isDuplicate: boolean,
+): ReviewCategory[] {
+  const cats = new Set<ReviewCategory>();
+  const r = `${reason} ${row.review_reason ?? ""}`.toLowerCase();
+  if (isDuplicate) cats.add("duplicate_ledger_entry");
+  if (squareLinkedCount > 1) cats.add("multiple_square_linked");
+  if (r.includes("no phone")) cats.add("missing_phone");
+  if (r.includes("no package price") || r.includes("no visit count")) cats.add("missing_package_information");
+  if (r.includes("credit") || r.includes("overpaid") || r.includes("refund")) cats.add("credit_special_balance");
+  if (r.includes("multiple names")) cats.add("multiple_names_on_line");
+  if (r.includes("no matching client")) cats.add("no_match");
+  if (r.includes("multiple candidates") || r.includes("multiple square")) {
+    if (squareLinkedCount <= 1) cats.add("ambiguous_match");
+  }
+  if (cats.size === 0) cats.add("other");
+  return Array.from(cats);
+}
 
 export type AutoUpdateRow = {
   parsed: ParsedRow;

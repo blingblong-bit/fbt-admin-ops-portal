@@ -32,6 +32,7 @@ import {
   resolvePaymentCreateClient,
   resolvePaymentLink,
   searchClientsForPayment,
+  suggestPaymentMatches,
 } from "@/lib/payments.functions";
 
 export const Route = createFileRoute("/_authenticated/sync-log")({
@@ -273,7 +274,7 @@ function SyncLogPage() {
                       </TableCell>
                       <TableCell className="text-xs text-slate-600">{p.note ?? "—"}</TableCell>
                       <TableCell className="text-right">
-                        {!p.square_customer_id && p.buyer_email ? (
+                        {!p.square_customer_id ? (
                           <ResolvePaymentDialog payment={p} />
                         ) : (
                           <span className="text-xs text-slate-400">—</span>
@@ -343,6 +344,14 @@ function ResolvePaymentDialog({ payment }: { payment: PaymentRow }) {
   const searchFn = useServerFn(searchClientsForPayment);
   const linkFn = useServerFn(resolvePaymentLink);
   const createFn = useServerFn(resolvePaymentCreateClient);
+  const suggestFn = useServerFn(suggestPaymentMatches);
+
+  const suggestQuery = useQuery({
+    queryKey: ["payment_match_suggestions", payment.id],
+    queryFn: () => suggestFn({ data: { payment_row_id: payment.id } }),
+    enabled: open,
+    staleTime: 60_000,
+  });
 
   const searchMut = useMutation({
     mutationFn: async (q: string) => searchFn({ data: { query: q } }),
@@ -415,6 +424,78 @@ function ResolvePaymentDialog({ payment }: { payment: PaymentRow }) {
               <span className="text-slate-500">Square payment ID</span>
               <span className="font-mono text-xs">{payment.square_payment_id}</span>
             </div>
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label className="text-sm font-semibold">Suggested matches</Label>
+              {suggestQuery.isFetching && (
+                <span className="text-xs text-slate-400">Loading…</span>
+              )}
+            </div>
+            {suggestQuery.data?.note && (
+              <div className="rounded border border-amber-200 bg-amber-50 px-2 py-1 text-xs text-amber-800">
+                {suggestQuery.data.note}
+              </div>
+            )}
+            {suggestQuery.error ? (
+              <div className="rounded border border-red-200 bg-red-50 p-2 text-xs text-red-800">
+                Failed to load suggestions: {(suggestQuery.error as Error).message}
+              </div>
+            ) : suggestQuery.data && suggestQuery.data.suggestions.length === 0 ? (
+              <div className="rounded border border-dashed border-slate-300 p-3 text-center text-xs text-slate-500">
+                No automatic suggestions. Search below.
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {suggestQuery.data?.suggestions.map((s) => (
+                  <div
+                    key={s.client_id}
+                    className="rounded-md border border-slate-200 bg-white p-3"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-semibold">
+                            {s.first_name} {s.last_name}
+                          </span>
+                          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium uppercase text-slate-600">
+                            {s.status}
+                          </span>
+                          <span
+                            className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                              s.confidence >= 3
+                                ? "bg-emerald-100 text-emerald-800"
+                                : s.confidence === 2
+                                  ? "bg-amber-100 text-amber-800"
+                                  : "bg-slate-100 text-slate-700"
+                            }`}
+                          >
+                            {s.confidence} signal{s.confidence === 1 ? "" : "s"}
+                          </span>
+                        </div>
+                        <div className="mt-0.5 text-xs text-slate-500">
+                          {s.email ?? "no email"} · {s.phone ?? "no phone"} · Owes{" "}
+                          {formatCurrency(s.amount_owed)}
+                        </div>
+                        <ul className="mt-1.5 list-inside list-disc space-y-0.5 text-xs text-slate-700">
+                          {s.reasons.map((r, i) => (
+                            <li key={i}>{r}</li>
+                          ))}
+                        </ul>
+                      </div>
+                      <Button
+                        size="sm"
+                        disabled={linkMut.isPending}
+                        onClick={() => linkMut.mutate(s.client_id)}
+                      >
+                        Link
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="space-y-2">

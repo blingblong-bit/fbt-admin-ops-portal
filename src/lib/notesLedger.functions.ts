@@ -191,42 +191,79 @@ export const previewNotesLedger = createServerFn({ method: "POST" })
     const auto: AutoUpdateRow[] = [];
     const reviews: ReviewRow[] = [];
     const skipped: SkippedRow[] = [];
+    const diagnostics: RowDiagnostic[] = [];
+    const summary: DiagnosticSummary = {
+      parser_needs_review: 0,
+      no_match: 0,
+      multiple_phone_matches: 0,
+      multiple_name_matches: 0,
+      multiple_square_linked: 0,
+      ambiguous_no_square_winner: 0,
+      no_changes_vs_current: 0,
+      auto_updates: 0,
+    };
 
     for (const row of parsed) {
-      if (row.needs_review) {
-        // Attempt to attach candidates anyway
-        const key = normName(row.name ?? "");
-        const nameCandidates = key ? (byName.get(key) ?? []) : [];
-        const phoneCandidates = row.phone ? (byPhone.get(row.phone) ?? []) : [];
-        const candidates = dedupe([...nameCandidates, ...phoneCandidates]);
-        reviews.push({ ...row, candidates, reason: row.review_reason ?? "Needs manual review." });
-        continue;
-      }
-
       const key = normName(row.name ?? "");
       const nameHits = key ? (byName.get(key) ?? []) : [];
       const phoneHits = row.phone ? (byPhone.get(row.phone) ?? []) : [];
-
-      // Prefer square-linked matches
       const combined = dedupe([...nameHits, ...phoneHits]);
       const squareLinked = combined.filter((c) => c.square_customer_id);
 
+      const diagBase: Omit<RowDiagnostic, "outcome" | "rule" | "reason"> = {
+        line_number: row.line_number,
+        parsed_name: row.name ?? null,
+        parsed_phone: row.phone ?? null,
+        parsed_package_price: row.package_price ?? null,
+        parsed_package_date: row.package_start_date ?? null,
+        parsed_visits: row.package_total_visits ?? null,
+        parsed_amount_paid: row.amount_paid ?? null,
+        phone_match_count: phoneHits.length,
+        name_match_count: nameHits.length,
+        combined_unique_count: combined.length,
+        square_linked_count: squareLinked.length,
+      };
+
+      if (row.needs_review) {
+        reviews.push({ ...row, candidates: combined, reason: row.review_reason ?? "Needs manual review." });
+        diagnostics.push({
+          ...diagBase,
+          outcome: "parser_review",
+          rule: "parser flagged row.needs_review=true",
+          reason: row.review_reason ?? "Parser could not confidently parse row.",
+        });
+        summary.parser_needs_review++;
+        continue;
+      }
+
       let chosen: MatchClient | null = null;
       let reason = "";
+      let rule = "";
       if (squareLinked.length === 1) {
         chosen = squareLinked[0];
+        rule = "exactly one Square-linked candidate";
       } else if (squareLinked.length > 1) {
         reason = `Multiple Square-linked candidates (${squareLinked.length}).`;
+        rule = "squareLinked.length > 1 → cannot auto-pick";
+        summary.multiple_square_linked++;
       } else if (combined.length === 1) {
         chosen = combined[0];
+        rule = "exactly one candidate (name or phone), not Square-linked";
       } else if (combined.length > 1) {
         reason = `Multiple candidates (${combined.length}); no Square-linked winner.`;
+        rule = "combined.length > 1 with 0 Square-linked → cannot auto-pick";
+        if (phoneHits.length > 1) summary.multiple_phone_matches++;
+        else if (nameHits.length > 1) summary.multiple_name_matches++;
+        else summary.ambiguous_no_square_winner++;
       } else {
         reason = "No matching client found.";
+        rule = "phoneHits.length===0 AND nameHits.length===0";
+        summary.no_match++;
       }
 
       if (!chosen) {
         reviews.push({ ...row, candidates: combined, reason });
+        diagnostics.push({ ...diagBase, outcome: "review", rule, reason });
         continue;
       }
 
@@ -239,9 +276,23 @@ export const previewNotesLedger = createServerFn({ method: "POST" })
         changes.internal_notes.changed;
       if (!anyChange) {
         skipped.push({ parsed: row, reason: "No changes vs current Admin data." });
+        diagnostics.push({
+          ...diagBase,
+          outcome: "skipped_no_changes",
+          rule: "matched client, but price/visits/date/paid/notes all equal",
+          reason: `Matched ${chosen.first_name} ${chosen.last_name}; existing Admin data already equals parsed values.`,
+        });
+        summary.no_changes_vs_current++;
         continue;
       }
       auto.push({ parsed: row, client: chosen, changes });
+      diagnostics.push({
+        ...diagBase,
+        outcome: "auto_update",
+        rule,
+        reason: `Matched ${chosen.first_name} ${chosen.last_name}${chosen.square_customer_id ? " (Square-linked)" : ""}.`,
+      });
+      summary.auto_updates++;
     }
 
     return {
@@ -249,6 +300,8 @@ export const previewNotesLedger = createServerFn({ method: "POST" })
       auto_updates: auto,
       reviews,
       skipped,
+      diagnostics,
+      diagnostic_summary: summary,
     };
   });
 

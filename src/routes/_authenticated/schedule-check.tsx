@@ -271,10 +271,16 @@ function UnmatchedAppointmentsCard({ appointments }: { appointments: ScheduleApp
               const first = group[0];
               const info = first.customer_info;
               const fullName = [info?.given_name, info?.family_name].filter(Boolean).join(" ").trim();
+              const anchorKey = first.square_customer_id ?? first.booking_id;
+              const linkedElsewhere =
+                first.square_customer_id && (clientsQuery.data ?? []).find(
+                  (c) => c.square_customer_id === first.square_customer_id,
+                );
               return (
                 <div
                   key={key}
-                  className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm"
+                  id={`unmatched-${anchorKey}`}
+                  className="scroll-mt-24 rounded-md border border-slate-200 bg-slate-50 p-3 text-sm transition-shadow"
                 >
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="space-y-1">
@@ -282,23 +288,33 @@ function UnmatchedAppointmentsCard({ appointments }: { appointments: ScheduleApp
                         {fullName || <span className="text-slate-500">Unknown name</span>}
                       </div>
                       <div className="text-xs text-slate-600">
-                        {info?.email && <span>{info.email}</span>}
-                        {info?.email && info?.phone && " · "}
-                        {info?.phone && <span>{info.phone}</span>}
+                        <span className="text-slate-400">Email: </span>
+                        {info?.email ?? <span className="italic text-slate-400">none</span>}
+                        {" · "}
+                        <span className="text-slate-400">Phone: </span>
+                        {info?.phone ?? <span className="italic text-slate-400">none</span>}
                       </div>
                       <div className="font-mono text-[11px] text-slate-500">
-                        Square ID: {first.square_customer_id ?? "—"}
+                        Square customer ID: {first.square_customer_id ?? "— (booking has no customer)"}
                       </div>
-                      <div className="text-xs text-slate-700">
-                        {group.length} appointment{group.length === 1 ? "" : "s"} ·{" "}
-                        {group
-                          .slice(0, 3)
-                          .map((g) => formatDateTimeLocal(g.start_at))
-                          .join(", ")}
-                        {group.length > 3 && ` +${group.length - 3} more`}
+                      <div className="text-[11px]">
+                        {!first.square_customer_id ? (
+                          <span className="rounded-full bg-red-100 px-2 py-0.5 font-medium text-red-800">
+                            Square booking has no customer_id — can't be linked
+                          </span>
+                        ) : linkedElsewhere ? (
+                          <span className="rounded-full bg-red-100 px-2 py-0.5 font-medium text-red-800">
+                            ⚠ Already linked to {linkedElsewhere.first_name}{" "}
+                            {linkedElsewhere.last_name} — refresh Schedule Check
+                          </span>
+                        ) : (
+                          <span className="rounded-full bg-amber-100 px-2 py-0.5 font-medium text-amber-900">
+                            No Admin client has this Square customer ID
+                          </span>
+                        )}
                       </div>
                     </div>
-                    {first.square_customer_id && (
+                    {first.square_customer_id && !linkedElsewhere && (
                       <LinkClientControl
                         clients={clientsQuery.data ?? []}
                         loading={clientsQuery.isLoading}
@@ -311,6 +327,35 @@ function UnmatchedAppointmentsCard({ appointments }: { appointments: ScheduleApp
                         }
                       />
                     )}
+                  </div>
+                  <div className="mt-3 overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead className="text-left text-slate-500">
+                        <tr>
+                          <th className="py-1 pr-3 font-medium">When</th>
+                          <th className="py-1 pr-3 font-medium">Service</th>
+                          <th className="py-1 pr-3 font-medium">Status</th>
+                          <th className="py-1 pr-3 font-medium">Booking ID</th>
+                        </tr>
+                      </thead>
+                      <tbody className="text-slate-700">
+                        {group.map((g) => (
+                          <tr key={g.booking_id} className="border-t border-slate-200">
+                            <td className="py-1 pr-3 whitespace-nowrap">
+                              {formatDateTimeLocal(g.start_at)}
+                            </td>
+                            <td className="py-1 pr-3">
+                              {g.service_name ??
+                                (g.duration_minutes ? `${g.duration_minutes} min` : "—")}
+                            </td>
+                            <td className="py-1 pr-3">{g.status}</td>
+                            <td className="py-1 pr-3 font-mono text-[10px] text-slate-500">
+                              {g.booking_id}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
                 </div>
               );
@@ -448,7 +493,25 @@ function AppointmentsCard({
                             </div>
                           </div>
                         ) : (
-                          <span className="text-amber-700">Unmatched</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const key = a.square_customer_id ?? a.booking_id;
+                              const el = document.getElementById(`unmatched-${key}`);
+                              if (el) {
+                                el.scrollIntoView({ behavior: "smooth", block: "start" });
+                                el.classList.add("ring-2", "ring-amber-400");
+                                setTimeout(
+                                  () => el.classList.remove("ring-2", "ring-amber-400"),
+                                  1600,
+                                );
+                              }
+                            }}
+                            className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800 underline-offset-2 hover:bg-amber-200 hover:underline"
+                            title="Jump to Unmatched Appointments"
+                          >
+                            Unmatched ↓
+                          </button>
                         )}
                       </TableCell>
                       <TableCell className="text-sm whitespace-nowrap">

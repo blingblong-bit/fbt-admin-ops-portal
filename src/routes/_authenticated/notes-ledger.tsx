@@ -742,10 +742,13 @@ function AutoUpdateCard({
         <div className="col-span-full">
           <span className="font-medium">Notes:</span>{" "}
           {c.internal_notes.note_status === "append" && c.internal_notes.appended && (
-            <span className="text-emerald-700">Append — {c.internal_notes.appended}</span>
+            <span className="text-emerald-700">
+              Append {c.internal_notes.appended_count} new note
+              {c.internal_notes.appended_count === 1 ? "" : "s"} — {c.internal_notes.appended}
+            </span>
           )}
           {c.internal_notes.note_status === "already_exists" && (
-            <span className="text-slate-500">Note already exists — no append needed.</span>
+            <span className="text-slate-500">No new notes (already exists)</span>
           )}
           {c.internal_notes.note_status === "no_note" && (
             <span className="text-slate-500">No new notes</span>

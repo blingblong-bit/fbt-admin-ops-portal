@@ -5,7 +5,7 @@ import type { Client, ClientActivity } from "@/lib/clients";
 type ActivityLite = Omit<ClientActivity, "metadata"> & { metadata: unknown };
 
 export type MergePairClient = Client & {
-  activities?: ClientActivity[];
+  activities?: ActivityLite[];
   is_square_linked: boolean;
   has_square_import_marker: boolean;
 };

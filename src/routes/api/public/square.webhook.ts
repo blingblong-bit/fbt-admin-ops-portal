@@ -143,7 +143,7 @@ export const Route = createFileRoute("/api/public/square/webhook")({
           });
           return new Response("ok");
         } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
+          const message = formatErr(err);
           try {
             await supabaseAdmin.from("square_sync_log").insert({
               event_type: eventType,
@@ -160,6 +160,21 @@ export const Route = createFileRoute("/api/public/square/webhook")({
     },
   },
 });
+
+function formatErr(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  if (err && typeof err === "object") {
+    const e = err as { message?: string; code?: string; details?: string; hint?: string };
+    const parts = [e.message, e.code ? `code=${e.code}` : null, e.details, e.hint].filter(Boolean);
+    if (parts.length > 0) return parts.join(" | ");
+    try {
+      return JSON.stringify(err);
+    } catch {
+      return "Unknown error";
+    }
+  }
+  return String(err);
+}
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function handleCustomerEvent(supabaseAdmin: any, eventType: string, event: SquareEvent) {

@@ -19,6 +19,7 @@ import { Route as AuthenticatedMergeCenterRouteImport } from './routes/_authenti
 import { Route as AuthenticatedImportRouteImport } from './routes/_authenticated/import'
 import { Route as AuthenticatedBackupRouteImport } from './routes/_authenticated/backup'
 import { Route as AuthenticatedClientsIndexRouteImport } from './routes/_authenticated/clients.index'
+import { Route as ApiPublicSquareDiagRouteImport } from './routes/api/public/square-diag'
 import { Route as AuthenticatedClientsNewRouteImport } from './routes/_authenticated/clients.new'
 import { Route as AuthenticatedClientsDeletedRouteImport } from './routes/_authenticated/clients.deleted'
 import { Route as AuthenticatedClientsIdRouteImport } from './routes/_authenticated/clients.$id'
@@ -77,6 +78,11 @@ const AuthenticatedClientsIndexRoute =
     path: '/clients/',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const ApiPublicSquareDiagRoute = ApiPublicSquareDiagRouteImport.update({
+  id: '/api/public/square-diag',
+  path: '/api/public/square-diag',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthenticatedClientsNewRoute = AuthenticatedClientsNewRouteImport.update({
   id: '/clients/new',
   path: '/clients/new',
@@ -111,6 +117,7 @@ export interface FileRoutesByFullPath {
   '/clients/$id': typeof AuthenticatedClientsIdRoute
   '/clients/deleted': typeof AuthenticatedClientsDeletedRoute
   '/clients/new': typeof AuthenticatedClientsNewRoute
+  '/api/public/square-diag': typeof ApiPublicSquareDiagRoute
   '/clients/': typeof AuthenticatedClientsIndexRoute
   '/api/public/square/webhook': typeof ApiPublicSquareWebhookRoute
 }
@@ -126,6 +133,7 @@ export interface FileRoutesByTo {
   '/clients/$id': typeof AuthenticatedClientsIdRoute
   '/clients/deleted': typeof AuthenticatedClientsDeletedRoute
   '/clients/new': typeof AuthenticatedClientsNewRoute
+  '/api/public/square-diag': typeof ApiPublicSquareDiagRoute
   '/clients': typeof AuthenticatedClientsIndexRoute
   '/api/public/square/webhook': typeof ApiPublicSquareWebhookRoute
 }
@@ -143,6 +151,7 @@ export interface FileRoutesById {
   '/_authenticated/clients/$id': typeof AuthenticatedClientsIdRoute
   '/_authenticated/clients/deleted': typeof AuthenticatedClientsDeletedRoute
   '/_authenticated/clients/new': typeof AuthenticatedClientsNewRoute
+  '/api/public/square-diag': typeof ApiPublicSquareDiagRoute
   '/_authenticated/clients/': typeof AuthenticatedClientsIndexRoute
   '/api/public/square/webhook': typeof ApiPublicSquareWebhookRoute
 }
@@ -160,6 +169,7 @@ export interface FileRouteTypes {
     | '/clients/$id'
     | '/clients/deleted'
     | '/clients/new'
+    | '/api/public/square-diag'
     | '/clients/'
     | '/api/public/square/webhook'
   fileRoutesByTo: FileRoutesByTo
@@ -175,6 +185,7 @@ export interface FileRouteTypes {
     | '/clients/$id'
     | '/clients/deleted'
     | '/clients/new'
+    | '/api/public/square-diag'
     | '/clients'
     | '/api/public/square/webhook'
   id:
@@ -191,6 +202,7 @@ export interface FileRouteTypes {
     | '/_authenticated/clients/$id'
     | '/_authenticated/clients/deleted'
     | '/_authenticated/clients/new'
+    | '/api/public/square-diag'
     | '/_authenticated/clients/'
     | '/api/public/square/webhook'
   fileRoutesById: FileRoutesById
@@ -198,6 +210,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRoute
+  ApiPublicSquareDiagRoute: typeof ApiPublicSquareDiagRoute
   ApiPublicSquareWebhookRoute: typeof ApiPublicSquareWebhookRoute
 }
 
@@ -273,6 +286,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedClientsIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/api/public/square-diag': {
+      id: '/api/public/square-diag'
+      path: '/api/public/square-diag'
+      fullPath: '/api/public/square-diag'
+      preLoaderRoute: typeof ApiPublicSquareDiagRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/_authenticated/clients/new': {
       id: '/_authenticated/clients/new'
       path: '/clients/new'
@@ -338,18 +358,9 @@ const AuthenticatedRouteRouteWithChildren =
 const rootRouteChildren: RootRouteChildren = {
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRoute,
+  ApiPublicSquareDiagRoute: ApiPublicSquareDiagRoute,
   ApiPublicSquareWebhookRoute: ApiPublicSquareWebhookRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}

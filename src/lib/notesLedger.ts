@@ -93,10 +93,11 @@ function isHeadingLike(line: string): boolean {
 
 export function parseLedger(text: string): ParsedRow[] {
   const rows: ParsedRow[] = [];
-  const lines = text.split(/\r?\n/);
+  const normalized = normalizeLedgerText(text);
+  const lines = normalized.split("\n");
   for (let i = 0; i < lines.length; i++) {
     const raw = lines[i];
-    let line = raw.replace(BULLET_RE, "").trim();
+    let line = raw.replace(LEADING_JUNK_RE, "").trim();
     if (!line) continue;
     if (isHeadingLike(line)) continue;
 

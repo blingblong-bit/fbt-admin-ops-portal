@@ -100,9 +100,8 @@ function NotesLedgerPage() {
       const visits = row.package_total_visits ?? Number(client.package_total_visits ?? 0);
       const startDate = row.package_start_date ?? client.package_start_date;
       const paid = row.amount_paid !== null ? row.amount_paid : Number(client.amount_paid ?? 0);
-      const currentNotes = client.internal_notes ?? "";
       const appended =
-        row.internal_notes && !currentNotes.includes(row.internal_notes)
+        row.internal_notes && !noteAlreadyExists(client.internal_notes, row.internal_notes)
           ? row.internal_notes
           : null;
       const res = await applyFn({

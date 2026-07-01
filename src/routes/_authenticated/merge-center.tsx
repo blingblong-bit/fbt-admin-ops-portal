@@ -17,6 +17,16 @@ import {
   type MergePairClient,
   type MergePairConfidence,
 } from "@/lib/merges.functions";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { formatCurrency, formatDate, fullName, amountOwed, visitsRemaining } from "@/lib/clients";
 
 export const Route = createFileRoute("/_authenticated/merge-center")({
@@ -394,36 +404,40 @@ function PairCard({
           {pair.status === "pending" && (
             <>
               {canOneClick && pair.recommended_keep_id && (
-                <Button
+                <MergePreviewButton
+                  pair={pair}
+                  keptId={pair.recommended_keep_id}
+                  force={false}
+                  onConfirm={() => onMerge(false)}
                   disabled={busy}
-                  onClick={() => onMerge(false)}
-                  className="bg-emerald-600 hover:bg-emerald-700"
-                >
-                  Merge into Square-linked client
-                </Button>
+                  className="bg-emerald-600 text-white hover:bg-emerald-700"
+                  label="Merge into Square-linked client"
+                />
               )}
               {!pair.square_conflict && (
                 <>
-                  <Button
-                    variant="outline"
-                    disabled={busy}
-                    onClick={() =>
+                  <MergePreviewButton
+                    pair={pair}
+                    keptId={pair.right.id}
+                    force={pair.balance_conflict}
+                    onConfirm={() =>
                       onMergeInto(pair.right.id, pair.balance_conflict ? true : false)
                     }
-                  >
-                    {pair.balance_conflict ? "Force merge into " : "Merge into "}
-                    {fullName(pair.right)}
-                  </Button>
-                  <Button
-                    variant="outline"
                     disabled={busy}
-                    onClick={() =>
+                    variant="outline"
+                    label={`${pair.balance_conflict ? "Force merge into " : "Merge into "}${fullName(pair.right)}`}
+                  />
+                  <MergePreviewButton
+                    pair={pair}
+                    keptId={pair.left.id}
+                    force={pair.balance_conflict}
+                    onConfirm={() =>
                       onMergeInto(pair.left.id, pair.balance_conflict ? true : false)
                     }
-                  >
-                    {pair.balance_conflict ? "Force merge into " : "Merge into "}
-                    {fullName(pair.left)}
-                  </Button>
+                    disabled={busy}
+                    variant="outline"
+                    label={`${pair.balance_conflict ? "Force merge into " : "Merge into "}${fullName(pair.left)}`}
+                  />
                 </>
               )}
               <Button variant="ghost" disabled={busy} onClick={onIgnore}>
@@ -439,5 +453,145 @@ function PairCard({
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+function MergePreviewButton({
+  pair,
+  keptId,
+  force,
+  onConfirm,
+  disabled,
+  variant,
+  className,
+  label,
+}: {
+  pair: MergePair;
+  keptId: string;
+  force: boolean;
+  onConfirm: () => void;
+  disabled: boolean;
+  variant?: "outline";
+  className?: string;
+  label: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const kept = keptId === pair.left.id ? pair.left : pair.right;
+  const archive = keptId === pair.left.id ? pair.right : pair.left;
+
+  const scalarChecks: { key: keyof MergePairClient; label: string }[] = [
+    { key: "phone", label: "Phone" },
+    { key: "email", label: "Email" },
+    { key: "package_name", label: "Package name" },
+    { key: "package_start_date", label: "Start date" },
+    { key: "square_visit_note", label: "Square visit note" },
+    { key: "square_customer_id", label: "Square Customer ID" },
+  ];
+  const willCopyScalars = scalarChecks.filter(({ key }) => {
+    const kv = kept[key];
+    const av = archive[key];
+    const keptEmpty = kv === null || kv === undefined || kv === "";
+    const archHas = !(av === null || av === undefined || av === "");
+    return keptEmpty && archHas;
+  });
+  const keptHasPkg =
+    Number(kept.package_price ?? 0) > 0 || Number(kept.package_total_visits ?? 0) > 0;
+  const archHasPkg =
+    Number(archive.package_price ?? 0) > 0 || Number(archive.package_total_visits ?? 0) > 0;
+  const willCopyPackage = !keptHasPkg && archHasPkg;
+  const willAppendNotes = !!(archive.internal_notes ?? "").trim();
+  const willReactivateKept = !!kept.square_customer_id && !archive.square_customer_id;
+
+  return (
+    <AlertDialog open={open} onOpenChange={setOpen}>
+      <Button
+        disabled={disabled}
+        variant={variant}
+        className={className}
+        onClick={() => setOpen(true)}
+      >
+        {label}
+      </Button>
+      <AlertDialogContent className="max-w-lg">
+        <AlertDialogHeader>
+          <AlertDialogTitle>Merge Preview</AlertDialogTitle>
+          <AlertDialogDescription asChild>
+            <div className="space-y-3 text-sm text-slate-700">
+              <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3">
+                <div className="text-xs font-semibold uppercase tracking-wide text-emerald-800">
+                  Keep
+                </div>
+                <div className="mt-1 font-medium text-slate-900">
+                  ✔ {fullName(kept)}
+                  {kept.square_customer_id ? " (Square-linked)" : ""}
+                </div>
+              </div>
+              <div className="rounded-md border border-amber-200 bg-amber-50 p-3">
+                <div className="text-xs font-semibold uppercase tracking-wide text-amber-800">
+                  Archive
+                </div>
+                <div className="mt-1 font-medium text-slate-900">
+                  ✔ {fullName(archive)}
+                  {archive.square_customer_id ? " (Square-linked)" : " (Legacy Notes)"}
+                </div>
+              </div>
+
+              <div>
+                <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Fields copied
+                </div>
+                <ul className="mt-1 space-y-0.5">
+                  {willCopyPackage && (
+                    <>
+                      <li>✔ Package</li>
+                      <li>✔ Visits</li>
+                      <li>✔ Balance</li>
+                      <li>✔ Payment history</li>
+                    </>
+                  )}
+                  {willAppendNotes && <li>✔ Notes (appended)</li>}
+                  {willCopyScalars.map((f) => (
+                    <li key={f.key as string}>✔ {f.label}</li>
+                  ))}
+                  {!willCopyPackage && !willAppendNotes && willCopyScalars.length === 0 && (
+                    <li className="text-slate-500">No new fields will be copied.</li>
+                  )}
+                </ul>
+              </div>
+
+              <div>
+                <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Fields preserved on kept client
+                </div>
+                <ul className="mt-1 space-y-0.5">
+                  <li>✔ Square Customer ID {kept.square_customer_id ? "" : "(none)"}</li>
+                  <li>✔ Future bookings</li>
+                  <li>✔ Webhook linkage</li>
+                  {willReactivateKept && <li>✔ Reactivated (status → active)</li>}
+                </ul>
+              </div>
+
+              {force && (
+                <div className="rounded-md border border-red-200 bg-red-50 p-2 text-xs text-red-800">
+                  Force merge: balance/package conflict will be overridden.
+                </div>
+              )}
+            </div>
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={() => {
+              setOpen(false);
+              onConfirm();
+            }}
+            className="bg-emerald-600 hover:bg-emerald-700"
+          >
+            Confirm merge
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }

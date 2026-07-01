@@ -10,6 +10,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     { to: "/clients", label: "All Clients" },
     { to: "/clients/new", label: "Add Client" },
     { to: "/schedule-check", label: "Schedule Check" },
+    { to: "/merge-center", label: "Merge Center" },
     { to: "/clients/deleted", label: "Deleted" },
     { to: "/import", label: "Import" },
     { to: "/backup", label: "Backup" },

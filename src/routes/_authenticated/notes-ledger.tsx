@@ -59,6 +59,7 @@ export const Route = createFileRoute("/_authenticated/notes-ledger")({
 function NotesLedgerPage() {
   const previewFn = useServerFn(previewNotesLedger);
   const applyFn = useServerFn(applyNotesLedger);
+  const undoFn = useServerFn(undoNotesLedgerApply);
   const [text, setText] = useState("");
   const [preview, setPreview] = useState<PreviewResult | null>(null);
   const [applied, setApplied] = useState<{ updated: number; errors: number } | null>(null);
@@ -68,6 +69,19 @@ function NotesLedgerPage() {
   const [resolvedReviews, setResolvedReviews] = useState<Set<number>>(new Set());
   const [skippedReviews, setSkippedReviews] = useState<Set<number>>(new Set());
   const [activeCategories, setActiveCategories] = useState<Set<ReviewCategory>>(new Set());
+  const [recentlyApplied, setRecentlyApplied] = useState<RecentlyApplied[]>([]);
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (recentlyApplied.length === 0) return;
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [recentlyApplied.length]);
+
+  const visibleRecent = recentlyApplied.filter(
+    (r) => now - r.applied_at < RECENTLY_APPLIED_TTL_MS,
+  );
+
 
   const previewMut = useMutation({
     mutationFn: async () => previewFn({ data: { text } }),

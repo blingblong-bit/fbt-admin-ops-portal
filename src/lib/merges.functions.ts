@@ -156,16 +156,20 @@ export const findDuplicatePairs = createServerFn({ method: "GET" })
     const clientIds = Array.from(involved);
     const activitiesByClient = new Map<string, ActivityLite[]>();
     if (clientIds.length > 0) {
-      const { data: acts, error: aErr } = await context.supabase
-        .from("client_activities")
-        .select("*")
-        .in("client_id", clientIds)
-        .order("created_at", { ascending: false });
-      if (aErr) throw aErr;
-      for (const row of (acts ?? []) as ClientActivity[]) {
-        const arr = activitiesByClient.get(row.client_id) ?? [];
-        arr.push(row);
-        activitiesByClient.set(row.client_id, arr);
+      const chunkSize = 100;
+      for (let i = 0; i < clientIds.length; i += chunkSize) {
+        const chunk = clientIds.slice(i, i + chunkSize);
+        const { data: acts, error: aErr } = await context.supabase
+          .from("client_activities")
+          .select("*")
+          .in("client_id", chunk)
+          .order("created_at", { ascending: false });
+        if (aErr) throw aErr;
+        for (const row of (acts ?? []) as ClientActivity[]) {
+          const arr = activitiesByClient.get(row.client_id) ?? [];
+          arr.push(row);
+          activitiesByClient.set(row.client_id, arr);
+        }
       }
     }
 

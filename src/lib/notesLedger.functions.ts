@@ -203,12 +203,25 @@ export const previewNotesLedger = createServerFn({ method: "POST" })
       auto_updates: 0,
     };
 
+    // Detect duplicate parsed-name occurrences across the ledger.
+    // If the same normalized parsed name appears more than once, route ALL
+    // occurrences to Review so an older package line can't overwrite a newer one.
+    const parsedNameCounts = new Map<string, number>();
+    for (const r of parsed) {
+      if (r.needs_review) continue;
+      const k = normName(r.name ?? "");
+      if (!k) continue;
+      parsedNameCounts.set(k, (parsedNameCounts.get(k) ?? 0) + 1);
+    }
+
     for (const row of parsed) {
       const key = normName(row.name ?? "");
       const nameHits = key ? (byName.get(key) ?? []) : [];
       const phoneHits = row.phone ? (byPhone.get(row.phone) ?? []) : [];
       const combined = dedupe([...nameHits, ...phoneHits]);
       const squareLinked = combined.filter((c) => c.square_customer_id);
+      const duplicateParsed = !row.needs_review && key ? (parsedNameCounts.get(key) ?? 0) > 1 : false;
+
 
       const diagBase: Omit<RowDiagnostic, "outcome" | "rule" | "reason"> = {
         line_number: row.line_number,
@@ -235,6 +248,21 @@ export const previewNotesLedger = createServerFn({ method: "POST" })
         summary.parser_needs_review++;
         continue;
       }
+
+      if (duplicateParsed) {
+        const dupReason = "Multiple ledger entries for same client — manual package selection required.";
+        reviews.push({ ...row, candidates: combined, reason: dupReason });
+        diagnostics.push({
+          ...diagBase,
+          outcome: "review",
+          rule: "duplicate parsed_name in ledger → force manual selection",
+          reason: dupReason,
+        });
+        summary.parser_needs_review++;
+        continue;
+      }
+
+
 
       let chosen: MatchClient | null = null;
       let reason = "";

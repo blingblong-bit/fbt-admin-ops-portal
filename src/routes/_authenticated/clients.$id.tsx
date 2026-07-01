@@ -166,24 +166,40 @@ function ClientDetailPage() {
             Schedule status is read live from Square — manage appointments in Square.
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-col items-end gap-1">
+          <div className="flex flex-wrap gap-2">
 
-          {hasVisitData && (
-            <Button onClick={() => completeVisit.mutate()} disabled={remaining === 0}>
-              Complete Visit
+            {(c.package_total_visits ?? 0) > 0 && remaining !== 0 && (
+              <Button
+                onClick={() => completeVisit.mutate()}
+                title={!hasVisitData ? "Visits unknown — verify before completing." : undefined}
+              >
+                Complete Visit
+              </Button>
+            )}
+            <Button variant="outline" onClick={() => setPaymentOpen(true)} disabled={owed === 0}>
+              Record Payment
             </Button>
+            <Button variant="outline" onClick={() => setEditOpen(true)}>
+              Edit Client
+            </Button>
+            <Button variant="outline" onClick={() => setRenewOpen(true)}>
+              Renew Package
+            </Button>
+          </div>
+          {(c.package_total_visits ?? 0) > 0 && !hasVisitData && (
+            <span className="text-xs text-amber-700">
+              ⚠ Visits unknown — verify before completing.
+            </span>
           )}
-          <Button variant="outline" onClick={() => setPaymentOpen(true)} disabled={owed === 0}>
-            Record Payment
-          </Button>
-          <Button variant="outline" onClick={() => setEditOpen(true)}>
-            Edit Client
-          </Button>
-          <Button variant="outline" onClick={() => setRenewOpen(true)}>
-            Renew Package
-          </Button>
+          {(c.package_total_visits ?? 0) > 0 && remaining === 0 && (
+            <span className="text-xs text-amber-700">
+              ⚠ Visits show 0 — verify in Square before completing.
+            </span>
+          )}
         </div>
       </div>
+
 
       <div className="grid gap-6 lg:grid-cols-3">
         <Card className="lg:col-span-2">

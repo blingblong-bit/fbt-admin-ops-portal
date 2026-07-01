@@ -274,7 +274,7 @@ function SyncLogPage() {
                       </TableCell>
                       <TableCell className="text-xs text-slate-600">{p.note ?? "—"}</TableCell>
                       <TableCell className="text-right">
-                        {!p.square_customer_id && p.buyer_email ? (
+                        {!p.square_customer_id ? (
                           <ResolvePaymentDialog payment={p} />
                         ) : (
                           <span className="text-xs text-slate-400">—</span>

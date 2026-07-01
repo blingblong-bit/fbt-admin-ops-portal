@@ -12,9 +12,13 @@ import { formatCurrency, formatDate, fullName } from "@/lib/clients";
 import {
   previewNotesLedger,
   applyNotesLedger,
+  REVIEW_CATEGORY_LABELS,
   type PreviewResult,
   type AutoUpdateRow,
   type ApplyRowResult,
+  type ReviewRow,
+  type ReviewCategory,
+  type MatchClient,
 } from "@/lib/notesLedger.functions";
 
 export const Route = createFileRoute("/_authenticated/notes-ledger")({
@@ -30,6 +34,10 @@ function NotesLedgerPage() {
   const [applied, setApplied] = useState<{ updated: number; errors: number } | null>(null);
   const [applyRows, setApplyRows] = useState<ApplyRowResult[]>([]);
   const [excluded, setExcluded] = useState<Set<string>>(new Set());
+  const [reviewSelection, setReviewSelection] = useState<Map<number, string>>(new Map());
+  const [resolvedReviews, setResolvedReviews] = useState<Set<number>>(new Set());
+  const [skippedReviews, setSkippedReviews] = useState<Set<number>>(new Set());
+  const [activeCategories, setActiveCategories] = useState<Set<ReviewCategory>>(new Set());
 
   const previewMut = useMutation({
     mutationFn: async () => previewFn({ data: { text } }),
@@ -38,6 +46,10 @@ function NotesLedgerPage() {
       setApplied(null);
       setApplyRows([]);
       setExcluded(new Set());
+      setReviewSelection(new Map());
+      setResolvedReviews(new Set());
+      setSkippedReviews(new Set());
+      setActiveCategories(new Set());
       toast.success(`Parsed ${r.parsed_count} rows`);
     },
     onError: (e: Error) => toast.error(e.message),
@@ -80,7 +92,67 @@ function NotesLedgerPage() {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  const reviewApplyMut = useMutation({
+    mutationFn: async (args: { row: ReviewRow; client: MatchClient }) => {
+      const { row, client } = args;
+      const price = row.package_price ?? Number(client.package_price ?? 0);
+      const visits = row.package_total_visits ?? Number(client.package_total_visits ?? 0);
+      const startDate = row.package_start_date ?? client.package_start_date;
+      const paid = row.amount_paid !== null ? row.amount_paid : Number(client.amount_paid ?? 0);
+      const currentNotes = client.internal_notes ?? "";
+      const appended =
+        row.internal_notes && !currentNotes.includes(row.internal_notes)
+          ? row.internal_notes
+          : null;
+      const res = await applyFn({
+        data: {
+          updates: [
+            {
+              client_id: client.id,
+              client_name: fullName(client),
+              parsed_name: row.name ?? null,
+              line_number: row.line_number,
+              package_price: price,
+              package_total_visits: visits,
+              package_start_date: startDate,
+              amount_paid: paid,
+              appended_note: appended,
+            },
+          ],
+        },
+      });
+      return { res, lineNumber: row.line_number };
+    },
+    onSuccess: ({ res, lineNumber }) => {
+      const failed = res.rows.find((r) => r.status === "error");
+      if (failed) {
+        toast.error(`Apply failed: ${failed.error ?? "Unknown error"}`);
+      } else {
+        toast.success("Row applied");
+        setResolvedReviews((prev) => new Set(prev).add(lineNumber));
+      }
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
   const autoCount = preview ? preview.auto_updates.length - excluded.size : 0;
+
+  const categoryCounts = new Map<ReviewCategory, number>();
+  if (preview) {
+    for (const r of preview.reviews) {
+      for (const c of r.categories) {
+        categoryCounts.set(c, (categoryCounts.get(c) ?? 0) + 1);
+      }
+    }
+  }
+  const visibleReviews = preview
+    ? preview.reviews.filter((r) => {
+        if (resolvedReviews.has(r.line_number) || skippedReviews.has(r.line_number)) return false;
+        if (activeCategories.size === 0) return true;
+        return r.categories.some((c) => activeCategories.has(c));
+      })
+    : [];
+
 
   return (
     <AppShell>
@@ -275,40 +347,77 @@ function NotesLedgerPage() {
 
           <Card className="mb-6">
             <CardHeader>
-              <CardTitle>Needs Review ({preview.reviews.length})</CardTitle>
+              <CardTitle>
+                Needs Review ({visibleReviews.length}
+                {visibleReviews.length !== preview.reviews.length
+                  ? ` of ${preview.reviews.length}`
+                  : ""}
+                )
+              </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-2">
-              {preview.reviews.length === 0 && (
-                <p className="text-sm text-slate-500">None.</p>
-              )}
-              {preview.reviews.map((r, idx) => (
-                <div
-                  key={idx}
-                  className="rounded border border-amber-200 bg-amber-50 p-3 text-sm"
-                >
-                  <div className="mb-1 flex flex-wrap items-center gap-2">
-                    <Badge variant="outline" className="border-amber-400 text-amber-800">
-                      Line {r.line_number}
-                    </Badge>
-                    {r.assessment && <Badge variant="secondary">Assessment</Badge>}
-                    <span className="font-semibold">{r.name ?? "(no name)"}</span>
-                    <span className="text-xs text-slate-500">{r.reason}</span>
-                  </div>
-                  <pre className="whitespace-pre-wrap font-mono text-xs text-slate-700">
-                    {r.raw}
-                  </pre>
-                  {r.candidates.length > 0 && (
-                    <div className="mt-2 text-xs">
-                      Candidates:{" "}
-                      {r.candidates.map((c) => (
-                        <span key={c.id} className="mr-2 rounded bg-white px-2 py-0.5 shadow-sm">
-                          {fullName(c)}
-                          {c.square_customer_id ? " · Square" : ""}
-                        </span>
-                      ))}
-                    </div>
+            <CardContent className="space-y-3">
+              {preview.reviews.length > 0 && (
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs font-medium text-slate-500">Filter:</span>
+                  {(Object.keys(REVIEW_CATEGORY_LABELS) as ReviewCategory[])
+                    .filter((c) => (categoryCounts.get(c) ?? 0) > 0)
+                    .map((c) => {
+                      const active = activeCategories.has(c);
+                      return (
+                        <button
+                          key={c}
+                          type="button"
+                          onClick={() => {
+                            const next = new Set(activeCategories);
+                            if (next.has(c)) next.delete(c);
+                            else next.add(c);
+                            setActiveCategories(next);
+                          }}
+                          className={`rounded-full border px-2.5 py-0.5 text-xs transition ${
+                            active
+                              ? "border-amber-500 bg-amber-500 text-white"
+                              : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+                          }`}
+                        >
+                          {REVIEW_CATEGORY_LABELS[c]} ({categoryCounts.get(c) ?? 0})
+                        </button>
+                      );
+                    })}
+                  {activeCategories.size > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setActiveCategories(new Set())}
+                      className="text-xs text-slate-500 underline"
+                    >
+                      Clear
+                    </button>
                   )}
                 </div>
+              )}
+              {visibleReviews.length === 0 && (
+                <p className="text-sm text-slate-500">
+                  {preview.reviews.length === 0 ? "None." : "No rows match the current filters."}
+                </p>
+              )}
+              {visibleReviews.map((r) => (
+                <ReviewCard
+                  key={r.line_number}
+                  row={r}
+                  selectedClientId={reviewSelection.get(r.line_number) ?? null}
+                  onSelect={(clientId) => {
+                    const next = new Map(reviewSelection);
+                    next.set(r.line_number, clientId);
+                    setReviewSelection(next);
+                  }}
+                  onApply={(client) => reviewApplyMut.mutate({ row: r, client })}
+                  onSkip={() =>
+                    setSkippedReviews((prev) => new Set(prev).add(r.line_number))
+                  }
+                  onMarkResolved={() =>
+                    setResolvedReviews((prev) => new Set(prev).add(r.line_number))
+                  }
+                  applying={reviewApplyMut.isPending}
+                />
               ))}
             </CardContent>
           </Card>
@@ -527,6 +636,119 @@ function DiffRow({
       ) : (
         <span>{after}</span>
       )}
+    </div>
+  );
+}
+
+function ReviewCard({
+  row,
+  selectedClientId,
+  onSelect,
+  onApply,
+  onSkip,
+  onMarkResolved,
+  applying,
+}: {
+  row: ReviewRow;
+  selectedClientId: string | null;
+  onSelect: (clientId: string) => void;
+  onApply: (client: MatchClient) => void;
+  onSkip: () => void;
+  onMarkResolved: () => void;
+  applying: boolean;
+}) {
+  const selectedClient = row.candidates.find((c) => c.id === selectedClientId) ?? null;
+  return (
+    <div className="rounded border border-amber-200 bg-amber-50 p-3 text-sm">
+      <div className="mb-2 flex flex-wrap items-center gap-2">
+        <Badge variant="outline" className="border-amber-400 text-amber-800">
+          Line {row.line_number}
+        </Badge>
+        {row.assessment && <Badge variant="secondary">Assessment</Badge>}
+        <span className="font-semibold">{row.name ?? "(no name)"}</span>
+        {row.categories.map((c) => (
+          <Badge
+            key={c}
+            variant="secondary"
+            className="bg-amber-100 text-amber-900"
+          >
+            {REVIEW_CATEGORY_LABELS[c]}
+          </Badge>
+        ))}
+      </div>
+      <div className="text-xs text-slate-600">{row.reason}</div>
+      <pre className="mt-2 whitespace-pre-wrap font-mono text-xs text-slate-700">
+        {row.raw}
+      </pre>
+      <div className="mt-2 grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
+        <div><span className="text-slate-500">Parsed price:</span> {row.package_price !== null ? formatCurrency(row.package_price) : "—"}</div>
+        <div><span className="text-slate-500">Parsed visits:</span> {row.package_total_visits ?? "—"}</div>
+        <div><span className="text-slate-500">Parsed start:</span> {row.package_start_date ? formatDate(row.package_start_date) : "—"}</div>
+        <div><span className="text-slate-500">Parsed paid:</span> {row.amount_paid !== null ? formatCurrency(row.amount_paid) : "—"}</div>
+      </div>
+
+      {row.candidates.length > 0 ? (
+        <div className="mt-3 space-y-2">
+          <div className="text-xs font-medium text-slate-600">
+            Possible matches ({row.candidates.length}) — select one to apply:
+          </div>
+          {row.candidates.map((c) => {
+            const owed = Math.max(0, Number(c.package_price ?? 0) - Number(c.amount_paid ?? 0));
+            const active = c.id === selectedClientId;
+            return (
+              <label
+                key={c.id}
+                className={`flex cursor-pointer flex-col gap-1 rounded border p-2 ${
+                  active ? "border-emerald-400 bg-emerald-50" : "border-slate-200 bg-white"
+                }`}
+              >
+                <div className="flex flex-wrap items-center gap-2">
+                  <input
+                    type="radio"
+                    name={`review-${row.line_number}`}
+                    checked={active}
+                    onChange={() => onSelect(c.id)}
+                  />
+                  <span className="font-semibold">{fullName(c)}</span>
+                  {c.square_customer_id && (
+                    <Badge variant="secondary" className="bg-blue-100 text-blue-800">Square</Badge>
+                  )}
+                  <span className="font-mono text-xs text-slate-600">{c.phone ?? "no phone"}</span>
+                </div>
+                <div className="grid grid-cols-2 gap-1 text-xs text-slate-700 sm:grid-cols-4">
+                  <div><span className="text-slate-500">Price:</span> {formatCurrency(Number(c.package_price ?? 0))}</div>
+                  <div><span className="text-slate-500">Start:</span> {c.package_start_date ? formatDate(c.package_start_date) : "—"}</div>
+                  <div><span className="text-slate-500">Owed:</span> {formatCurrency(owed)}</div>
+                  <div><span className="text-slate-500">Status:</span> {c.status}</div>
+                </div>
+                {c.internal_notes && (
+                  <div className="whitespace-pre-wrap text-xs text-slate-600">
+                    <span className="text-slate-500">Notes:</span> {c.internal_notes}
+                  </div>
+                )}
+              </label>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="mt-3 text-xs text-slate-500">No candidate clients found for this row.</div>
+      )}
+
+      <div className="mt-3 flex flex-wrap gap-2">
+        <Button
+          size="sm"
+          onClick={() => selectedClient && onApply(selectedClient)}
+          disabled={!selectedClient || applying}
+        >
+          {applying ? "Applying…" : "Apply to selected client"}
+        </Button>
+        <Button size="sm" variant="outline" onClick={onSkip}>
+          Skip row
+        </Button>
+        <Button size="sm" variant="outline" onClick={onMarkResolved}>
+          Mark resolved
+        </Button>
+      </div>
     </div>
   );
 }

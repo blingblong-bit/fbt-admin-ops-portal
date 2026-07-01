@@ -405,9 +405,15 @@ async function handlePaymentEvent(supabaseAdmin: any, eventType: string, event: 
 
     // Not yet applied — only proceed when COMPLETED and amount > 0
     if (!isCompleted || amountCents <= 0) {
+      // If we already have a matched client, clear needs_review so it drops out
+      // of the review queue and shows up as a pending/approved payment instead.
       await supabaseAdmin
         .from("square_payments")
-        .update({ status, raw_event: event as unknown as never })
+        .update({
+          status,
+          needs_review: existingPayment.client_id ? false : true,
+          raw_event: event as unknown as never,
+        })
         .eq("id", existingPayment.id);
       await supabaseAdmin.from("square_sync_log").insert({
         event_type: eventType,
@@ -415,7 +421,9 @@ async function handlePaymentEvent(supabaseAdmin: any, eventType: string, event: 
         client_id: existingPayment.client_id,
         status: "skipped",
         action: `recorded_status_${status.toLowerCase() || "unknown"}`,
-        message: `Payment ${squarePaymentId} status=${status} — not applied (waiting for COMPLETED)`,
+        message: existingPayment.client_id
+          ? `Payment ${squarePaymentId} status=${status} — matched, waiting for COMPLETED`
+          : `Payment ${squarePaymentId} status=${status} — not applied (waiting for COMPLETED)`,
         raw_event: event as unknown as never,
       });
       return;

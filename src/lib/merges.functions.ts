@@ -2,6 +2,8 @@ import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { Client, ClientActivity } from "@/lib/clients";
 
+type ActivityLite = Omit<ClientActivity, "metadata"> & { metadata: unknown };
+
 export type MergePairClient = Client & {
   activities?: ClientActivity[];
   is_square_linked: boolean;

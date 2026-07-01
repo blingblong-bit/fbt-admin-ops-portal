@@ -344,6 +344,14 @@ function ResolvePaymentDialog({ payment }: { payment: PaymentRow }) {
   const searchFn = useServerFn(searchClientsForPayment);
   const linkFn = useServerFn(resolvePaymentLink);
   const createFn = useServerFn(resolvePaymentCreateClient);
+  const suggestFn = useServerFn(suggestPaymentMatches);
+
+  const suggestQuery = useQuery({
+    queryKey: ["payment_match_suggestions", payment.id],
+    queryFn: () => suggestFn({ data: { payment_row_id: payment.id } }),
+    enabled: open,
+    staleTime: 60_000,
+  });
 
   const searchMut = useMutation({
     mutationFn: async (q: string) => searchFn({ data: { query: q } }),

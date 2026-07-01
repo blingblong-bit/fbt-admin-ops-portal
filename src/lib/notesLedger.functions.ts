@@ -58,9 +58,13 @@ export type ReviewCategory =
 
 export type ReviewRow = ParsedRow & {
   candidates: MatchClient[];
+  archived_candidates: MatchClient[];
   reason: string;
   categories: ReviewCategory[];
+  note_status: NoteStatus;
 };
+
+export type NoteStatus = "append" | "already_exists" | "no_note";
 
 export const REVIEW_CATEGORY_LABELS: Record<ReviewCategory, string> = {
   duplicate_ledger_entry: "Duplicate ledger entry",

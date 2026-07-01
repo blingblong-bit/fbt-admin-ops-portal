@@ -395,8 +395,9 @@ function PairCard({
       <CardContent className="space-y-3">
         {pair.square_conflict && (
           <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-            Both clients have different <code>square_customer_id</code> values. Merge blocked —
-            manual review required.
+            Blocked because both clients have different Square Customer IDs. This cannot be
+            reopened. Resolve by verifying whether these are truly different people or manually
+            correcting the Square linkage.
           </div>
         )}
         {pair.balance_conflict && !pair.square_conflict && (
@@ -406,9 +407,20 @@ function PairCard({
           </div>
         )}
         <div className="grid gap-3 md:grid-cols-2">
-          <ClientCol c={pair.left} side="left" isKept={keptId === pair.left.id} />
-          <ClientCol c={pair.right} side="right" isKept={keptId === pair.right.id} />
+          <ClientCol
+            c={pair.left}
+            side="left"
+            isKept={keptId === pair.left.id}
+            blocked={pair.status === "blocked"}
+          />
+          <ClientCol
+            c={pair.right}
+            side="right"
+            isKept={keptId === pair.right.id}
+            blocked={pair.status === "blocked"}
+          />
         </div>
+
 
         <div className="flex flex-wrap items-center gap-2 border-t pt-3">
           {pair.status === "pending" && (

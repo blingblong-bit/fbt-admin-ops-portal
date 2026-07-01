@@ -1,6 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
+import { useServerFn } from "@tanstack/react-start";
+import { useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -12,8 +14,25 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { formatCurrency, formatDateTimeLocal } from "@/lib/clients";
+import {
+  resolvePaymentCreateClient,
+  resolvePaymentLink,
+  searchClientsForPayment,
+} from "@/lib/payments.functions";
 
 export const Route = createFileRoute("/_authenticated/sync-log")({
   head: () => ({
@@ -230,6 +249,7 @@ function SyncLogPage() {
                     <TableHead>Square Customer ID</TableHead>
                     <TableHead>Buyer Email</TableHead>
                     <TableHead>Note</TableHead>
+                    <TableHead className="text-right">Resolve</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -252,6 +272,13 @@ function SyncLogPage() {
                         {p.buyer_email ?? "—"}
                       </TableCell>
                       <TableCell className="text-xs text-slate-600">{p.note ?? "—"}</TableCell>
+                      <TableCell className="text-right">
+                        {!p.square_customer_id && p.buyer_email ? (
+                          <ResolvePaymentDialog payment={p} />
+                        ) : (
+                          <span className="text-xs text-slate-400">—</span>
+                        )}
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -291,5 +318,200 @@ function SyncLogPage() {
         </Card>
       </div>
     </AppShell>
+  );
+}
+
+type SearchClient = {
+  id: string;
+  first_name: string;
+  last_name: string;
+  email: string | null;
+  phone: string | null;
+  status: string;
+};
+
+function ResolvePaymentDialog({ payment }: { payment: PaymentRow }) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<SearchClient[]>([]);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [phone, setPhone] = useState("");
+
+  const queryClient = useQueryClient();
+  const searchFn = useServerFn(searchClientsForPayment);
+  const linkFn = useServerFn(resolvePaymentLink);
+  const createFn = useServerFn(resolvePaymentCreateClient);
+
+  const searchMut = useMutation({
+    mutationFn: async (q: string) => searchFn({ data: { query: q } }),
+    onSuccess: (r) => setResults(r.clients as SearchClient[]),
+    onError: (e) => toast.error(`Search failed: ${(e as Error).message}`),
+  });
+
+  const linkMut = useMutation({
+    mutationFn: async (clientId: string) =>
+      linkFn({ data: { payment_row_id: payment.id, client_id: clientId } }),
+    onSuccess: (r) => {
+      toast.success(
+        r.already_applied
+          ? "Linked — payment was already credited to this client."
+          : `Applied $${(payment.amount_cents / 100).toFixed(2)} to client.`,
+      );
+      queryClient.invalidateQueries({ queryKey: ["square_payments_needs_review"] });
+      setOpen(false);
+    },
+    onError: (e) => toast.error(`Link failed: ${(e as Error).message}`),
+  });
+
+  const createMut = useMutation({
+    mutationFn: async () =>
+      createFn({
+        data: {
+          payment_row_id: payment.id,
+          first_name: firstName,
+          last_name: lastName,
+          email: payment.buyer_email,
+          phone: phone || null,
+        },
+      }),
+    onSuccess: () => {
+      toast.success("Client created and payment applied.");
+      queryClient.invalidateQueries({ queryKey: ["square_payments_needs_review"] });
+      setOpen(false);
+    },
+    onError: (e) => toast.error(`Create failed: ${(e as Error).message}`),
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <Button size="sm" variant="outline" onClick={() => setOpen(true)}>
+        Resolve
+      </Button>
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Resolve Square Payment</DialogTitle>
+          <DialogDescription>
+            Link this payment to an Admin client, or create a new client from the buyer email.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm">
+            <div className="flex justify-between">
+              <span className="text-slate-500">Amount</span>
+              <span className="font-medium">{formatCurrency(payment.amount_cents / 100)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-500">Buyer email</span>
+              <span className="font-mono text-xs">{payment.buyer_email ?? "—"}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-500">Payment date</span>
+              <span className="text-xs">{formatDateTimeLocal(payment.created_at)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-500">Square payment ID</span>
+              <span className="font-mono text-xs">{payment.square_payment_id}</span>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Search Admin Clients</Label>
+            <div className="flex gap-2">
+              <Input
+                placeholder="Name, email, or phone"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    searchMut.mutate(query);
+                  }
+                }}
+              />
+              <Button
+                variant="secondary"
+                disabled={searchMut.isPending || !query.trim()}
+                onClick={() => searchMut.mutate(query)}
+              >
+                Search
+              </Button>
+            </div>
+            {results.length > 0 && (
+              <div className="max-h-56 overflow-y-auto rounded-md border border-slate-200">
+                {results.map((c) => (
+                  <label
+                    key={c.id}
+                    className={`flex cursor-pointer items-start gap-2 border-b border-slate-100 p-2 text-sm last:border-0 hover:bg-slate-50 ${
+                      selectedId === c.id ? "bg-slate-100" : ""
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="client"
+                      className="mt-1"
+                      checked={selectedId === c.id}
+                      onChange={() => setSelectedId(c.id)}
+                    />
+                    <div className="flex-1">
+                      <div className="font-medium">
+                        {c.first_name} {c.last_name}{" "}
+                        <span className="text-xs text-slate-400">({c.status})</span>
+                      </div>
+                      <div className="text-xs text-slate-500">
+                        {c.email ?? "no email"} · {c.phone ?? "no phone"}
+                      </div>
+                    </div>
+                  </label>
+                ))}
+              </div>
+            )}
+            <Button
+              className="w-full"
+              disabled={!selectedId || linkMut.isPending}
+              onClick={() => selectedId && linkMut.mutate(selectedId)}
+            >
+              Link Payment to Selected Client
+            </Button>
+          </div>
+
+          <div className="space-y-2 border-t pt-4">
+            <Label>Or create new Admin client</Label>
+            <div className="grid grid-cols-2 gap-2">
+              <Input
+                placeholder="First name"
+                value={firstName}
+                onChange={(e) => setFirstName(e.target.value)}
+              />
+              <Input
+                placeholder="Last name"
+                value={lastName}
+                onChange={(e) => setLastName(e.target.value)}
+              />
+            </div>
+            <Input placeholder="Phone (optional)" value={phone} onChange={(e) => setPhone(e.target.value)} />
+            <p className="text-xs text-slate-500">
+              Email will be set to <span className="font-mono">{payment.buyer_email}</span>.
+            </p>
+            <Button
+              variant="outline"
+              className="w-full"
+              disabled={createMut.isPending || (!firstName.trim() && !lastName.trim())}
+              onClick={() => createMut.mutate()}
+            >
+              Create New Client from Buyer Email
+            </Button>
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="ghost" onClick={() => setOpen(false)}>
+            Cancel
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

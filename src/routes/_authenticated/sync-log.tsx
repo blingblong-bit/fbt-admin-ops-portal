@@ -464,14 +464,15 @@ function ResolvePaymentDialog({ payment }: { payment: PaymentRow }) {
                           </span>
                           <span
                             className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
-                              s.confidence >= 3
+                              s.score >= 100
                                 ? "bg-emerald-100 text-emerald-800"
-                                : s.confidence === 2
+                                : s.score >= 60
                                   ? "bg-amber-100 text-amber-800"
                                   : "bg-slate-100 text-slate-700"
                             }`}
                           >
-                            {s.confidence} signal{s.confidence === 1 ? "" : "s"}
+                            score {s.score} · {s.confidence} signal
+                            {s.confidence === 1 ? "" : "s"}
                           </span>
                         </div>
                         <div className="mt-0.5 text-xs text-slate-500">

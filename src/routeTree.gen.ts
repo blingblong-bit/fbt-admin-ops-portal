@@ -13,6 +13,7 @@ import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/index'
 import { Route as AuthenticatedSyncLogRouteImport } from './routes/_authenticated/sync-log'
+import { Route as AuthenticatedSquareDiagnosticRouteImport } from './routes/_authenticated/square-diagnostic'
 import { Route as AuthenticatedScheduleCheckRouteImport } from './routes/_authenticated/schedule-check'
 import { Route as AuthenticatedMergeCenterRouteImport } from './routes/_authenticated/merge-center'
 import { Route as AuthenticatedImportRouteImport } from './routes/_authenticated/import'
@@ -42,6 +43,12 @@ const AuthenticatedSyncLogRoute = AuthenticatedSyncLogRouteImport.update({
   path: '/sync-log',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedSquareDiagnosticRoute =
+  AuthenticatedSquareDiagnosticRouteImport.update({
+    id: '/square-diagnostic',
+    path: '/square-diagnostic',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedScheduleCheckRoute =
   AuthenticatedScheduleCheckRouteImport.update({
     id: '/schedule-check',
@@ -99,6 +106,7 @@ export interface FileRoutesByFullPath {
   '/import': typeof AuthenticatedImportRoute
   '/merge-center': typeof AuthenticatedMergeCenterRoute
   '/schedule-check': typeof AuthenticatedScheduleCheckRoute
+  '/square-diagnostic': typeof AuthenticatedSquareDiagnosticRoute
   '/sync-log': typeof AuthenticatedSyncLogRoute
   '/clients/$id': typeof AuthenticatedClientsIdRoute
   '/clients/deleted': typeof AuthenticatedClientsDeletedRoute
@@ -112,6 +120,7 @@ export interface FileRoutesByTo {
   '/import': typeof AuthenticatedImportRoute
   '/merge-center': typeof AuthenticatedMergeCenterRoute
   '/schedule-check': typeof AuthenticatedScheduleCheckRoute
+  '/square-diagnostic': typeof AuthenticatedSquareDiagnosticRoute
   '/sync-log': typeof AuthenticatedSyncLogRoute
   '/': typeof AuthenticatedIndexRoute
   '/clients/$id': typeof AuthenticatedClientsIdRoute
@@ -128,6 +137,7 @@ export interface FileRoutesById {
   '/_authenticated/import': typeof AuthenticatedImportRoute
   '/_authenticated/merge-center': typeof AuthenticatedMergeCenterRoute
   '/_authenticated/schedule-check': typeof AuthenticatedScheduleCheckRoute
+  '/_authenticated/square-diagnostic': typeof AuthenticatedSquareDiagnosticRoute
   '/_authenticated/sync-log': typeof AuthenticatedSyncLogRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
   '/_authenticated/clients/$id': typeof AuthenticatedClientsIdRoute
@@ -145,6 +155,7 @@ export interface FileRouteTypes {
     | '/import'
     | '/merge-center'
     | '/schedule-check'
+    | '/square-diagnostic'
     | '/sync-log'
     | '/clients/$id'
     | '/clients/deleted'
@@ -158,6 +169,7 @@ export interface FileRouteTypes {
     | '/import'
     | '/merge-center'
     | '/schedule-check'
+    | '/square-diagnostic'
     | '/sync-log'
     | '/'
     | '/clients/$id'
@@ -173,6 +185,7 @@ export interface FileRouteTypes {
     | '/_authenticated/import'
     | '/_authenticated/merge-center'
     | '/_authenticated/schedule-check'
+    | '/_authenticated/square-diagnostic'
     | '/_authenticated/sync-log'
     | '/_authenticated/'
     | '/_authenticated/clients/$id'
@@ -216,6 +229,13 @@ declare module '@tanstack/react-router' {
       path: '/sync-log'
       fullPath: '/sync-log'
       preLoaderRoute: typeof AuthenticatedSyncLogRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/square-diagnostic': {
+      id: '/_authenticated/square-diagnostic'
+      path: '/square-diagnostic'
+      fullPath: '/square-diagnostic'
+      preLoaderRoute: typeof AuthenticatedSquareDiagnosticRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/schedule-check': {
@@ -289,6 +309,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedImportRoute: typeof AuthenticatedImportRoute
   AuthenticatedMergeCenterRoute: typeof AuthenticatedMergeCenterRoute
   AuthenticatedScheduleCheckRoute: typeof AuthenticatedScheduleCheckRoute
+  AuthenticatedSquareDiagnosticRoute: typeof AuthenticatedSquareDiagnosticRoute
   AuthenticatedSyncLogRoute: typeof AuthenticatedSyncLogRoute
   AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
   AuthenticatedClientsIdRoute: typeof AuthenticatedClientsIdRoute
@@ -302,6 +323,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedImportRoute: AuthenticatedImportRoute,
   AuthenticatedMergeCenterRoute: AuthenticatedMergeCenterRoute,
   AuthenticatedScheduleCheckRoute: AuthenticatedScheduleCheckRoute,
+  AuthenticatedSquareDiagnosticRoute: AuthenticatedSquareDiagnosticRoute,
   AuthenticatedSyncLogRoute: AuthenticatedSyncLogRoute,
   AuthenticatedIndexRoute: AuthenticatedIndexRoute,
   AuthenticatedClientsIdRoute: AuthenticatedClientsIdRoute,
@@ -321,3 +343,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}

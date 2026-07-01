@@ -301,9 +301,16 @@ export const previewNotesLedger = createServerFn({ method: "POST" })
 
     for (const row of parsed) {
       const key = normName(row.name ?? "");
-      const nameHits = key ? (byName.get(key) ?? []) : [];
-      const phoneHits = row.phone ? (byPhone.get(row.phone) ?? []) : [];
+      const nameHitsRaw = key ? (byName.get(key) ?? []) : [];
+      const phoneHitsRaw = row.phone ? (byPhone.get(row.phone) ?? []) : [];
+      // Exclude archived clients from active matching. Track them separately.
+      const isArchived = (c: MatchClient) => c.status === "archived";
+      const nameHits = nameHitsRaw.filter((c) => !isArchived(c));
+      const phoneHits = phoneHitsRaw.filter((c) => !isArchived(c));
       const combined = dedupe([...nameHits, ...phoneHits]);
+      const archivedCandidates = dedupe(
+        [...nameHitsRaw, ...phoneHitsRaw].filter(isArchived),
+      );
       const squareLinked = combined.filter((c) => c.square_customer_id);
       const duplicateParsed = !row.needs_review && key ? (parsedNameCounts.get(key) ?? 0) > 1 : false;
 
@@ -322,14 +329,20 @@ export const previewNotesLedger = createServerFn({ method: "POST" })
         square_linked_count: squareLinked.length,
       };
 
-      if (row.needs_review) {
-        const reason = row.review_reason ?? "Needs manual review.";
+      const pushReview = (reason: string, isDup: boolean) => {
         reviews.push({
           ...row,
           candidates: combined,
+          archived_candidates: archivedCandidates,
           reason,
-          categories: classifyReview(row, reason, squareLinked.length, combined.length, false),
+          categories: classifyReview(row, reason, squareLinked.length, combined.length, isDup),
+          note_status: computeRowNoteStatus(row, combined),
         });
+      };
+
+      if (row.needs_review) {
+        const reason = row.review_reason ?? "Needs manual review.";
+        pushReview(reason, false);
         diagnostics.push({
           ...diagBase,
           outcome: "parser_review",
@@ -342,12 +355,7 @@ export const previewNotesLedger = createServerFn({ method: "POST" })
 
       if (duplicateParsed) {
         const dupReason = "Multiple ledger entries for same client — manual package selection required.";
-        reviews.push({
-          ...row,
-          candidates: combined,
-          reason: dupReason,
-          categories: classifyReview(row, dupReason, squareLinked.length, combined.length, true),
-        });
+        pushReview(dupReason, true);
         diagnostics.push({
           ...diagBase,
           outcome: "review",
@@ -363,33 +371,32 @@ export const previewNotesLedger = createServerFn({ method: "POST" })
       let chosen: MatchClient | null = null;
       let reason = "";
       let rule = "";
-      // Priority:
-      // 1. Exactly one exact normalized-name match → auto-pick (even if other
-      //    family members share the same phone number).
-      // 2. Multiple candidates with the same normalized name → Review.
-      // 3. No exact name match → fall back to Square-linked / single-candidate
-      //    heuristics, otherwise Review.
+      // Priority (archived clients excluded from active matching):
+      // 1. Exactly one active exact normalized-name match → auto-pick.
+      // 2. Multiple active candidates with the same normalized name → Review.
+      // 3. No exact name match → fall back to Square-linked / single active
+      //    phone candidate, otherwise Review.
       if (nameHits.length === 1) {
         chosen = nameHits[0];
         rule = nameHits[0].square_customer_id
-          ? "exactly one exact name match (Square-linked)"
-          : "exactly one exact name match";
+          ? "exactly one active exact name match (Square-linked)"
+          : "exactly one active exact name match";
       } else if (nameHits.length > 1) {
-        reason = `Multiple candidates with same normalized name (${nameHits.length}).`;
+        reason = `Multiple active candidates with same normalized name (${nameHits.length}).`;
         rule = "nameHits.length > 1 → cannot auto-pick";
         summary.multiple_name_matches++;
       } else if (squareLinked.length === 1) {
         chosen = squareLinked[0];
-        rule = "no name match; exactly one Square-linked phone candidate";
+        rule = "no name match; exactly one active Square-linked phone candidate";
       } else if (squareLinked.length > 1) {
-        reason = `No candidate matches parsed name; multiple Square-linked candidates share phone (${squareLinked.length}).`;
+        reason = `No candidate matches parsed name; multiple active Square-linked candidates share phone (${squareLinked.length}).`;
         rule = "no name match; squareLinked.length > 1 via phone";
         summary.multiple_square_linked++;
       } else if (combined.length === 1) {
         chosen = combined[0];
-        rule = "no name match; exactly one candidate via phone, not Square-linked";
+        rule = "no name match; exactly one active candidate via phone, not Square-linked";
       } else if (combined.length > 1) {
-        reason = `No candidate matches parsed name; multiple phone candidates (${combined.length}).`;
+        reason = `No candidate matches parsed name; multiple active phone candidates (${combined.length}).`;
         rule = "no name match; multiple phone candidates";
         if (phoneHits.length > 1) summary.multiple_phone_matches++;
         else summary.ambiguous_no_square_winner++;
@@ -400,15 +407,11 @@ export const previewNotesLedger = createServerFn({ method: "POST" })
       }
 
       if (!chosen) {
-        reviews.push({
-          ...row,
-          candidates: combined,
-          reason,
-          categories: classifyReview(row, reason, squareLinked.length, combined.length, false),
-        });
+        pushReview(reason, false);
         diagnostics.push({ ...diagBase, outcome: "review", rule, reason });
         continue;
       }
+
 
       const changes = buildChanges(row, chosen);
       const anyChange =

@@ -168,10 +168,79 @@ function NotesLedgerPage() {
           </div>
 
           {applied && (
-            <Card className="mb-6 border-emerald-200 bg-emerald-50">
-              <CardContent className="pt-6 text-sm">
-                Applied: <strong>{applied.updated}</strong> · Errors:{" "}
-                <strong>{applied.errors}</strong>
+            <Card className={`mb-6 ${applied.errors ? "border-rose-200 bg-rose-50" : "border-emerald-200 bg-emerald-50"}`}>
+              <CardHeader>
+                <CardTitle className="text-base">
+                  Apply Results — {applied.updated} success · {applied.errors} error
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2 text-sm">
+                <p className="text-xs text-slate-600">
+                  Successful rows have been auto-unchecked above. Failed rows remain checked so you can retry only them by clicking Apply again.
+                </p>
+                <div className="max-h-[500px] overflow-auto rounded border bg-white">
+                  <table className="w-full text-xs">
+                    <thead className="sticky top-0 bg-slate-100 text-left">
+                      <tr>
+                        <th className="p-2">Line</th>
+                        <th className="p-2">Parsed name</th>
+                        <th className="p-2">Matched client</th>
+                        <th className="p-2">Client ID</th>
+                        <th className="p-2">Status</th>
+                        <th className="p-2">Step</th>
+                        <th className="p-2">Error / Fields written</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {applyRows.map((r, i) => (
+                        <tr
+                          key={r.client_id + i}
+                          className={`border-t align-top ${r.status === "error" ? "bg-rose-50" : ""}`}
+                        >
+                          <td className="p-2">{r.line_number ?? "—"}</td>
+                          <td className="p-2">{r.parsed_name ?? "—"}</td>
+                          <td className="p-2 font-medium">{r.client_name}</td>
+                          <td className="p-2 font-mono text-[10px] text-slate-500">{r.client_id}</td>
+                          <td className="p-2">
+                            {r.status === "success" ? (
+                              <Badge variant="secondary" className="bg-emerald-100 text-emerald-800">success</Badge>
+                            ) : (
+                              <Badge variant="secondary" className="bg-rose-100 text-rose-800">error</Badge>
+                            )}
+                          </td>
+                          <td className="p-2">{r.step}</td>
+                          <td className="p-2">
+                            {r.error ? (
+                              <div className="text-rose-700">
+                                <div className="font-semibold">Failed on: {r.step}</div>
+                                <div className="whitespace-pre-wrap">{r.error}</div>
+                                <details className="mt-1">
+                                  <summary className="cursor-pointer text-slate-600">Fields being written</summary>
+                                  <pre className="mt-1 whitespace-pre-wrap text-[10px]">{JSON.stringify(r.fields, null, 2)}</pre>
+                                </details>
+                              </div>
+                            ) : (
+                              <details>
+                                <summary className="cursor-pointer text-slate-600">Fields written</summary>
+                                <pre className="mt-1 whitespace-pre-wrap text-[10px]">{JSON.stringify(r.fields, null, 2)}</pre>
+                              </details>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    navigator.clipboard.writeText(JSON.stringify(applyRows, null, 2));
+                    toast.success("Apply results JSON copied");
+                  }}
+                >
+                  Copy JSON
+                </Button>
               </CardContent>
             </Card>
           )}
@@ -184,19 +253,23 @@ function NotesLedgerPage() {
               {preview.auto_updates.length === 0 && (
                 <p className="text-sm text-slate-500">None.</p>
               )}
-              {preview.auto_updates.map((r) => (
-                <AutoUpdateCard
-                  key={r.client.id + r.parsed.line_number}
-                  row={r}
-                  excluded={excluded.has(r.client.id)}
-                  onToggle={() => {
-                    const next = new Set(excluded);
-                    if (next.has(r.client.id)) next.delete(r.client.id);
-                    else next.add(r.client.id);
-                    setExcluded(next);
-                  }}
-                />
-              ))}
+              {preview.auto_updates.map((r) => {
+                const result = applyRows.find((x) => x.client_id === r.client.id);
+                return (
+                  <AutoUpdateCard
+                    key={r.client.id + r.parsed.line_number}
+                    row={r}
+                    excluded={excluded.has(r.client.id)}
+                    result={result}
+                    onToggle={() => {
+                      const next = new Set(excluded);
+                      if (next.has(r.client.id)) next.delete(r.client.id);
+                      else next.add(r.client.id);
+                      setExcluded(next);
+                    }}
+                  />
+                );
+              })}
             </CardContent>
           </Card>
 

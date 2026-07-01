@@ -17,7 +17,7 @@ export type MergePairConfidence =
 
 export type MergePair = {
   review_id: string | null;
-  status: "pending" | "merged" | "ignored" | "blocked";
+  status: "pending" | "merged" | "ignored" | "blocked" | "shared_phone";
   confidence: MergePairConfidence;
   recommended_keep_id: string | null;
   balance_conflict: boolean;

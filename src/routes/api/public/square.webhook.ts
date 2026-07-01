@@ -551,21 +551,25 @@ async function handlePaymentEvent(supabaseAdmin: any, eventType: string, event: 
     event_type: eventType,
     square_customer_id: squareCustomerId,
     client_id: clientId,
-    status: applied ? "success" : "skipped",
+    status: applied ? "success" : applyErr ? "error" : "skipped",
     action: applied
       ? alreadyApplied
         ? "reconciled_already_credited"
         : `applied_payment_${method ?? "unknown"}`
-      : clientId
-        ? `recorded_status_${status.toLowerCase() || "unknown"}`
-        : "needs_review_no_match",
+      : applyErr
+        ? "apply_blocked"
+        : clientId
+          ? `recorded_status_${status.toLowerCase() || "unknown"}`
+          : "needs_review_no_match",
     message: applied
       ? alreadyApplied
         ? `Payment ${squarePaymentId} (${amountDisplay}) already credited — flags set applied=true`
         : `Applied ${amountDisplay} to client via ${method}`
-      : clientId
-        ? `Recorded payment ${squarePaymentId} (${amountDisplay}, status=${status}) — not applied`
-        : `No client match for payment ${squarePaymentId} (${amountDisplay}) — flagged for review`,
+      : applyErr
+        ? `COMPLETED payment ${squarePaymentId} (${amountDisplay}) matched to client but credit was blocked: ${formatErr(applyErr)}`
+        : clientId
+          ? `Recorded payment ${squarePaymentId} (${amountDisplay}, status=${status}) — matched, waiting for COMPLETED`
+          : `No client match for payment ${squarePaymentId} (${amountDisplay}) — flagged for review`,
     raw_event: event as unknown as never,
   });
 }

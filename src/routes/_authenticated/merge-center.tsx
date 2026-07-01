@@ -467,11 +467,12 @@ function PairCard({
               </Button>
             </>
           )}
-          {(pair.status === "ignored" || pair.status === "merged" || pair.status === "blocked") && (
+          {(pair.status === "ignored" || pair.status === "merged") && (
             <Button variant="outline" disabled={busy} onClick={onReset}>
               Reopen review
             </Button>
           )}
+
         </div>
       </CardContent>
     </Card>

@@ -170,14 +170,57 @@ function NotesLedgerPage() {
       return { res, lineNumber: row.line_number };
     },
     onSuccess: ({ res, lineNumber }) => {
-      const failed = res.rows.find((r) => r.status === "error");
-      if (failed) {
-        toast.error(`Apply failed: ${failed.error ?? "Unknown error"}`);
-      } else {
-        toast.success("Row applied");
-        setResolvedReviews((prev) => new Set(prev).add(lineNumber));
+      const row = res.rows[0];
+      if (!row || row.status === "error") {
+        toast.error(`Apply failed: ${row?.error ?? "Unknown error"}`);
+        return;
       }
+      const before = row.before ?? {
+        package_price: 0,
+        package_total_visits: 0,
+        package_start_date: null,
+        amount_paid: 0,
+        internal_notes: null,
+      };
+      const after = {
+        package_price: row.fields.package_price,
+        package_total_visits: row.fields.package_total_visits,
+        package_start_date: row.fields.package_start_date,
+        amount_paid: row.fields.amount_paid,
+        internal_notes: row.fields.internal_notes_after,
+      };
+      const appended = row.fields.appended_note;
+      const noteStatus: RecentlyApplied["note_status"] = appended
+        ? "append"
+        : before.internal_notes && before.internal_notes.length > 0
+          ? "already_exists"
+          : "no_note";
+      setRecentlyApplied((prev) => [
+        {
+          id: `${lineNumber}-${Date.now()}`,
+          line_number: lineNumber,
+          client_id: row.client_id,
+          client_name: row.client_name,
+          applied_at: Date.now(),
+          before,
+          after,
+          appended_note: appended,
+          note_status: noteStatus,
+          undone: false,
+        },
+        ...prev,
+      ]);
+      setNow(Date.now());
+      // Immediately remove from Needs Review and clear selection.
+      setResolvedReviews((prev) => new Set(prev).add(lineNumber));
+      setReviewSelection((prev) => {
+        const next = new Map(prev);
+        next.delete(lineNumber);
+        return next;
+      });
+      toast.success(`Applied to ${row.client_name}`);
     },
+
     onError: (e: Error) => toast.error(e.message),
   });
 

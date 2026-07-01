@@ -249,6 +249,21 @@ export const previewNotesLedger = createServerFn({ method: "POST" })
         continue;
       }
 
+      if (duplicateParsed) {
+        const dupReason = "Multiple ledger entries for same client — manual package selection required.";
+        reviews.push({ ...row, candidates: combined, reason: dupReason });
+        diagnostics.push({
+          ...diagBase,
+          outcome: "review",
+          rule: "duplicate parsed_name in ledger → force manual selection",
+          reason: dupReason,
+        });
+        summary.parser_needs_review++;
+        continue;
+      }
+
+
+
       let chosen: MatchClient | null = null;
       let reason = "";
       let rule = "";

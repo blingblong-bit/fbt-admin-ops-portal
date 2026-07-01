@@ -268,7 +268,7 @@ function ClientCol({
       <div className="mb-2 flex items-center justify-between gap-2">
         <div>
           <div className="text-xs uppercase tracking-wide text-slate-500">
-            {side === "left" ? "Legacy Notes candidate" : "Square-linked candidate"}
+            {label}
           </div>
           <Link
             to="/clients/$id"

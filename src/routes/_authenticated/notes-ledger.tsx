@@ -12,6 +12,7 @@ import { formatCurrency, formatDate, fullName } from "@/lib/clients";
 import {
   previewNotesLedger,
   applyNotesLedger,
+  noteAlreadyExists,
   REVIEW_CATEGORY_LABELS,
   type PreviewResult,
   type AutoUpdateRow,

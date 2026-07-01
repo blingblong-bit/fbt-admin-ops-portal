@@ -929,3 +929,114 @@ function ReviewCard({
     </div>
   );
 }
+
+function RecentlyAppliedCard({
+  entry,
+  now,
+  ttlMs,
+  onUndo,
+  undoing,
+}: {
+  entry: RecentlyApplied;
+  now: number;
+  ttlMs: number;
+  onUndo: () => void;
+  undoing: boolean;
+}) {
+  const secondsLeft = Math.max(0, Math.ceil((ttlMs - (now - entry.applied_at)) / 1000));
+  const { before, after } = entry;
+  const changes: { label: string; before: string; after: string; changed: boolean }[] = [
+    {
+      label: "Package price",
+      before: formatCurrency(before.package_price),
+      after: formatCurrency(after.package_price),
+      changed: before.package_price !== after.package_price,
+    },
+    {
+      label: "Visits",
+      before: String(before.package_total_visits),
+      after: String(after.package_total_visits),
+      changed: before.package_total_visits !== after.package_total_visits,
+    },
+    {
+      label: "Start date",
+      before: formatDate(before.package_start_date),
+      after: formatDate(after.package_start_date),
+      changed: (before.package_start_date ?? null) !== (after.package_start_date ?? null),
+    },
+    {
+      label: "Amount paid",
+      before: formatCurrency(before.amount_paid),
+      after: formatCurrency(after.amount_paid),
+      changed: before.amount_paid !== after.amount_paid,
+    },
+  ];
+  const noteLine =
+    entry.note_status === "append" && entry.appended_note
+      ? `Appended — ${entry.appended_note}`
+      : entry.note_status === "already_exists"
+        ? "Note already exists — no append needed"
+        : "No new notes";
+  return (
+    <div
+      className={`rounded border p-3 text-sm ${
+        entry.undone ? "border-slate-200 bg-slate-50 opacity-70" : "border-emerald-300 bg-white"
+      }`}
+    >
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-emerald-700">✓</span>
+          <span className="font-semibold">
+            {entry.undone ? "Reverted — " : "Applied to "}
+            {entry.client_name}
+          </span>
+          <Badge variant="outline" className="text-xs">
+            Line {entry.line_number}
+          </Badge>
+        </div>
+        {!entry.undone && (
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-slate-500">Undo in {secondsLeft}s</span>
+            <Button size="sm" variant="outline" onClick={onUndo} disabled={undoing}>
+              {undoing ? "Undoing…" : "Undo"}
+            </Button>
+          </div>
+        )}
+      </div>
+      <div className="text-xs text-slate-600">Changes made:</div>
+      <ul className="mt-1 space-y-0.5 text-xs">
+        {changes.map((c) => (
+          <li key={c.label}>
+            •{" "}
+            {c.changed ? (
+              <>
+                <span className="font-medium">{c.label}:</span>{" "}
+                <span className="text-slate-500 line-through">{c.before}</span>{" "}
+                <span className="font-semibold text-emerald-700">→ {c.after}</span>
+              </>
+            ) : (
+              <>
+                <span className="font-medium">{c.label}:</span>{" "}
+                <span className="text-slate-500">No change</span>
+              </>
+            )}
+          </li>
+        ))}
+        <li>
+          • <span className="font-medium">Notes:</span>{" "}
+          <span
+            className={
+              entry.note_status === "append" ? "text-emerald-700" : "text-slate-500"
+            }
+          >
+            {noteLine}
+          </span>
+        </li>
+        <li>
+          • <span className="text-slate-500">Ledger row marked as imported/resolved</span>
+        </li>
+      </ul>
+    </div>
+  );
+}
+

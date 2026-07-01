@@ -160,6 +160,24 @@ async function loadAllClients(
   return out;
 }
 
+function normalizeNoteForCompare(s: string): string {
+  return s
+    .toLowerCase()
+    .normalize("NFKC")
+    .replace(/[\p{P}\p{S}]+/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export function noteAlreadyExists(existing: string | null | undefined, incoming: string | null | undefined): boolean {
+  if (!incoming) return false;
+  const inc = normalizeNoteForCompare(incoming);
+  if (!inc) return false;
+  const ex = normalizeNoteForCompare(existing ?? "");
+  if (!ex) return false;
+  return ex.includes(inc);
+}
+
 function buildChanges(parsed: ParsedRow, client: MatchClient): AutoUpdateRow["changes"] {
   const newPrice = parsed.package_price ?? Number(client.package_price ?? 0);
   const newVisits = parsed.package_total_visits ?? Number(client.package_total_visits ?? 0);
@@ -171,14 +189,20 @@ function buildChanges(parsed: ParsedRow, client: MatchClient): AutoUpdateRow["ch
   const newOwed = Math.max(0, newPrice - newPaid);
   const currentOwed = Math.max(0, Number(client.package_price ?? 0) - Number(client.amount_paid ?? 0));
 
-  let appendedNote: string | null = null;
   const currentNotes = client.internal_notes ?? "";
-  if (parsed.internal_notes && !currentNotes.includes(parsed.internal_notes)) {
-    appendedNote = parsed.internal_notes;
+  let appendedNote: string | null = null;
+  let noteStatus: NoteStatus = "no_note";
+  if (parsed.internal_notes && parsed.internal_notes.trim()) {
+    if (noteAlreadyExists(currentNotes, parsed.internal_notes)) {
+      noteStatus = "already_exists";
+    } else {
+      appendedNote = parsed.internal_notes;
+      noteStatus = "append";
+    }
   }
   const newNotes = appendedNote
     ? (currentNotes ? `${currentNotes}\n${appendedNote}` : appendedNote)
-    : currentNotes || null;
+    : (currentNotes || null);
 
   return {
     package_price: {
@@ -211,8 +235,17 @@ function buildChanges(parsed: ParsedRow, client: MatchClient): AutoUpdateRow["ch
       after: newNotes,
       changed: appendedNote !== null,
       appended: appendedNote,
+      note_status: noteStatus,
     },
   };
+}
+
+function computeRowNoteStatus(parsed: ParsedRow, candidates: MatchClient[]): NoteStatus {
+  if (!parsed.internal_notes || !parsed.internal_notes.trim()) return "no_note";
+  if (candidates.length > 0 && candidates.every((c) => noteAlreadyExists(c.internal_notes, parsed.internal_notes))) {
+    return "already_exists";
+  }
+  return "append";
 }
 
 export const previewNotesLedger = createServerFn({ method: "POST" })

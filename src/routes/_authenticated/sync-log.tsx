@@ -268,6 +268,7 @@ function SyncLogPage() {
                     <TableHead>When</TableHead>
                     <TableHead>Amount</TableHead>
                     <TableHead>Status</TableHead>
+                    <TableHead>Client</TableHead>
                     <TableHead>Square Payment ID</TableHead>
                     <TableHead>Square Customer ID</TableHead>
                     <TableHead>Buyer Email</TableHead>
@@ -276,34 +277,135 @@ function SyncLogPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {(review.data ?? []).map((p) => (
-                    <TableRow key={p.id}>
-                      <TableCell className="whitespace-nowrap text-xs text-slate-600">
-                        {formatDateTimeLocal(p.created_at)}
-                      </TableCell>
-                      <TableCell className="text-sm font-medium">
-                        {formatCurrency(p.amount_cents / 100)}
-                      </TableCell>
-                      <TableCell className="text-xs">{p.status ?? "—"}</TableCell>
-                      <TableCell className="font-mono text-xs text-slate-600">
-                        {p.square_payment_id}
-                      </TableCell>
-                      <TableCell className="font-mono text-xs text-slate-600">
-                        {p.square_customer_id ?? "—"}
-                      </TableCell>
-                      <TableCell className="text-xs text-slate-600">
-                        {p.buyer_email ?? "—"}
-                      </TableCell>
-                      <TableCell className="text-xs text-slate-600">{p.note ?? "—"}</TableCell>
-                      <TableCell className="text-right">
-                        {!p.square_customer_id ? (
-                          <ResolvePaymentDialog payment={p} />
-                        ) : (
-                          <span className="text-xs text-slate-400">—</span>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  {(review.data ?? []).map((p) => {
+                    const clientName = p.clients
+                      ? `${p.clients.first_name} ${p.clients.last_name}`.trim()
+                      : null;
+                    const matchedButBlocked =
+                      p.client_id && !p.applied && (p.status ?? "").toUpperCase() === "COMPLETED";
+                    return (
+                      <TableRow key={p.id}>
+                        <TableCell className="whitespace-nowrap text-xs text-slate-600">
+                          {formatDateTimeLocal(p.created_at)}
+                        </TableCell>
+                        <TableCell className="text-sm font-medium">
+                          {formatCurrency(p.amount_cents / 100)}
+                        </TableCell>
+                        <TableCell className="text-xs">
+                          {p.status ?? "—"}
+                          {matchedButBlocked ? (
+                            <div className="mt-0.5 text-[11px] font-medium text-amber-700">
+                              Matched but not applied — credit blocked (check package price / balance)
+                            </div>
+                          ) : null}
+                        </TableCell>
+                        <TableCell className="text-sm">
+                          {p.client_id ? (
+                            <Link
+                              to="/clients/$id"
+                              params={{ id: p.client_id }}
+                              className="text-slate-900 underline-offset-2 hover:underline"
+                            >
+                              {clientName || "View client"}
+                            </Link>
+                          ) : (
+                            <span className="text-slate-400">—</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="font-mono text-xs text-slate-600">
+                          {p.square_payment_id}
+                        </TableCell>
+                        <TableCell className="font-mono text-xs text-slate-600">
+                          {p.square_customer_id ?? "—"}
+                        </TableCell>
+                        <TableCell className="text-xs text-slate-600">
+                          {p.buyer_email ?? "—"}
+                        </TableCell>
+                        <TableCell className="text-xs text-slate-600">{p.note ?? "—"}</TableCell>
+                        <TableCell className="text-right">
+                          {!p.square_customer_id ? (
+                            <ResolvePaymentDialog payment={p} />
+                          ) : (
+                            <span className="text-xs text-slate-400">—</span>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Pending / Approved Payments</CardTitle>
+            <CardDescription>
+              Matched to a client but not yet credited — waiting for the COMPLETED payment update
+              from Square. These do not require action.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {pending.isLoading ? (
+              <div className="text-sm text-slate-500">Loading…</div>
+            ) : pending.error ? (
+              <div className="rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+                Failed to load: {(pending.error as Error).message}
+              </div>
+            ) : (pending.data ?? []).length === 0 ? (
+              <div className="rounded-md border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500">
+                No pending payments.
+              </div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>When</TableHead>
+                    <TableHead>Amount</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Client</TableHead>
+                    <TableHead>Square Payment ID</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {(pending.data ?? []).map((p) => {
+                    const clientName = p.clients
+                      ? `${p.clients.first_name} ${p.clients.last_name}`.trim()
+                      : null;
+                    return (
+                      <TableRow key={p.id}>
+                        <TableCell className="whitespace-nowrap text-xs text-slate-600">
+                          {formatDateTimeLocal(p.created_at)}
+                        </TableCell>
+                        <TableCell className="text-sm font-medium">
+                          {formatCurrency(p.amount_cents / 100)}
+                        </TableCell>
+                        <TableCell className="text-xs">
+                          {p.status ?? "—"}
+                          <div className="mt-0.5 text-[11px] text-slate-500">
+                            Waiting for completed payment update
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-sm">
+                          {p.client_id ? (
+                            <Link
+                              to="/clients/$id"
+                              params={{ id: p.client_id }}
+                              className="text-slate-900 underline-offset-2 hover:underline"
+                            >
+                              {clientName || "View client"}
+                            </Link>
+                          ) : (
+                            <span className="text-slate-400">—</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="font-mono text-xs text-slate-600">
+                          {p.square_payment_id}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             )}

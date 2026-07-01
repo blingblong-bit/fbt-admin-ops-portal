@@ -246,6 +246,97 @@ async function handleCustomerEvent(supabaseAdmin: any, eventType: string, event:
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function matchClient(
+  supabaseAdmin: any,
+  {
+    existingClientId,
+    squareCustomerId,
+    buyerEmail,
+  }: { existingClientId: string | null; squareCustomerId: string | null; buyerEmail: string | null },
+): Promise<{ clientId: string | null; method: string | null }> {
+  if (existingClientId) return { clientId: existingClientId, method: "existing_client_id" };
+
+  if (squareCustomerId) {
+    const { data } = await supabaseAdmin
+      .from("clients")
+      .select("id")
+      .eq("square_customer_id", squareCustomerId)
+      .is("deleted_at", null)
+      .maybeSingle();
+    if (data) return { clientId: data.id, method: "square_customer_id" };
+  }
+
+  if (buyerEmail) {
+    const { data } = await supabaseAdmin
+      .from("clients")
+      .select("id")
+      .ilike("email", buyerEmail)
+      .is("deleted_at", null);
+    if (data && data.length === 1) return { clientId: data[0].id, method: "email" };
+  }
+
+  return { clientId: null, method: null };
+}
+
+// Applies a payment to a client's balance exactly once. Guards against double-application
+// by checking client_activities for the same square_payment_id.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function applyPaymentOnce(
+  supabaseAdmin: any,
+  {
+    clientId,
+    squarePaymentId,
+    amountCents,
+    matchMethod,
+  }: { clientId: string; squarePaymentId: string; amountCents: number; matchMethod: string | null },
+): Promise<{ credited: boolean; appliedAmount: number; alreadyApplied: boolean }> {
+  // Guard 1: activity already logged for this payment id
+  const { data: existingActivity } = await supabaseAdmin
+    .from("client_activities")
+    .select("id")
+    .eq("client_id", clientId)
+    .contains("metadata", { square_payment_id: squarePaymentId } as unknown as never)
+    .limit(1);
+  if (existingActivity && existingActivity.length > 0) {
+    return { credited: false, appliedAmount: 0, alreadyApplied: true };
+  }
+
+  const { data: client, error: clientErr } = await supabaseAdmin
+    .from("clients")
+    .select("amount_paid, package_price")
+    .eq("id", clientId)
+    .single();
+  if (clientErr) throw clientErr;
+
+  const amountDollars = amountCents / 100;
+  const currentPaid = Number(client.amount_paid ?? 0);
+  const price = Number(client.package_price ?? 0);
+  const newPaid = price > 0 ? Math.min(price, currentPaid + amountDollars) : currentPaid + amountDollars;
+  const appliedAmount = Math.max(0, newPaid - currentPaid);
+
+  const { error: updErr } = await supabaseAdmin
+    .from("clients")
+    .update({ amount_paid: newPaid })
+    .eq("id", clientId);
+  if (updErr) throw updErr;
+
+  await supabaseAdmin.from("client_activities").insert({
+    client_id: clientId,
+    activity_type: "payment",
+    description: `Square payment synced — $${amountDollars.toFixed(2)}`,
+    metadata: {
+      source: "square",
+      square_payment_id: squarePaymentId,
+      amount: amountDollars,
+      applied_amount: appliedAmount,
+      match_method: matchMethod,
+    } as unknown as never,
+  });
+
+  return { credited: true, appliedAmount, alreadyApplied: false };
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function handlePaymentEvent(supabaseAdmin: any, eventType: string, event: SquareEvent) {
   const payment = event.data?.object?.payment;
   const squarePaymentId = payment?.id ?? event.data?.id ?? null;
@@ -267,8 +358,9 @@ async function handlePaymentEvent(supabaseAdmin: any, eventType: string, event: 
   const squareCustomerId = payment?.customer_id ?? null;
   const buyerEmail = payment?.buyer_email_address ?? null;
   const note = payment?.note ?? null;
+  const isCompleted = status === "COMPLETED";
+  const amountDisplay = `$${(amountCents / 100).toFixed(2)}`;
 
-  // Check if we've already recorded this payment
   const { data: existingPayment, error: existingErr } = await supabaseAdmin
     .from("square_payments")
     .select("id, applied, client_id")
@@ -276,101 +368,127 @@ async function handlePaymentEvent(supabaseAdmin: any, eventType: string, event: 
     .maybeSingle();
   if (existingErr) throw existingErr;
 
-  // Only completed payments are applied to balances
-  const isCompleted = status === "COMPLETED";
-
+  // ============ Existing payment row ============
   if (existingPayment) {
-    // Update status; never re-apply
+    // Already applied → nothing to do beyond status refresh
+    if (existingPayment.applied) {
+      await supabaseAdmin
+        .from("square_payments")
+        .update({ status, raw_event: event as unknown as never })
+        .eq("id", existingPayment.id);
+      await supabaseAdmin.from("square_sync_log").insert({
+        event_type: eventType,
+        square_customer_id: squareCustomerId,
+        client_id: existingPayment.client_id,
+        status: "skipped",
+        action: "already_applied",
+        message: `Payment ${squarePaymentId} already applied — status refreshed to ${status}`,
+        raw_event: event as unknown as never,
+      });
+      return;
+    }
+
+    // Not yet applied — only proceed when COMPLETED and amount > 0
+    if (!isCompleted || amountCents <= 0) {
+      await supabaseAdmin
+        .from("square_payments")
+        .update({ status, raw_event: event as unknown as never })
+        .eq("id", existingPayment.id);
+      await supabaseAdmin.from("square_sync_log").insert({
+        event_type: eventType,
+        square_customer_id: squareCustomerId,
+        client_id: existingPayment.client_id,
+        status: "skipped",
+        action: `recorded_status_${status.toLowerCase() || "unknown"}`,
+        message: `Payment ${squarePaymentId} status=${status} — not applied (waiting for COMPLETED)`,
+        raw_event: event as unknown as never,
+      });
+      return;
+    }
+
+    // Re-run match, preferring existing client_id
+    const { clientId, method } = await matchClient(supabaseAdmin, {
+      existingClientId: existingPayment.client_id,
+      squareCustomerId,
+      buyerEmail,
+    });
+
+    if (!clientId) {
+      await supabaseAdmin
+        .from("square_payments")
+        .update({ status, needs_review: true, raw_event: event as unknown as never })
+        .eq("id", existingPayment.id);
+      await supabaseAdmin.from("square_sync_log").insert({
+        event_type: eventType,
+        square_customer_id: squareCustomerId,
+        status: "skipped",
+        action: "needs_review_no_match",
+        message: `Payment ${squarePaymentId} (${amountDisplay}) COMPLETED but no client match — needs review`,
+        raw_event: event as unknown as never,
+      });
+      return;
+    }
+
+    const result = await applyPaymentOnce(supabaseAdmin, {
+      clientId,
+      squarePaymentId,
+      amountCents,
+      matchMethod: method,
+    });
+
     await supabaseAdmin
       .from("square_payments")
-      .update({ status, raw_event: event as unknown as never })
+      .update({
+        status,
+        client_id: clientId,
+        applied: true,
+        needs_review: false,
+        raw_event: event as unknown as never,
+      })
       .eq("id", existingPayment.id);
 
     await supabaseAdmin.from("square_sync_log").insert({
       event_type: eventType,
       square_customer_id: squareCustomerId,
-      client_id: existingPayment.client_id,
-      status: "skipped",
-      action: "already_processed",
-      message: `Payment ${squarePaymentId} already processed (applied=${existingPayment.applied}, status=${status})`,
+      client_id: clientId,
+      status: "success",
+      action: result.alreadyApplied
+        ? "reconciled_already_credited"
+        : `applied_payment_${method ?? "unknown"}`,
+      message: result.alreadyApplied
+        ? `Payment ${squarePaymentId} activity already existed on client — reconciled flags (applied=true, needs_review=false)`
+        : `Applied ${amountDisplay} to client via ${method} (promoted from APPROVED→COMPLETED)`,
       raw_event: event as unknown as never,
     });
     return;
   }
 
-  // Attempt to match a client
-  let matchedClientId: string | null = null;
-  let matchMethod: string | null = null;
+  // ============ New payment row ============
+  const { clientId, method } = await matchClient(supabaseAdmin, {
+    existingClientId: null,
+    squareCustomerId,
+    buyerEmail,
+  });
 
-  if (squareCustomerId) {
-    const { data: byCustomer } = await supabaseAdmin
-      .from("clients")
-      .select("id")
-      .eq("square_customer_id", squareCustomerId)
-      .is("deleted_at", null)
-      .maybeSingle();
-    if (byCustomer) {
-      matchedClientId = byCustomer.id;
-      matchMethod = "square_customer_id";
-    }
-  }
-
-  if (!matchedClientId && buyerEmail) {
-    const { data: byEmail } = await supabaseAdmin
-      .from("clients")
-      .select("id")
-      .ilike("email", buyerEmail)
-      .is("deleted_at", null);
-    if (byEmail && byEmail.length === 1) {
-      matchedClientId = byEmail[0].id;
-      matchMethod = "email";
-    }
-  }
-
-  const needsReview = !matchedClientId || !isCompleted;
   let applied = false;
-  let appliedAmount = 0;
-
-  if (matchedClientId && isCompleted && amountCents > 0) {
-    // Apply payment: amount_paid += amount, capped at package_price
-    const { data: client, error: clientErr } = await supabaseAdmin
-      .from("clients")
-      .select("amount_paid, package_price")
-      .eq("id", matchedClientId)
-      .single();
-    if (clientErr) throw clientErr;
-
-    const amountDollars = amountCents / 100;
-    const currentPaid = Number(client.amount_paid ?? 0);
-    const price = Number(client.package_price ?? 0);
-    const newPaid = price > 0 ? Math.min(price, currentPaid + amountDollars) : currentPaid + amountDollars;
-    appliedAmount = Math.max(0, newPaid - currentPaid);
-
-    const { error: updErr } = await supabaseAdmin
-      .from("clients")
-      .update({ amount_paid: newPaid })
-      .eq("id", matchedClientId);
-    if (updErr) throw updErr;
-
-    await supabaseAdmin.from("client_activities").insert({
-      client_id: matchedClientId,
-      activity_type: "payment",
-      description: `Square payment synced — $${amountDollars.toFixed(2)}`,
-      metadata: {
-        source: "square",
-        square_payment_id: squarePaymentId,
-        amount: amountDollars,
-        applied_amount: appliedAmount,
-        match_method: matchMethod,
-      } as unknown as never,
+  let alreadyApplied = false;
+  if (clientId && isCompleted && amountCents > 0) {
+    const result = await applyPaymentOnce(supabaseAdmin, {
+      clientId,
+      squarePaymentId,
+      amountCents,
+      matchMethod: method,
     });
     applied = true;
+    alreadyApplied = result.alreadyApplied;
   }
+
+  const needsReview = !clientId || !isCompleted ? !applied : false;
 
   await supabaseAdmin.from("square_payments").insert({
     square_payment_id: squarePaymentId,
     square_customer_id: squareCustomerId,
-    client_id: matchedClientId,
+    client_id: clientId,
     amount_cents: amountCents,
     currency,
     status,
@@ -381,25 +499,29 @@ async function handlePaymentEvent(supabaseAdmin: any, eventType: string, event: 
     raw_event: event as unknown as never,
   });
 
-  const amountDisplay = `$${(amountCents / 100).toFixed(2)}`;
   await supabaseAdmin.from("square_sync_log").insert({
     event_type: eventType,
     square_customer_id: squareCustomerId,
-    client_id: matchedClientId,
-    status: applied ? "success" : needsReview ? "skipped" : "skipped",
+    client_id: clientId,
+    status: applied ? "success" : "skipped",
     action: applied
-      ? `applied_payment_${matchMethod ?? "unknown"}`
-      : matchedClientId
+      ? alreadyApplied
+        ? "reconciled_already_credited"
+        : `applied_payment_${method ?? "unknown"}`
+      : clientId
         ? `recorded_status_${status.toLowerCase() || "unknown"}`
         : "needs_review_no_match",
     message: applied
-      ? `Applied ${amountDisplay} to client via ${matchMethod}`
-      : matchedClientId
+      ? alreadyApplied
+        ? `Payment ${squarePaymentId} (${amountDisplay}) already credited — flags set applied=true`
+        : `Applied ${amountDisplay} to client via ${method}`
+      : clientId
         ? `Recorded payment ${squarePaymentId} (${amountDisplay}, status=${status}) — not applied`
         : `No client match for payment ${squarePaymentId} (${amountDisplay}) — flagged for review`,
     raw_event: event as unknown as never,
   });
 }
+
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function handleBookingEvent(supabaseAdmin: any, eventType: string, event: SquareEvent) {

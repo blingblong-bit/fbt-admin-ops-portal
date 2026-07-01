@@ -15,6 +15,7 @@ import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/
 import { Route as AuthenticatedSyncLogRouteImport } from './routes/_authenticated/sync-log'
 import { Route as AuthenticatedSquareDiagnosticRouteImport } from './routes/_authenticated/square-diagnostic'
 import { Route as AuthenticatedScheduleCheckRouteImport } from './routes/_authenticated/schedule-check'
+import { Route as AuthenticatedNotesLedgerRouteImport } from './routes/_authenticated/notes-ledger'
 import { Route as AuthenticatedMergeCenterRouteImport } from './routes/_authenticated/merge-center'
 import { Route as AuthenticatedImportRouteImport } from './routes/_authenticated/import'
 import { Route as AuthenticatedBackupRouteImport } from './routes/_authenticated/backup'
@@ -54,6 +55,12 @@ const AuthenticatedScheduleCheckRoute =
   AuthenticatedScheduleCheckRouteImport.update({
     id: '/schedule-check',
     path: '/schedule-check',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedNotesLedgerRoute =
+  AuthenticatedNotesLedgerRouteImport.update({
+    id: '/notes-ledger',
+    path: '/notes-ledger',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
 const AuthenticatedMergeCenterRoute =
@@ -111,6 +118,7 @@ export interface FileRoutesByFullPath {
   '/backup': typeof AuthenticatedBackupRoute
   '/import': typeof AuthenticatedImportRoute
   '/merge-center': typeof AuthenticatedMergeCenterRoute
+  '/notes-ledger': typeof AuthenticatedNotesLedgerRoute
   '/schedule-check': typeof AuthenticatedScheduleCheckRoute
   '/square-diagnostic': typeof AuthenticatedSquareDiagnosticRoute
   '/sync-log': typeof AuthenticatedSyncLogRoute
@@ -126,6 +134,7 @@ export interface FileRoutesByTo {
   '/backup': typeof AuthenticatedBackupRoute
   '/import': typeof AuthenticatedImportRoute
   '/merge-center': typeof AuthenticatedMergeCenterRoute
+  '/notes-ledger': typeof AuthenticatedNotesLedgerRoute
   '/schedule-check': typeof AuthenticatedScheduleCheckRoute
   '/square-diagnostic': typeof AuthenticatedSquareDiagnosticRoute
   '/sync-log': typeof AuthenticatedSyncLogRoute
@@ -144,6 +153,7 @@ export interface FileRoutesById {
   '/_authenticated/backup': typeof AuthenticatedBackupRoute
   '/_authenticated/import': typeof AuthenticatedImportRoute
   '/_authenticated/merge-center': typeof AuthenticatedMergeCenterRoute
+  '/_authenticated/notes-ledger': typeof AuthenticatedNotesLedgerRoute
   '/_authenticated/schedule-check': typeof AuthenticatedScheduleCheckRoute
   '/_authenticated/square-diagnostic': typeof AuthenticatedSquareDiagnosticRoute
   '/_authenticated/sync-log': typeof AuthenticatedSyncLogRoute
@@ -163,6 +173,7 @@ export interface FileRouteTypes {
     | '/backup'
     | '/import'
     | '/merge-center'
+    | '/notes-ledger'
     | '/schedule-check'
     | '/square-diagnostic'
     | '/sync-log'
@@ -178,6 +189,7 @@ export interface FileRouteTypes {
     | '/backup'
     | '/import'
     | '/merge-center'
+    | '/notes-ledger'
     | '/schedule-check'
     | '/square-diagnostic'
     | '/sync-log'
@@ -195,6 +207,7 @@ export interface FileRouteTypes {
     | '/_authenticated/backup'
     | '/_authenticated/import'
     | '/_authenticated/merge-center'
+    | '/_authenticated/notes-ledger'
     | '/_authenticated/schedule-check'
     | '/_authenticated/square-diagnostic'
     | '/_authenticated/sync-log'
@@ -256,6 +269,13 @@ declare module '@tanstack/react-router' {
       path: '/schedule-check'
       fullPath: '/schedule-check'
       preLoaderRoute: typeof AuthenticatedScheduleCheckRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/notes-ledger': {
+      id: '/_authenticated/notes-ledger'
+      path: '/notes-ledger'
+      fullPath: '/notes-ledger'
+      preLoaderRoute: typeof AuthenticatedNotesLedgerRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/merge-center': {
@@ -328,6 +348,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedBackupRoute: typeof AuthenticatedBackupRoute
   AuthenticatedImportRoute: typeof AuthenticatedImportRoute
   AuthenticatedMergeCenterRoute: typeof AuthenticatedMergeCenterRoute
+  AuthenticatedNotesLedgerRoute: typeof AuthenticatedNotesLedgerRoute
   AuthenticatedScheduleCheckRoute: typeof AuthenticatedScheduleCheckRoute
   AuthenticatedSquareDiagnosticRoute: typeof AuthenticatedSquareDiagnosticRoute
   AuthenticatedSyncLogRoute: typeof AuthenticatedSyncLogRoute
@@ -342,6 +363,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedBackupRoute: AuthenticatedBackupRoute,
   AuthenticatedImportRoute: AuthenticatedImportRoute,
   AuthenticatedMergeCenterRoute: AuthenticatedMergeCenterRoute,
+  AuthenticatedNotesLedgerRoute: AuthenticatedNotesLedgerRoute,
   AuthenticatedScheduleCheckRoute: AuthenticatedScheduleCheckRoute,
   AuthenticatedSquareDiagnosticRoute: AuthenticatedSquareDiagnosticRoute,
   AuthenticatedSyncLogRoute: AuthenticatedSyncLogRoute,

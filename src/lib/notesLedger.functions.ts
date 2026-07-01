@@ -58,9 +58,13 @@ export type ReviewCategory =
 
 export type ReviewRow = ParsedRow & {
   candidates: MatchClient[];
+  archived_candidates: MatchClient[];
   reason: string;
   categories: ReviewCategory[];
+  note_status: NoteStatus;
 };
+
+export type NoteStatus = "append" | "already_exists" | "no_note";
 
 export const REVIEW_CATEGORY_LABELS: Record<ReviewCategory, string> = {
   duplicate_ledger_entry: "Duplicate ledger entry",
@@ -107,7 +111,7 @@ export type AutoUpdateRow = {
     package_start_date: { before: string | null; after: string | null; changed: boolean };
     amount_paid: { before: number; after: number; changed: boolean };
     amount_owed: { before: number; after: number; changed: boolean };
-    internal_notes: { before: string | null; after: string | null; changed: boolean; appended: string | null };
+    internal_notes: { before: string | null; after: string | null; changed: boolean; appended: string | null; note_status: NoteStatus };
   };
 };
 
@@ -156,6 +160,24 @@ async function loadAllClients(
   return out;
 }
 
+function normalizeNoteForCompare(s: string): string {
+  return s
+    .toLowerCase()
+    .normalize("NFKC")
+    .replace(/[\p{P}\p{S}]+/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export function noteAlreadyExists(existing: string | null | undefined, incoming: string | null | undefined): boolean {
+  if (!incoming) return false;
+  const inc = normalizeNoteForCompare(incoming);
+  if (!inc) return false;
+  const ex = normalizeNoteForCompare(existing ?? "");
+  if (!ex) return false;
+  return ex.includes(inc);
+}
+
 function buildChanges(parsed: ParsedRow, client: MatchClient): AutoUpdateRow["changes"] {
   const newPrice = parsed.package_price ?? Number(client.package_price ?? 0);
   const newVisits = parsed.package_total_visits ?? Number(client.package_total_visits ?? 0);
@@ -167,14 +189,20 @@ function buildChanges(parsed: ParsedRow, client: MatchClient): AutoUpdateRow["ch
   const newOwed = Math.max(0, newPrice - newPaid);
   const currentOwed = Math.max(0, Number(client.package_price ?? 0) - Number(client.amount_paid ?? 0));
 
-  let appendedNote: string | null = null;
   const currentNotes = client.internal_notes ?? "";
-  if (parsed.internal_notes && !currentNotes.includes(parsed.internal_notes)) {
-    appendedNote = parsed.internal_notes;
+  let appendedNote: string | null = null;
+  let noteStatus: NoteStatus = "no_note";
+  if (parsed.internal_notes && parsed.internal_notes.trim()) {
+    if (noteAlreadyExists(currentNotes, parsed.internal_notes)) {
+      noteStatus = "already_exists";
+    } else {
+      appendedNote = parsed.internal_notes;
+      noteStatus = "append";
+    }
   }
   const newNotes = appendedNote
     ? (currentNotes ? `${currentNotes}\n${appendedNote}` : appendedNote)
-    : currentNotes || null;
+    : (currentNotes || null);
 
   return {
     package_price: {
@@ -207,8 +235,17 @@ function buildChanges(parsed: ParsedRow, client: MatchClient): AutoUpdateRow["ch
       after: newNotes,
       changed: appendedNote !== null,
       appended: appendedNote,
+      note_status: noteStatus,
     },
   };
+}
+
+function computeRowNoteStatus(parsed: ParsedRow, candidates: MatchClient[]): NoteStatus {
+  if (!parsed.internal_notes || !parsed.internal_notes.trim()) return "no_note";
+  if (candidates.length > 0 && candidates.every((c) => noteAlreadyExists(c.internal_notes, parsed.internal_notes))) {
+    return "already_exists";
+  }
+  return "append";
 }
 
 export const previewNotesLedger = createServerFn({ method: "POST" })
@@ -264,9 +301,16 @@ export const previewNotesLedger = createServerFn({ method: "POST" })
 
     for (const row of parsed) {
       const key = normName(row.name ?? "");
-      const nameHits = key ? (byName.get(key) ?? []) : [];
-      const phoneHits = row.phone ? (byPhone.get(row.phone) ?? []) : [];
+      const nameHitsRaw = key ? (byName.get(key) ?? []) : [];
+      const phoneHitsRaw = row.phone ? (byPhone.get(row.phone) ?? []) : [];
+      // Exclude archived clients from active matching. Track them separately.
+      const isArchived = (c: MatchClient) => c.status === "archived";
+      const nameHits = nameHitsRaw.filter((c) => !isArchived(c));
+      const phoneHits = phoneHitsRaw.filter((c) => !isArchived(c));
       const combined = dedupe([...nameHits, ...phoneHits]);
+      const archivedCandidates = dedupe(
+        [...nameHitsRaw, ...phoneHitsRaw].filter(isArchived),
+      );
       const squareLinked = combined.filter((c) => c.square_customer_id);
       const duplicateParsed = !row.needs_review && key ? (parsedNameCounts.get(key) ?? 0) > 1 : false;
 
@@ -285,14 +329,20 @@ export const previewNotesLedger = createServerFn({ method: "POST" })
         square_linked_count: squareLinked.length,
       };
 
-      if (row.needs_review) {
-        const reason = row.review_reason ?? "Needs manual review.";
+      const pushReview = (reason: string, isDup: boolean) => {
         reviews.push({
           ...row,
           candidates: combined,
+          archived_candidates: archivedCandidates,
           reason,
-          categories: classifyReview(row, reason, squareLinked.length, combined.length, false),
+          categories: classifyReview(row, reason, squareLinked.length, combined.length, isDup),
+          note_status: computeRowNoteStatus(row, combined),
         });
+      };
+
+      if (row.needs_review) {
+        const reason = row.review_reason ?? "Needs manual review.";
+        pushReview(reason, false);
         diagnostics.push({
           ...diagBase,
           outcome: "parser_review",
@@ -305,12 +355,7 @@ export const previewNotesLedger = createServerFn({ method: "POST" })
 
       if (duplicateParsed) {
         const dupReason = "Multiple ledger entries for same client — manual package selection required.";
-        reviews.push({
-          ...row,
-          candidates: combined,
-          reason: dupReason,
-          categories: classifyReview(row, dupReason, squareLinked.length, combined.length, true),
-        });
+        pushReview(dupReason, true);
         diagnostics.push({
           ...diagBase,
           outcome: "review",
@@ -326,33 +371,32 @@ export const previewNotesLedger = createServerFn({ method: "POST" })
       let chosen: MatchClient | null = null;
       let reason = "";
       let rule = "";
-      // Priority:
-      // 1. Exactly one exact normalized-name match → auto-pick (even if other
-      //    family members share the same phone number).
-      // 2. Multiple candidates with the same normalized name → Review.
-      // 3. No exact name match → fall back to Square-linked / single-candidate
-      //    heuristics, otherwise Review.
+      // Priority (archived clients excluded from active matching):
+      // 1. Exactly one active exact normalized-name match → auto-pick.
+      // 2. Multiple active candidates with the same normalized name → Review.
+      // 3. No exact name match → fall back to Square-linked / single active
+      //    phone candidate, otherwise Review.
       if (nameHits.length === 1) {
         chosen = nameHits[0];
         rule = nameHits[0].square_customer_id
-          ? "exactly one exact name match (Square-linked)"
-          : "exactly one exact name match";
+          ? "exactly one active exact name match (Square-linked)"
+          : "exactly one active exact name match";
       } else if (nameHits.length > 1) {
-        reason = `Multiple candidates with same normalized name (${nameHits.length}).`;
+        reason = `Multiple active candidates with same normalized name (${nameHits.length}).`;
         rule = "nameHits.length > 1 → cannot auto-pick";
         summary.multiple_name_matches++;
       } else if (squareLinked.length === 1) {
         chosen = squareLinked[0];
-        rule = "no name match; exactly one Square-linked phone candidate";
+        rule = "no name match; exactly one active Square-linked phone candidate";
       } else if (squareLinked.length > 1) {
-        reason = `No candidate matches parsed name; multiple Square-linked candidates share phone (${squareLinked.length}).`;
+        reason = `No candidate matches parsed name; multiple active Square-linked candidates share phone (${squareLinked.length}).`;
         rule = "no name match; squareLinked.length > 1 via phone";
         summary.multiple_square_linked++;
       } else if (combined.length === 1) {
         chosen = combined[0];
-        rule = "no name match; exactly one candidate via phone, not Square-linked";
+        rule = "no name match; exactly one active candidate via phone, not Square-linked";
       } else if (combined.length > 1) {
-        reason = `No candidate matches parsed name; multiple phone candidates (${combined.length}).`;
+        reason = `No candidate matches parsed name; multiple active phone candidates (${combined.length}).`;
         rule = "no name match; multiple phone candidates";
         if (phoneHits.length > 1) summary.multiple_phone_matches++;
         else summary.ambiguous_no_square_winner++;
@@ -363,15 +407,11 @@ export const previewNotesLedger = createServerFn({ method: "POST" })
       }
 
       if (!chosen) {
-        reviews.push({
-          ...row,
-          candidates: combined,
-          reason,
-          categories: classifyReview(row, reason, squareLinked.length, combined.length, false),
-        });
+        pushReview(reason, false);
         diagnostics.push({ ...diagBase, outcome: "review", rule, reason });
         continue;
       }
+
 
       const changes = buildChanges(row, chosen);
       const anyChange =

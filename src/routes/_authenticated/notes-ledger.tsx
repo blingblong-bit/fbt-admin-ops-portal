@@ -12,6 +12,7 @@ import { formatCurrency, formatDate, fullName } from "@/lib/clients";
 import {
   previewNotesLedger,
   applyNotesLedger,
+  noteAlreadyExists,
   REVIEW_CATEGORY_LABELS,
   type PreviewResult,
   type AutoUpdateRow,
@@ -99,9 +100,8 @@ function NotesLedgerPage() {
       const visits = row.package_total_visits ?? Number(client.package_total_visits ?? 0);
       const startDate = row.package_start_date ?? client.package_start_date;
       const paid = row.amount_paid !== null ? row.amount_paid : Number(client.amount_paid ?? 0);
-      const currentNotes = client.internal_notes ?? "";
       const appended =
-        row.internal_notes && !currentNotes.includes(row.internal_notes)
+        row.internal_notes && !noteAlreadyExists(client.internal_notes, row.internal_notes)
           ? row.internal_notes
           : null;
       const res = await applyFn({
@@ -602,12 +602,18 @@ function AutoUpdateCard({
         <DiffRow label="Start" before={formatDate(c.package_start_date.before)} after={formatDate(c.package_start_date.after)} changed={c.package_start_date.changed} />
         <DiffRow label="Paid" before={formatCurrency(c.amount_paid.before)} after={formatCurrency(c.amount_paid.after)} changed={c.amount_paid.changed} />
         <DiffRow label="Owed" before={formatCurrency(c.amount_owed.before)} after={formatCurrency(c.amount_owed.after)} changed={c.amount_owed.changed} />
-        {c.internal_notes.appended && (
-          <div className="col-span-full">
-            <span className="font-medium">Append note:</span>{" "}
-            <span className="text-emerald-700">{c.internal_notes.appended}</span>
-          </div>
-        )}
+        <div className="col-span-full">
+          <span className="font-medium">Notes:</span>{" "}
+          {c.internal_notes.note_status === "append" && c.internal_notes.appended && (
+            <span className="text-emerald-700">Append — {c.internal_notes.appended}</span>
+          )}
+          {c.internal_notes.note_status === "already_exists" && (
+            <span className="text-slate-500">Note already exists — no append needed.</span>
+          )}
+          {c.internal_notes.note_status === "no_note" && (
+            <span className="text-slate-500">No new notes</span>
+          )}
+        </div>
       </div>
       <div className="mt-2 text-xs text-slate-500 font-mono">{row.parsed.raw}</div>
     </div>
@@ -687,6 +693,19 @@ function ReviewCard({
         <div><span className="text-slate-500">Parsed paid:</span> {row.amount_paid !== null ? formatCurrency(row.amount_paid) : "—"}</div>
       </div>
 
+      <div className="mt-2 text-xs">
+        <span className="text-slate-500">Notes:</span>{" "}
+        {row.note_status === "append" && row.internal_notes && (
+          <span className="text-emerald-700">Would append — {row.internal_notes}</span>
+        )}
+        {row.note_status === "already_exists" && (
+          <span className="text-slate-500">Note already exists — no append needed.</span>
+        )}
+        {row.note_status === "no_note" && (
+          <span className="text-slate-500">No new notes</span>
+        )}
+      </div>
+
       {row.candidates.length > 0 ? (
         <div className="mt-3 space-y-2">
           <div className="text-xs font-medium text-slate-600">
@@ -731,8 +750,29 @@ function ReviewCard({
           })}
         </div>
       ) : (
-        <div className="mt-3 text-xs text-slate-500">No candidate clients found for this row.</div>
+        <div className="mt-3 text-xs text-slate-500">No active candidate clients found for this row.</div>
       )}
+
+      {row.archived_candidates.length > 0 && (
+        <details className="mt-3 rounded border border-slate-200 bg-white p-2 text-xs">
+          <summary className="cursor-pointer text-slate-600">
+            Archived matches ({row.archived_candidates.length}) — not counted as active candidates
+          </summary>
+          <div className="mt-2 space-y-1">
+            {row.archived_candidates.map((c) => (
+              <div key={c.id} className="flex flex-wrap items-center gap-2 border-t pt-1 text-slate-600">
+                <span className="font-medium">{fullName(c)}</span>
+                <Badge variant="secondary" className="bg-slate-200 text-slate-700">archived</Badge>
+                <span className="font-mono">{c.phone ?? "no phone"}</span>
+                {c.square_customer_id && (
+                  <Badge variant="secondary" className="bg-blue-100 text-blue-800">Square</Badge>
+                )}
+              </div>
+            ))}
+          </div>
+        </details>
+      )}
+
 
       <div className="mt-3 flex flex-wrap gap-2">
         <Button

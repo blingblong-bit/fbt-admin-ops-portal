@@ -14,6 +14,7 @@ import {
   applyNotesLedger,
   type PreviewResult,
   type AutoUpdateRow,
+  type ApplyRowResult,
 } from "@/lib/notesLedger.functions";
 
 export const Route = createFileRoute("/_authenticated/notes-ledger")({
@@ -27,6 +28,7 @@ function NotesLedgerPage() {
   const [text, setText] = useState("");
   const [preview, setPreview] = useState<PreviewResult | null>(null);
   const [applied, setApplied] = useState<{ updated: number; errors: number } | null>(null);
+  const [applyRows, setApplyRows] = useState<ApplyRowResult[]>([]);
   const [excluded, setExcluded] = useState<Set<string>>(new Set());
 
   const previewMut = useMutation({
@@ -34,6 +36,7 @@ function NotesLedgerPage() {
     onSuccess: (r) => {
       setPreview(r);
       setApplied(null);
+      setApplyRows([]);
       setExcluded(new Set());
       toast.success(`Parsed ${r.parsed_count} rows`);
     },
@@ -47,6 +50,9 @@ function NotesLedgerPage() {
         .filter((r) => !excluded.has(r.client.id))
         .map((r) => ({
           client_id: r.client.id,
+          client_name: fullName(r.client),
+          parsed_name: r.parsed.name ?? null,
+          line_number: r.parsed.line_number,
           package_price: r.changes.package_price.after,
           package_total_visits: r.changes.package_total_visits.after,
           package_start_date: r.changes.package_start_date.after,
@@ -57,9 +63,19 @@ function NotesLedgerPage() {
     },
     onSuccess: (r) => {
       setApplied({ updated: r.updated, errors: r.errors.length });
-      if (r.errors.length) toast.error(`${r.errors.length} errors — see console`);
+      setApplyRows(r.rows);
+      // Auto-exclude successful rows so only failed rows remain checked for retry.
+      setExcluded((prev) => {
+        const next = new Set(prev);
+        for (const row of r.rows) {
+          if (row.status === "success") next.add(row.client_id);
+        }
+        return next;
+      });
+      if (r.errors.length) toast.error(`${r.errors.length} row(s) failed — see Apply Results below`);
       else toast.success(`Updated ${r.updated} clients`);
-      if (r.errors.length) console.error("Ledger import errors:", r.errors);
+      console.log("Ledger apply results:", r);
+      if (r.errors.length) console.error("Ledger apply errors:", r.rows.filter((x) => x.status === "error"));
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -152,10 +168,79 @@ function NotesLedgerPage() {
           </div>
 
           {applied && (
-            <Card className="mb-6 border-emerald-200 bg-emerald-50">
-              <CardContent className="pt-6 text-sm">
-                Applied: <strong>{applied.updated}</strong> · Errors:{" "}
-                <strong>{applied.errors}</strong>
+            <Card className={`mb-6 ${applied.errors ? "border-rose-200 bg-rose-50" : "border-emerald-200 bg-emerald-50"}`}>
+              <CardHeader>
+                <CardTitle className="text-base">
+                  Apply Results — {applied.updated} success · {applied.errors} error
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2 text-sm">
+                <p className="text-xs text-slate-600">
+                  Successful rows have been auto-unchecked above. Failed rows remain checked so you can retry only them by clicking Apply again.
+                </p>
+                <div className="max-h-[500px] overflow-auto rounded border bg-white">
+                  <table className="w-full text-xs">
+                    <thead className="sticky top-0 bg-slate-100 text-left">
+                      <tr>
+                        <th className="p-2">Line</th>
+                        <th className="p-2">Parsed name</th>
+                        <th className="p-2">Matched client</th>
+                        <th className="p-2">Client ID</th>
+                        <th className="p-2">Status</th>
+                        <th className="p-2">Step</th>
+                        <th className="p-2">Error / Fields written</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {applyRows.map((r, i) => (
+                        <tr
+                          key={r.client_id + i}
+                          className={`border-t align-top ${r.status === "error" ? "bg-rose-50" : ""}`}
+                        >
+                          <td className="p-2">{r.line_number ?? "—"}</td>
+                          <td className="p-2">{r.parsed_name ?? "—"}</td>
+                          <td className="p-2 font-medium">{r.client_name}</td>
+                          <td className="p-2 font-mono text-[10px] text-slate-500">{r.client_id}</td>
+                          <td className="p-2">
+                            {r.status === "success" ? (
+                              <Badge variant="secondary" className="bg-emerald-100 text-emerald-800">success</Badge>
+                            ) : (
+                              <Badge variant="secondary" className="bg-rose-100 text-rose-800">error</Badge>
+                            )}
+                          </td>
+                          <td className="p-2">{r.step}</td>
+                          <td className="p-2">
+                            {r.error ? (
+                              <div className="text-rose-700">
+                                <div className="font-semibold">Failed on: {r.step}</div>
+                                <div className="whitespace-pre-wrap">{r.error}</div>
+                                <details className="mt-1">
+                                  <summary className="cursor-pointer text-slate-600">Fields being written</summary>
+                                  <pre className="mt-1 whitespace-pre-wrap text-[10px]">{JSON.stringify(r.fields, null, 2)}</pre>
+                                </details>
+                              </div>
+                            ) : (
+                              <details>
+                                <summary className="cursor-pointer text-slate-600">Fields written</summary>
+                                <pre className="mt-1 whitespace-pre-wrap text-[10px]">{JSON.stringify(r.fields, null, 2)}</pre>
+                              </details>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    navigator.clipboard.writeText(JSON.stringify(applyRows, null, 2));
+                    toast.success("Apply results JSON copied");
+                  }}
+                >
+                  Copy JSON
+                </Button>
               </CardContent>
             </Card>
           )}
@@ -168,19 +253,23 @@ function NotesLedgerPage() {
               {preview.auto_updates.length === 0 && (
                 <p className="text-sm text-slate-500">None.</p>
               )}
-              {preview.auto_updates.map((r) => (
-                <AutoUpdateCard
-                  key={r.client.id + r.parsed.line_number}
-                  row={r}
-                  excluded={excluded.has(r.client.id)}
-                  onToggle={() => {
-                    const next = new Set(excluded);
-                    if (next.has(r.client.id)) next.delete(r.client.id);
-                    else next.add(r.client.id);
-                    setExcluded(next);
-                  }}
-                />
-              ))}
+              {preview.auto_updates.map((r) => {
+                const result = applyRows.find((x) => x.client_id === r.client.id);
+                return (
+                  <AutoUpdateCard
+                    key={r.client.id + r.parsed.line_number}
+                    row={r}
+                    excluded={excluded.has(r.client.id)}
+                    result={result}
+                    onToggle={() => {
+                      const next = new Set(excluded);
+                      if (next.has(r.client.id)) next.delete(r.client.id);
+                      else next.add(r.client.id);
+                      setExcluded(next);
+                    }}
+                  />
+                );
+              })}
             </CardContent>
           </Card>
 
@@ -361,14 +450,23 @@ function AutoUpdateCard({
   row,
   excluded,
   onToggle,
+  result,
 }: {
   row: AutoUpdateRow;
   excluded: boolean;
   onToggle: () => void;
+  result?: ApplyRowResult;
 }) {
   const c = row.changes;
+  const border = result?.status === "error"
+    ? "border-rose-300 bg-rose-50"
+    : result?.status === "success"
+      ? "border-emerald-300 bg-emerald-50/60"
+      : excluded
+        ? "border-slate-200 bg-slate-50 opacity-60"
+        : "border-emerald-200 bg-white";
   return (
-    <div className={`rounded border p-3 text-sm ${excluded ? "border-slate-200 bg-slate-50 opacity-60" : "border-emerald-200 bg-white"}`}>
+    <div className={`rounded border p-3 text-sm ${border}`}>
       <div className="mb-2 flex flex-wrap items-center gap-2">
         <input type="checkbox" checked={!excluded} onChange={onToggle} />
         <span className="font-semibold">{fullName(row.client)}</span>
@@ -377,7 +475,18 @@ function AutoUpdateCard({
         )}
         {row.parsed.assessment && <Badge variant="secondary">Assessment</Badge>}
         <span className="text-xs text-slate-500">Line {row.parsed.line_number}</span>
+        {result?.status === "success" && (
+          <Badge variant="secondary" className="bg-emerald-100 text-emerald-800">Applied</Badge>
+        )}
+        {result?.status === "error" && (
+          <Badge variant="secondary" className="bg-rose-100 text-rose-800">Failed — {result.step}</Badge>
+        )}
       </div>
+      {result?.status === "error" && (
+        <div className="mb-2 rounded border border-rose-200 bg-white p-2 text-xs text-rose-700">
+          {result.error}
+        </div>
+      )}
       <div className="grid grid-cols-1 gap-2 text-xs sm:grid-cols-3">
         <DiffRow label="Price" before={formatCurrency(c.package_price.before)} after={formatCurrency(c.package_price.after)} changed={c.package_price.changed} />
         <DiffRow label="Visits" before={String(c.package_total_visits.before)} after={String(c.package_total_visits.after)} changed={c.package_total_visits.changed} />

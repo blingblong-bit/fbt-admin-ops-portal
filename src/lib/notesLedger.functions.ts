@@ -316,9 +316,28 @@ function dedupe(arr: MatchClient[]): MatchClient[] {
   return out;
 }
 
+export type ApplyRowResult = {
+  client_id: string;
+  client_name: string;
+  parsed_name: string | null;
+  line_number: number | null;
+  status: "success" | "error";
+  step: "read" | "update" | "activity" | "ok";
+  error: string | null;
+  fields: {
+    package_price: number;
+    package_total_visits: number;
+    package_start_date: string | null;
+    amount_paid: number;
+    appended_note: string | null;
+    internal_notes_after: string | null;
+  };
+};
+
 export type ApplyResult = {
   updated: number;
   errors: { client_id: string; error: string }[];
+  rows: ApplyRowResult[];
 };
 
 export const applyNotesLedger = createServerFn({ method: "POST" })
@@ -327,6 +346,9 @@ export const applyNotesLedger = createServerFn({ method: "POST" })
     (input: {
       updates: {
         client_id: string;
+        client_name?: string | null;
+        parsed_name?: string | null;
+        line_number?: number | null;
         package_price: number;
         package_total_visits: number;
         package_start_date: string | null;
@@ -338,10 +360,20 @@ export const applyNotesLedger = createServerFn({ method: "POST" })
   .handler(async ({ data, context }): Promise<ApplyResult> => {
     const { supabase } = context;
     const errors: ApplyResult["errors"] = [];
+    const rows: ApplyRowResult[] = [];
     let updated = 0;
 
     for (const u of data.updates) {
-      // Read current row to append notes safely
+      const baseFields = {
+        package_price: u.package_price,
+        package_total_visits: u.package_total_visits,
+        package_start_date: u.package_start_date,
+        amount_paid: u.amount_paid,
+        appended_note: u.appended_note,
+        internal_notes_after: null as string | null,
+      };
+      const clientName = u.client_name ?? "(unknown)";
+
       const { data: current, error: readErr } = await supabase
         .from("clients")
         .select("internal_notes, package_price, package_total_visits, package_start_date, amount_paid")
@@ -349,6 +381,16 @@ export const applyNotesLedger = createServerFn({ method: "POST" })
         .single();
       if (readErr) {
         errors.push({ client_id: u.client_id, error: readErr.message });
+        rows.push({
+          client_id: u.client_id,
+          client_name: clientName,
+          parsed_name: u.parsed_name ?? null,
+          line_number: u.line_number ?? null,
+          status: "error",
+          step: "read",
+          error: readErr.message,
+          fields: baseFields,
+        });
         continue;
       }
 
@@ -356,6 +398,7 @@ export const applyNotesLedger = createServerFn({ method: "POST" })
       if (u.appended_note && (!newNotes || !newNotes.includes(u.appended_note))) {
         newNotes = newNotes ? `${newNotes}\n${u.appended_note}` : u.appended_note;
       }
+      baseFields.internal_notes_after = newNotes;
 
       const { error: updErr } = await supabase
         .from("clients")
@@ -368,11 +411,23 @@ export const applyNotesLedger = createServerFn({ method: "POST" })
         })
         .eq("id", u.client_id);
       if (updErr) {
-        errors.push({ client_id: u.client_id, error: updErr.message });
+        const e = updErr as { message: string; hint?: string; details?: string; code?: string };
+        const detail = `${e.message}${e.hint ? ` — ${e.hint}` : ""}${e.details ? ` (${e.details})` : ""}${e.code ? ` [${e.code}]` : ""}`;
+        errors.push({ client_id: u.client_id, error: detail });
+        rows.push({
+          client_id: u.client_id,
+          client_name: clientName,
+          parsed_name: u.parsed_name ?? null,
+          line_number: u.line_number ?? null,
+          status: "error",
+          step: "update",
+          error: detail,
+          fields: baseFields,
+        });
         continue;
       }
 
-      await supabase.from("client_activities").insert({
+      const { error: actErr } = await supabase.from("client_activities").insert({
         client_id: u.client_id,
         activity_type: "notes_ledger_import",
         description: "Updated from latest Apple Notes package ledger",
@@ -384,8 +439,33 @@ export const applyNotesLedger = createServerFn({ method: "POST" })
           appended_note: u.appended_note,
         },
       });
+      if (actErr) {
+        errors.push({ client_id: u.client_id, error: `activity: ${actErr.message}` });
+        rows.push({
+          client_id: u.client_id,
+          client_name: clientName,
+          parsed_name: u.parsed_name ?? null,
+          line_number: u.line_number ?? null,
+          status: "error",
+          step: "activity",
+          error: `Client update succeeded, but activity log insert failed: ${actErr.message}`,
+          fields: baseFields,
+        });
+        continue;
+      }
+
       updated++;
+      rows.push({
+        client_id: u.client_id,
+        client_name: clientName,
+        parsed_name: u.parsed_name ?? null,
+        line_number: u.line_number ?? null,
+        status: "success",
+        step: "ok",
+        error: null,
+        fields: baseFields,
+      });
     }
 
-    return { updated, errors };
+    return { updated, errors, rows };
   });

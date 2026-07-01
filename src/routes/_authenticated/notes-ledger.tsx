@@ -971,12 +971,14 @@ function RecentlyAppliedCard({
       changed: before.amount_paid !== after.amount_paid,
     },
   ];
+  const appendedLines = entry.appended_note
+    ? entry.appended_note.split(/\r?\n/).map((l) => l.trim()).filter((l) => l.length > 0)
+    : [];
+  const appendedCount = appendedLines.length;
   const noteLine =
-    entry.note_status === "append" && entry.appended_note
-      ? `Appended — ${entry.appended_note}`
-      : entry.note_status === "already_exists"
-        ? "Note already exists — no append needed"
-        : "No new notes";
+    entry.note_status === "append" && appendedCount > 0
+      ? `Appended ${appendedCount} new note${appendedCount === 1 ? "" : "s"}`
+      : "No new notes";
   return (
     <div
       className={`rounded border p-3 text-sm ${

@@ -312,8 +312,9 @@ export const findDuplicatePairs = createServerFn({ method: "GET" })
     const statusRank: Record<MergePair["status"], number> = {
       pending: 0,
       blocked: 1,
-      merged: 2,
-      ignored: 3,
+      shared_phone: 2,
+      merged: 3,
+      ignored: 4,
     };
     pairs.sort((x, y) => {
       const s = statusRank[x.status] - statusRank[y.status];

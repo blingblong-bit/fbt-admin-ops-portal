@@ -485,6 +485,11 @@ function PairCard({
               </Button>
             </>
           )}
+          {pair.status === "shared_phone" && (
+            <Button variant="ghost" disabled={busy} onClick={onIgnore}>
+              Ignore pair
+            </Button>
+          )}
           {(pair.status === "ignored" || pair.status === "merged") && (
             <Button variant="outline" disabled={busy} onClick={onReset}>
               Reopen review

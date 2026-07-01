@@ -18,7 +18,8 @@ export type PaymentMatchSuggestion = {
   status: string;
   amount_owed: number;
   reasons: string[];
-  confidence: number; // count of reason categories matched
+  confidence: number; // count of reason categories matched (kept for backwards compat)
+  score: number; // weighted total
   nearest_appointment_at: string | null;
   square_customer_id: string | null;
 };

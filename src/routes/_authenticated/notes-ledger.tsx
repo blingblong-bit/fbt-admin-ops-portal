@@ -28,6 +28,7 @@ function NotesLedgerPage() {
   const [text, setText] = useState("");
   const [preview, setPreview] = useState<PreviewResult | null>(null);
   const [applied, setApplied] = useState<{ updated: number; errors: number } | null>(null);
+  const [applyRows, setApplyRows] = useState<ApplyRowResult[]>([]);
   const [excluded, setExcluded] = useState<Set<string>>(new Set());
 
   const previewMut = useMutation({
@@ -35,6 +36,7 @@ function NotesLedgerPage() {
     onSuccess: (r) => {
       setPreview(r);
       setApplied(null);
+      setApplyRows([]);
       setExcluded(new Set());
       toast.success(`Parsed ${r.parsed_count} rows`);
     },
@@ -48,6 +50,9 @@ function NotesLedgerPage() {
         .filter((r) => !excluded.has(r.client.id))
         .map((r) => ({
           client_id: r.client.id,
+          client_name: fullName(r.client),
+          parsed_name: r.parsed.name ?? null,
+          line_number: r.parsed.line_number,
           package_price: r.changes.package_price.after,
           package_total_visits: r.changes.package_total_visits.after,
           package_start_date: r.changes.package_start_date.after,
@@ -58,9 +63,19 @@ function NotesLedgerPage() {
     },
     onSuccess: (r) => {
       setApplied({ updated: r.updated, errors: r.errors.length });
-      if (r.errors.length) toast.error(`${r.errors.length} errors — see console`);
+      setApplyRows(r.rows);
+      // Auto-exclude successful rows so only failed rows remain checked for retry.
+      setExcluded((prev) => {
+        const next = new Set(prev);
+        for (const row of r.rows) {
+          if (row.status === "success") next.add(row.client_id);
+        }
+        return next;
+      });
+      if (r.errors.length) toast.error(`${r.errors.length} row(s) failed — see Apply Results below`);
       else toast.success(`Updated ${r.updated} clients`);
-      if (r.errors.length) console.error("Ledger import errors:", r.errors);
+      console.log("Ledger apply results:", r);
+      if (r.errors.length) console.error("Ledger apply errors:", r.rows.filter((x) => x.status === "error"));
     },
     onError: (e: Error) => toast.error(e.message),
   });

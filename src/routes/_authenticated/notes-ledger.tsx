@@ -224,7 +224,7 @@ function NotesLedgerPage() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="mb-6">
             <CardHeader>
               <CardTitle>Skipped ({preview.skipped.length})</CardTitle>
             </CardHeader>
@@ -238,6 +238,94 @@ function NotesLedgerPage() {
                   <span className="text-xs text-slate-500">{s.reason}</span>
                 </div>
               ))}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Diagnostic Report</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4 text-sm">
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                {Object.entries(preview.diagnostic_summary).map(([k, v]) => (
+                  <div key={k} className="rounded border border-slate-200 bg-slate-50 p-2">
+                    <div className="text-xs text-slate-500">{k.replace(/_/g, " ")}</div>
+                    <div className="text-lg font-semibold">{v as number}</div>
+                  </div>
+                ))}
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    const rows = preview.diagnostics;
+                    const headers = [
+                      "line","parsed_name","parsed_phone","parsed_price","parsed_date","parsed_visits","parsed_amount_paid",
+                      "phone_match_count","name_match_count","combined_unique","square_linked","outcome","rule","reason",
+                    ];
+                    const esc = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+                    const csv = [headers.join(",")].concat(
+                      rows.map((r) => [
+                        r.line_number, r.parsed_name, r.parsed_phone, r.parsed_package_price,
+                        r.parsed_package_date, r.parsed_visits, r.parsed_amount_paid,
+                        r.phone_match_count, r.name_match_count, r.combined_unique_count,
+                        r.square_linked_count, r.outcome, r.rule, r.reason,
+                      ].map(esc).join(","))
+                    ).join("\n");
+                    navigator.clipboard.writeText(csv);
+                    toast.success("Diagnostic CSV copied to clipboard");
+                  }}
+                >
+                  Copy CSV
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    navigator.clipboard.writeText(JSON.stringify(preview.diagnostics, null, 2));
+                    toast.success("Diagnostic JSON copied to clipboard");
+                  }}
+                >
+                  Copy JSON
+                </Button>
+              </div>
+              <div className="max-h-[600px] overflow-auto rounded border">
+                <table className="w-full text-xs">
+                  <thead className="sticky top-0 bg-slate-100 text-left">
+                    <tr>
+                      <th className="p-1">#</th>
+                      <th className="p-1">Name</th>
+                      <th className="p-1">Phone</th>
+                      <th className="p-1">Price</th>
+                      <th className="p-1">Date</th>
+                      <th className="p-1">Ph✓</th>
+                      <th className="p-1">Nm✓</th>
+                      <th className="p-1">Sq</th>
+                      <th className="p-1">Outcome</th>
+                      <th className="p-1">Rule</th>
+                      <th className="p-1">Reason</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {preview.diagnostics
+                      .filter((d) => d.outcome !== "auto_update")
+                      .map((d) => (
+                        <tr key={d.line_number} className="border-t align-top">
+                          <td className="p-1">{d.line_number}</td>
+                          <td className="p-1">{d.parsed_name}</td>
+                          <td className="p-1 font-mono">{d.parsed_phone ?? "—"}</td>
+                          <td className="p-1">{d.parsed_package_price ?? "—"}</td>
+                          <td className="p-1">{d.parsed_package_date ?? "—"}</td>
+                          <td className="p-1 text-center">{d.phone_match_count}</td>
+                          <td className="p-1 text-center">{d.name_match_count}</td>
+                          <td className="p-1 text-center">{d.square_linked_count}</td>
+                          <td className="p-1">{d.outcome}</td>
+                          <td className="p-1">{d.rule}</td>
+                          <td className="p-1">{d.reason}</td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
             </CardContent>
           </Card>
         </>

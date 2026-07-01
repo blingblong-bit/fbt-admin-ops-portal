@@ -169,6 +169,18 @@ function normalizeNoteForCompare(s: string): string {
     .trim();
 }
 
+/** Strip phone-number-like digit runs so notes that differ only by a phone compare as equal. */
+function stripPhones(s: string): string {
+  return s
+    .replace(/\+?\d[\d\s().-]{6,}\d/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function normalizeNoteNoPhone(s: string): string {
+  return normalizeNoteForCompare(stripPhones(s));
+}
+
 const JUNK_LINE_RE = /^[\s\-–—.()·•*]*$/;
 
 function isJunkLine(raw: string): boolean {
@@ -206,6 +218,35 @@ function similarity(a: string, b: string): number {
   return 1 - levenshtein(a, b) / m;
 }
 
+/** Word-boundary containment: is `needle` fully contained inside `hay`? */
+function containsPhrase(hay: string, needle: string): boolean {
+  if (!needle) return true;
+  if (!hay) return false;
+  if (hay === needle) return true;
+  return (" " + hay + " ").includes(" " + needle + " ") || hay.includes(needle);
+}
+
+function isDuplicateLine(
+  n: string,
+  nNoPhone: string,
+  existingNorm: string[],
+  existingNormNoPhone: string[],
+): boolean {
+  for (let i = 0; i < existingNorm.length; i++) {
+    const ex = existingNorm[i];
+    const exNoPhone = existingNormNoPhone[i];
+    if (ex === n) return true;
+    if (containsPhrase(ex, n) || containsPhrase(n, ex)) return true;
+    if (similarity(n, ex) >= 0.95) return true;
+    if (nNoPhone && exNoPhone) {
+      if (exNoPhone === nNoPhone) return true;
+      if (containsPhrase(exNoPhone, nNoPhone) || containsPhrase(nNoPhone, exNoPhone)) return true;
+      if (similarity(nNoPhone, exNoPhone) >= 0.95) return true;
+    }
+  }
+  return false;
+}
+
 /** Dedupe incoming notes line-by-line against existing notes. */
 export function dedupeNoteLines(
   existing: string | null | undefined,
@@ -213,31 +254,25 @@ export function dedupeNoteLines(
 ): { appended: string | null; count: number } {
   if (!incoming) return { appended: null, count: 0 };
   const existingNorm: string[] = [];
+  const existingNormNoPhone: string[] = [];
   for (const l of (existing ?? "").split(/\r?\n/)) {
     if (isJunkLine(l)) continue;
     const n = normalizeNoteForCompare(l);
-    if (n) existingNorm.push(n);
+    if (n) {
+      existingNorm.push(n);
+      existingNormNoPhone.push(normalizeNoteNoPhone(l));
+    }
   }
-  const seen = new Set(existingNorm);
-  const addedNorm: string[] = [];
   const kept: string[] = [];
   for (const raw of incoming.split(/\r?\n/)) {
     if (isJunkLine(raw)) continue;
     const line = raw.trim();
     const n = normalizeNoteForCompare(line);
-    if (!n || seen.has(n)) continue;
-    let dup = false;
-    for (const ex of existingNorm) {
-      if (similarity(n, ex) >= 0.95) { dup = true; break; }
-    }
-    if (!dup) {
-      for (const ex of addedNorm) {
-        if (similarity(n, ex) >= 0.95) { dup = true; break; }
-      }
-    }
-    if (dup) continue;
-    seen.add(n);
-    addedNorm.push(n);
+    if (!n) continue;
+    const nNoPhone = normalizeNoteNoPhone(line);
+    if (isDuplicateLine(n, nNoPhone, existingNorm, existingNormNoPhone)) continue;
+    existingNorm.push(n);
+    existingNormNoPhone.push(nNoPhone);
     kept.push(line);
   }
   if (kept.length === 0) return { appended: null, count: 0 };

@@ -89,7 +89,8 @@ function classifyReview(
   if (r.includes("no package price") || r.includes("no visit count")) cats.add("missing_package_information");
   if (r.includes("credit") || r.includes("overpaid") || r.includes("refund")) cats.add("credit_special_balance");
   if (r.includes("multiple names")) cats.add("multiple_names_on_line");
-  if (r.includes("no matching client")) cats.add("no_match");
+  if (r.includes("no matching client") || r.includes("no candidate matches")) cats.add("no_match");
+  if (r.includes("same normalized name")) cats.add("ambiguous_match");
   if (r.includes("multiple candidates") || r.includes("multiple square")) {
     if (squareLinkedCount <= 1) cats.add("ambiguous_match");
   }
@@ -325,21 +326,35 @@ export const previewNotesLedger = createServerFn({ method: "POST" })
       let chosen: MatchClient | null = null;
       let reason = "";
       let rule = "";
-      if (squareLinked.length === 1) {
+      // Priority:
+      // 1. Exactly one exact normalized-name match → auto-pick (even if other
+      //    family members share the same phone number).
+      // 2. Multiple candidates with the same normalized name → Review.
+      // 3. No exact name match → fall back to Square-linked / single-candidate
+      //    heuristics, otherwise Review.
+      if (nameHits.length === 1) {
+        chosen = nameHits[0];
+        rule = nameHits[0].square_customer_id
+          ? "exactly one exact name match (Square-linked)"
+          : "exactly one exact name match";
+      } else if (nameHits.length > 1) {
+        reason = `Multiple candidates with same normalized name (${nameHits.length}).`;
+        rule = "nameHits.length > 1 → cannot auto-pick";
+        summary.multiple_name_matches++;
+      } else if (squareLinked.length === 1) {
         chosen = squareLinked[0];
-        rule = "exactly one Square-linked candidate";
+        rule = "no name match; exactly one Square-linked phone candidate";
       } else if (squareLinked.length > 1) {
-        reason = `Multiple Square-linked candidates (${squareLinked.length}).`;
-        rule = "squareLinked.length > 1 → cannot auto-pick";
+        reason = `No candidate matches parsed name; multiple Square-linked candidates share phone (${squareLinked.length}).`;
+        rule = "no name match; squareLinked.length > 1 via phone";
         summary.multiple_square_linked++;
       } else if (combined.length === 1) {
         chosen = combined[0];
-        rule = "exactly one candidate (name or phone), not Square-linked";
+        rule = "no name match; exactly one candidate via phone, not Square-linked";
       } else if (combined.length > 1) {
-        reason = `Multiple candidates (${combined.length}); no Square-linked winner.`;
-        rule = "combined.length > 1 with 0 Square-linked → cannot auto-pick";
+        reason = `No candidate matches parsed name; multiple phone candidates (${combined.length}).`;
+        rule = "no name match; multiple phone candidates";
         if (phoneHits.length > 1) summary.multiple_phone_matches++;
-        else if (nameHits.length > 1) summary.multiple_name_matches++;
         else summary.ambiguous_no_square_winner++;
       } else {
         reason = "No matching client found.";

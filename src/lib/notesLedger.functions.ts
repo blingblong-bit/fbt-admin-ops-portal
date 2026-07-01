@@ -89,7 +89,8 @@ function classifyReview(
   if (r.includes("no package price") || r.includes("no visit count")) cats.add("missing_package_information");
   if (r.includes("credit") || r.includes("overpaid") || r.includes("refund")) cats.add("credit_special_balance");
   if (r.includes("multiple names")) cats.add("multiple_names_on_line");
-  if (r.includes("no matching client")) cats.add("no_match");
+  if (r.includes("no matching client") || r.includes("no candidate matches")) cats.add("no_match");
+  if (r.includes("same normalized name")) cats.add("ambiguous_match");
   if (r.includes("multiple candidates") || r.includes("multiple square")) {
     if (squareLinkedCount <= 1) cats.add("ambiguous_match");
   }

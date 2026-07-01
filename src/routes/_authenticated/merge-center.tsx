@@ -244,13 +244,23 @@ function ClientCol({
   c,
   side,
   isKept,
+  blocked,
 }: {
   c: MergePairClient;
   side: "left" | "right";
   isKept: boolean;
+  blocked?: boolean;
 }) {
   const owed = amountOwed(c);
   const remaining = visitsRemaining(c);
+  const label = blocked
+    ? side === "left"
+      ? "Client A"
+      : "Client B"
+    : side === "left"
+      ? "Legacy Notes candidate"
+      : "Square-linked candidate";
+
   return (
     <div
       className={`rounded-lg border p-4 ${isKept ? "border-emerald-300 bg-emerald-50/40" : "border-slate-200 bg-white"}`}

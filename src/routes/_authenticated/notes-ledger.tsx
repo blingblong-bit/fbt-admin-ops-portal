@@ -12,9 +12,13 @@ import { formatCurrency, formatDate, fullName } from "@/lib/clients";
 import {
   previewNotesLedger,
   applyNotesLedger,
+  REVIEW_CATEGORY_LABELS,
   type PreviewResult,
   type AutoUpdateRow,
   type ApplyRowResult,
+  type ReviewRow,
+  type ReviewCategory,
+  type MatchClient,
 } from "@/lib/notesLedger.functions";
 
 export const Route = createFileRoute("/_authenticated/notes-ledger")({

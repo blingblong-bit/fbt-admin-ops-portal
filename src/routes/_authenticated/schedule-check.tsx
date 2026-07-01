@@ -306,10 +306,21 @@ function ScheduleCheckPage() {
   );
 }
 
+function normNameForDup(s: string | null | undefined): string {
+  return (s ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+}
+function normPhoneForDup(s: string | null | undefined): string | null {
+  if (!s) return null;
+  const d = s.replace(/\D+/g, "");
+  if (!d) return null;
+  return d.length > 10 ? d.slice(-10) : d;
+}
+
 function UnmatchedAppointmentsCard({ appointments }: { appointments: ScheduleAppointment[] }) {
   const listFn = useServerFn(listLinkableClients);
   const linkFn = useServerFn(linkSquareCustomer);
   const qc = useQueryClient();
+  const [ignored, setIgnored] = useState<Set<string>>(new Set());
 
   const clientsQuery = useQuery({
     queryKey: ["linkable-clients"],
@@ -328,6 +339,27 @@ function UnmatchedAppointmentsCard({ appointments }: { appointments: ScheduleApp
     onError: (e: Error) => toast.error(e.message),
   });
 
+  // Build normalized-name and normalized-phone lookup maps from Admin clients
+  const { byName, byPhone } = useMemo(() => {
+    const byName = new Map<string, LinkableClient[]>();
+    const byPhone = new Map<string, LinkableClient[]>();
+    for (const c of clientsQuery.data ?? []) {
+      const nm = normNameForDup(`${c.first_name} ${c.last_name}`);
+      if (nm) {
+        const arr = byName.get(nm) ?? [];
+        arr.push(c);
+        byName.set(nm, arr);
+      }
+      const ph = normPhoneForDup(c.phone);
+      if (ph) {
+        const arr = byPhone.get(ph) ?? [];
+        arr.push(c);
+        byPhone.set(ph, arr);
+      }
+    }
+    return { byName, byPhone };
+  }, [clientsQuery.data]);
+
   // Group appointments by Square customer ID so the same person isn't linked twice in a row.
   const grouped = useMemo(() => {
     const m = new Map<string, ScheduleAppointment[]>();
@@ -339,6 +371,8 @@ function UnmatchedAppointmentsCard({ appointments }: { appointments: ScheduleApp
     }
     return Array.from(m.entries());
   }, [appointments]);
+
+  const visible = grouped.filter(([key]) => !ignored.has(key));
 
   return (
     <Card>
@@ -352,9 +386,11 @@ function UnmatchedAppointmentsCard({ appointments }: { appointments: ScheduleApp
       <CardContent>
         {appointments.length === 0 ? (
           <EmptyState text="All bookings match an Admin client." />
+        ) : visible.length === 0 ? (
+          <EmptyState text="All unmatched bookings ignored in this session." />
         ) : (
           <div className="space-y-3">
-            {grouped.map(([key, group]) => {
+            {visible.map(([key, group]) => {
               const first = group[0];
               const info = first.customer_info;
               const fullName = [info?.given_name, info?.family_name].filter(Boolean).join(" ").trim();
@@ -363,6 +399,19 @@ function UnmatchedAppointmentsCard({ appointments }: { appointments: ScheduleApp
                 first.square_customer_id && (clientsQuery.data ?? []).find(
                   (c) => c.square_customer_id === first.square_customer_id,
                 );
+
+              // Possible-duplicate detection: same normalized name OR same phone
+              // as an existing Admin client. Skip anything already linked to
+                // *this* Square customer (that's handled by linkedElsewhere).
+              const nameKey = normNameForDup(fullName);
+              const phoneKey = normPhoneForDup(info?.phone);
+              const dupSet = new Map<string, LinkableClient>();
+              if (nameKey) for (const c of byName.get(nameKey) ?? []) dupSet.set(c.id, c);
+              if (phoneKey) for (const c of byPhone.get(phoneKey) ?? []) dupSet.set(c.id, c);
+              // Never surface the exact-linked client as a "possible duplicate"
+              if (linkedElsewhere) dupSet.delete(linkedElsewhere.id);
+              const duplicates = Array.from(dupSet.values());
+
               return (
                 <div
                   key={key}
@@ -415,6 +464,130 @@ function UnmatchedAppointmentsCard({ appointments }: { appointments: ScheduleApp
                       />
                     )}
                   </div>
+
+                  {duplicates.length > 0 && first.square_customer_id && !linkedElsewhere && (
+                    <div className="mt-3 rounded-md border border-orange-300 bg-orange-50 p-3">
+                      <div className="text-sm font-semibold text-orange-900">
+                        ⚠ Possible duplicate client already exists
+                      </div>
+                      <div className="mt-1 text-xs text-orange-800">
+                        Matched on{" "}
+                        {[
+                          nameKey && (byName.get(nameKey) ?? []).length > 0 ? "name" : null,
+                          phoneKey && (byPhone.get(phoneKey) ?? []).length > 0 ? "phone" : null,
+                        ]
+                          .filter(Boolean)
+                          .join(" + ") || "contact info"}
+                        .
+                      </div>
+                      <div className="mt-2 space-y-2">
+                        {duplicates.map((c) => {
+                          const remaining = visitsRemaining(c);
+                          const owed = Math.max(
+                            0,
+                            Number(c.package_price ?? 0) - Number(c.amount_paid ?? 0),
+                          );
+                          const isArchived =
+                            (c.status ?? "active").toLowerCase() !== "active";
+                          return (
+                            <div
+                              key={c.id}
+                              className="rounded border border-orange-200 bg-white p-2 text-xs"
+                            >
+                              <div className="flex flex-wrap items-start justify-between gap-2">
+                                <div className="space-y-1">
+                                  <div className="font-medium text-slate-900">
+                                    <Link
+                                      to="/clients/$id"
+                                      params={{ id: c.id }}
+                                      className="underline"
+                                    >
+                                      {c.first_name} {c.last_name}
+                                    </Link>
+                                    <span
+                                      className={`ml-2 rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                                        isArchived
+                                          ? "bg-slate-200 text-slate-700"
+                                          : "bg-emerald-100 text-emerald-900"
+                                      }`}
+                                    >
+                                      {isArchived ? c.status ?? "archived" : "active"}
+                                    </span>
+                                  </div>
+                                  <div className="text-slate-600">
+                                    <span className="text-slate-400">Phone: </span>
+                                    {c.phone ?? "—"}
+                                    {" · "}
+                                    <span className="text-slate-400">Email: </span>
+                                    {c.email ?? "—"}
+                                  </div>
+                                  <div className="font-mono text-[10px] text-slate-500">
+                                    Current square_customer_id:{" "}
+                                    {c.square_customer_id ?? (
+                                      <span className="italic text-slate-400">
+                                        not linked
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="text-slate-600">
+                                    {remaining}/{c.package_total_visits} visits left ·{" "}
+                                    {formatCurrency(Number(c.amount_paid ?? 0))} /{" "}
+                                    {formatCurrency(Number(c.package_price ?? 0))}
+                                    {owed > 0 && (
+                                      <span className="text-red-700">
+                                        {" · "}
+                                        Owes {formatCurrency(owed)}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                                <div className="flex flex-col items-end gap-1">
+                                  <Button
+                                    size="sm"
+                                    disabled={
+                                      linkMut.isPending || !!c.square_customer_id
+                                    }
+                                    onClick={() =>
+                                      linkMut.mutate({
+                                        clientId: c.id,
+                                        squareCustomerId: first.square_customer_id!,
+                                      })
+                                    }
+                                    title={
+                                      c.square_customer_id
+                                        ? "This Admin client is already linked to a different Square customer"
+                                        : undefined
+                                    }
+                                  >
+                                    Link Square customer to {c.first_name}
+                                  </Button>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <Button asChild size="sm" variant="outline">
+                          <Link to="/clients/new">Create new Admin client</Link>
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() =>
+                            setIgnored((prev) => {
+                              const next = new Set(prev);
+                              next.add(key);
+                              return next;
+                            })
+                          }
+                        >
+                          Ignore
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
                   <div className="mt-3 overflow-x-auto">
                     <table className="w-full text-xs">
                       <thead className="text-left text-slate-500">

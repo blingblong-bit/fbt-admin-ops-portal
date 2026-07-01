@@ -285,7 +285,13 @@ export const previewNotesLedger = createServerFn({ method: "POST" })
       };
 
       if (row.needs_review) {
-        reviews.push({ ...row, candidates: combined, reason: row.review_reason ?? "Needs manual review." });
+        const reason = row.review_reason ?? "Needs manual review.";
+        reviews.push({
+          ...row,
+          candidates: combined,
+          reason,
+          categories: classifyReview(row, reason, squareLinked.length, combined.length, false),
+        });
         diagnostics.push({
           ...diagBase,
           outcome: "parser_review",
@@ -298,7 +304,12 @@ export const previewNotesLedger = createServerFn({ method: "POST" })
 
       if (duplicateParsed) {
         const dupReason = "Multiple ledger entries for same client — manual package selection required.";
-        reviews.push({ ...row, candidates: combined, reason: dupReason });
+        reviews.push({
+          ...row,
+          candidates: combined,
+          reason: dupReason,
+          categories: classifyReview(row, dupReason, squareLinked.length, combined.length, true),
+        });
         diagnostics.push({
           ...diagBase,
           outcome: "review",
@@ -337,7 +348,12 @@ export const previewNotesLedger = createServerFn({ method: "POST" })
       }
 
       if (!chosen) {
-        reviews.push({ ...row, candidates: combined, reason });
+        reviews.push({
+          ...row,
+          candidates: combined,
+          reason,
+          categories: classifyReview(row, reason, squareLinked.length, combined.length, false),
+        });
         diagnostics.push({ ...diagBase, outcome: "review", rule, reason });
         continue;
       }

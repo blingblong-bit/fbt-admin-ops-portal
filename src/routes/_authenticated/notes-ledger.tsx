@@ -742,10 +742,13 @@ function AutoUpdateCard({
         <div className="col-span-full">
           <span className="font-medium">Notes:</span>{" "}
           {c.internal_notes.note_status === "append" && c.internal_notes.appended && (
-            <span className="text-emerald-700">Append — {c.internal_notes.appended}</span>
+            <span className="text-emerald-700">
+              Append {c.internal_notes.appended_count} new note
+              {c.internal_notes.appended_count === 1 ? "" : "s"} — {c.internal_notes.appended}
+            </span>
           )}
           {c.internal_notes.note_status === "already_exists" && (
-            <span className="text-slate-500">Note already exists — no append needed.</span>
+            <span className="text-slate-500">No new notes (already exists)</span>
           )}
           {c.internal_notes.note_status === "no_note" && (
             <span className="text-slate-500">No new notes</span>
@@ -971,12 +974,14 @@ function RecentlyAppliedCard({
       changed: before.amount_paid !== after.amount_paid,
     },
   ];
+  const appendedLines = entry.appended_note
+    ? entry.appended_note.split(/\r?\n/).map((l) => l.trim()).filter((l) => l.length > 0)
+    : [];
+  const appendedCount = appendedLines.length;
   const noteLine =
-    entry.note_status === "append" && entry.appended_note
-      ? `Appended — ${entry.appended_note}`
-      : entry.note_status === "already_exists"
-        ? "Note already exists — no append needed"
-        : "No new notes";
+    entry.note_status === "append" && appendedCount > 0
+      ? `Appended ${appendedCount} new note${appendedCount === 1 ? "" : "s"}`
+      : "No new notes";
   return (
     <div
       className={`rounded border p-3 text-sm ${
@@ -1032,6 +1037,15 @@ function RecentlyAppliedCard({
             {noteLine}
           </span>
         </li>
+        {appendedCount > 0 && (
+          <li className="pl-4">
+            <ul className="space-y-0.5">
+              {appendedLines.map((l, i) => (
+                <li key={i} className="text-emerald-700">— {l}</li>
+              ))}
+            </ul>
+          </li>
+        )}
         <li>
           • <span className="text-slate-500">Ledger row marked as imported/resolved</span>
         </li>

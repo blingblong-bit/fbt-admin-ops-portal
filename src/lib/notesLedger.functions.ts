@@ -111,7 +111,7 @@ export type AutoUpdateRow = {
     package_start_date: { before: string | null; after: string | null; changed: boolean };
     amount_paid: { before: number; after: number; changed: boolean };
     amount_owed: { before: number; after: number; changed: boolean };
-    internal_notes: { before: string | null; after: string | null; changed: boolean; appended: string | null; note_status: NoteStatus };
+    internal_notes: { before: string | null; after: string | null; changed: boolean; appended: string | null; appended_count: number; note_status: NoteStatus };
   };
 };
 
@@ -169,13 +169,84 @@ function normalizeNoteForCompare(s: string): string {
     .trim();
 }
 
+const JUNK_LINE_RE = /^[\s\-–—.()·•*]*$/;
+
+function isJunkLine(raw: string): boolean {
+  const t = raw.trim();
+  if (!t) return true;
+  if (JUNK_LINE_RE.test(t)) return true;
+  if (!normalizeNoteForCompare(t)) return true;
+  return false;
+}
+
+function levenshtein(a: string, b: string): number {
+  if (a === b) return 0;
+  if (!a.length) return b.length;
+  if (!b.length) return a.length;
+  const dp: number[] = new Array(b.length + 1);
+  for (let j = 0; j <= b.length; j++) dp[j] = j;
+  for (let i = 1; i <= a.length; i++) {
+    let prev = dp[0];
+    dp[0] = i;
+    for (let j = 1; j <= b.length; j++) {
+      const tmp = dp[j];
+      dp[j] =
+        a.charCodeAt(i - 1) === b.charCodeAt(j - 1)
+          ? prev
+          : 1 + Math.min(prev, dp[j], dp[j - 1]);
+      prev = tmp;
+    }
+  }
+  return dp[b.length];
+}
+
+function similarity(a: string, b: string): number {
+  const m = Math.max(a.length, b.length);
+  if (m === 0) return 1;
+  return 1 - levenshtein(a, b) / m;
+}
+
+/** Dedupe incoming notes line-by-line against existing notes. */
+export function dedupeNoteLines(
+  existing: string | null | undefined,
+  incoming: string | null | undefined,
+): { appended: string | null; count: number } {
+  if (!incoming) return { appended: null, count: 0 };
+  const existingNorm: string[] = [];
+  for (const l of (existing ?? "").split(/\r?\n/)) {
+    if (isJunkLine(l)) continue;
+    const n = normalizeNoteForCompare(l);
+    if (n) existingNorm.push(n);
+  }
+  const seen = new Set(existingNorm);
+  const addedNorm: string[] = [];
+  const kept: string[] = [];
+  for (const raw of incoming.split(/\r?\n/)) {
+    if (isJunkLine(raw)) continue;
+    const line = raw.trim();
+    const n = normalizeNoteForCompare(line);
+    if (!n || seen.has(n)) continue;
+    let dup = false;
+    for (const ex of existingNorm) {
+      if (similarity(n, ex) >= 0.95) { dup = true; break; }
+    }
+    if (!dup) {
+      for (const ex of addedNorm) {
+        if (similarity(n, ex) >= 0.95) { dup = true; break; }
+      }
+    }
+    if (dup) continue;
+    seen.add(n);
+    addedNorm.push(n);
+    kept.push(line);
+  }
+  if (kept.length === 0) return { appended: null, count: 0 };
+  return { appended: kept.join("\n"), count: kept.length };
+}
+
 export function noteAlreadyExists(existing: string | null | undefined, incoming: string | null | undefined): boolean {
-  if (!incoming) return false;
-  const inc = normalizeNoteForCompare(incoming);
-  if (!inc) return false;
-  const ex = normalizeNoteForCompare(existing ?? "");
-  if (!ex) return false;
-  return ex.includes(inc);
+  if (!incoming || !incoming.trim()) return false;
+  return dedupeNoteLines(existing, incoming).count === 0;
 }
 
 function buildChanges(parsed: ParsedRow, client: MatchClient): AutoUpdateRow["changes"] {
@@ -191,12 +262,15 @@ function buildChanges(parsed: ParsedRow, client: MatchClient): AutoUpdateRow["ch
 
   const currentNotes = client.internal_notes ?? "";
   let appendedNote: string | null = null;
+  let appendedCount = 0;
   let noteStatus: NoteStatus = "no_note";
   if (parsed.internal_notes && parsed.internal_notes.trim()) {
-    if (noteAlreadyExists(currentNotes, parsed.internal_notes)) {
+    const dedup = dedupeNoteLines(currentNotes, parsed.internal_notes);
+    if (dedup.count === 0) {
       noteStatus = "already_exists";
     } else {
-      appendedNote = parsed.internal_notes;
+      appendedNote = dedup.appended;
+      appendedCount = dedup.count;
       noteStatus = "append";
     }
   }
@@ -235,6 +309,7 @@ function buildChanges(parsed: ParsedRow, client: MatchClient): AutoUpdateRow["ch
       after: newNotes,
       changed: appendedNote !== null,
       appended: appendedNote,
+      appended_count: appendedCount,
       note_status: noteStatus,
     },
   };
@@ -557,9 +632,12 @@ export const applyNotesLedger = createServerFn({ method: "POST" })
         internal_notes: (current?.internal_notes as string | null) ?? null,
       };
 
-      let newNotes = current?.internal_notes ?? null;
-      if (u.appended_note && (!newNotes || !newNotes.includes(u.appended_note))) {
-        newNotes = newNotes ? `${newNotes}\n${u.appended_note}` : u.appended_note;
+      let newNotes: string | null = (current?.internal_notes as string | null) ?? null;
+      if (u.appended_note) {
+        const dedup = dedupeNoteLines(newNotes, u.appended_note);
+        if (dedup.count > 0 && dedup.appended) {
+          newNotes = newNotes ? `${newNotes}\n${dedup.appended}` : dedup.appended;
+        }
       }
       baseFields.internal_notes_after = newNotes;
 

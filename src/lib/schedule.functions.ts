@@ -557,15 +557,28 @@ export type LinkableClient = {
 export const listLinkableClients = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }): Promise<LinkableClient[]> => {
-    const { data, error } = await context.supabase
-      .from("clients")
-      .select(
-        "id, first_name, last_name, phone, email, square_customer_id, status, package_total_visits, visits_used, package_price, amount_paid",
-      )
-      .is("deleted_at", null)
-      .order("first_name", { ascending: true });
-    if (error) throw error;
-    return (data ?? []) as LinkableClient[];
+    // Paginate in 1000-row chunks so the manual link picker sees every client
+    // past PostgREST's default 1000-row cap.
+    const all: LinkableClient[] = [];
+    const pageSize = 1000;
+    let from = 0;
+    for (let i = 0; i < 100; i++) {
+      const { data, error } = await context.supabase
+        .from("clients")
+        .select(
+          "id, first_name, last_name, phone, email, square_customer_id, status, package_total_visits, visits_used, package_price, amount_paid",
+        )
+        .is("deleted_at", null)
+        .order("first_name", { ascending: true })
+        .range(from, from + pageSize - 1);
+      if (error) throw error;
+      const page = (data ?? []) as LinkableClient[];
+      if (page.length === 0) break;
+      all.push(...page);
+      if (page.length < pageSize) break;
+      from += pageSize;
+    }
+    return all;
   });
 
 export const linkSquareCustomer = createServerFn({ method: "POST" })

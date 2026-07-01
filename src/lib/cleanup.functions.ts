@@ -28,15 +28,43 @@ export const archiveInactiveSquareImports = createServerFn({ method: "POST" })
     const scheduled = await getScheduledClientIds({ data: { days: 30 } });
     const scheduledSet = new Set<string>(scheduled.client_ids);
 
-    const { data: rows, error } = await context.supabase
-      .from("clients")
-      .select(
-        "id, status, manual_active, package_total_visits, visits_used, package_price, amount_paid, square_customer_id, updated_at, deleted_at",
-      )
-      .is("deleted_at", null)
-      .not("square_customer_id", "is", null)
-      .neq("status", "archived");
-    if (error) throw error;
+    // Paginate in 1000-row chunks so every candidate past the default
+    // PostgREST 1000-row cap is evaluated.
+    type CleanupRow = {
+      id: string;
+      status: string | null;
+      manual_active: boolean | null;
+      package_total_visits: number | null;
+      visits_used: number | null;
+      package_price: number | string | null;
+      amount_paid: number | string | null;
+      square_customer_id: string | null;
+      updated_at: string;
+      deleted_at: string | null;
+    };
+    const rows: CleanupRow[] = [];
+    {
+      const pageSize = 1000;
+      let from = 0;
+      for (let i = 0; i < 100; i++) {
+        const { data: page, error } = await context.supabase
+          .from("clients")
+          .select(
+            "id, status, manual_active, package_total_visits, visits_used, package_price, amount_paid, square_customer_id, updated_at, deleted_at",
+          )
+          .is("deleted_at", null)
+          .not("square_customer_id", "is", null)
+          .neq("status", "archived")
+          .range(from, from + pageSize - 1);
+        if (error) throw error;
+        const chunk = (page ?? []) as CleanupRow[];
+        if (chunk.length === 0) break;
+        rows.push(...chunk);
+        if (chunk.length < pageSize) break;
+        from += pageSize;
+      }
+    }
+
 
     const out: ArchiveInactiveResult = {
       evaluated: rows?.length ?? 0,

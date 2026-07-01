@@ -77,12 +77,25 @@ function BackupPage() {
   }, []);
 
   async function fetchAllClients(): Promise<Client[]> {
-    const { data, error } = await supabase
-      .from("clients")
-      .select("*")
-      .order("last_name", { ascending: true });
-    if (error) throw error;
-    return (data ?? []) as Client[];
+    // Paginate in 1000-row chunks so backups include every client past the
+    // default PostgREST 1000-row cap.
+    const all: Client[] = [];
+    const pageSize = 1000;
+    let from = 0;
+    for (let i = 0; i < 100; i++) {
+      const { data, error } = await supabase
+        .from("clients")
+        .select("*")
+        .order("last_name", { ascending: true })
+        .range(from, from + pageSize - 1);
+      if (error) throw error;
+      const page = (data ?? []) as Client[];
+      if (page.length === 0) break;
+      all.push(...page);
+      if (page.length < pageSize) break;
+      from += pageSize;
+    }
+    return all;
   }
 
   function downloadBlob(content: string, filename: string, mime: string) {

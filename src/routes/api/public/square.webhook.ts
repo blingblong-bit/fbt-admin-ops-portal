@@ -444,12 +444,37 @@ async function handlePaymentEvent(supabaseAdmin: any, eventType: string, event: 
       return;
     }
 
-    const result = await applyPaymentOnce(supabaseAdmin, {
-      clientId,
-      squarePaymentId,
-      amountCents,
-      matchMethod: method,
-    });
+    let result: { credited: boolean; appliedAmount: number; alreadyApplied: boolean } | null = null;
+    let applyErr: unknown = null;
+    try {
+      result = await applyPaymentOnce(supabaseAdmin, {
+        clientId,
+        squarePaymentId,
+        amountCents,
+        matchMethod: method,
+      });
+    } catch (e) {
+      applyErr = e;
+    }
+
+    if (applyErr || !result) {
+      // Credit failed (e.g. clients_validate trigger blocked because package_price=0
+      // or amount would exceed price). Keep needs_review=true so staff can act.
+      await supabaseAdmin
+        .from("square_payments")
+        .update({ status, client_id: clientId, needs_review: true, raw_event: event as unknown as never })
+        .eq("id", existingPayment.id);
+      await supabaseAdmin.from("square_sync_log").insert({
+        event_type: eventType,
+        square_customer_id: squareCustomerId,
+        client_id: clientId,
+        status: "error",
+        action: "apply_blocked",
+        message: `COMPLETED payment ${squarePaymentId} (${amountDisplay}) matched to client but credit was blocked: ${formatErr(applyErr)}`,
+        raw_event: event as unknown as never,
+      });
+      return;
+    }
 
     await supabaseAdmin
       .from("square_payments")

@@ -632,9 +632,12 @@ export const applyNotesLedger = createServerFn({ method: "POST" })
         internal_notes: (current?.internal_notes as string | null) ?? null,
       };
 
-      let newNotes = current?.internal_notes ?? null;
-      if (u.appended_note && (!newNotes || !newNotes.includes(u.appended_note))) {
-        newNotes = newNotes ? `${newNotes}\n${u.appended_note}` : u.appended_note;
+      let newNotes: string | null = (current?.internal_notes as string | null) ?? null;
+      if (u.appended_note) {
+        const dedup = dedupeNoteLines(newNotes, u.appended_note);
+        if (dedup.count > 0 && dedup.appended) {
+          newNotes = newNotes ? `${newNotes}\n${dedup.appended}` : dedup.appended;
+        }
       }
       baseFields.internal_notes_after = newNotes;
 

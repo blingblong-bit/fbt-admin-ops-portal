@@ -639,3 +639,116 @@ function DiffRow({
     </div>
   );
 }
+
+function ReviewCard({
+  row,
+  selectedClientId,
+  onSelect,
+  onApply,
+  onSkip,
+  onMarkResolved,
+  applying,
+}: {
+  row: ReviewRow;
+  selectedClientId: string | null;
+  onSelect: (clientId: string) => void;
+  onApply: (client: MatchClient) => void;
+  onSkip: () => void;
+  onMarkResolved: () => void;
+  applying: boolean;
+}) {
+  const selectedClient = row.candidates.find((c) => c.id === selectedClientId) ?? null;
+  return (
+    <div className="rounded border border-amber-200 bg-amber-50 p-3 text-sm">
+      <div className="mb-2 flex flex-wrap items-center gap-2">
+        <Badge variant="outline" className="border-amber-400 text-amber-800">
+          Line {row.line_number}
+        </Badge>
+        {row.assessment && <Badge variant="secondary">Assessment</Badge>}
+        <span className="font-semibold">{row.name ?? "(no name)"}</span>
+        {row.categories.map((c) => (
+          <Badge
+            key={c}
+            variant="secondary"
+            className="bg-amber-100 text-amber-900"
+          >
+            {REVIEW_CATEGORY_LABELS[c]}
+          </Badge>
+        ))}
+      </div>
+      <div className="text-xs text-slate-600">{row.reason}</div>
+      <pre className="mt-2 whitespace-pre-wrap font-mono text-xs text-slate-700">
+        {row.raw}
+      </pre>
+      <div className="mt-2 grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
+        <div><span className="text-slate-500">Parsed price:</span> {row.package_price !== null ? formatCurrency(row.package_price) : "—"}</div>
+        <div><span className="text-slate-500">Parsed visits:</span> {row.package_total_visits ?? "—"}</div>
+        <div><span className="text-slate-500">Parsed start:</span> {row.package_start_date ? formatDate(row.package_start_date) : "—"}</div>
+        <div><span className="text-slate-500">Parsed paid:</span> {row.amount_paid !== null ? formatCurrency(row.amount_paid) : "—"}</div>
+      </div>
+
+      {row.candidates.length > 0 ? (
+        <div className="mt-3 space-y-2">
+          <div className="text-xs font-medium text-slate-600">
+            Possible matches ({row.candidates.length}) — select one to apply:
+          </div>
+          {row.candidates.map((c) => {
+            const owed = Math.max(0, Number(c.package_price ?? 0) - Number(c.amount_paid ?? 0));
+            const active = c.id === selectedClientId;
+            return (
+              <label
+                key={c.id}
+                className={`flex cursor-pointer flex-col gap-1 rounded border p-2 ${
+                  active ? "border-emerald-400 bg-emerald-50" : "border-slate-200 bg-white"
+                }`}
+              >
+                <div className="flex flex-wrap items-center gap-2">
+                  <input
+                    type="radio"
+                    name={`review-${row.line_number}`}
+                    checked={active}
+                    onChange={() => onSelect(c.id)}
+                  />
+                  <span className="font-semibold">{fullName(c)}</span>
+                  {c.square_customer_id && (
+                    <Badge variant="secondary" className="bg-blue-100 text-blue-800">Square</Badge>
+                  )}
+                  <span className="font-mono text-xs text-slate-600">{c.phone ?? "no phone"}</span>
+                </div>
+                <div className="grid grid-cols-2 gap-1 text-xs text-slate-700 sm:grid-cols-4">
+                  <div><span className="text-slate-500">Price:</span> {formatCurrency(Number(c.package_price ?? 0))}</div>
+                  <div><span className="text-slate-500">Start:</span> {c.package_start_date ? formatDate(c.package_start_date) : "—"}</div>
+                  <div><span className="text-slate-500">Owed:</span> {formatCurrency(owed)}</div>
+                  <div><span className="text-slate-500">Status:</span> {c.status}</div>
+                </div>
+                {c.internal_notes && (
+                  <div className="whitespace-pre-wrap text-xs text-slate-600">
+                    <span className="text-slate-500">Notes:</span> {c.internal_notes}
+                  </div>
+                )}
+              </label>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="mt-3 text-xs text-slate-500">No candidate clients found for this row.</div>
+      )}
+
+      <div className="mt-3 flex flex-wrap gap-2">
+        <Button
+          size="sm"
+          onClick={() => selectedClient && onApply(selectedClient)}
+          disabled={!selectedClient || applying}
+        >
+          {applying ? "Applying…" : "Apply to selected client"}
+        </Button>
+        <Button size="sm" variant="outline" onClick={onSkip}>
+          Skip row
+        </Button>
+        <Button size="sm" variant="outline" onClick={onMarkResolved}>
+          Mark resolved
+        </Button>
+      </div>
+    </div>
+  );
+}

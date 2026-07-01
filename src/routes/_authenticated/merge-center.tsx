@@ -88,12 +88,14 @@ function MergeCenterPage() {
       pending_phone: 0,
       balance_conflict: 0,
       blocked: 0,
+      shared_phone: 0,
       resolved: 0,
       all: pairs.length,
     };
     for (const p of pairs) {
       if (p.balance_conflict && p.status === "pending") c.balance_conflict++;
       if (p.status === "blocked") c.blocked++;
+      if (p.status === "shared_phone") c.shared_phone++;
       if (p.status === "merged" || p.status === "ignored") c.resolved++;
       if (p.status === "pending") {
         if (p.confidence === "high_name_phone") c.pending_high++;
@@ -117,6 +119,8 @@ function MergeCenterPage() {
           return p.status === "pending" && p.balance_conflict;
         case "blocked":
           return p.status === "blocked";
+        case "shared_phone":
+          return p.status === "shared_phone";
         case "resolved":
           return p.status === "merged" || p.status === "ignored";
         case "all":

@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useMutation } from "@tanstack/react-query";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,6 +12,7 @@ import { formatCurrency, formatDate, fullName } from "@/lib/clients";
 import {
   previewNotesLedger,
   applyNotesLedger,
+  undoNotesLedgerApply,
   noteAlreadyExists,
   REVIEW_CATEGORY_LABELS,
   type PreviewResult,
@@ -21,6 +22,34 @@ import {
   type ReviewCategory,
   type MatchClient,
 } from "@/lib/notesLedger.functions";
+
+const RECENTLY_APPLIED_TTL_MS = 12000;
+
+type RecentlyApplied = {
+  id: string;
+  line_number: number;
+  client_id: string;
+  client_name: string;
+  applied_at: number;
+  before: {
+    package_price: number;
+    package_total_visits: number;
+    package_start_date: string | null;
+    amount_paid: number;
+    internal_notes: string | null;
+  };
+  after: {
+    package_price: number;
+    package_total_visits: number;
+    package_start_date: string | null;
+    amount_paid: number;
+    internal_notes: string | null;
+  };
+  appended_note: string | null;
+  note_status: "append" | "already_exists" | "no_note";
+  undone: boolean;
+};
+
 
 export const Route = createFileRoute("/_authenticated/notes-ledger")({
   head: () => ({ meta: [{ title: "Notes Ledger Import · FBT Admin" }] }),

@@ -518,6 +518,11 @@ export type LinkableClient = {
   phone: string | null;
   email: string | null;
   square_customer_id: string | null;
+  status: string | null;
+  package_total_visits: number;
+  visits_used: number | null;
+  package_price: number;
+  amount_paid: number;
 };
 
 export const listLinkableClients = createServerFn({ method: "GET" })
@@ -525,7 +530,9 @@ export const listLinkableClients = createServerFn({ method: "GET" })
   .handler(async ({ context }): Promise<LinkableClient[]> => {
     const { data, error } = await context.supabase
       .from("clients")
-      .select("id, first_name, last_name, phone, email, square_customer_id")
+      .select(
+        "id, first_name, last_name, phone, email, square_customer_id, status, package_total_visits, visits_used, package_price, amount_paid",
+      )
       .is("deleted_at", null)
       .order("first_name", { ascending: true });
     if (error) throw error;

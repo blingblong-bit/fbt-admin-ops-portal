@@ -450,7 +450,13 @@ export const getScheduleCheck = createServerFn({ method: "GET" })
           : 0
         : Math.max(0, (c.package_total_visits ?? 0) - c.visits_used);
 
-    const clientList = (clients ?? []) as ScheduleClientLite[];
+    // Reports must exclude archived clients — matching map above still
+    // contains them so appointments continue to resolve for display, but
+    // "Not Scheduled After Selected Date" / "Needs Next Week Scheduling"
+    // (and any other clientList-derived report) filter them out here.
+    const clientList = ((clients ?? []) as ScheduleClientLite[]).filter(
+      (c) => c.status !== "archived",
+    );
 
     // last appointment date per client across active bookings
     const lastApptByClient = new Map<string, string>();

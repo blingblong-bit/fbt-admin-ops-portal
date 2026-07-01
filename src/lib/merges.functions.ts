@@ -283,8 +283,12 @@ export const findDuplicatePairs = createServerFn({ method: "GET" })
 
       const [pa, pb] = orderPair(left.id, right.id);
       const review = reviewByPair.get(`${pa}|${pb}`) ?? null;
-      const status =
-        review?.status ?? (squareConflict ? "blocked" : "pending");
+      const derivedStatus: MergePair["status"] = squareConflict
+        ? cand.nameMatch
+          ? "blocked"
+          : "shared_phone"
+        : "pending";
+      const status = review?.status ?? derivedStatus;
 
       pairs.push({
         review_id: review?.id ?? null,

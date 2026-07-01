@@ -450,14 +450,23 @@ function AutoUpdateCard({
   row,
   excluded,
   onToggle,
+  result,
 }: {
   row: AutoUpdateRow;
   excluded: boolean;
   onToggle: () => void;
+  result?: ApplyRowResult;
 }) {
   const c = row.changes;
+  const border = result?.status === "error"
+    ? "border-rose-300 bg-rose-50"
+    : result?.status === "success"
+      ? "border-emerald-300 bg-emerald-50/60"
+      : excluded
+        ? "border-slate-200 bg-slate-50 opacity-60"
+        : "border-emerald-200 bg-white";
   return (
-    <div className={`rounded border p-3 text-sm ${excluded ? "border-slate-200 bg-slate-50 opacity-60" : "border-emerald-200 bg-white"}`}>
+    <div className={`rounded border p-3 text-sm ${border}`}>
       <div className="mb-2 flex flex-wrap items-center gap-2">
         <input type="checkbox" checked={!excluded} onChange={onToggle} />
         <span className="font-semibold">{fullName(row.client)}</span>
@@ -466,7 +475,18 @@ function AutoUpdateCard({
         )}
         {row.parsed.assessment && <Badge variant="secondary">Assessment</Badge>}
         <span className="text-xs text-slate-500">Line {row.parsed.line_number}</span>
+        {result?.status === "success" && (
+          <Badge variant="secondary" className="bg-emerald-100 text-emerald-800">Applied</Badge>
+        )}
+        {result?.status === "error" && (
+          <Badge variant="secondary" className="bg-rose-100 text-rose-800">Failed — {result.step}</Badge>
+        )}
       </div>
+      {result?.status === "error" && (
+        <div className="mb-2 rounded border border-rose-200 bg-white p-2 text-xs text-rose-700">
+          {result.error}
+        </div>
+      )}
       <div className="grid grid-cols-1 gap-2 text-xs sm:grid-cols-3">
         <DiffRow label="Price" before={formatCurrency(c.package_price.before)} after={formatCurrency(c.package_price.after)} changed={c.package_price.changed} />
         <DiffRow label="Visits" before={String(c.package_total_visits.before)} after={String(c.package_total_visits.after)} changed={c.package_total_visits.changed} />

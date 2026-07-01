@@ -587,6 +587,8 @@ export const applyNotesLedger = createServerFn({ method: "POST" })
           step: "update",
           error: detail,
           fields: baseFields,
+          before: beforeSnapshot,
+
         });
         continue;
       }

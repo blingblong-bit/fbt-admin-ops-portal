@@ -512,18 +512,26 @@ async function handlePaymentEvent(supabaseAdmin: any, eventType: string, event: 
 
   let applied = false;
   let alreadyApplied = false;
+  let applyErr: unknown = null;
   if (clientId && isCompleted && amountCents > 0) {
-    const result = await applyPaymentOnce(supabaseAdmin, {
-      clientId,
-      squarePaymentId,
-      amountCents,
-      matchMethod: method,
-    });
-    applied = true;
-    alreadyApplied = result.alreadyApplied;
+    try {
+      const result = await applyPaymentOnce(supabaseAdmin, {
+        clientId,
+        squarePaymentId,
+        amountCents,
+        matchMethod: method,
+      });
+      applied = true;
+      alreadyApplied = result.alreadyApplied;
+    } catch (e) {
+      applyErr = e;
+    }
   }
 
-  const needsReview = !clientId || !isCompleted ? !applied : false;
+  // Needs review only when we can't identify the customer OR when a COMPLETED
+  // matched payment failed to apply (trigger blocked). Matched-but-not-completed
+  // rows are "pending", not review.
+  const needsReview = !clientId || (isCompleted && !applied);
 
   await supabaseAdmin.from("square_payments").insert({
     square_payment_id: squarePaymentId,
@@ -533,7 +541,7 @@ async function handlePaymentEvent(supabaseAdmin: any, eventType: string, event: 
     currency,
     status,
     applied,
-    needs_review: needsReview && !applied,
+    needs_review: needsReview,
     buyer_email: buyerEmail,
     note,
     raw_event: event as unknown as never,

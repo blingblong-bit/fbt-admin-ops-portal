@@ -39,6 +39,7 @@ type FilterKey =
   | "pending_phone"
   | "balance_conflict"
   | "blocked"
+  | "shared_phone"
   | "resolved"
   | "all";
 
@@ -47,7 +48,8 @@ const FILTERS: { key: FilterKey; label: string }[] = [
   { key: "pending_name", label: "Name only" },
   { key: "pending_phone", label: "Phone only" },
   { key: "balance_conflict", label: "Balance conflict" },
-  { key: "blocked", label: "Blocked (different Square IDs)" },
+  { key: "blocked", label: "Blocked (same name, different Square IDs)" },
+  { key: "shared_phone", label: "Shared phone (different names)" },
   { key: "resolved", label: "Merged / Ignored" },
   { key: "all", label: "All pairs" },
 ];
@@ -86,12 +88,14 @@ function MergeCenterPage() {
       pending_phone: 0,
       balance_conflict: 0,
       blocked: 0,
+      shared_phone: 0,
       resolved: 0,
       all: pairs.length,
     };
     for (const p of pairs) {
       if (p.balance_conflict && p.status === "pending") c.balance_conflict++;
       if (p.status === "blocked") c.blocked++;
+      if (p.status === "shared_phone") c.shared_phone++;
       if (p.status === "merged" || p.status === "ignored") c.resolved++;
       if (p.status === "pending") {
         if (p.confidence === "high_name_phone") c.pending_high++;
@@ -115,6 +119,8 @@ function MergeCenterPage() {
           return p.status === "pending" && p.balance_conflict;
         case "blocked":
           return p.status === "blocked";
+        case "shared_phone":
+          return p.status === "shared_phone";
         case "resolved":
           return p.status === "merged" || p.status === "ignored";
         case "all":
@@ -390,14 +396,26 @@ function PairCard({
           {pair.status === "blocked" && (
             <Badge className="bg-red-600 text-white hover:bg-red-600">Blocked</Badge>
           )}
+          {pair.status === "shared_phone" && (
+            <Badge variant="outline" className="border-slate-300 text-slate-600">
+              Shared phone
+            </Badge>
+          )}
         </div>
       </CardHeader>
       <CardContent className="space-y-3">
-        {pair.square_conflict && (
+        {pair.status === "blocked" && (
           <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-            Blocked because both clients have different Square Customer IDs. This cannot be
-            reopened. Resolve by verifying whether these are truly different people or manually
-            correcting the Square linkage.
+            Blocked because both clients have the same name but different Square Customer IDs. This
+            cannot be reopened. Resolve by verifying whether these are truly different people or
+            manually correcting the Square linkage.
+          </div>
+        )}
+        {pair.status === "shared_phone" && (
+          <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+            These clients share a phone number but have different names and different Square
+            Customer IDs — likely family members, not duplicates. No merge action needed. Use
+            "Ignore pair" to hide from future scans.
           </div>
         )}
         {pair.balance_conflict && !pair.square_conflict && (
@@ -411,13 +429,13 @@ function PairCard({
             c={pair.left}
             side="left"
             isKept={keptId === pair.left.id}
-            blocked={pair.status === "blocked"}
+            blocked={pair.status === "blocked" || pair.status === "shared_phone"}
           />
           <ClientCol
             c={pair.right}
             side="right"
             isKept={keptId === pair.right.id}
-            blocked={pair.status === "blocked"}
+            blocked={pair.status === "blocked" || pair.status === "shared_phone"}
           />
         </div>
 
@@ -466,6 +484,11 @@ function PairCard({
                 Ignore pair
               </Button>
             </>
+          )}
+          {pair.status === "shared_phone" && (
+            <Button variant="ghost" disabled={busy} onClick={onIgnore}>
+              Ignore pair
+            </Button>
           )}
           {(pair.status === "ignored" || pair.status === "merged") && (
             <Button variant="outline" disabled={busy} onClick={onReset}>

@@ -17,7 +17,7 @@ export type MergePairConfidence =
 
 export type MergePair = {
   review_id: string | null;
-  status: "pending" | "merged" | "ignored" | "blocked";
+  status: "pending" | "merged" | "ignored" | "blocked" | "shared_phone";
   confidence: MergePairConfidence;
   recommended_keep_id: string | null;
   balance_conflict: boolean;
@@ -283,8 +283,12 @@ export const findDuplicatePairs = createServerFn({ method: "GET" })
 
       const [pa, pb] = orderPair(left.id, right.id);
       const review = reviewByPair.get(`${pa}|${pb}`) ?? null;
-      const status =
-        review?.status ?? (squareConflict ? "blocked" : "pending");
+      const derivedStatus: MergePair["status"] = squareConflict
+        ? cand.nameMatch
+          ? "blocked"
+          : "shared_phone"
+        : "pending";
+      const status = review?.status ?? derivedStatus;
 
       pairs.push({
         review_id: review?.id ?? null,
@@ -308,8 +312,9 @@ export const findDuplicatePairs = createServerFn({ method: "GET" })
     const statusRank: Record<MergePair["status"], number> = {
       pending: 0,
       blocked: 1,
-      merged: 2,
-      ignored: 3,
+      shared_phone: 2,
+      merged: 3,
+      ignored: 4,
     };
     pairs.sort((x, y) => {
       const s = statusRank[x.status] - statusRank[y.status];

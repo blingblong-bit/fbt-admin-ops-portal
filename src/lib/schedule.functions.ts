@@ -346,6 +346,8 @@ export const getScheduleCheck = createServerFn({ method: "GET" })
           .from("clients")
           .select(
             "id, first_name, last_name, phone, package_total_visits, visits_used, package_price, amount_paid, internal_notes, square_customer_id",
+          .select(
+            "id, first_name, last_name, phone, package_total_visits, visits_used, package_price, amount_paid, internal_notes, square_customer_id, status, manual_active",
           )
           .is("deleted_at", null)
           .range(from, from + pageSize - 1);

@@ -31,6 +31,8 @@ export type ScheduleClientLite = {
   amount_paid: number;
   internal_notes: string | null;
   square_customer_id: string | null;
+  status: string | null;
+  manual_active: boolean | null;
 };
 
 export type ProductionCustomerInfo = {

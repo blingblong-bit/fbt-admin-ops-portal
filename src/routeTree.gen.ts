@@ -13,11 +13,13 @@ import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/index'
 import { Route as AuthenticatedSyncLogRouteImport } from './routes/_authenticated/sync-log'
+import { Route as AuthenticatedSquareDiagnosticRouteImport } from './routes/_authenticated/square-diagnostic'
 import { Route as AuthenticatedScheduleCheckRouteImport } from './routes/_authenticated/schedule-check'
 import { Route as AuthenticatedMergeCenterRouteImport } from './routes/_authenticated/merge-center'
 import { Route as AuthenticatedImportRouteImport } from './routes/_authenticated/import'
 import { Route as AuthenticatedBackupRouteImport } from './routes/_authenticated/backup'
 import { Route as AuthenticatedClientsIndexRouteImport } from './routes/_authenticated/clients.index'
+import { Route as ApiPublicSquareDiagRouteImport } from './routes/api/public/square-diag'
 import { Route as AuthenticatedClientsNewRouteImport } from './routes/_authenticated/clients.new'
 import { Route as AuthenticatedClientsDeletedRouteImport } from './routes/_authenticated/clients.deleted'
 import { Route as AuthenticatedClientsIdRouteImport } from './routes/_authenticated/clients.$id'
@@ -42,6 +44,12 @@ const AuthenticatedSyncLogRoute = AuthenticatedSyncLogRouteImport.update({
   path: '/sync-log',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedSquareDiagnosticRoute =
+  AuthenticatedSquareDiagnosticRouteImport.update({
+    id: '/square-diagnostic',
+    path: '/square-diagnostic',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedScheduleCheckRoute =
   AuthenticatedScheduleCheckRouteImport.update({
     id: '/schedule-check',
@@ -70,6 +78,11 @@ const AuthenticatedClientsIndexRoute =
     path: '/clients/',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const ApiPublicSquareDiagRoute = ApiPublicSquareDiagRouteImport.update({
+  id: '/api/public/square-diag',
+  path: '/api/public/square-diag',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthenticatedClientsNewRoute = AuthenticatedClientsNewRouteImport.update({
   id: '/clients/new',
   path: '/clients/new',
@@ -99,10 +112,12 @@ export interface FileRoutesByFullPath {
   '/import': typeof AuthenticatedImportRoute
   '/merge-center': typeof AuthenticatedMergeCenterRoute
   '/schedule-check': typeof AuthenticatedScheduleCheckRoute
+  '/square-diagnostic': typeof AuthenticatedSquareDiagnosticRoute
   '/sync-log': typeof AuthenticatedSyncLogRoute
   '/clients/$id': typeof AuthenticatedClientsIdRoute
   '/clients/deleted': typeof AuthenticatedClientsDeletedRoute
   '/clients/new': typeof AuthenticatedClientsNewRoute
+  '/api/public/square-diag': typeof ApiPublicSquareDiagRoute
   '/clients/': typeof AuthenticatedClientsIndexRoute
   '/api/public/square/webhook': typeof ApiPublicSquareWebhookRoute
 }
@@ -112,11 +127,13 @@ export interface FileRoutesByTo {
   '/import': typeof AuthenticatedImportRoute
   '/merge-center': typeof AuthenticatedMergeCenterRoute
   '/schedule-check': typeof AuthenticatedScheduleCheckRoute
+  '/square-diagnostic': typeof AuthenticatedSquareDiagnosticRoute
   '/sync-log': typeof AuthenticatedSyncLogRoute
   '/': typeof AuthenticatedIndexRoute
   '/clients/$id': typeof AuthenticatedClientsIdRoute
   '/clients/deleted': typeof AuthenticatedClientsDeletedRoute
   '/clients/new': typeof AuthenticatedClientsNewRoute
+  '/api/public/square-diag': typeof ApiPublicSquareDiagRoute
   '/clients': typeof AuthenticatedClientsIndexRoute
   '/api/public/square/webhook': typeof ApiPublicSquareWebhookRoute
 }
@@ -128,11 +145,13 @@ export interface FileRoutesById {
   '/_authenticated/import': typeof AuthenticatedImportRoute
   '/_authenticated/merge-center': typeof AuthenticatedMergeCenterRoute
   '/_authenticated/schedule-check': typeof AuthenticatedScheduleCheckRoute
+  '/_authenticated/square-diagnostic': typeof AuthenticatedSquareDiagnosticRoute
   '/_authenticated/sync-log': typeof AuthenticatedSyncLogRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
   '/_authenticated/clients/$id': typeof AuthenticatedClientsIdRoute
   '/_authenticated/clients/deleted': typeof AuthenticatedClientsDeletedRoute
   '/_authenticated/clients/new': typeof AuthenticatedClientsNewRoute
+  '/api/public/square-diag': typeof ApiPublicSquareDiagRoute
   '/_authenticated/clients/': typeof AuthenticatedClientsIndexRoute
   '/api/public/square/webhook': typeof ApiPublicSquareWebhookRoute
 }
@@ -145,10 +164,12 @@ export interface FileRouteTypes {
     | '/import'
     | '/merge-center'
     | '/schedule-check'
+    | '/square-diagnostic'
     | '/sync-log'
     | '/clients/$id'
     | '/clients/deleted'
     | '/clients/new'
+    | '/api/public/square-diag'
     | '/clients/'
     | '/api/public/square/webhook'
   fileRoutesByTo: FileRoutesByTo
@@ -158,11 +179,13 @@ export interface FileRouteTypes {
     | '/import'
     | '/merge-center'
     | '/schedule-check'
+    | '/square-diagnostic'
     | '/sync-log'
     | '/'
     | '/clients/$id'
     | '/clients/deleted'
     | '/clients/new'
+    | '/api/public/square-diag'
     | '/clients'
     | '/api/public/square/webhook'
   id:
@@ -173,11 +196,13 @@ export interface FileRouteTypes {
     | '/_authenticated/import'
     | '/_authenticated/merge-center'
     | '/_authenticated/schedule-check'
+    | '/_authenticated/square-diagnostic'
     | '/_authenticated/sync-log'
     | '/_authenticated/'
     | '/_authenticated/clients/$id'
     | '/_authenticated/clients/deleted'
     | '/_authenticated/clients/new'
+    | '/api/public/square-diag'
     | '/_authenticated/clients/'
     | '/api/public/square/webhook'
   fileRoutesById: FileRoutesById
@@ -185,6 +210,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRoute
+  ApiPublicSquareDiagRoute: typeof ApiPublicSquareDiagRoute
   ApiPublicSquareWebhookRoute: typeof ApiPublicSquareWebhookRoute
 }
 
@@ -216,6 +242,13 @@ declare module '@tanstack/react-router' {
       path: '/sync-log'
       fullPath: '/sync-log'
       preLoaderRoute: typeof AuthenticatedSyncLogRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/square-diagnostic': {
+      id: '/_authenticated/square-diagnostic'
+      path: '/square-diagnostic'
+      fullPath: '/square-diagnostic'
+      preLoaderRoute: typeof AuthenticatedSquareDiagnosticRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/schedule-check': {
@@ -253,6 +286,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedClientsIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/api/public/square-diag': {
+      id: '/api/public/square-diag'
+      path: '/api/public/square-diag'
+      fullPath: '/api/public/square-diag'
+      preLoaderRoute: typeof ApiPublicSquareDiagRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/_authenticated/clients/new': {
       id: '/_authenticated/clients/new'
       path: '/clients/new'
@@ -289,6 +329,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedImportRoute: typeof AuthenticatedImportRoute
   AuthenticatedMergeCenterRoute: typeof AuthenticatedMergeCenterRoute
   AuthenticatedScheduleCheckRoute: typeof AuthenticatedScheduleCheckRoute
+  AuthenticatedSquareDiagnosticRoute: typeof AuthenticatedSquareDiagnosticRoute
   AuthenticatedSyncLogRoute: typeof AuthenticatedSyncLogRoute
   AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
   AuthenticatedClientsIdRoute: typeof AuthenticatedClientsIdRoute
@@ -302,6 +343,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedImportRoute: AuthenticatedImportRoute,
   AuthenticatedMergeCenterRoute: AuthenticatedMergeCenterRoute,
   AuthenticatedScheduleCheckRoute: AuthenticatedScheduleCheckRoute,
+  AuthenticatedSquareDiagnosticRoute: AuthenticatedSquareDiagnosticRoute,
   AuthenticatedSyncLogRoute: AuthenticatedSyncLogRoute,
   AuthenticatedIndexRoute: AuthenticatedIndexRoute,
   AuthenticatedClientsIdRoute: AuthenticatedClientsIdRoute,
@@ -316,6 +358,7 @@ const AuthenticatedRouteRouteWithChildren =
 const rootRouteChildren: RootRouteChildren = {
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRoute,
+  ApiPublicSquareDiagRoute: ApiPublicSquareDiagRoute,
   ApiPublicSquareWebhookRoute: ApiPublicSquareWebhookRoute,
 }
 export const routeTree = rootRouteImport

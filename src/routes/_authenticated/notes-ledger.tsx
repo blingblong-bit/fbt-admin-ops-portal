@@ -693,6 +693,19 @@ function ReviewCard({
         <div><span className="text-slate-500">Parsed paid:</span> {row.amount_paid !== null ? formatCurrency(row.amount_paid) : "—"}</div>
       </div>
 
+      <div className="mt-2 text-xs">
+        <span className="text-slate-500">Notes:</span>{" "}
+        {row.note_status === "append" && row.internal_notes && (
+          <span className="text-emerald-700">Would append — {row.internal_notes}</span>
+        )}
+        {row.note_status === "already_exists" && (
+          <span className="text-slate-500">Note already exists — no append needed.</span>
+        )}
+        {row.note_status === "no_note" && (
+          <span className="text-slate-500">No new notes</span>
+        )}
+      </div>
+
       {row.candidates.length > 0 ? (
         <div className="mt-3 space-y-2">
           <div className="text-xs font-medium text-slate-600">

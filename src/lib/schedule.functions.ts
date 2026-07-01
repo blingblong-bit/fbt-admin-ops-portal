@@ -241,39 +241,51 @@ async function fetchProductionCustomers(
   // eslint-disable-next-line no-control-regex
   const cleanToken = (token ?? "").replace(/[^\x20-\x7E]/g, "").trim();
   if (!cleanToken) return out;
-  const ids = customerIds.slice(0, 50);
-  await Promise.all(
-    ids.map(async (id) => {
-      try {
-        const res = await fetch(`${SQUARE_BASE}/v2/customers/${encodeURIComponent(id)}`, {
-          headers: {
-            Authorization: `Bearer ${cleanToken}`,
-            "Square-Version": SQUARE_VERSION,
-            "Content-Type": "application/json",
-          },
-        });
-        if (!res.ok) return;
-        const json = (await res.json()) as {
-          customer?: {
-            given_name?: string | null;
-            family_name?: string | null;
-            email_address?: string | null;
-            phone_number?: string | null;
+  // Hydrate ALL requested customer IDs (no silent 50-item cap). Chunk to avoid
+  // exhausting sockets on large unmatched sets.
+  const CHUNK = 25;
+  const HARD_CAP = 500;
+  const ids = customerIds.slice(0, HARD_CAP);
+  if (customerIds.length > HARD_CAP) {
+    console.warn(
+      `[schedule] fetchProductionCustomers: ${customerIds.length} IDs exceeded hard cap ${HARD_CAP}; truncating.`,
+    );
+  }
+  for (let i = 0; i < ids.length; i += CHUNK) {
+    const batch = ids.slice(i, i + CHUNK);
+    await Promise.all(
+      batch.map(async (id) => {
+        try {
+          const res = await fetch(`${SQUARE_BASE}/v2/customers/${encodeURIComponent(id)}`, {
+            headers: {
+              Authorization: `Bearer ${cleanToken}`,
+              "Square-Version": SQUARE_VERSION,
+              "Content-Type": "application/json",
+            },
+          });
+          if (!res.ok) return;
+          const json = (await res.json()) as {
+            customer?: {
+              given_name?: string | null;
+              family_name?: string | null;
+              email_address?: string | null;
+              phone_number?: string | null;
+            };
           };
-        };
-        const c = json.customer;
-        if (!c) return;
-        out.set(id, {
-          given_name: c.given_name ?? null,
-          family_name: c.family_name ?? null,
-          email: c.email_address ?? null,
-          phone: c.phone_number ?? null,
-        });
-      } catch {
-        // ignore per-customer failures
-      }
-    }),
-  );
+          const c = json.customer;
+          if (!c) return;
+          out.set(id, {
+            given_name: c.given_name ?? null,
+            family_name: c.family_name ?? null,
+            email: c.email_address ?? null,
+            phone: c.phone_number ?? null,
+          });
+        } catch {
+          // ignore per-customer failures
+        }
+      }),
+    );
+  }
   return out;
 }
 

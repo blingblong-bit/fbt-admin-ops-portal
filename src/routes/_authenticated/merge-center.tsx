@@ -244,13 +244,23 @@ function ClientCol({
   c,
   side,
   isKept,
+  blocked,
 }: {
   c: MergePairClient;
   side: "left" | "right";
   isKept: boolean;
+  blocked?: boolean;
 }) {
   const owed = amountOwed(c);
   const remaining = visitsRemaining(c);
+  const label = blocked
+    ? side === "left"
+      ? "Client A"
+      : "Client B"
+    : side === "left"
+      ? "Legacy Notes candidate"
+      : "Square-linked candidate";
+
   return (
     <div
       className={`rounded-lg border p-4 ${isKept ? "border-emerald-300 bg-emerald-50/40" : "border-slate-200 bg-white"}`}
@@ -258,7 +268,7 @@ function ClientCol({
       <div className="mb-2 flex items-center justify-between gap-2">
         <div>
           <div className="text-xs uppercase tracking-wide text-slate-500">
-            {side === "left" ? "Legacy Notes candidate" : "Square-linked candidate"}
+            {label}
           </div>
           <Link
             to="/clients/$id"
@@ -385,8 +395,9 @@ function PairCard({
       <CardContent className="space-y-3">
         {pair.square_conflict && (
           <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-            Both clients have different <code>square_customer_id</code> values. Merge blocked —
-            manual review required.
+            Blocked because both clients have different Square Customer IDs. This cannot be
+            reopened. Resolve by verifying whether these are truly different people or manually
+            correcting the Square linkage.
           </div>
         )}
         {pair.balance_conflict && !pair.square_conflict && (
@@ -396,9 +407,20 @@ function PairCard({
           </div>
         )}
         <div className="grid gap-3 md:grid-cols-2">
-          <ClientCol c={pair.left} side="left" isKept={keptId === pair.left.id} />
-          <ClientCol c={pair.right} side="right" isKept={keptId === pair.right.id} />
+          <ClientCol
+            c={pair.left}
+            side="left"
+            isKept={keptId === pair.left.id}
+            blocked={pair.status === "blocked"}
+          />
+          <ClientCol
+            c={pair.right}
+            side="right"
+            isKept={keptId === pair.right.id}
+            blocked={pair.status === "blocked"}
+          />
         </div>
+
 
         <div className="flex flex-wrap items-center gap-2 border-t pt-3">
           {pair.status === "pending" && (
@@ -445,11 +467,12 @@ function PairCard({
               </Button>
             </>
           )}
-          {(pair.status === "ignored" || pair.status === "merged" || pair.status === "blocked") && (
+          {(pair.status === "ignored" || pair.status === "merged") && (
             <Button variant="outline" disabled={busy} onClick={onReset}>
               Reopen review
             </Button>
           )}
+
         </div>
       </CardContent>
     </Card>

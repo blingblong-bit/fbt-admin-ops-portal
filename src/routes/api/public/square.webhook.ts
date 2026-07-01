@@ -143,7 +143,7 @@ export const Route = createFileRoute("/api/public/square/webhook")({
           });
           return new Response("ok");
         } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
+          const message = formatErr(err);
           try {
             await supabaseAdmin.from("square_sync_log").insert({
               event_type: eventType,
@@ -160,6 +160,21 @@ export const Route = createFileRoute("/api/public/square/webhook")({
     },
   },
 });
+
+function formatErr(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  if (err && typeof err === "object") {
+    const e = err as { message?: string; code?: string; details?: string; hint?: string };
+    const parts = [e.message, e.code ? `code=${e.code}` : null, e.details, e.hint].filter(Boolean);
+    if (parts.length > 0) return parts.join(" | ");
+    try {
+      return JSON.stringify(err);
+    } catch {
+      return "Unknown error";
+    }
+  }
+  return String(err);
+}
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function handleCustomerEvent(supabaseAdmin: any, eventType: string, event: SquareEvent) {
@@ -390,9 +405,15 @@ async function handlePaymentEvent(supabaseAdmin: any, eventType: string, event: 
 
     // Not yet applied — only proceed when COMPLETED and amount > 0
     if (!isCompleted || amountCents <= 0) {
+      // If we already have a matched client, clear needs_review so it drops out
+      // of the review queue and shows up as a pending/approved payment instead.
       await supabaseAdmin
         .from("square_payments")
-        .update({ status, raw_event: event as unknown as never })
+        .update({
+          status,
+          needs_review: existingPayment.client_id ? false : true,
+          raw_event: event as unknown as never,
+        })
         .eq("id", existingPayment.id);
       await supabaseAdmin.from("square_sync_log").insert({
         event_type: eventType,
@@ -400,7 +421,9 @@ async function handlePaymentEvent(supabaseAdmin: any, eventType: string, event: 
         client_id: existingPayment.client_id,
         status: "skipped",
         action: `recorded_status_${status.toLowerCase() || "unknown"}`,
-        message: `Payment ${squarePaymentId} status=${status} — not applied (waiting for COMPLETED)`,
+        message: existingPayment.client_id
+          ? `Payment ${squarePaymentId} status=${status} — matched, waiting for COMPLETED`
+          : `Payment ${squarePaymentId} status=${status} — not applied (waiting for COMPLETED)`,
         raw_event: event as unknown as never,
       });
       return;
@@ -429,12 +452,37 @@ async function handlePaymentEvent(supabaseAdmin: any, eventType: string, event: 
       return;
     }
 
-    const result = await applyPaymentOnce(supabaseAdmin, {
-      clientId,
-      squarePaymentId,
-      amountCents,
-      matchMethod: method,
-    });
+    let result: { credited: boolean; appliedAmount: number; alreadyApplied: boolean } | null = null;
+    let applyErr: unknown = null;
+    try {
+      result = await applyPaymentOnce(supabaseAdmin, {
+        clientId,
+        squarePaymentId,
+        amountCents,
+        matchMethod: method,
+      });
+    } catch (e) {
+      applyErr = e;
+    }
+
+    if (applyErr || !result) {
+      // Credit failed (e.g. clients_validate trigger blocked because package_price=0
+      // or amount would exceed price). Keep needs_review=true so staff can act.
+      await supabaseAdmin
+        .from("square_payments")
+        .update({ status, client_id: clientId, needs_review: true, raw_event: event as unknown as never })
+        .eq("id", existingPayment.id);
+      await supabaseAdmin.from("square_sync_log").insert({
+        event_type: eventType,
+        square_customer_id: squareCustomerId,
+        client_id: clientId,
+        status: "error",
+        action: "apply_blocked",
+        message: `COMPLETED payment ${squarePaymentId} (${amountDisplay}) matched to client but credit was blocked: ${formatErr(applyErr)}`,
+        raw_event: event as unknown as never,
+      });
+      return;
+    }
 
     await supabaseAdmin
       .from("square_payments")
@@ -472,18 +520,26 @@ async function handlePaymentEvent(supabaseAdmin: any, eventType: string, event: 
 
   let applied = false;
   let alreadyApplied = false;
+  let applyErr: unknown = null;
   if (clientId && isCompleted && amountCents > 0) {
-    const result = await applyPaymentOnce(supabaseAdmin, {
-      clientId,
-      squarePaymentId,
-      amountCents,
-      matchMethod: method,
-    });
-    applied = true;
-    alreadyApplied = result.alreadyApplied;
+    try {
+      const result = await applyPaymentOnce(supabaseAdmin, {
+        clientId,
+        squarePaymentId,
+        amountCents,
+        matchMethod: method,
+      });
+      applied = true;
+      alreadyApplied = result.alreadyApplied;
+    } catch (e) {
+      applyErr = e;
+    }
   }
 
-  const needsReview = !clientId || !isCompleted ? !applied : false;
+  // Needs review only when we can't identify the customer OR when a COMPLETED
+  // matched payment failed to apply (trigger blocked). Matched-but-not-completed
+  // rows are "pending", not review.
+  const needsReview = !clientId || (isCompleted && !applied);
 
   await supabaseAdmin.from("square_payments").insert({
     square_payment_id: squarePaymentId,
@@ -493,7 +549,7 @@ async function handlePaymentEvent(supabaseAdmin: any, eventType: string, event: 
     currency,
     status,
     applied,
-    needs_review: needsReview && !applied,
+    needs_review: needsReview,
     buyer_email: buyerEmail,
     note,
     raw_event: event as unknown as never,
@@ -503,21 +559,25 @@ async function handlePaymentEvent(supabaseAdmin: any, eventType: string, event: 
     event_type: eventType,
     square_customer_id: squareCustomerId,
     client_id: clientId,
-    status: applied ? "success" : "skipped",
+    status: applied ? "success" : applyErr ? "error" : "skipped",
     action: applied
       ? alreadyApplied
         ? "reconciled_already_credited"
         : `applied_payment_${method ?? "unknown"}`
-      : clientId
-        ? `recorded_status_${status.toLowerCase() || "unknown"}`
-        : "needs_review_no_match",
+      : applyErr
+        ? "apply_blocked"
+        : clientId
+          ? `recorded_status_${status.toLowerCase() || "unknown"}`
+          : "needs_review_no_match",
     message: applied
       ? alreadyApplied
         ? `Payment ${squarePaymentId} (${amountDisplay}) already credited — flags set applied=true`
         : `Applied ${amountDisplay} to client via ${method}`
-      : clientId
-        ? `Recorded payment ${squarePaymentId} (${amountDisplay}, status=${status}) — not applied`
-        : `No client match for payment ${squarePaymentId} (${amountDisplay}) — flagged for review`,
+      : applyErr
+        ? `COMPLETED payment ${squarePaymentId} (${amountDisplay}) matched to client but credit was blocked: ${formatErr(applyErr)}`
+        : clientId
+          ? `Recorded payment ${squarePaymentId} (${amountDisplay}, status=${status}) — matched, waiting for COMPLETED`
+          : `No client match for payment ${squarePaymentId} (${amountDisplay}) — flagged for review`,
     raw_event: event as unknown as never,
   });
 }

@@ -17,6 +17,34 @@ export type MatchClient = {
   internal_notes: string | null;
 };
 
+export type RowDiagnostic = {
+  line_number: number;
+  parsed_name: string | null;
+  parsed_phone: string | null;
+  parsed_package_price: number | null;
+  parsed_package_date: string | null;
+  parsed_visits: number | null;
+  parsed_amount_paid: number | null;
+  phone_match_count: number;
+  name_match_count: number;
+  combined_unique_count: number;
+  square_linked_count: number;
+  outcome: "auto_update" | "review" | "skipped_no_changes" | "parser_review";
+  rule: string;
+  reason: string;
+};
+
+export type DiagnosticSummary = {
+  parser_needs_review: number;
+  no_match: number;
+  multiple_phone_matches: number;
+  multiple_name_matches: number;
+  multiple_square_linked: number;
+  ambiguous_no_square_winner: number;
+  no_changes_vs_current: number;
+  auto_updates: number;
+};
+
 export type ReviewRow = ParsedRow & {
   candidates: MatchClient[];
   reason: string;
@@ -45,6 +73,8 @@ export type PreviewResult = {
   auto_updates: AutoUpdateRow[];
   reviews: ReviewRow[];
   skipped: SkippedRow[];
+  diagnostics: RowDiagnostic[];
+  diagnostic_summary: DiagnosticSummary;
 };
 
 function normPhone(s: string | null | undefined): string | null {

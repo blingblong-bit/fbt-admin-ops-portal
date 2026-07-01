@@ -92,7 +92,67 @@ function NotesLedgerPage() {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  const reviewApplyMut = useMutation({
+    mutationFn: async (args: { row: ReviewRow; client: MatchClient }) => {
+      const { row, client } = args;
+      const price = row.package_price ?? Number(client.package_price ?? 0);
+      const visits = row.package_total_visits ?? Number(client.package_total_visits ?? 0);
+      const startDate = row.package_start_date ?? client.package_start_date;
+      const paid = row.amount_paid !== null ? row.amount_paid : Number(client.amount_paid ?? 0);
+      const currentNotes = client.internal_notes ?? "";
+      const appended =
+        row.internal_notes && !currentNotes.includes(row.internal_notes)
+          ? row.internal_notes
+          : null;
+      const res = await applyFn({
+        data: {
+          updates: [
+            {
+              client_id: client.id,
+              client_name: fullName(client),
+              parsed_name: row.name ?? null,
+              line_number: row.line_number,
+              package_price: price,
+              package_total_visits: visits,
+              package_start_date: startDate,
+              amount_paid: paid,
+              appended_note: appended,
+            },
+          ],
+        },
+      });
+      return { res, lineNumber: row.line_number };
+    },
+    onSuccess: ({ res, lineNumber }) => {
+      const failed = res.rows.find((r) => r.status === "error");
+      if (failed) {
+        toast.error(`Apply failed: ${failed.error ?? "Unknown error"}`);
+      } else {
+        toast.success("Row applied");
+        setResolvedReviews((prev) => new Set(prev).add(lineNumber));
+      }
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
   const autoCount = preview ? preview.auto_updates.length - excluded.size : 0;
+
+  const categoryCounts = new Map<ReviewCategory, number>();
+  if (preview) {
+    for (const r of preview.reviews) {
+      for (const c of r.categories) {
+        categoryCounts.set(c, (categoryCounts.get(c) ?? 0) + 1);
+      }
+    }
+  }
+  const visibleReviews = preview
+    ? preview.reviews.filter((r) => {
+        if (resolvedReviews.has(r.line_number) || skippedReviews.has(r.line_number)) return false;
+        if (activeCategories.size === 0) return true;
+        return r.categories.some((c) => activeCategories.has(c));
+      })
+    : [];
+
 
   return (
     <AppShell>

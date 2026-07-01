@@ -94,8 +94,12 @@ function NotesLedgerPage() {
       setResolvedReviews(new Set());
       setSkippedReviews(new Set());
       setActiveCategories(new Set());
+      setRecentlyApplied([]);
       toast.success(`Parsed ${r.parsed_count} rows`);
     },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
     onError: (e: Error) => toast.error(e.message),
   });
 

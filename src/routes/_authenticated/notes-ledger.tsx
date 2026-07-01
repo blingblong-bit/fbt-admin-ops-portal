@@ -602,12 +602,18 @@ function AutoUpdateCard({
         <DiffRow label="Start" before={formatDate(c.package_start_date.before)} after={formatDate(c.package_start_date.after)} changed={c.package_start_date.changed} />
         <DiffRow label="Paid" before={formatCurrency(c.amount_paid.before)} after={formatCurrency(c.amount_paid.after)} changed={c.amount_paid.changed} />
         <DiffRow label="Owed" before={formatCurrency(c.amount_owed.before)} after={formatCurrency(c.amount_owed.after)} changed={c.amount_owed.changed} />
-        {c.internal_notes.appended && (
-          <div className="col-span-full">
-            <span className="font-medium">Append note:</span>{" "}
-            <span className="text-emerald-700">{c.internal_notes.appended}</span>
-          </div>
-        )}
+        <div className="col-span-full">
+          <span className="font-medium">Notes:</span>{" "}
+          {c.internal_notes.note_status === "append" && c.internal_notes.appended && (
+            <span className="text-emerald-700">Append — {c.internal_notes.appended}</span>
+          )}
+          {c.internal_notes.note_status === "already_exists" && (
+            <span className="text-slate-500">Note already exists — no append needed.</span>
+          )}
+          {c.internal_notes.note_status === "no_note" && (
+            <span className="text-slate-500">No new notes</span>
+          )}
+        </div>
       </div>
       <div className="mt-2 text-xs text-slate-500 font-mono">{row.parsed.raw}</div>
     </div>

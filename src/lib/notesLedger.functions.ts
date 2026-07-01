@@ -478,7 +478,15 @@ export type ApplyRowResult = {
     appended_note: string | null;
     internal_notes_after: string | null;
   };
+  before: {
+    package_price: number;
+    package_total_visits: number;
+    package_start_date: string | null;
+    amount_paid: number;
+    internal_notes: string | null;
+  } | null;
 };
+
 
 export type ApplyResult = {
   updated: number;

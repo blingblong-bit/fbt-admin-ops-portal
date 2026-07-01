@@ -9,6 +9,20 @@ export type PaymentResolutionResult = {
   created_client: boolean;
 };
 
+export type PaymentMatchSuggestion = {
+  client_id: string;
+  first_name: string;
+  last_name: string;
+  email: string | null;
+  phone: string | null;
+  status: string;
+  amount_owed: number;
+  reasons: string[];
+  confidence: number; // count of reason categories matched
+  nearest_appointment_at: string | null;
+  square_customer_id: string | null;
+};
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function applyPaymentOnce(
   supabaseAdmin: any,

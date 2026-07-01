@@ -347,9 +347,12 @@ export const suggestPaymentMatches = createServerFn({ method: "POST" })
 
     const amountDollars = payment.amount_cents / 100;
     const paymentTs = new Date(payment.created_at).getTime();
-    const windowMs = 2 * 60 * 60 * 1000;
-    const startIso = new Date(paymentTs - windowMs).toISOString();
-    const endIso = new Date(paymentTs + windowMs).toISOString();
+    const halfHourMs = 30 * 60 * 1000;
+    const twoHourMs = 2 * 60 * 60 * 1000;
+    const twelveHourMs = 12 * 60 * 60 * 1000;
+    // Fetch a wider window (±12h) to detect same-day bookings, then classify per booking.
+    const startIso = new Date(paymentTs - twelveHourMs).toISOString();
+    const endIso = new Date(paymentTs + twelveHourMs).toISOString();
 
     const token = cleanToken(process.env.SQUARE_PRODUCTION_ACCESS_TOKEN);
     let note: string | null = null;
@@ -360,7 +363,7 @@ export const suggestPaymentMatches = createServerFn({ method: "POST" })
       bookings = await fetchBookingsInWindow(token, startIso, endIso);
     }
 
-    // Load all non-deleted clients (paginated)
+    // Load all non-deleted clients (paginated, ordered for stable ranges)
     type ClientRow = {
       id: string;
       first_name: string;
@@ -382,6 +385,7 @@ export const suggestPaymentMatches = createServerFn({ method: "POST" })
           "id, first_name, last_name, email, phone, status, package_price, amount_paid, square_customer_id",
         )
         .is("deleted_at", null)
+        .order("id", { ascending: true })
         .range(from, from + pageSize - 1);
       if (error) throw error;
       if (!rows || rows.length === 0) break;
@@ -393,39 +397,58 @@ export const suggestPaymentMatches = createServerFn({ method: "POST" })
     const byCustomerId = new Map<string, ClientRow>();
     for (const c of clients) if (c.square_customer_id) byCustomerId.set(c.square_customer_id, c);
 
-    // reason accumulator
-    const map = new Map<string, { client: ClientRow; reasons: string[]; categories: Set<string>; nearestApptAt: string | null; nearestDeltaMin: number }>();
-    const addReason = (client: ClientRow, reason: string, category: string, apptAt: string | null = null) => {
-      const e = map.get(client.id);
-      const deltaMin = apptAt ? Math.abs(new Date(apptAt).getTime() - paymentTs) / 60000 : Number.POSITIVE_INFINITY;
+    // Per-client signal accumulator. Each category records its best contribution.
+    type ApptTier = "within30" | "within2h" | "sameday";
+    type Signals = {
+      email?: { reason: string };
+      amount?: { reason: string };
+      appt?: { tier: ApptTier; reason: string; apptAt: string; deltaMin: number };
+      name?: { reason: string; sameDay: boolean };
+    };
+    const perClient = new Map<string, { client: ClientRow; signals: Signals }>();
+    const ensure = (c: ClientRow) => {
+      let e = perClient.get(c.id);
       if (!e) {
-        map.set(client.id, {
-          client,
-          reasons: [reason],
-          categories: new Set([category]),
-          nearestApptAt: apptAt,
-          nearestDeltaMin: deltaMin,
-        });
-      } else {
-        e.reasons.push(reason);
-        e.categories.add(category);
-        if (apptAt && deltaMin < e.nearestDeltaMin) {
-          e.nearestApptAt = apptAt;
-          e.nearestDeltaMin = deltaMin;
-        }
+        e = { client: c, signals: {} };
+        perClient.set(c.id, e);
       }
+      return e;
     };
 
-    // 1) Appointment window matches (linked customers)
+    const isSameDay = (a: number, b: number) =>
+      new Date(a).toDateString() === new Date(b).toDateString();
+    const fmtTime = (iso: string) =>
+      new Date(iso).toLocaleString(undefined, {
+        hour: "numeric",
+        minute: "2-digit",
+        month: "short",
+        day: "numeric",
+      });
+
+    // 1) Appointment matches for linked customers (best tier wins)
     const unmatchedCustomerIds = new Set<string>();
     for (const b of bookings) {
       if (!b.start_at || !b.customer_id) continue;
       if (/CANCELLED|DECLINED|NO_SHOW/i.test(b.status ?? "")) continue;
       const c = byCustomerId.get(b.customer_id);
-      const deltaMin = Math.round(Math.abs(new Date(b.start_at).getTime() - paymentTs) / 60000);
+      const bTs = new Date(b.start_at).getTime();
+      const deltaMs = Math.abs(bTs - paymentTs);
       if (c) {
-        const t = new Date(b.start_at).toLocaleString(undefined, { hour: "numeric", minute: "2-digit", month: "short", day: "numeric" });
-        addReason(c, `Appointment ${t} (${deltaMin}m from payment)`, "appointment", b.start_at);
+        let tier: ApptTier | null = null;
+        if (deltaMs <= halfHourMs) tier = "within30";
+        else if (deltaMs <= twoHourMs) tier = "within2h";
+        else if (isSameDay(bTs, paymentTs)) tier = "sameday";
+        if (!tier) continue;
+        const deltaMin = Math.round(deltaMs / 60000);
+        const reason =
+          tier === "sameday"
+            ? `Same-day appointment ${fmtTime(b.start_at)}`
+            : `Appointment ${fmtTime(b.start_at)} (${deltaMin}m from payment)`;
+        const e = ensure(c);
+        const rank = { within30: 3, within2h: 2, sameday: 1 } as const;
+        if (!e.signals.appt || rank[tier] > rank[e.signals.appt.tier]) {
+          e.signals.appt = { tier, reason, apptAt: b.start_at, deltaMin };
+        }
       } else {
         unmatchedCustomerIds.add(b.customer_id);
       }
@@ -436,29 +459,32 @@ export const suggestPaymentMatches = createServerFn({ method: "POST" })
       for (const c of clients) {
         const owed = Math.max(0, Number(c.package_price ?? 0) - Number(c.amount_paid ?? 0));
         if (owed > 0 && Math.abs(owed - amountDollars) <= 1) {
-          addReason(c, `Owes $${owed.toFixed(2)} (matches payment)`, "amount");
+          ensure(c).signals.amount = { reason: `Owes $${owed.toFixed(2)} (matches payment)` };
         }
       }
     }
 
-    // 3) Buyer email match
+    // 3) Buyer email exact match
     if (payment.buyer_email) {
       const target = payment.buyer_email.trim().toLowerCase();
       for (const c of clients) {
         if (c.email && c.email.trim().toLowerCase() === target) {
-          addReason(c, `Buyer email match (${c.email})`, "email");
+          ensure(c).signals.email = { reason: `Buyer email match (${c.email})` };
         }
       }
     }
 
-    // 4) Name matches via nearby unmatched bookings — look up Square customer info
+    // 4) Name match via nearby unmatched Square customers
     if (token && unmatchedCustomerIds.size > 0) {
-      const ids = Array.from(unmatchedCustomerIds).slice(0, 20);
-      const infos = await Promise.all(ids.map(async (id) => ({ id, info: await fetchCustomer(token, id) })));
-      // find the booking start_at for each id
+      const ids = Array.from(unmatchedCustomerIds).slice(0, 30);
+      const infos = await Promise.all(
+        ids.map(async (id) => ({ id, info: await fetchCustomer(token, id) })),
+      );
       const apptById = new Map<string, string>();
       for (const b of bookings) {
-        if (b.customer_id && b.start_at && !apptById.has(b.customer_id)) apptById.set(b.customer_id, b.start_at);
+        if (b.customer_id && b.start_at && !apptById.has(b.customer_id)) {
+          apptById.set(b.customer_id, b.start_at);
+        }
       }
       for (const { id, info } of infos) {
         if (!info) continue;
@@ -468,36 +494,139 @@ export const suggestPaymentMatches = createServerFn({ method: "POST" })
           const cf = normName(`${c.first_name}${c.last_name}`);
           if (cf && cf === full) {
             const apptAt = apptById.get(id) ?? null;
+            const sameDay = apptAt ? isSameDay(new Date(apptAt).getTime(), paymentTs) : false;
             const label = `${info.given_name ?? ""} ${info.family_name ?? ""}`.trim();
-            addReason(
-              c,
-              apptAt
-                ? `Name match on nearby booking (${label})`
-                : `Name match (${label})`,
-              "name",
-              apptAt,
-            );
+            const reason = apptAt
+              ? `Name match on nearby booking (${label}${sameDay ? ", same day" : ""})`
+              : `Name match (${label})`;
+            const e = ensure(c);
+            if (!e.signals.name || (sameDay && !e.signals.name.sameDay)) {
+              e.signals.name = { reason, sameDay };
+            }
           }
         }
       }
     }
 
-    const suggestions: PaymentMatchSuggestion[] = Array.from(map.values())
-      .map(({ client, reasons, categories, nearestApptAt }) => ({
-        client_id: client.id,
-        first_name: client.first_name,
-        last_name: client.last_name,
-        email: client.email,
-        phone: client.phone,
-        status: client.status,
-        amount_owed: Math.max(0, Number(client.package_price ?? 0) - Number(client.amount_paid ?? 0)),
-        reasons,
-        confidence: categories.size,
-        nearest_appointment_at: nearestApptAt,
-        square_customer_id: client.square_customer_id,
-      }))
-      .sort((a, b) => b.confidence - a.confidence || a.last_name.localeCompare(b.last_name))
+    // Cross-credit: merge signals across duplicate client rows that share
+    // normalized (name + phone). Keeps each row visible with the union of signals.
+    const normPhone = (p: string | null) => (p ?? "").replace(/\D/g, "").slice(-10);
+    const groupKey = (c: ClientRow) => {
+      const name = normName(`${c.first_name}${c.last_name}`);
+      const phone = normPhone(c.phone);
+      if (!name || !phone) return null;
+      return `${name}|${phone}`;
+    };
+    const groups = new Map<string, Signals>();
+    for (const { client, signals } of perClient.values()) {
+      const k = groupKey(client);
+      if (!k) continue;
+      const merged: Signals = groups.get(k) ?? {};
+      if (signals.email) merged.email = signals.email;
+      if (signals.amount) merged.amount = signals.amount;
+      if (signals.appt) {
+        const rank = { within30: 3, within2h: 2, sameday: 1 } as const;
+        if (!merged.appt || rank[signals.appt.tier] > rank[merged.appt.tier]) {
+          merged.appt = signals.appt;
+        }
+      }
+      if (signals.name) {
+        if (!merged.name || (signals.name.sameDay && !merged.name.sameDay)) {
+          merged.name = signals.name;
+        }
+      }
+      groups.set(k, merged);
+    }
+
+    // Also include client rows that had no direct signal but belong to a
+    // group with signals (so the "$360 owed" active row surfaces when its
+    // duplicate linked row got the appointment signal).
+    const inScope = new Map<string, { client: ClientRow; signals: Signals }>();
+    for (const [id, entry] of perClient) inScope.set(id, entry);
+    for (const c of clients) {
+      const k = groupKey(c);
+      if (!k) continue;
+      const g = groups.get(k);
+      if (!g) continue;
+      if (!inScope.has(c.id)) inScope.set(c.id, { client: c, signals: {} });
+    }
+
+    // Compute final signals per row (own signals ∪ group signals), score, reasons
+    const scoreSignals = (s: Signals): { score: number; reasons: string[] } => {
+      let score = 0;
+      const reasons: string[] = [];
+      if (s.email) {
+        score += 100;
+        reasons.push(`+100 ${s.email.reason}`);
+      }
+      if (s.amount) {
+        score += 60;
+        reasons.push(`+60 ${s.amount.reason}`);
+      }
+      if (s.appt) {
+        if (s.appt.tier === "within30") {
+          score += 50;
+          reasons.push(`+50 ${s.appt.reason}`);
+        } else if (s.appt.tier === "within2h") {
+          score += 20;
+          reasons.push(`+20 ${s.appt.reason}`);
+        } else {
+          score += 15;
+          reasons.push(`+15 ${s.appt.reason}`);
+        }
+      }
+      if (s.name) {
+        score += 40;
+        reasons.push(`+40 ${s.name.reason}`);
+        if (s.name.sameDay) {
+          score += 20;
+          reasons.push(`+20 Same-day name match bonus`);
+        }
+      }
+      return { score, reasons };
+    };
+
+    const suggestions: PaymentMatchSuggestion[] = Array.from(inScope.values())
+      .map(({ client, signals }) => {
+        const k = groupKey(client);
+        const merged: Signals = { ...signals };
+        if (k) {
+          const g = groups.get(k);
+          if (g) {
+            if (!merged.email && g.email) merged.email = g.email;
+            if (!merged.amount && g.amount) merged.amount = g.amount;
+            if (!merged.appt && g.appt) merged.appt = g.appt;
+            if (!merged.name && g.name) merged.name = g.name;
+          }
+        }
+        const { score, reasons } = scoreSignals(merged);
+        const categoryCount =
+          (merged.email ? 1 : 0) +
+          (merged.amount ? 1 : 0) +
+          (merged.appt ? 1 : 0) +
+          (merged.name ? 1 : 0);
+        return {
+          client_id: client.id,
+          first_name: client.first_name,
+          last_name: client.last_name,
+          email: client.email,
+          phone: client.phone,
+          status: client.status,
+          amount_owed: Math.max(
+            0,
+            Number(client.package_price ?? 0) - Number(client.amount_paid ?? 0),
+          ),
+          reasons,
+          confidence: categoryCount,
+          score,
+          nearest_appointment_at: merged.appt?.apptAt ?? null,
+          square_customer_id: client.square_customer_id,
+        };
+      })
+      .filter((s) => s.score > 0)
+      .sort((a, b) => b.score - a.score || a.last_name.localeCompare(b.last_name))
       .slice(0, 10);
 
     return { suggestions, note };
   });
+

@@ -1,0 +1,310 @@
+import { createFileRoute } from "@tanstack/react-router";
+import { useServerFn } from "@tanstack/react-start";
+import { useMutation } from "@tanstack/react-query";
+import { useState } from "react";
+import { toast } from "sonner";
+import { AppShell } from "@/components/AppShell";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Textarea } from "@/components/ui/textarea";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { formatCurrency, formatDate, fullName } from "@/lib/clients";
+import {
+  previewNotesLedger,
+  applyNotesLedger,
+  type PreviewResult,
+  type AutoUpdateRow,
+} from "@/lib/notesLedger.functions";
+
+export const Route = createFileRoute("/_authenticated/notes-ledger")({
+  head: () => ({ meta: [{ title: "Notes Ledger Import · FBT Admin" }] }),
+  component: NotesLedgerPage,
+});
+
+function NotesLedgerPage() {
+  const previewFn = useServerFn(previewNotesLedger);
+  const applyFn = useServerFn(applyNotesLedger);
+  const [text, setText] = useState("");
+  const [preview, setPreview] = useState<PreviewResult | null>(null);
+  const [applied, setApplied] = useState<{ updated: number; errors: number } | null>(null);
+  const [excluded, setExcluded] = useState<Set<string>>(new Set());
+
+  const previewMut = useMutation({
+    mutationFn: async () => previewFn({ data: { text } }),
+    onSuccess: (r) => {
+      setPreview(r);
+      setApplied(null);
+      setExcluded(new Set());
+      toast.success(`Parsed ${r.parsed_count} rows`);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const applyMut = useMutation({
+    mutationFn: async () => {
+      if (!preview) throw new Error("Run preview first");
+      const updates = preview.auto_updates
+        .filter((r) => !excluded.has(r.client.id))
+        .map((r) => ({
+          client_id: r.client.id,
+          package_price: r.changes.package_price.after,
+          package_total_visits: r.changes.package_total_visits.after,
+          package_start_date: r.changes.package_start_date.after,
+          amount_paid: r.changes.amount_paid.after,
+          appended_note: r.changes.internal_notes.appended,
+        }));
+      return applyFn({ data: { updates } });
+    },
+    onSuccess: (r) => {
+      setApplied({ updated: r.updated, errors: r.errors.length });
+      if (r.errors.length) toast.error(`${r.errors.length} errors — see console`);
+      else toast.success(`Updated ${r.updated} clients`);
+      if (r.errors.length) console.error("Ledger import errors:", r.errors);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const autoCount = preview ? preview.auto_updates.length - excluded.size : 0;
+
+  return (
+    <AppShell>
+      <h1 className="mb-2 text-3xl font-semibold tracking-tight">Notes Ledger Import</h1>
+      <p className="mb-6 max-w-3xl text-sm text-slate-500">
+        Paste the latest Apple Notes package ledger. This tool parses each line, matches to
+        existing Admin clients (preferring Square-linked), and lets you review changes before
+        applying. It never modifies Square, phones, emails, timelines, or Square IDs.
+      </p>
+
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle>Paste Ledger</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Textarea
+            rows={12}
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            placeholder="Paste Apple Notes content…"
+            className="font-mono text-xs"
+          />
+          <div className="mt-4 flex justify-end gap-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setText("");
+                setPreview(null);
+                setApplied(null);
+              }}
+            >
+              Clear
+            </Button>
+            <Button onClick={() => previewMut.mutate()} disabled={previewMut.isPending || !text.trim()}>
+              {previewMut.isPending ? "Parsing…" : "Preview"}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {preview && (
+        <>
+          <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-4">
+            <StatCard label="Parsed" value={preview.parsed_count} />
+            <StatCard label="Auto-update" value={autoCount} tone="emerald" />
+            <StatCard label="Needs review" value={preview.reviews.length} tone="amber" />
+            <StatCard label="Skipped" value={preview.skipped.length} tone="slate" />
+          </div>
+
+          <div className="mb-6 flex items-center justify-between">
+            <p className="text-sm text-slate-600">
+              Review the changes below. Uncheck any row to exclude it from the apply step.
+            </p>
+            <Button
+              onClick={() => applyMut.mutate()}
+              disabled={applyMut.isPending || autoCount === 0}
+            >
+              {applyMut.isPending ? "Applying…" : `Apply ${autoCount} updates`}
+            </Button>
+          </div>
+
+          {applied && (
+            <Card className="mb-6 border-emerald-200 bg-emerald-50">
+              <CardContent className="pt-6 text-sm">
+                Applied: <strong>{applied.updated}</strong> · Errors:{" "}
+                <strong>{applied.errors}</strong>
+              </CardContent>
+            </Card>
+          )}
+
+          <Card className="mb-6">
+            <CardHeader>
+              <CardTitle>Auto-Update Candidates ({preview.auto_updates.length})</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {preview.auto_updates.length === 0 && (
+                <p className="text-sm text-slate-500">None.</p>
+              )}
+              {preview.auto_updates.map((r) => (
+                <AutoUpdateCard
+                  key={r.client.id + r.parsed.line_number}
+                  row={r}
+                  excluded={excluded.has(r.client.id)}
+                  onToggle={() => {
+                    const next = new Set(excluded);
+                    if (next.has(r.client.id)) next.delete(r.client.id);
+                    else next.add(r.client.id);
+                    setExcluded(next);
+                  }}
+                />
+              ))}
+            </CardContent>
+          </Card>
+
+          <Card className="mb-6">
+            <CardHeader>
+              <CardTitle>Needs Review ({preview.reviews.length})</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {preview.reviews.length === 0 && (
+                <p className="text-sm text-slate-500">None.</p>
+              )}
+              {preview.reviews.map((r, idx) => (
+                <div
+                  key={idx}
+                  className="rounded border border-amber-200 bg-amber-50 p-3 text-sm"
+                >
+                  <div className="mb-1 flex flex-wrap items-center gap-2">
+                    <Badge variant="outline" className="border-amber-400 text-amber-800">
+                      Line {r.line_number}
+                    </Badge>
+                    {r.assessment && <Badge variant="secondary">Assessment</Badge>}
+                    <span className="font-semibold">{r.name ?? "(no name)"}</span>
+                    <span className="text-xs text-slate-500">{r.reason}</span>
+                  </div>
+                  <pre className="whitespace-pre-wrap font-mono text-xs text-slate-700">
+                    {r.raw}
+                  </pre>
+                  {r.candidates.length > 0 && (
+                    <div className="mt-2 text-xs">
+                      Candidates:{" "}
+                      {r.candidates.map((c) => (
+                        <span key={c.id} className="mr-2 rounded bg-white px-2 py-0.5 shadow-sm">
+                          {fullName(c)}
+                          {c.square_customer_id ? " · Square" : ""}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Skipped ({preview.skipped.length})</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-1 text-sm">
+              {preview.skipped.length === 0 && (
+                <p className="text-slate-500">None.</p>
+              )}
+              {preview.skipped.map((s, idx) => (
+                <div key={idx} className="flex justify-between border-b py-1">
+                  <span className="font-mono text-xs text-slate-600">{s.parsed.raw}</span>
+                  <span className="text-xs text-slate-500">{s.reason}</span>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        </>
+      )}
+    </AppShell>
+  );
+}
+
+function StatCard({
+  label,
+  value,
+  tone = "slate",
+}: {
+  label: string;
+  value: number;
+  tone?: "slate" | "emerald" | "amber";
+}) {
+  const cls =
+    tone === "emerald"
+      ? "border-emerald-200 bg-emerald-50 text-emerald-900"
+      : tone === "amber"
+      ? "border-amber-200 bg-amber-50 text-amber-900"
+      : "border-slate-200 bg-white text-slate-900";
+  return (
+    <div className={`rounded-lg border p-4 ${cls}`}>
+      <div className="text-2xl font-semibold">{value}</div>
+      <div className="text-xs uppercase tracking-wide">{label}</div>
+    </div>
+  );
+}
+
+function AutoUpdateCard({
+  row,
+  excluded,
+  onToggle,
+}: {
+  row: AutoUpdateRow;
+  excluded: boolean;
+  onToggle: () => void;
+}) {
+  const c = row.changes;
+  return (
+    <div className={`rounded border p-3 text-sm ${excluded ? "border-slate-200 bg-slate-50 opacity-60" : "border-emerald-200 bg-white"}`}>
+      <div className="mb-2 flex flex-wrap items-center gap-2">
+        <input type="checkbox" checked={!excluded} onChange={onToggle} />
+        <span className="font-semibold">{fullName(row.client)}</span>
+        {row.client.square_customer_id && (
+          <Badge variant="secondary" className="bg-blue-100 text-blue-800">Square</Badge>
+        )}
+        {row.parsed.assessment && <Badge variant="secondary">Assessment</Badge>}
+        <span className="text-xs text-slate-500">Line {row.parsed.line_number}</span>
+      </div>
+      <div className="grid grid-cols-1 gap-2 text-xs sm:grid-cols-3">
+        <DiffRow label="Price" before={formatCurrency(c.package_price.before)} after={formatCurrency(c.package_price.after)} changed={c.package_price.changed} />
+        <DiffRow label="Visits" before={String(c.package_total_visits.before)} after={String(c.package_total_visits.after)} changed={c.package_total_visits.changed} />
+        <DiffRow label="Start" before={formatDate(c.package_start_date.before)} after={formatDate(c.package_start_date.after)} changed={c.package_start_date.changed} />
+        <DiffRow label="Paid" before={formatCurrency(c.amount_paid.before)} after={formatCurrency(c.amount_paid.after)} changed={c.amount_paid.changed} />
+        <DiffRow label="Owed" before={formatCurrency(c.amount_owed.before)} after={formatCurrency(c.amount_owed.after)} changed={c.amount_owed.changed} />
+        {c.internal_notes.appended && (
+          <div className="col-span-full">
+            <span className="font-medium">Append note:</span>{" "}
+            <span className="text-emerald-700">{c.internal_notes.appended}</span>
+          </div>
+        )}
+      </div>
+      <div className="mt-2 text-xs text-slate-500 font-mono">{row.parsed.raw}</div>
+    </div>
+  );
+}
+
+function DiffRow({
+  label,
+  before,
+  after,
+  changed,
+}: {
+  label: string;
+  before: string;
+  after: string;
+  changed: boolean;
+}) {
+  return (
+    <div>
+      <span className="text-slate-500">{label}:</span>{" "}
+      {changed ? (
+        <>
+          <span className="text-slate-500 line-through">{before}</span>{" "}
+          <span className="font-semibold text-emerald-700">→ {after}</span>
+        </>
+      ) : (
+        <span>{after}</span>
+      )}
+    </div>
+  );
+}

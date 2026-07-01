@@ -13,6 +13,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     { to: "/merge-center", label: "Merge Center" },
     { to: "/clients/deleted", label: "Deleted" },
     { to: "/import", label: "Import" },
+    { to: "/notes-ledger", label: "Notes Ledger" },
     { to: "/backup", label: "Backup" },
     { to: "/sync-log", label: "Sync Log" },
   ] as const;

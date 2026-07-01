@@ -321,14 +321,31 @@ export const getScheduleCheck = createServerFn({ method: "GET" })
 
     const { bookings, error } = await fetchSquareBookings(token, startIso, endIso);
 
-    // Load clients
-    const { data: clients, error: cErr } = await context.supabase
-      .from("clients")
-      .select(
-        "id, first_name, last_name, phone, package_total_visits, visits_used, package_price, amount_paid, internal_notes, square_customer_id",
-      )
-      .is("deleted_at", null);
-    if (cErr) throw cErr;
+    // Load clients — paginated in 1000-row chunks so clients past the default
+    // PostgREST 1000-row cap are still included in the matching map.
+    const clients: ScheduleClientLite[] = [];
+    {
+      const pageSize = 1000;
+      let from = 0;
+      for (let i = 0; i < 100; i++) {
+        const { data: page, error: cErr } = await context.supabase
+          .from("clients")
+          .select(
+            "id, first_name, last_name, phone, package_total_visits, visits_used, package_price, amount_paid, internal_notes, square_customer_id",
+          )
+          .is("deleted_at", null)
+          .range(from, from + pageSize - 1);
+        if (cErr) throw cErr;
+        if (!page || page.length === 0) break;
+        clients.push(...(page as ScheduleClientLite[]));
+        if (page.length < pageSize) break;
+        from += pageSize;
+      }
+    }
+    console.log(
+      `[schedule] Loaded ${clients.length} non-deleted clients (` +
+        `${clients.filter((c) => c.square_customer_id).length} with square_customer_id)`,
+    );
 
     // Match bookings to clients by Square customer ID.
     const byCustomerId = new Map<string, ScheduleClientLite>();

@@ -169,13 +169,84 @@ function normalizeNoteForCompare(s: string): string {
     .trim();
 }
 
+const JUNK_LINE_RE = /^[\s\-–—.()·•*]*$/;
+
+function isJunkLine(raw: string): boolean {
+  const t = raw.trim();
+  if (!t) return true;
+  if (JUNK_LINE_RE.test(t)) return true;
+  if (!normalizeNoteForCompare(t)) return true;
+  return false;
+}
+
+function levenshtein(a: string, b: string): number {
+  if (a === b) return 0;
+  if (!a.length) return b.length;
+  if (!b.length) return a.length;
+  const dp: number[] = new Array(b.length + 1);
+  for (let j = 0; j <= b.length; j++) dp[j] = j;
+  for (let i = 1; i <= a.length; i++) {
+    let prev = dp[0];
+    dp[0] = i;
+    for (let j = 1; j <= b.length; j++) {
+      const tmp = dp[j];
+      dp[j] =
+        a.charCodeAt(i - 1) === b.charCodeAt(j - 1)
+          ? prev
+          : 1 + Math.min(prev, dp[j], dp[j - 1]);
+      prev = tmp;
+    }
+  }
+  return dp[b.length];
+}
+
+function similarity(a: string, b: string): number {
+  const m = Math.max(a.length, b.length);
+  if (m === 0) return 1;
+  return 1 - levenshtein(a, b) / m;
+}
+
+/** Dedupe incoming notes line-by-line against existing notes. */
+export function dedupeNoteLines(
+  existing: string | null | undefined,
+  incoming: string | null | undefined,
+): { appended: string | null; count: number } {
+  if (!incoming) return { appended: null, count: 0 };
+  const existingNorm: string[] = [];
+  for (const l of (existing ?? "").split(/\r?\n/)) {
+    if (isJunkLine(l)) continue;
+    const n = normalizeNoteForCompare(l);
+    if (n) existingNorm.push(n);
+  }
+  const seen = new Set(existingNorm);
+  const addedNorm: string[] = [];
+  const kept: string[] = [];
+  for (const raw of incoming.split(/\r?\n/)) {
+    if (isJunkLine(raw)) continue;
+    const line = raw.trim();
+    const n = normalizeNoteForCompare(line);
+    if (!n || seen.has(n)) continue;
+    let dup = false;
+    for (const ex of existingNorm) {
+      if (similarity(n, ex) >= 0.95) { dup = true; break; }
+    }
+    if (!dup) {
+      for (const ex of addedNorm) {
+        if (similarity(n, ex) >= 0.95) { dup = true; break; }
+      }
+    }
+    if (dup) continue;
+    seen.add(n);
+    addedNorm.push(n);
+    kept.push(line);
+  }
+  if (kept.length === 0) return { appended: null, count: 0 };
+  return { appended: kept.join("\n"), count: kept.length };
+}
+
 export function noteAlreadyExists(existing: string | null | undefined, incoming: string | null | undefined): boolean {
-  if (!incoming) return false;
-  const inc = normalizeNoteForCompare(incoming);
-  if (!inc) return false;
-  const ex = normalizeNoteForCompare(existing ?? "");
-  if (!ex) return false;
-  return ex.includes(inc);
+  if (!incoming || !incoming.trim()) return false;
+  return dedupeNoteLines(existing, incoming).count === 0;
 }
 
 function buildChanges(parsed: ParsedRow, client: MatchClient): AutoUpdateRow["changes"] {

@@ -249,6 +249,7 @@ function SyncLogPage() {
                     <TableHead>Square Customer ID</TableHead>
                     <TableHead>Buyer Email</TableHead>
                     <TableHead>Note</TableHead>
+                    <TableHead className="text-right">Resolve</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -271,6 +272,13 @@ function SyncLogPage() {
                         {p.buyer_email ?? "—"}
                       </TableCell>
                       <TableCell className="text-xs text-slate-600">{p.note ?? "—"}</TableCell>
+                      <TableCell className="text-right">
+                        {!p.square_customer_id && p.buyer_email ? (
+                          <ResolvePaymentDialog payment={p} />
+                        ) : (
+                          <span className="text-xs text-slate-400">—</span>
+                        )}
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>

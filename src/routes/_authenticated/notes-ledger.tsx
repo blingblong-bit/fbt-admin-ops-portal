@@ -347,40 +347,77 @@ function NotesLedgerPage() {
 
           <Card className="mb-6">
             <CardHeader>
-              <CardTitle>Needs Review ({preview.reviews.length})</CardTitle>
+              <CardTitle>
+                Needs Review ({visibleReviews.length}
+                {visibleReviews.length !== preview.reviews.length
+                  ? ` of ${preview.reviews.length}`
+                  : ""}
+                )
+              </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-2">
-              {preview.reviews.length === 0 && (
-                <p className="text-sm text-slate-500">None.</p>
-              )}
-              {preview.reviews.map((r, idx) => (
-                <div
-                  key={idx}
-                  className="rounded border border-amber-200 bg-amber-50 p-3 text-sm"
-                >
-                  <div className="mb-1 flex flex-wrap items-center gap-2">
-                    <Badge variant="outline" className="border-amber-400 text-amber-800">
-                      Line {r.line_number}
-                    </Badge>
-                    {r.assessment && <Badge variant="secondary">Assessment</Badge>}
-                    <span className="font-semibold">{r.name ?? "(no name)"}</span>
-                    <span className="text-xs text-slate-500">{r.reason}</span>
-                  </div>
-                  <pre className="whitespace-pre-wrap font-mono text-xs text-slate-700">
-                    {r.raw}
-                  </pre>
-                  {r.candidates.length > 0 && (
-                    <div className="mt-2 text-xs">
-                      Candidates:{" "}
-                      {r.candidates.map((c) => (
-                        <span key={c.id} className="mr-2 rounded bg-white px-2 py-0.5 shadow-sm">
-                          {fullName(c)}
-                          {c.square_customer_id ? " · Square" : ""}
-                        </span>
-                      ))}
-                    </div>
+            <CardContent className="space-y-3">
+              {preview.reviews.length > 0 && (
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs font-medium text-slate-500">Filter:</span>
+                  {(Object.keys(REVIEW_CATEGORY_LABELS) as ReviewCategory[])
+                    .filter((c) => (categoryCounts.get(c) ?? 0) > 0)
+                    .map((c) => {
+                      const active = activeCategories.has(c);
+                      return (
+                        <button
+                          key={c}
+                          type="button"
+                          onClick={() => {
+                            const next = new Set(activeCategories);
+                            if (next.has(c)) next.delete(c);
+                            else next.add(c);
+                            setActiveCategories(next);
+                          }}
+                          className={`rounded-full border px-2.5 py-0.5 text-xs transition ${
+                            active
+                              ? "border-amber-500 bg-amber-500 text-white"
+                              : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+                          }`}
+                        >
+                          {REVIEW_CATEGORY_LABELS[c]} ({categoryCounts.get(c) ?? 0})
+                        </button>
+                      );
+                    })}
+                  {activeCategories.size > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setActiveCategories(new Set())}
+                      className="text-xs text-slate-500 underline"
+                    >
+                      Clear
+                    </button>
                   )}
                 </div>
+              )}
+              {visibleReviews.length === 0 && (
+                <p className="text-sm text-slate-500">
+                  {preview.reviews.length === 0 ? "None." : "No rows match the current filters."}
+                </p>
+              )}
+              {visibleReviews.map((r) => (
+                <ReviewCard
+                  key={r.line_number}
+                  row={r}
+                  selectedClientId={reviewSelection.get(r.line_number) ?? null}
+                  onSelect={(clientId) => {
+                    const next = new Map(reviewSelection);
+                    next.set(r.line_number, clientId);
+                    setReviewSelection(next);
+                  }}
+                  onApply={(client) => reviewApplyMut.mutate({ row: r, client })}
+                  onSkip={() =>
+                    setSkippedReviews((prev) => new Set(prev).add(r.line_number))
+                  }
+                  onMarkResolved={() =>
+                    setResolvedReviews((prev) => new Set(prev).add(r.line_number))
+                  }
+                  applying={reviewApplyMut.isPending}
+                />
               ))}
             </CardContent>
           </Card>

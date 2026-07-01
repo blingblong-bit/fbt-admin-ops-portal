@@ -632,6 +632,8 @@ export const applyNotesLedger = createServerFn({ method: "POST" })
         step: "ok",
         error: null,
         fields: baseFields,
+        before: beforeSnapshot,
+
       });
     }
 

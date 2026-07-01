@@ -455,6 +455,33 @@ function NotesLedgerPage() {
             </CardContent>
           </Card>
 
+          {visibleRecent.length > 0 && (
+            <Card className="mb-6 border-emerald-200 bg-emerald-50/60">
+              <CardHeader>
+                <CardTitle className="text-base">
+                  Recently Applied ({visibleRecent.length})
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <p className="text-xs text-slate-600">
+                  Confirmation of the changes committed to the database. Undo is
+                  available for a few seconds after each apply.
+                </p>
+                {visibleRecent.map((entry) => (
+                  <RecentlyAppliedCard
+                    key={entry.id}
+                    entry={entry}
+                    now={now}
+                    ttlMs={RECENTLY_APPLIED_TTL_MS}
+                    onUndo={() => undoMut.mutate(entry)}
+                    undoing={undoMut.isPending}
+                  />
+                ))}
+              </CardContent>
+            </Card>
+          )}
+
+
           <Card className="mb-6">
             <CardHeader>
               <CardTitle>

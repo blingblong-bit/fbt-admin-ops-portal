@@ -396,14 +396,26 @@ function PairCard({
           {pair.status === "blocked" && (
             <Badge className="bg-red-600 text-white hover:bg-red-600">Blocked</Badge>
           )}
+          {pair.status === "shared_phone" && (
+            <Badge variant="outline" className="border-slate-300 text-slate-600">
+              Shared phone
+            </Badge>
+          )}
         </div>
       </CardHeader>
       <CardContent className="space-y-3">
-        {pair.square_conflict && (
+        {pair.status === "blocked" && (
           <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-            Blocked because both clients have different Square Customer IDs. This cannot be
-            reopened. Resolve by verifying whether these are truly different people or manually
-            correcting the Square linkage.
+            Blocked because both clients have the same name but different Square Customer IDs. This
+            cannot be reopened. Resolve by verifying whether these are truly different people or
+            manually correcting the Square linkage.
+          </div>
+        )}
+        {pair.status === "shared_phone" && (
+          <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+            These clients share a phone number but have different names and different Square
+            Customer IDs — likely family members, not duplicates. No merge action needed. Use
+            "Ignore pair" to hide from future scans.
           </div>
         )}
         {pair.balance_conflict && !pair.square_conflict && (

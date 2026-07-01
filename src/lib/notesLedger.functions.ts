@@ -633,7 +633,10 @@ export const applyNotesLedger = createServerFn({ method: "POST" })
         error: null,
         fields: baseFields,
         before: beforeSnapshot,
+      });
+    }
 
+    return { updated, errors, rows };
   });
 
 export const undoNotesLedgerApply = createServerFn({ method: "POST" })
@@ -672,7 +675,3 @@ export const undoNotesLedgerApply = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-    }
-
-    return { updated, errors, rows };
-  });

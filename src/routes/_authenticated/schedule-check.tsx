@@ -136,6 +136,8 @@ function ScheduleCheckPage() {
           amount_paid: 0,
           internal_notes: null,
           square_customer_id: c.square_customer_id,
+          status: null,
+          manual_active: null,
         },
       });
     }

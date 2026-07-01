@@ -429,13 +429,13 @@ function PairCard({
             c={pair.left}
             side="left"
             isKept={keptId === pair.left.id}
-            blocked={pair.status === "blocked"}
+            blocked={pair.status === "blocked" || pair.status === "shared_phone"}
           />
           <ClientCol
             c={pair.right}
             side="right"
             isKept={keptId === pair.right.id}
-            blocked={pair.status === "blocked"}
+            blocked={pair.status === "blocked" || pair.status === "shared_phone"}
           />
         </div>
 

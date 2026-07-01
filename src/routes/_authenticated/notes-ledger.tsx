@@ -46,6 +46,10 @@ function NotesLedgerPage() {
       setApplied(null);
       setApplyRows([]);
       setExcluded(new Set());
+      setReviewSelection(new Map());
+      setResolvedReviews(new Set());
+      setSkippedReviews(new Set());
+      setActiveCategories(new Set());
       toast.success(`Parsed ${r.parsed_count} rows`);
     },
     onError: (e: Error) => toast.error(e.message),

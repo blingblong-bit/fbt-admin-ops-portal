@@ -389,11 +389,22 @@ export const mergeDuplicatePair = createServerFn({ method: "POST" })
       fieldsCopied.push("package_price", "package_total_visits", "amount_paid", "visits_used");
     }
 
-    // Append internal notes
+    // Append structured "Legacy Notes" block (only once per kept client)
     const legacyNotes = (archive.internal_notes ?? "").trim();
-    if (legacyNotes) {
-      const header = `\n\n--- Merged from legacy client ${archive.first_name} ${archive.last_name} (${archive.id.slice(0, 8)}) on ${new Date().toISOString().slice(0, 10)} ---\n`;
-      patch.internal_notes = `${(kept.internal_notes ?? "").trimEnd()}${header}${legacyNotes}`.trim();
+    const legacyPhone = (archive.phone ?? "").trim();
+    const existingKeptNotes = kept.internal_notes ?? "";
+    const alreadyHasBlock = /(^|\n)Legacy Notes\n-+/.test(existingKeptNotes);
+    if (!alreadyHasBlock && (legacyPhone || legacyNotes)) {
+      const lines: string[] = ["Legacy Notes", "------------"];
+      if (legacyPhone) lines.push(`Legacy Phone: ${legacyPhone}`);
+      if (legacyNotes) {
+        if (legacyPhone) lines.push("");
+        lines.push("Legacy Notes:", legacyNotes);
+      }
+      const block = lines.join("\n");
+      patch.internal_notes = existingKeptNotes.trim()
+        ? `${existingKeptNotes.trimEnd()}\n\n${block}`
+        : block;
       fieldsCopied.push("internal_notes");
     }
 

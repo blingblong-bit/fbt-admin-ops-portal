@@ -96,10 +96,16 @@ export const findDuplicatePairs = createServerFn({ method: "GET" })
       reviewByPair.set(`${r.client_a_id}|${r.client_b_id}`, r);
     }
 
-    // Bucket by name and phone
+    const clientById = new Map<string, Client>(clients.map((c) => [c.id, c]));
+
+    // Bucket by name and phone — ONLY non-archived clients participate in
+    // generating new pending pairs. Archived clients (typically legacy records
+    // already merged into a Square-linked client) must not resurrect as new
+    // pending duplicates.
+    const scanClients = clients.filter((c) => c.status !== "archived");
     const byName = new Map<string, Client[]>();
     const byPhone = new Map<string, Client[]>();
-    for (const c of clients) {
+    for (const c of scanClients) {
       const n = normName(c.first_name, c.last_name);
       const p = normPhone(c.phone);
       if (n) {
@@ -113,8 +119,6 @@ export const findDuplicatePairs = createServerFn({ method: "GET" })
         byPhone.set(p, arr);
       }
     }
-
-    const clientById = new Map<string, Client>(clients.map((c) => [c.id, c]));
 
     type Candidate = { a: string; b: string; nameMatch: boolean; phoneMatch: boolean };
     const candidates = new Map<string, Candidate>();
@@ -145,6 +149,29 @@ export const findDuplicatePairs = createServerFn({ method: "GET" })
       for (let i = 0; i < arr.length; i++) {
         for (let j = i + 1; j < arr.length; j++) addPair(arr[i], arr[j], "phone");
       }
+    }
+
+    // Also surface resolved / blocked reviews (merged, ignored, blocked) even
+    // when one side is now archived — so they still appear in the
+    // Merged/Ignored history bucket. Pending review rows for pairs where
+    // either side is archived are skipped: they no longer belong in pending
+    // tabs.
+    for (const r of (reviews ?? []) as ReviewRow[]) {
+      const a = clientById.get(r.client_a_id);
+      const b = clientById.get(r.client_b_id);
+      if (!a || !b) continue;
+      const eitherArchived = a.status === "archived" || b.status === "archived";
+      if (r.status === "pending" && eitherArchived) continue;
+      const key = `${r.client_a_id}|${r.client_b_id}`;
+      if (candidates.has(key)) continue;
+      // Recompute name/phone match flags from current data.
+      const nameMatch =
+        !!normName(a.first_name, a.last_name) &&
+        normName(a.first_name, a.last_name) === normName(b.first_name, b.last_name);
+      const phoneMatch =
+        !!normPhone(a.phone) && normPhone(a.phone) === normPhone(b.phone);
+      if (!nameMatch && !phoneMatch) continue;
+      candidates.set(key, { a: r.client_a_id, b: r.client_b_id, nameMatch, phoneMatch });
     }
 
     // Fetch activities for all clients involved

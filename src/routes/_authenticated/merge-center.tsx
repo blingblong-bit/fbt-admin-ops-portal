@@ -17,6 +17,16 @@ import {
   type MergePairClient,
   type MergePairConfidence,
 } from "@/lib/merges.functions";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { formatCurrency, formatDate, fullName, amountOwed, visitsRemaining } from "@/lib/clients";
 
 export const Route = createFileRoute("/_authenticated/merge-center")({

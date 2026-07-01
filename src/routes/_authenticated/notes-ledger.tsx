@@ -224,6 +224,27 @@ function NotesLedgerPage() {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  const undoMut = useMutation({
+    mutationFn: async (entry: RecentlyApplied) => {
+      await undoFn({ data: { client_id: entry.client_id, before: entry.before } });
+      return entry;
+    },
+    onSuccess: (entry) => {
+      setRecentlyApplied((prev) =>
+        prev.map((r) => (r.id === entry.id ? { ...r, undone: true } : r)),
+      );
+      // Restore into Needs Review so the row can be re-applied.
+      setResolvedReviews((prev) => {
+        const next = new Set(prev);
+        next.delete(entry.line_number);
+        return next;
+      });
+      toast.success(`Reverted changes to ${entry.client_name}`);
+    },
+    onError: (e: Error) => toast.error(`Undo failed: ${e.message}`),
+  });
+
+
   const autoCount = preview ? preview.auto_updates.length - excluded.size : 0;
 
   const categoryCounts = new Map<ReviewCategory, number>();

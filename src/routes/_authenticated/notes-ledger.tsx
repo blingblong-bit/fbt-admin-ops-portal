@@ -34,6 +34,10 @@ function NotesLedgerPage() {
   const [applied, setApplied] = useState<{ updated: number; errors: number } | null>(null);
   const [applyRows, setApplyRows] = useState<ApplyRowResult[]>([]);
   const [excluded, setExcluded] = useState<Set<string>>(new Set());
+  const [reviewSelection, setReviewSelection] = useState<Map<number, string>>(new Map());
+  const [resolvedReviews, setResolvedReviews] = useState<Set<number>>(new Set());
+  const [skippedReviews, setSkippedReviews] = useState<Set<number>>(new Set());
+  const [activeCategories, setActiveCategories] = useState<Set<ReviewCategory>>(new Set());
 
   const previewMut = useMutation({
     mutationFn: async () => previewFn({ data: { text } }),

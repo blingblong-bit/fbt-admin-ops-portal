@@ -312,7 +312,18 @@ function Dashboard() {
           <h2 className="text-xl font-semibold tracking-tight">
             Showing: {FILTER_LABEL[filter]}
           </h2>
-          <span className="text-sm text-slate-500">{filtered.length}</span>
+          <div className="flex items-center gap-3">
+            {filter === "payment_due" && filtered.length > 0 && (
+              <button
+                type="button"
+                onClick={() => exportPaymentDueCsv(filtered)}
+                className="text-sm font-medium text-slate-600 underline-offset-2 hover:text-slate-900 hover:underline"
+              >
+                Export CSV
+              </button>
+            )}
+            <span className="text-sm text-slate-500">{filtered.length}</span>
+          </div>
         </div>
 
         <Card className="mb-4">
@@ -433,6 +444,26 @@ function PaymentTotals({ clients }: { clients: Client[] }) {
       ))}
     </div>
   );
+}
+
+function exportPaymentDueCsv(clients: Client[]) {
+  const rows = [
+    ["Name", "Amount Owed"],
+    ...clients.map((c) => [
+      fullName(c),
+      String(amountOwed(c)),
+    ]),
+  ];
+  const csv = rows.map((r) => r.map((cell) => `"${cell.replace(/"/g, '""')}"`).join(",")).join("\n");
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "payment-due-export.csv";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 // Keep StatusBadge import used elsewhere referenced to avoid unused-import noise

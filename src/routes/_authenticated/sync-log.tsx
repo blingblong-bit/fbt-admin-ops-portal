@@ -31,9 +31,12 @@ import { formatCurrency, formatDateTimeLocal } from "@/lib/clients";
 import {
   resolvePaymentCreateClient,
   resolvePaymentLink,
+  retryAllMatchedBlockedPayments,
+  retryApplyPayment,
   searchClientsForPayment,
   suggestPaymentMatches,
 } from "@/lib/payments.functions";
+
 
 export const Route = createFileRoute("/_authenticated/sync-log")({
   head: () => ({

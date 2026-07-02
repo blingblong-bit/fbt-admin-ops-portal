@@ -12,6 +12,7 @@ import { formatCurrency, formatDate, fullName } from "@/lib/clients";
 import {
   previewNotesLedger,
   applyNotesLedger,
+  resolveNotesLedgerRow,
   undoNotesLedgerApply,
   noteAlreadyExists,
   REVIEW_CATEGORY_LABELS,
@@ -21,6 +22,7 @@ import {
   type ReviewRow,
   type ReviewCategory,
   type MatchClient,
+  type LedgerResolutionInput,
 } from "@/lib/notesLedger.functions";
 
 const RECENTLY_APPLIED_TTL_MS = 12000;
@@ -50,6 +52,21 @@ type RecentlyApplied = {
   undone: boolean;
 };
 
+function ledgerResolutionInput(row: ReviewRow | AutoUpdateRow["parsed"]): LedgerResolutionInput {
+  return {
+    row_fingerprint: row.row_fingerprint,
+    line_number: row.line_number,
+    raw: row.raw,
+    name: row.name ?? null,
+    phone: row.phone ?? null,
+    leading_amount: row.leading_amount ?? null,
+    package_price: row.package_price ?? null,
+    package_total_visits: row.package_total_visits ?? null,
+    package_start_date: row.package_start_date ?? null,
+    internal_notes: row.internal_notes ?? null,
+  };
+}
+
 
 export const Route = createFileRoute("/_authenticated/notes-ledger")({
   head: () => ({ meta: [{ title: "Notes Ledger Import · FBT Admin" }] }),
@@ -59,6 +76,7 @@ export const Route = createFileRoute("/_authenticated/notes-ledger")({
 function NotesLedgerPage() {
   const previewFn = useServerFn(previewNotesLedger);
   const applyFn = useServerFn(applyNotesLedger);
+  const resolveFn = useServerFn(resolveNotesLedgerRow);
   const undoFn = useServerFn(undoNotesLedgerApply);
   const [text, setText] = useState("");
   const [preview, setPreview] = useState<PreviewResult | null>(null);
@@ -66,8 +84,8 @@ function NotesLedgerPage() {
   const [applyRows, setApplyRows] = useState<ApplyRowResult[]>([]);
   const [excluded, setExcluded] = useState<Set<string>>(new Set());
   const [reviewSelection, setReviewSelection] = useState<Map<number, string>>(new Map());
-  const [resolvedReviews, setResolvedReviews] = useState<Set<number>>(new Set());
-  const [skippedReviews, setSkippedReviews] = useState<Set<number>>(new Set());
+  const [resolvedReviews, setResolvedReviews] = useState<Set<string>>(new Set());
+  const [skippedReviews, setSkippedReviews] = useState<Set<string>>(new Set());
   const [activeCategories, setActiveCategories] = useState<Set<ReviewCategory>>(new Set());
   const [recentlyApplied, setRecentlyApplied] = useState<RecentlyApplied[]>([]);
   const [now, setNow] = useState(() => Date.now());
@@ -112,6 +130,7 @@ function NotesLedgerPage() {
           client_name: fullName(r.client),
           parsed_name: r.parsed.name ?? null,
           line_number: r.parsed.line_number,
+          resolution_row: ledgerResolutionInput(r.parsed),
           package_price: r.changes.package_price.after,
           package_total_visits: r.changes.package_total_visits.after,
           package_start_date: r.changes.package_start_date.after,
@@ -158,6 +177,7 @@ function NotesLedgerPage() {
               client_name: fullName(client),
               parsed_name: row.name ?? null,
               line_number: row.line_number,
+              resolution_row: ledgerResolutionInput(row),
               package_price: price,
               package_total_visits: visits,
               package_start_date: startDate,
@@ -167,9 +187,9 @@ function NotesLedgerPage() {
           ],
         },
       });
-      return { res, lineNumber: row.line_number };
+      return { res, rowFingerprint: row.row_fingerprint };
     },
-    onSuccess: ({ res, lineNumber }) => {
+    onSuccess: ({ res, rowFingerprint }) => {
       const row = res.rows[0];
       if (!row || row.status === "error") {
         toast.error(`Apply failed: ${row?.error ?? "Unknown error"}`);
@@ -197,8 +217,8 @@ function NotesLedgerPage() {
           : "no_note";
       setRecentlyApplied((prev) => [
         {
-          id: `${lineNumber}-${Date.now()}`,
-          line_number: lineNumber,
+          id: `${rowFingerprint}-${Date.now()}`,
+          line_number: row.line_number ?? 0,
           client_id: row.client_id,
           client_name: row.client_name,
           applied_at: Date.now(),
@@ -212,15 +232,40 @@ function NotesLedgerPage() {
       ]);
       setNow(Date.now());
       // Immediately remove from Needs Review and clear selection.
-      setResolvedReviews((prev) => new Set(prev).add(lineNumber));
+      setResolvedReviews((prev) => new Set(prev).add(rowFingerprint));
       setReviewSelection((prev) => {
         const next = new Map(prev);
-        next.delete(lineNumber);
+        if (row.line_number !== null) next.delete(row.line_number);
         return next;
       });
       toast.success(`Applied to ${row.client_name}`);
     },
 
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const resolveReviewMut = useMutation({
+    mutationFn: async (args: { row: ReviewRow; status: "skipped" | "resolved" }) => {
+      const reason = args.status === "skipped" ? "Skipped row" : "Marked resolved";
+      const res = await resolveFn({
+        data: {
+          row: ledgerResolutionInput(args.row),
+          status: args.status,
+          reason,
+        },
+      });
+      return { res, row: args.row, status: args.status };
+    },
+    onSuccess: ({ row, status }) => {
+      if (status === "skipped") setSkippedReviews((prev) => new Set(prev).add(row.row_fingerprint));
+      else setResolvedReviews((prev) => new Set(prev).add(row.row_fingerprint));
+      setReviewSelection((prev) => {
+        const next = new Map(prev);
+        next.delete(row.line_number);
+        return next;
+      });
+      toast.success(status === "skipped" ? "Row skipped and saved" : "Row marked resolved and saved");
+    },
     onError: (e: Error) => toast.error(e.message),
   });
 
@@ -257,7 +302,7 @@ function NotesLedgerPage() {
   }
   const visibleReviews = preview
     ? preview.reviews.filter((r) => {
-        if (resolvedReviews.has(r.line_number) || skippedReviews.has(r.line_number)) return false;
+        if (resolvedReviews.has(r.row_fingerprint) || skippedReviews.has(r.row_fingerprint)) return false;
         if (activeCategories.size === 0) return true;
         return r.categories.some((c) => activeCategories.has(c));
       })

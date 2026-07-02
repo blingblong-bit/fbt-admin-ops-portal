@@ -23,7 +23,10 @@ export type ParsedRow = {
   review_reason: string | null;
   /** Dollar amount that appears before the client name (e.g. "100 (Elizabeth Banks) 931…"). */
   leading_amount: number | null;
+  /** True when leading_amount > 0 and differs from the parenthetical package_price. */
+  leading_amount_mismatch: boolean;
 };
+
 
 // Decorative markers to strip anywhere on the line (Apple Notes bullets/checks).
 // Includes common Unicode bullets/checkmarks and their mojibake forms (e.g. "%" or "◦"

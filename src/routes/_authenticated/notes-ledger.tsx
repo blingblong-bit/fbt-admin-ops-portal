@@ -220,6 +220,7 @@ function NotesLedgerPage() {
         {
           id: `${rowFingerprint}-${Date.now()}`,
           line_number: row.line_number ?? 0,
+          row_fingerprint: rowFingerprint,
           client_id: row.client_id,
           client_name: row.client_name,
           applied_at: Date.now(),

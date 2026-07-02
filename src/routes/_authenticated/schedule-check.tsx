@@ -192,8 +192,8 @@ function ScheduleCheckPage() {
           <div className="inline-flex items-center gap-2 rounded-full border border-amber-300 bg-amber-50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-amber-800">
             Production Read-Only
           </div>
-          <h1 className="text-3xl font-semibold tracking-tight">Schedule Check</h1>
-          <p className="text-slate-600">
+          <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">Schedule Check</h1>
+          <p className="hidden text-slate-600 md:block">
             Read-only view of Square appointments from the <strong>Production</strong> Square
             account. Therapy Admin never writes back to Square. Bookings whose customer ID
             isn't linked to an Admin client appear under "Unmatched Appointments".
@@ -203,16 +203,18 @@ function ScheduleCheckPage() {
               variant="outline"
               onClick={() => backfillMut.mutate()}
               disabled={backfillMut.isPending}
+              className="h-11 md:h-9"
             >
               {backfillMut.isPending ? "Running backfill…" : "Backfill Square Customers"}
             </Button>
-            <p className="mt-1 text-xs text-slate-500">
+            <p className="mt-1 hidden text-xs text-slate-500 md:block">
               Pulls all Production Square customers. Auto-links to Admin clients only on a
               high-confidence email/phone match. Uncertain matches are sent to <em>Needs Review</em>{" "}
               below.
             </p>
           </div>
         </header>
+
 
         <SquareReviewCard />
 

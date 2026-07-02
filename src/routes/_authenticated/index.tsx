@@ -312,7 +312,18 @@ function Dashboard() {
           <h2 className="text-xl font-semibold tracking-tight">
             Showing: {FILTER_LABEL[filter]}
           </h2>
-          <span className="text-sm text-slate-500">{filtered.length}</span>
+          <div className="flex items-center gap-3">
+            {filter === "payment_due" && filtered.length > 0 && (
+              <button
+                type="button"
+                onClick={() => exportPaymentDueCsv(filtered)}
+                className="text-sm font-medium text-slate-600 underline-offset-2 hover:text-slate-900 hover:underline"
+              >
+                Export CSV
+              </button>
+            )}
+            <span className="text-sm text-slate-500">{filtered.length}</span>
+          </div>
         </div>
 
         <Card className="mb-4">

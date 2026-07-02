@@ -309,8 +309,8 @@ function Dashboard() {
 
       {/* Filtered list */}
       <section>
-        <div className="mb-4 flex items-baseline justify-between">
-          <h2 className="text-xl font-semibold tracking-tight">
+        <div className="mb-3 flex items-baseline justify-between md:mb-4">
+          <h2 className="text-lg font-semibold tracking-tight md:text-xl">
             Showing: {FILTER_LABEL[filter]}
           </h2>
           <div className="flex items-center gap-3">

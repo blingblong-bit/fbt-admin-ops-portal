@@ -49,6 +49,7 @@ export type ReviewCategory =
   | "duplicate_ledger_entry"
   | "multiple_square_linked"
   | "missing_package_information"
+  | "amount_only_package"
   | "missing_phone"
   | "credit_special_balance"
   | "multiple_names_on_line"
@@ -70,6 +71,7 @@ export const REVIEW_CATEGORY_LABELS: Record<ReviewCategory, string> = {
   duplicate_ledger_entry: "Duplicate ledger entry",
   multiple_square_linked: "Multiple Square-linked clients",
   missing_package_information: "Missing package information",
+  amount_only_package: "Amount-only package / special billing",
   missing_phone: "Missing phone",
   credit_special_balance: "Credit / special balance",
   multiple_names_on_line: "Multiple names on one line",
@@ -90,7 +92,11 @@ function classifyReview(
   if (isDuplicate) cats.add("duplicate_ledger_entry");
   if (squareLinkedCount > 1) cats.add("multiple_square_linked");
   if (r.includes("no phone")) cats.add("missing_phone");
-  if (r.includes("no package price") || r.includes("no visit count")) cats.add("missing_package_information");
+  const isAmountOnly = r.includes("amount-only") || r.includes("special billing");
+  if (isAmountOnly) cats.add("amount_only_package");
+  if (!isAmountOnly && (r.includes("no package price") || r.includes("no visit count"))) {
+    cats.add("missing_package_information");
+  }
   if (r.includes("credit") || r.includes("overpaid") || r.includes("refund")) cats.add("credit_special_balance");
   if (r.includes("multiple names")) cats.add("multiple_names_on_line");
   if (r.includes("no matching client") || r.includes("no candidate matches")) cats.add("no_match");
@@ -449,6 +455,26 @@ export const previewNotesLedger = createServerFn({ method: "POST" })
           note_status: computeRowNoteStatus(row, combined),
         });
       };
+
+      // Amount-only package / special billing: a leading dollar amount before
+      // the name, no package price, no visit count, and exactly one active
+      // matched client. Reclassify + surface as a review row so staff can
+      // apply it manually (never auto-updated).
+      if (
+        row.leading_amount !== null &&
+        row.leading_amount > 0 &&
+        row.package_price === null &&
+        row.package_total_visits === null &&
+        combined.length === 1
+      ) {
+        row.package_price = row.leading_amount;
+        row.amount_paid = 0;
+        row.amount_owed = row.leading_amount;
+        row.paid_in_full = false;
+        row.needs_review = true;
+        row.review_reason =
+          "Amount-only package / special billing — leading amount before name, no package price or visit count in ledger.";
+      }
 
       if (row.needs_review) {
         const reason = row.review_reason ?? "Needs manual review.";

@@ -20,6 +20,8 @@ export type ParsedRow = {
   internal_notes: string | null;
   needs_review: boolean;
   review_reason: string | null;
+  /** Dollar amount that appears before the client name (e.g. "100 (Elizabeth Banks) 931…"). */
+  leading_amount: number | null;
 };
 
 // Decorative markers to strip anywhere on the line (Apple Notes bullets/checks).
@@ -120,6 +122,7 @@ export function parseLedger(text: string): ParsedRow[] {
       internal_notes: null,
       needs_review: false,
       review_reason: null,
+      leading_amount: null,
     };
 
     // Assessment flag: leading "A " or "A:" or "A-"
@@ -127,6 +130,13 @@ export function parseLedger(text: string): ParsedRow[] {
     if (asmt) {
       row.assessment = true;
       line = asmt[1].trim();
+    }
+
+    // Leading amount: a bare number before a "(Name)" or before a name word.
+    // Must be followed by "(" or 2+ letters so we don't grab the first phone digits.
+    const leadingAmt = line.match(/^(\d{1,4}(?:\.\d{1,2})?)\s+(?=\(|[A-Za-z]{2,})/);
+    if (leadingAmt) {
+      row.leading_amount = Number(leadingAmt[1]);
     }
 
     // Extract phone

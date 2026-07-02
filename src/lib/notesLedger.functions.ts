@@ -49,6 +49,7 @@ export type ReviewCategory =
   | "duplicate_ledger_entry"
   | "multiple_square_linked"
   | "missing_package_information"
+  | "amount_only_package"
   | "missing_phone"
   | "credit_special_balance"
   | "multiple_names_on_line"
@@ -70,6 +71,7 @@ export const REVIEW_CATEGORY_LABELS: Record<ReviewCategory, string> = {
   duplicate_ledger_entry: "Duplicate ledger entry",
   multiple_square_linked: "Multiple Square-linked clients",
   missing_package_information: "Missing package information",
+  amount_only_package: "Amount-only package / special billing",
   missing_phone: "Missing phone",
   credit_special_balance: "Credit / special balance",
   multiple_names_on_line: "Multiple names on one line",

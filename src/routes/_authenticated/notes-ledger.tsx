@@ -12,6 +12,7 @@ import { formatCurrency, formatDate, fullName } from "@/lib/clients";
 import {
   previewNotesLedger,
   applyNotesLedger,
+  resolveNotesLedgerRow,
   undoNotesLedgerApply,
   noteAlreadyExists,
   REVIEW_CATEGORY_LABELS,
@@ -21,6 +22,7 @@ import {
   type ReviewRow,
   type ReviewCategory,
   type MatchClient,
+  type LedgerResolutionInput,
 } from "@/lib/notesLedger.functions";
 
 const RECENTLY_APPLIED_TTL_MS = 12000;
@@ -28,6 +30,7 @@ const RECENTLY_APPLIED_TTL_MS = 12000;
 type RecentlyApplied = {
   id: string;
   line_number: number;
+  row_fingerprint: string;
   client_id: string;
   client_name: string;
   applied_at: number;
@@ -50,6 +53,21 @@ type RecentlyApplied = {
   undone: boolean;
 };
 
+function ledgerResolutionInput(row: ReviewRow | AutoUpdateRow["parsed"]): LedgerResolutionInput {
+  return {
+    row_fingerprint: row.row_fingerprint,
+    line_number: row.line_number,
+    raw: row.raw,
+    name: row.name ?? null,
+    phone: row.phone ?? null,
+    leading_amount: row.leading_amount ?? null,
+    package_price: row.package_price ?? null,
+    package_total_visits: row.package_total_visits ?? null,
+    package_start_date: row.package_start_date ?? null,
+    internal_notes: row.internal_notes ?? null,
+  };
+}
+
 
 export const Route = createFileRoute("/_authenticated/notes-ledger")({
   head: () => ({ meta: [{ title: "Notes Ledger Import · FBT Admin" }] }),
@@ -59,6 +77,7 @@ export const Route = createFileRoute("/_authenticated/notes-ledger")({
 function NotesLedgerPage() {
   const previewFn = useServerFn(previewNotesLedger);
   const applyFn = useServerFn(applyNotesLedger);
+  const resolveFn = useServerFn(resolveNotesLedgerRow);
   const undoFn = useServerFn(undoNotesLedgerApply);
   const [text, setText] = useState("");
   const [preview, setPreview] = useState<PreviewResult | null>(null);
@@ -66,8 +85,8 @@ function NotesLedgerPage() {
   const [applyRows, setApplyRows] = useState<ApplyRowResult[]>([]);
   const [excluded, setExcluded] = useState<Set<string>>(new Set());
   const [reviewSelection, setReviewSelection] = useState<Map<number, string>>(new Map());
-  const [resolvedReviews, setResolvedReviews] = useState<Set<number>>(new Set());
-  const [skippedReviews, setSkippedReviews] = useState<Set<number>>(new Set());
+  const [resolvedReviews, setResolvedReviews] = useState<Set<string>>(new Set());
+  const [skippedReviews, setSkippedReviews] = useState<Set<string>>(new Set());
   const [activeCategories, setActiveCategories] = useState<Set<ReviewCategory>>(new Set());
   const [recentlyApplied, setRecentlyApplied] = useState<RecentlyApplied[]>([]);
   const [now, setNow] = useState(() => Date.now());
@@ -112,6 +131,7 @@ function NotesLedgerPage() {
           client_name: fullName(r.client),
           parsed_name: r.parsed.name ?? null,
           line_number: r.parsed.line_number,
+          resolution_row: ledgerResolutionInput(r.parsed),
           package_price: r.changes.package_price.after,
           package_total_visits: r.changes.package_total_visits.after,
           package_start_date: r.changes.package_start_date.after,
@@ -158,6 +178,7 @@ function NotesLedgerPage() {
               client_name: fullName(client),
               parsed_name: row.name ?? null,
               line_number: row.line_number,
+              resolution_row: ledgerResolutionInput(row),
               package_price: price,
               package_total_visits: visits,
               package_start_date: startDate,
@@ -167,9 +188,9 @@ function NotesLedgerPage() {
           ],
         },
       });
-      return { res, lineNumber: row.line_number };
+      return { res, rowFingerprint: row.row_fingerprint };
     },
-    onSuccess: ({ res, lineNumber }) => {
+    onSuccess: ({ res, rowFingerprint }) => {
       const row = res.rows[0];
       if (!row || row.status === "error") {
         toast.error(`Apply failed: ${row?.error ?? "Unknown error"}`);
@@ -197,8 +218,9 @@ function NotesLedgerPage() {
           : "no_note";
       setRecentlyApplied((prev) => [
         {
-          id: `${lineNumber}-${Date.now()}`,
-          line_number: lineNumber,
+          id: `${rowFingerprint}-${Date.now()}`,
+          line_number: row.line_number ?? 0,
+          row_fingerprint: rowFingerprint,
           client_id: row.client_id,
           client_name: row.client_name,
           applied_at: Date.now(),
@@ -212,10 +234,10 @@ function NotesLedgerPage() {
       ]);
       setNow(Date.now());
       // Immediately remove from Needs Review and clear selection.
-      setResolvedReviews((prev) => new Set(prev).add(lineNumber));
+      setResolvedReviews((prev) => new Set(prev).add(rowFingerprint));
       setReviewSelection((prev) => {
         const next = new Map(prev);
-        next.delete(lineNumber);
+        if (row.line_number !== null) next.delete(row.line_number);
         return next;
       });
       toast.success(`Applied to ${row.client_name}`);
@@ -224,9 +246,40 @@ function NotesLedgerPage() {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  const resolveReviewMut = useMutation({
+    mutationFn: async (args: { row: ReviewRow; status: "skipped" | "resolved" }) => {
+      const reason = args.status === "skipped" ? "Skipped row" : "Marked resolved";
+      const res = await resolveFn({
+        data: {
+          row: ledgerResolutionInput(args.row),
+          status: args.status,
+          reason,
+        },
+      });
+      return { res, row: args.row, status: args.status };
+    },
+    onSuccess: ({ row, status }) => {
+      if (status === "skipped") setSkippedReviews((prev) => new Set(prev).add(row.row_fingerprint));
+      else setResolvedReviews((prev) => new Set(prev).add(row.row_fingerprint));
+      setReviewSelection((prev) => {
+        const next = new Map(prev);
+        next.delete(row.line_number);
+        return next;
+      });
+      toast.success(status === "skipped" ? "Row skipped and saved" : "Row marked resolved and saved");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
   const undoMut = useMutation({
     mutationFn: async (entry: RecentlyApplied) => {
-      await undoFn({ data: { client_id: entry.client_id, before: entry.before } });
+      await undoFn({
+        data: {
+          client_id: entry.client_id,
+          before: entry.before,
+          row_fingerprint: entry.row_fingerprint,
+        },
+      });
       return entry;
     },
     onSuccess: (entry) => {
@@ -236,7 +289,7 @@ function NotesLedgerPage() {
       // Restore into Needs Review so the row can be re-applied.
       setResolvedReviews((prev) => {
         const next = new Set(prev);
-        next.delete(entry.line_number);
+        next.delete(entry.row_fingerprint);
         return next;
       });
       toast.success(`Reverted changes to ${entry.client_name}`);
@@ -257,11 +310,12 @@ function NotesLedgerPage() {
   }
   const visibleReviews = preview
     ? preview.reviews.filter((r) => {
-        if (resolvedReviews.has(r.line_number) || skippedReviews.has(r.line_number)) return false;
+        if (resolvedReviews.has(r.row_fingerprint) || skippedReviews.has(r.row_fingerprint)) return false;
         if (activeCategories.size === 0) return true;
         return r.categories.some((c) => activeCategories.has(c));
       })
     : [];
+  const skippedCount = preview ? preview.skipped.length + resolvedReviews.size + skippedReviews.size : 0;
 
 
   return (
@@ -333,8 +387,8 @@ function NotesLedgerPage() {
           <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-4">
             <StatCard label="Parsed" value={preview.parsed_count} />
             <StatCard label="Auto-update" value={autoCount} tone="emerald" />
-            <StatCard label="Needs review" value={preview.reviews.length} tone="amber" />
-            <StatCard label="Skipped" value={preview.skipped.length} tone="slate" />
+            <StatCard label="Needs review" value={visibleReviews.length} tone="amber" />
+            <StatCard label="Skipped" value={skippedCount} tone="slate" />
           </div>
 
           <div className="mb-6 flex items-center justify-between">
@@ -538,7 +592,7 @@ function NotesLedgerPage() {
               )}
               {visibleReviews.map((r) => (
                 <ReviewCard
-                  key={r.line_number}
+                  key={r.row_fingerprint}
                   row={r}
                   selectedClientId={reviewSelection.get(r.line_number) ?? null}
                   onSelect={(clientId) => {
@@ -547,13 +601,9 @@ function NotesLedgerPage() {
                     setReviewSelection(next);
                   }}
                   onApply={(client) => reviewApplyMut.mutate({ row: r, client })}
-                  onSkip={() =>
-                    setSkippedReviews((prev) => new Set(prev).add(r.line_number))
-                  }
-                  onMarkResolved={() =>
-                    setResolvedReviews((prev) => new Set(prev).add(r.line_number))
-                  }
-                  applying={reviewApplyMut.isPending}
+                  onSkip={() => resolveReviewMut.mutate({ row: r, status: "skipped" })}
+                  onMarkResolved={() => resolveReviewMut.mutate({ row: r, status: "resolved" })}
+                  applying={reviewApplyMut.isPending || resolveReviewMut.isPending}
                 />
               ))}
             </CardContent>
@@ -561,16 +611,26 @@ function NotesLedgerPage() {
 
           <Card className="mb-6">
             <CardHeader>
-              <CardTitle>Skipped ({preview.skipped.length})</CardTitle>
+              <CardTitle>Skipped ({skippedCount})</CardTitle>
             </CardHeader>
             <CardContent className="space-y-1 text-sm">
-              {preview.skipped.length === 0 && (
+              {skippedCount === 0 && (
                 <p className="text-slate-500">None.</p>
               )}
               {preview.skipped.map((s, idx) => (
-                <div key={idx} className="flex justify-between border-b py-1">
+                <div key={s.parsed.row_fingerprint || idx} className="flex justify-between gap-3 border-b py-1">
                   <span className="font-mono text-xs text-slate-600">{s.parsed.raw}</span>
-                  <span className="text-xs text-slate-500">{s.reason}</span>
+                  <span className="text-right text-xs text-slate-500">
+                    {s.reason}
+                    {s.resolution.state === "previously_resolved" && (
+                      <span className="block text-emerald-700">
+                        Previously resolved · {s.resolution.status}
+                      </span>
+                    )}
+                    {s.resolution.state === "unresolved" && (
+                      <span className="block">Unresolved — no saved review decision yet</span>
+                    )}
+                  </span>
                 </div>
               ))}
             </CardContent>
@@ -756,6 +816,10 @@ function AutoUpdateCard({
         </div>
       </div>
       <div className="mt-2 text-xs text-slate-500 font-mono">{row.parsed.raw}</div>
+      <div className="mt-1 text-xs text-slate-500">
+        <span className="font-medium">Review persistence:</span> Unresolved — no saved review decision yet
+        <span className="ml-2 font-mono">{row.parsed.row_fingerprint}</span>
+      </div>
     </div>
   );
 }
@@ -804,6 +868,10 @@ function ReviewCard({
   applying: boolean;
 }) {
   const selectedClient = row.candidates.find((c) => c.id === selectedClientId) ?? null;
+  const resolutionText =
+    row.resolution.state === "previously_resolved"
+      ? `Previously resolved · ${row.resolution.status}`
+      : "Unresolved — no saved review decision yet";
   return (
     <div className="rounded border border-amber-200 bg-amber-50 p-3 text-sm">
       <div className="mb-2 flex flex-wrap items-center gap-2">
@@ -823,6 +891,10 @@ function ReviewCard({
         ))}
       </div>
       <div className="text-xs text-slate-600">{row.reason}</div>
+      <div className="mt-1 text-xs text-slate-500">
+        <span className="font-medium">Review persistence:</span> {resolutionText}
+        <span className="ml-2 font-mono">{row.row_fingerprint}</span>
+      </div>
       <pre className="mt-2 whitespace-pre-wrap font-mono text-xs text-slate-700">
         {row.raw}
       </pre>

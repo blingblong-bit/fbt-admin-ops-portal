@@ -210,6 +210,80 @@ export type Database = {
         }
         Relationships: []
       }
+      notes_ledger_resolutions: {
+        Row: {
+          created_at: string
+          id: string
+          internal_notes: string | null
+          leading_amount: number | null
+          line_number: number | null
+          normalized_row_content: string | null
+          package_price: number | null
+          package_start_date: string | null
+          package_total_visits: number | null
+          parsed_name: string | null
+          parsed_phone: string | null
+          raw_row: string | null
+          reason: string | null
+          resolution_status: string
+          resolved_at: string
+          resolved_by: string | null
+          resolved_client_id: string | null
+          row_fingerprint: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          internal_notes?: string | null
+          leading_amount?: number | null
+          line_number?: number | null
+          normalized_row_content?: string | null
+          package_price?: number | null
+          package_start_date?: string | null
+          package_total_visits?: number | null
+          parsed_name?: string | null
+          parsed_phone?: string | null
+          raw_row?: string | null
+          reason?: string | null
+          resolution_status: string
+          resolved_at?: string
+          resolved_by?: string | null
+          resolved_client_id?: string | null
+          row_fingerprint: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          internal_notes?: string | null
+          leading_amount?: number | null
+          line_number?: number | null
+          normalized_row_content?: string | null
+          package_price?: number | null
+          package_start_date?: string | null
+          package_total_visits?: number | null
+          parsed_name?: string | null
+          parsed_phone?: string | null
+          raw_row?: string | null
+          reason?: string | null
+          resolution_status?: string
+          resolved_at?: string
+          resolved_by?: string | null
+          resolved_client_id?: string | null
+          row_fingerprint?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notes_ledger_resolutions_resolved_client_id_fkey"
+            columns: ["resolved_client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       square_customer_reviews: {
         Row: {
           created_at: string

@@ -263,23 +263,23 @@ function Dashboard() {
 
   return (
     <AppShell>
-      <div className="mb-8 flex flex-wrap items-end justify-between gap-3">
+      <div className="mb-4 flex flex-wrap items-end justify-between gap-3 md:mb-8">
         <div>
-          <h1 className="text-3xl font-semibold tracking-tight">Today</h1>
+          <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">Today</h1>
           <p className="mt-1 text-sm text-slate-500">
             {isLoading
               ? "Loading…"
               : `${visibleClients.length} shown · ${clients.length} total`}
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex w-full flex-wrap items-center gap-2 md:w-auto">
           <label className="text-xs font-medium uppercase tracking-wide text-slate-500">
             Status
           </label>
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
-            className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+            className="h-11 flex-1 rounded-md border border-slate-300 bg-white px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-400 md:h-9 md:flex-none md:py-2"
           >
             {(Object.keys(STATUS_FILTER_LABEL) as StatusFilter[]).map((k) => (
               <option key={k} value={k}>
@@ -287,15 +287,15 @@ function Dashboard() {
               </option>
             ))}
           </select>
-          <Link to="/clients/new">
-            <Button>+ Add Client</Button>
+          <Link to="/clients/new" className="shrink-0">
+            <Button className="h-11 md:h-9">+ Add</Button>
           </Link>
         </div>
       </div>
 
 
       {/* Tiles */}
-      <div className="mb-8 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+      <div className="mb-6 grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 lg:grid-cols-6 md:mb-8">
         {tiles.map((t) => (
           <Tile
             key={t.key}
@@ -305,6 +305,7 @@ function Dashboard() {
           />
         ))}
       </div>
+
 
       {/* Filtered list */}
       <section>

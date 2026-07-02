@@ -92,7 +92,11 @@ function classifyReview(
   if (isDuplicate) cats.add("duplicate_ledger_entry");
   if (squareLinkedCount > 1) cats.add("multiple_square_linked");
   if (r.includes("no phone")) cats.add("missing_phone");
-  if (r.includes("no package price") || r.includes("no visit count")) cats.add("missing_package_information");
+  const isAmountOnly = r.includes("amount-only") || r.includes("special billing");
+  if (isAmountOnly) cats.add("amount_only_package");
+  if (!isAmountOnly && (r.includes("no package price") || r.includes("no visit count"))) {
+    cats.add("missing_package_information");
+  }
   if (r.includes("credit") || r.includes("overpaid") || r.includes("refund")) cats.add("credit_special_balance");
   if (r.includes("multiple names")) cats.add("multiple_names_on_line");
   if (r.includes("no matching client") || r.includes("no candidate matches")) cats.add("no_match");

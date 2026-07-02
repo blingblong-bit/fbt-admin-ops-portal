@@ -682,6 +682,12 @@ function NotesLedgerPage() {
                 >
                   Copy JSON
                 </Button>
+                <Button
+                  variant="default"
+                  onClick={() => downloadMigrationAuditCsv(preview, resolvedReviews, skippedReviews)}
+                >
+                  Download Migration Audit CSV
+                </Button>
               </div>
               <div className="max-h-[600px] overflow-auto rounded border">
                 <table className="w-full text-xs">

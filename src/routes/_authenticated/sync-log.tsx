@@ -332,12 +332,18 @@ function SyncLogPage() {
                         </TableCell>
                         <TableCell className="text-xs text-slate-600">{p.note ?? "—"}</TableCell>
                         <TableCell className="text-right">
-                          {!p.square_customer_id ? (
-                            <ResolvePaymentDialog payment={p} />
-                          ) : (
-                            <span className="text-xs text-slate-400">—</span>
-                          )}
+                          <div className="flex flex-col items-end gap-1">
+                            {p.client_id && !p.applied ? (
+                              <RetryPaymentButton paymentRowId={p.id} />
+                            ) : null}
+                            {!p.square_customer_id ? (
+                              <ResolvePaymentDialog payment={p} />
+                            ) : !p.client_id ? (
+                              <span className="text-xs text-slate-400">—</span>
+                            ) : null}
+                          </div>
                         </TableCell>
+
                       </TableRow>
                     );
                   })}

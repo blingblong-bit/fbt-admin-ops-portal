@@ -736,3 +736,54 @@ function ResolvePaymentDialog({ payment }: { payment: PaymentRow }) {
     </Dialog>
   );
 }
+
+function RetryPaymentButton({ paymentRowId }: { paymentRowId: string }) {
+  const queryClient = useQueryClient();
+  const retryFn = useServerFn(retryApplyPayment);
+  const mut = useMutation({
+    mutationFn: async () => retryFn({ data: { payment_row_id: paymentRowId } }),
+    onSuccess: (r) => {
+      if (r.outcome === "applied") {
+        toast.success(`Applied $${r.applied_amount.toFixed(2)}.`);
+      } else if (r.outcome === "already_applied") {
+        toast.success(r.reason ?? "Already applied — marked resolved.");
+      } else if (r.outcome === "blocked") {
+        toast.error(`Still blocked: ${r.reason ?? "unknown reason"}`);
+      } else {
+        toast.error(r.reason ?? "No matched client.");
+      }
+      queryClient.invalidateQueries({ queryKey: ["square_payments_needs_review"] });
+      queryClient.invalidateQueries({ queryKey: ["square_payments_pending"] });
+      queryClient.invalidateQueries({ queryKey: ["square_sync_log"] });
+    },
+    onError: (e) => toast.error(`Retry failed: ${(e as Error).message}`),
+  });
+  return (
+    <Button size="sm" variant="outline" disabled={mut.isPending} onClick={() => mut.mutate()}>
+      {mut.isPending ? "Retrying…" : "Retry Apply"}
+    </Button>
+  );
+}
+
+function RetryAllButton() {
+  const queryClient = useQueryClient();
+  const retryAll = useServerFn(retryAllMatchedBlockedPayments);
+  const mut = useMutation({
+    mutationFn: async () => retryAll({}),
+    onSuccess: (r) => {
+      const s = r.summary;
+      toast.success(
+        `Retry complete — ${s.applied} applied, ${s.already_applied} already applied, ${s.blocked} still blocked.`,
+      );
+      queryClient.invalidateQueries({ queryKey: ["square_payments_needs_review"] });
+      queryClient.invalidateQueries({ queryKey: ["square_payments_pending"] });
+      queryClient.invalidateQueries({ queryKey: ["square_sync_log"] });
+    },
+    onError: (e) => toast.error(`Retry all failed: ${(e as Error).message}`),
+  });
+  return (
+    <Button variant="secondary" disabled={mut.isPending} onClick={() => mut.mutate()}>
+      {mut.isPending ? "Retrying all…" : "Retry All Matched Blocked Payments"}
+    </Button>
+  );
+}

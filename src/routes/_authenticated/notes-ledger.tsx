@@ -315,6 +315,7 @@ function NotesLedgerPage() {
         return r.categories.some((c) => activeCategories.has(c));
       })
     : [];
+  const skippedCount = preview ? preview.skipped.length + resolvedReviews.size + skippedReviews.size : 0;
 
 
   return (
@@ -386,8 +387,8 @@ function NotesLedgerPage() {
           <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-4">
             <StatCard label="Parsed" value={preview.parsed_count} />
             <StatCard label="Auto-update" value={autoCount} tone="emerald" />
-            <StatCard label="Needs review" value={preview.reviews.length} tone="amber" />
-            <StatCard label="Skipped" value={preview.skipped.length} tone="slate" />
+            <StatCard label="Needs review" value={visibleReviews.length} tone="amber" />
+            <StatCard label="Skipped" value={skippedCount} tone="slate" />
           </div>
 
           <div className="mb-6 flex items-center justify-between">
@@ -591,7 +592,7 @@ function NotesLedgerPage() {
               )}
               {visibleReviews.map((r) => (
                 <ReviewCard
-                  key={r.line_number}
+                  key={r.row_fingerprint}
                   row={r}
                   selectedClientId={reviewSelection.get(r.line_number) ?? null}
                   onSelect={(clientId) => {
@@ -610,16 +611,23 @@ function NotesLedgerPage() {
 
           <Card className="mb-6">
             <CardHeader>
-              <CardTitle>Skipped ({preview.skipped.length})</CardTitle>
+              <CardTitle>Skipped ({skippedCount})</CardTitle>
             </CardHeader>
             <CardContent className="space-y-1 text-sm">
-              {preview.skipped.length === 0 && (
+              {skippedCount === 0 && (
                 <p className="text-slate-500">None.</p>
               )}
               {preview.skipped.map((s, idx) => (
-                <div key={idx} className="flex justify-between border-b py-1">
+                <div key={s.parsed.row_fingerprint || idx} className="flex justify-between gap-3 border-b py-1">
                   <span className="font-mono text-xs text-slate-600">{s.parsed.raw}</span>
-                  <span className="text-xs text-slate-500">{s.reason}</span>
+                  <span className="text-right text-xs text-slate-500">
+                    {s.reason}
+                    {s.resolution.state === "previously_resolved" && (
+                      <span className="block text-emerald-700">
+                        Previously resolved · {s.resolution.status}
+                      </span>
+                    )}
+                  </span>
                 </div>
               ))}
             </CardContent>

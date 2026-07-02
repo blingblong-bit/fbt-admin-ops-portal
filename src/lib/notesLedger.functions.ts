@@ -645,6 +645,30 @@ export const previewNotesLedger = createServerFn({ method: "POST" })
 
       if (row.needs_review) {
         const reason = row.review_reason ?? "Needs manual review.";
+        if (combined.length === 1) {
+          const changes = buildChanges(row, combined[0]);
+          const anyChange =
+            changes.package_price.changed ||
+            changes.package_total_visits.changed ||
+            changes.package_start_date.changed ||
+            changes.amount_paid.changed ||
+            changes.internal_notes.changed;
+          if (!anyChange) {
+            skipped.push({
+              parsed: row,
+              reason: "No changes vs current Admin data.",
+              resolution: { state: "unresolved" },
+            });
+            diagnostics.push({
+              ...diagBase,
+              outcome: "skipped_no_changes",
+              rule: "review row has one active candidate and no remaining package/payment/note changes",
+              reason: `Matched ${combined[0].first_name} ${combined[0].last_name}; existing Admin data already equals parsed values.`,
+            });
+            summary.no_changes_vs_current++;
+            continue;
+          }
+        }
         pushReview(reason, false);
         diagnostics.push({
           ...diagBase,

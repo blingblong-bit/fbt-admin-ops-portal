@@ -263,23 +263,23 @@ function Dashboard() {
 
   return (
     <AppShell>
-      <div className="mb-8 flex flex-wrap items-end justify-between gap-3">
+      <div className="mb-4 flex flex-wrap items-end justify-between gap-3 md:mb-8">
         <div>
-          <h1 className="text-3xl font-semibold tracking-tight">Today</h1>
+          <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">Today</h1>
           <p className="mt-1 text-sm text-slate-500">
             {isLoading
               ? "Loading…"
               : `${visibleClients.length} shown · ${clients.length} total`}
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex w-full flex-wrap items-center gap-2 md:w-auto">
           <label className="text-xs font-medium uppercase tracking-wide text-slate-500">
             Status
           </label>
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
-            className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+            className="h-11 flex-1 rounded-md border border-slate-300 bg-white px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-400 md:h-9 md:flex-none md:py-2"
           >
             {(Object.keys(STATUS_FILTER_LABEL) as StatusFilter[]).map((k) => (
               <option key={k} value={k}>
@@ -287,15 +287,15 @@ function Dashboard() {
               </option>
             ))}
           </select>
-          <Link to="/clients/new">
-            <Button>+ Add Client</Button>
+          <Link to="/clients/new" className="shrink-0">
+            <Button className="h-11 md:h-9">+ Add</Button>
           </Link>
         </div>
       </div>
 
 
       {/* Tiles */}
-      <div className="mb-8 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+      <div className="mb-6 grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 lg:grid-cols-6 md:mb-8">
         {tiles.map((t) => (
           <Tile
             key={t.key}
@@ -306,10 +306,11 @@ function Dashboard() {
         ))}
       </div>
 
+
       {/* Filtered list */}
       <section>
-        <div className="mb-4 flex items-baseline justify-between">
-          <h2 className="text-xl font-semibold tracking-tight">
+        <div className="mb-3 flex items-baseline justify-between md:mb-4">
+          <h2 className="text-lg font-semibold tracking-tight md:text-xl">
             Showing: {FILTER_LABEL[filter]}
           </h2>
           <div className="flex items-center gap-3">
@@ -326,16 +327,26 @@ function Dashboard() {
           </div>
         </div>
 
-        <Card className="mb-4">
-          <CardContent className="pt-6">
-            <Input
-              placeholder="Search within this view by name or phone…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="h-11 text-base"
-            />
-          </CardContent>
-        </Card>
+        {/* Search — sticky on mobile */}
+        <div className="sticky top-0 z-20 -mx-4 mb-3 border-b bg-slate-50/95 px-4 py-2 backdrop-blur md:static md:mx-0 md:mb-4 md:border-0 md:bg-transparent md:p-0 md:backdrop-blur-0">
+          <Input
+            placeholder="Search name or phone…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="h-11 text-base md:hidden"
+          />
+          <Card className="hidden md:block">
+            <CardContent className="pt-6">
+              <Input
+                placeholder="Search within this view by name or phone…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="h-11 text-base"
+              />
+            </CardContent>
+          </Card>
+        </div>
+
 
         {filter === "payment_due" && filtered.length > 0 && (
           <PaymentTotals clients={filtered} />

@@ -204,6 +204,8 @@ export const REVIEW_CATEGORY_LABELS: Record<ReviewCategory, string> = {
   multiple_square_linked: "Multiple Square-linked clients",
   missing_package_information: "Missing package information",
   amount_only_package: "Amount-only package / special billing",
+  leading_amount_mismatch: "Leading amount differs from package amount",
+
   missing_phone: "Missing phone",
   credit_special_balance: "Credit / special balance",
   multiple_names_on_line: "Multiple names on one line",

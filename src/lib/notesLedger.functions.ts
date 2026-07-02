@@ -98,6 +98,105 @@ export type LedgerResolutionInput = {
   internal_notes: string | null;
 };
 
+type StoredLedgerResolution = {
+  row_fingerprint: string;
+  resolution_status: LedgerResolutionStatus;
+  resolved_at: string | null;
+  reason: string | null;
+  resolved_client_id: string | null;
+};
+
+function normalizeRowContent(raw: string): string {
+  return normalizeLedgerText(raw).toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+function resolutionInputFromParsed(row: ParsedRow): LedgerResolutionInput {
+  const fingerprint = row.row_fingerprint || buildLedgerRowFingerprint(row);
+  return {
+    row_fingerprint: fingerprint,
+    line_number: row.line_number,
+    raw: row.raw,
+    name: row.name ?? null,
+    phone: row.phone ?? null,
+    leading_amount: row.leading_amount ?? null,
+    package_price: row.package_price ?? null,
+    package_total_visits: row.package_total_visits ?? null,
+    package_start_date: row.package_start_date ?? null,
+    internal_notes: row.internal_notes ?? null,
+  };
+}
+
+function resolutionStateFor(
+  row: ParsedRow,
+  resolvedByFingerprint: Map<string, StoredLedgerResolution>,
+): LedgerResolutionState {
+  const hit = resolvedByFingerprint.get(row.row_fingerprint || buildLedgerRowFingerprint(row));
+  if (!hit) return { state: "unresolved" };
+  return {
+    state: "previously_resolved",
+    status: hit.resolution_status,
+    resolved_at: hit.resolved_at,
+    reason: hit.reason,
+    resolved_client_id: hit.resolved_client_id,
+  };
+}
+
+async function loadResolvedFingerprints(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any,
+  fingerprints: string[],
+): Promise<Map<string, StoredLedgerResolution>> {
+  const unique = Array.from(new Set(fingerprints.filter(Boolean)));
+  const out = new Map<string, StoredLedgerResolution>();
+  if (unique.length === 0) return out;
+  const pageSize = 500;
+  for (let i = 0; i < unique.length; i += pageSize) {
+    const chunk = unique.slice(i, i + pageSize);
+    const { data, error } = await supabase
+      .from("notes_ledger_resolutions")
+      .select("row_fingerprint, resolution_status, resolved_at, reason, resolved_client_id")
+      .in("row_fingerprint", chunk);
+    if (error) throw error;
+    for (const r of (data ?? []) as StoredLedgerResolution[]) {
+      out.set(r.row_fingerprint, r);
+    }
+  }
+  return out;
+}
+
+async function persistLedgerResolution(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any,
+  userId: string,
+  row: LedgerResolutionInput,
+  status: LedgerResolutionStatus,
+  reason: string,
+  clientId: string | null,
+) {
+  const { error } = await supabase.from("notes_ledger_resolutions").upsert(
+    {
+      row_fingerprint: row.row_fingerprint,
+      resolution_status: status,
+      resolved_client_id: clientId,
+      line_number: row.line_number,
+      raw_row: row.raw,
+      normalized_row_content: normalizeRowContent(row.raw),
+      parsed_name: row.name,
+      parsed_phone: row.phone,
+      leading_amount: row.leading_amount,
+      package_price: row.package_price,
+      package_total_visits: row.package_total_visits,
+      package_start_date: row.package_start_date,
+      internal_notes: row.internal_notes,
+      reason,
+      resolved_by: userId,
+      resolved_at: new Date().toISOString(),
+    },
+    { onConflict: "row_fingerprint" },
+  );
+  if (error) throw error;
+}
+
 export const REVIEW_CATEGORY_LABELS: Record<ReviewCategory, string> = {
   duplicate_ledger_entry: "Duplicate ledger entry",
   multiple_square_linked: "Multiple Square-linked clients",
@@ -402,6 +501,10 @@ export const previewNotesLedger = createServerFn({ method: "POST" })
   .handler(async ({ data, context }): Promise<PreviewResult> => {
     const parsed = parseLedger(data.text);
     const clients = await loadAllClients(context.supabase);
+  const resolvedByFingerprint = await loadResolvedFingerprints(
+    context.supabase,
+    parsed.map((r) => r.row_fingerprint),
+  );
 
     // Build index
     const byName = new Map<string, MatchClient[]>();
@@ -477,6 +580,23 @@ export const previewNotesLedger = createServerFn({ method: "POST" })
         square_linked_count: squareLinked.length,
       };
 
+      const rowResolution = resolutionStateFor(row, resolvedByFingerprint);
+      if (rowResolution.state === "previously_resolved") {
+        skipped.push({
+          parsed: row,
+          reason: "Already resolved from prior review",
+          resolution: rowResolution,
+        });
+        diagnostics.push({
+          ...diagBase,
+          outcome: "skipped_prior_resolution",
+          rule: "row_fingerprint exists in Notes Ledger resolutions",
+          reason: `Already resolved from prior review (${rowResolution.status}).`,
+        });
+        summary.no_changes_vs_current++;
+        continue;
+      }
+
       const pushReview = (reason: string, isDup: boolean) => {
         reviews.push({
           ...row,
@@ -485,6 +605,7 @@ export const previewNotesLedger = createServerFn({ method: "POST" })
           reason,
           categories: classifyReview(row, reason, squareLinked.length, combined.length, isDup),
           note_status: computeRowNoteStatus(row, combined),
+          resolution: { state: "unresolved" },
         });
       };
 
@@ -589,7 +710,7 @@ export const previewNotesLedger = createServerFn({ method: "POST" })
         changes.amount_paid.changed ||
         changes.internal_notes.changed;
       if (!anyChange) {
-        skipped.push({ parsed: row, reason: "No changes vs current Admin data." });
+        skipped.push({ parsed: row, reason: "No changes vs current Admin data.", resolution: { state: "unresolved" } });
         diagnostics.push({
           ...diagBase,
           outcome: "skipped_no_changes",

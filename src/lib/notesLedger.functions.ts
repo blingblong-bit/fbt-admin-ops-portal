@@ -766,13 +766,33 @@ export const previewNotesLedger = createServerFn({ method: "POST" })
         continue;
       }
 
+      const historicalHit = historicalRows.get(row);
+      if (historicalHit) {
+        const { client, currentRow } = historicalHit;
+        const currentDesc = currentRow.package_start_date
+          ? `start date ${currentRow.package_start_date}`
+          : currentRow.package_price !== null
+            ? `price $${currentRow.package_price}`
+            : `line ${currentRow.line_number}`;
+        const reasonHist = `Historical package entry — superseded by newer/current ledger row (${currentDesc}) for ${client.first_name} ${client.last_name}.`;
+        skipped.push({ parsed: row, reason: reasonHist, resolution: { state: "unresolved" } });
+        diagnostics.push({
+          ...diagBase,
+          outcome: "skipped_no_changes",
+          rule: "duplicate parsed_name; row does not match current package (older/historical)",
+          reason: reasonHist,
+        });
+        summary.no_changes_vs_current++;
+        continue;
+      }
+
       if (duplicateParsed) {
-        const dupReason = "Multiple ledger entries for same client — manual package selection required.";
+        const dupReason = "Duplicate ledger entry — two rows could both represent the current package. Pick one.";
         pushReview(dupReason, true);
         diagnostics.push({
           ...diagBase,
           outcome: "review",
-          rule: "duplicate parsed_name in ledger → force manual selection",
+          rule: "duplicate parsed_name in ledger; no single row identifiable as current package",
           reason: dupReason,
         });
         summary.parser_needs_review++;

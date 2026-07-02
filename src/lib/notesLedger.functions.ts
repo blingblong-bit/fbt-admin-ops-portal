@@ -942,6 +942,29 @@ export const applyNotesLedger = createServerFn({ method: "POST" })
       }
       baseFields.internal_notes_after = newNotes;
 
+      // Defense-in-depth: never reduce amount_paid, and refuse to shrink
+      // package_price below what the client has already paid. This preserves
+      // legitimate payment history (Square, prior imports) even if the caller
+      // passed stale ledger values.
+      const currentPaid = beforeSnapshot.amount_paid;
+      if (u.package_price < currentPaid) {
+        const detail = `Refused: incoming package price $${u.package_price.toFixed(2)} is less than existing amount paid $${currentPaid.toFixed(2)}. Route this row to Needs Review instead.`;
+        errors.push({ client_id: u.client_id, error: detail });
+        rows.push({
+          client_id: u.client_id,
+          client_name: clientName,
+          parsed_name: u.parsed_name ?? null,
+          line_number: u.line_number ?? null,
+          status: "error",
+          step: "update",
+          error: detail,
+          fields: baseFields,
+          before: beforeSnapshot,
+        });
+        continue;
+      }
+      const safeAmountPaid = Math.max(currentPaid, u.amount_paid);
+      baseFields.amount_paid = safeAmountPaid;
 
       const { error: updErr } = await supabase
         .from("clients")
@@ -949,10 +972,11 @@ export const applyNotesLedger = createServerFn({ method: "POST" })
           package_price: u.package_price,
           package_total_visits: u.package_total_visits,
           package_start_date: u.package_start_date,
-          amount_paid: u.amount_paid,
+          amount_paid: safeAmountPaid,
           internal_notes: newNotes,
         })
         .eq("id", u.client_id);
+
       if (updErr) {
         const e = updErr as { message: string; hint?: string; details?: string; code?: string };
         const detail = `${e.message}${e.hint ? ` — ${e.hint}` : ""}${e.details ? ` (${e.details})` : ""}${e.code ? ` [${e.code}]` : ""}`;

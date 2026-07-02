@@ -430,6 +430,17 @@ export const getScheduleCheck = createServerFn({ method: "GET" })
       .filter((b) => b.start_at)
       .sort((a, b) => (a.start_at ?? "").localeCompare(b.start_at ?? ""));
 
+    // Resolve team-member (provider/therapist) names (best-effort)
+    const teamMemberIds = Array.from(
+      new Set(
+        sorted
+          .flatMap((b) => b.appointment_segments ?? [])
+          .map((s) => s.team_member_id ?? "")
+          .filter(Boolean),
+      ),
+    );
+    const teamMemberNames = await fetchTeamMemberNames(token, teamMemberIds);
+
     // Fetch production customer info for unmatched booking customer IDs (best effort, to help linking)
     const unmatchedCustomerIds = Array.from(
       new Set(
@@ -443,6 +454,7 @@ export const getScheduleCheck = createServerFn({ method: "GET" })
     const all: ScheduleAppointment[] = sorted.map((b) => {
       const seg = b.appointment_segments?.[0];
       const svc = seg?.service_variation_id ? serviceNames.get(seg.service_variation_id) : null;
+      const tmName = seg?.team_member_id ? teamMemberNames.get(seg.team_member_id) ?? null : null;
       const client = matchClient(b.customer_id);
       return {
         booking_id: b.id,
@@ -450,6 +462,7 @@ export const getScheduleCheck = createServerFn({ method: "GET" })
         status: (b.status ?? "UNKNOWN").toString(),
         duration_minutes: seg?.duration_minutes ?? null,
         service_name: svc ?? null,
+        team_member_name: tmName,
         square_customer_id: b.customer_id ?? null,
         customer_info: b.customer_id ? customerInfoMap.get(b.customer_id) ?? null : null,
         client,

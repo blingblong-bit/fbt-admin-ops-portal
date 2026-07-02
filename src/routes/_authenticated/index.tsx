@@ -327,16 +327,26 @@ function Dashboard() {
           </div>
         </div>
 
-        <Card className="mb-4">
-          <CardContent className="pt-6">
-            <Input
-              placeholder="Search within this view by name or phone…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="h-11 text-base"
-            />
-          </CardContent>
-        </Card>
+        {/* Search — sticky on mobile */}
+        <div className="sticky top-0 z-20 -mx-4 mb-3 border-b bg-slate-50/95 px-4 py-2 backdrop-blur md:static md:mx-0 md:mb-4 md:border-0 md:bg-transparent md:p-0 md:backdrop-blur-0">
+          <Input
+            placeholder="Search name or phone…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="h-11 text-base md:hidden"
+          />
+          <Card className="hidden md:block">
+            <CardContent className="pt-6">
+              <Input
+                placeholder="Search within this view by name or phone…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="h-11 text-base"
+              />
+            </CardContent>
+          </Card>
+        </div>
+
 
         {filter === "payment_due" && filtered.length > 0 && (
           <PaymentTotals clients={filtered} />

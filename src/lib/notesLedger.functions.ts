@@ -598,15 +598,76 @@ export const previewNotesLedger = createServerFn({ method: "POST" })
       auto_updates: 0,
     };
 
-    // Detect duplicate parsed-name occurrences across the ledger.
-    // If the same normalized parsed name appears more than once, route ALL
-    // occurrences to Review so an older package line can't overwrite a newer one.
-    const parsedNameCounts = new Map<string, number>();
+    // Group parsed rows by normalized name to distinguish historical entries
+    // (older packages already superseded in Admin) from true current-package
+    // conflicts. Only rows that plausibly both represent the current package
+    // are routed to Review; older historical lines are skipped silently.
+    const parsedByName = new Map<string, ParsedRow[]>();
     for (const r of parsed) {
       if (r.needs_review) continue;
       const k = normName(r.name ?? "");
       if (!k) continue;
-      parsedNameCounts.set(k, (parsedNameCounts.get(k) ?? 0) + 1);
+      const list = parsedByName.get(k) ?? [];
+      list.push(r);
+      parsedByName.set(k, list);
+    }
+
+    const historicalRows = new Map<ParsedRow, { client: MatchClient; currentRow: ParsedRow }>();
+    const conflictRows = new Set<ParsedRow>();
+    for (const [nameKey, group] of parsedByName) {
+      if (group.length < 2) continue;
+      const activeForName = (byName.get(nameKey) ?? []).filter((c) => c.status !== "archived");
+      if (activeForName.length !== 1) {
+        // Zero or multiple active clients share this name — can't decide which
+        // row is "current"; leave everything as a conflict for manual review.
+        group.forEach((r) => conflictRows.add(r));
+        continue;
+      }
+      const client = activeForName[0];
+      const clientPrice = Number(client.package_price ?? 0);
+      const clientDate = client.package_start_date;
+
+      type Scored = {
+        row: ParsedRow;
+        priceMatch: boolean;
+        dateMatch: boolean;
+        startDate: string | null;
+      };
+      const scored: Scored[] = group.map((r) => ({
+        row: r,
+        priceMatch:
+          r.package_price !== null && clientPrice > 0 && Math.abs(r.package_price - clientPrice) < 1,
+        dateMatch:
+          !!r.package_start_date && !!clientDate && r.package_start_date === clientDate,
+        startDate: r.package_start_date,
+      }));
+
+      // Rows that plausibly represent the client's current package.
+      const currentCandidates = scored.filter((s) => s.priceMatch || s.dateMatch);
+      let currentRow: ParsedRow | null = null;
+      if (currentCandidates.length === 1) {
+        currentRow = currentCandidates[0].row;
+      } else if (currentCandidates.length === 0) {
+        // No row matches current — prefer the newest by start_date if there is
+        // a strict winner (no tie on the latest date).
+        const withDate = scored.filter((s) => s.startDate);
+        if (withDate.length > 0) {
+          withDate.sort((a, b) => (a.startDate! < b.startDate! ? 1 : -1));
+          const newest = withDate[0];
+          const second = withDate[1];
+          if (!second || newest.startDate !== second.startDate) {
+            currentRow = newest.row;
+          }
+        }
+      }
+
+      if (currentRow) {
+        for (const s of scored) {
+          if (s.row !== currentRow) historicalRows.set(s.row, { client, currentRow });
+        }
+      } else {
+        group.forEach((r) => conflictRows.add(r));
+      }
     }
 
     for (const row of parsed) {
@@ -622,7 +683,7 @@ export const previewNotesLedger = createServerFn({ method: "POST" })
         [...nameHitsRaw, ...phoneHitsRaw].filter(isArchived),
       );
       const squareLinked = combined.filter((c) => c.square_customer_id);
-      const duplicateParsed = !row.needs_review && key ? (parsedNameCounts.get(key) ?? 0) > 1 : false;
+      const duplicateParsed = !row.needs_review && conflictRows.has(row);
 
 
       const diagBase: Omit<RowDiagnostic, "outcome" | "rule" | "reason"> = {

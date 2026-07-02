@@ -1,6 +1,12 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { parseLedger, normName, type ParsedRow } from "./notesLedger";
+import {
+  buildLedgerRowFingerprint,
+  normalizeLedgerText,
+  parseLedger,
+  normName,
+  type ParsedRow,
+} from "./notesLedger";
 
 export type MatchClient = {
   id: string;
@@ -29,7 +35,7 @@ export type RowDiagnostic = {
   name_match_count: number;
   combined_unique_count: number;
   square_linked_count: number;
-  outcome: "auto_update" | "review" | "skipped_no_changes" | "parser_review";
+  outcome: "auto_update" | "review" | "skipped_no_changes" | "skipped_prior_resolution" | "parser_review";
   rule: string;
   reason: string;
 };
@@ -63,9 +69,34 @@ export type ReviewRow = ParsedRow & {
   reason: string;
   categories: ReviewCategory[];
   note_status: NoteStatus;
+  resolution: LedgerResolutionState;
 };
 
 export type NoteStatus = "append" | "already_exists" | "no_note";
+export type LedgerResolutionStatus = "imported" | "skipped" | "resolved";
+
+export type LedgerResolutionState =
+  | { state: "unresolved" }
+  | {
+      state: "previously_resolved";
+      status: LedgerResolutionStatus;
+      resolved_at: string | null;
+      reason: string | null;
+      resolved_client_id: string | null;
+    };
+
+export type LedgerResolutionInput = {
+  row_fingerprint: string;
+  line_number: number;
+  raw: string;
+  name: string | null;
+  phone: string | null;
+  leading_amount: number | null;
+  package_price: number | null;
+  package_total_visits: number | null;
+  package_start_date: string | null;
+  internal_notes: string | null;
+};
 
 export const REVIEW_CATEGORY_LABELS: Record<ReviewCategory, string> = {
   duplicate_ledger_entry: "Duplicate ledger entry",
@@ -124,6 +155,7 @@ export type AutoUpdateRow = {
 export type SkippedRow = {
   parsed: ParsedRow;
   reason: string;
+  resolution: LedgerResolutionState;
 };
 
 export type PreviewResult = {

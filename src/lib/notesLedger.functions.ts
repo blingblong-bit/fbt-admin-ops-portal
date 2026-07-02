@@ -456,6 +456,26 @@ export const previewNotesLedger = createServerFn({ method: "POST" })
         });
       };
 
+      // Amount-only package / special billing: a leading dollar amount before
+      // the name, no package price, no visit count, and exactly one active
+      // matched client. Reclassify + surface as a review row so staff can
+      // apply it manually (never auto-updated).
+      if (
+        row.leading_amount !== null &&
+        row.leading_amount > 0 &&
+        row.package_price === null &&
+        row.package_total_visits === null &&
+        combined.length === 1
+      ) {
+        row.package_price = row.leading_amount;
+        row.amount_paid = 0;
+        row.amount_owed = row.leading_amount;
+        row.paid_in_full = false;
+        row.needs_review = true;
+        row.review_reason =
+          "Amount-only package / special billing — leading amount before name, no package price or visit count in ledger.";
+      }
+
       if (row.needs_review) {
         const reason = row.review_reason ?? "Needs manual review.";
         pushReview(reason, false);

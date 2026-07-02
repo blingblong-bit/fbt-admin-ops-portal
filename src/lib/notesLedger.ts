@@ -122,6 +122,7 @@ export function parseLedger(text: string): ParsedRow[] {
       internal_notes: null,
       needs_review: false,
       review_reason: null,
+      leading_amount: null,
     };
 
     // Assessment flag: leading "A " or "A:" or "A-"

@@ -765,6 +765,26 @@ export const previewNotesLedger = createServerFn({ method: "POST" })
       }
 
 
+      // Guardrail: never let a smaller imported package silently discard
+      // legitimate payment history (Square payments, prior imports, etc.).
+      const clientPaidNow = Number(chosen.amount_paid ?? 0);
+      if (
+        !row.leading_amount_mismatch &&
+        row.package_price !== null &&
+        row.package_price < clientPaidNow
+      ) {
+        const reasonPay = `Existing payments exceed imported package amount — client already has $${clientPaidNow.toFixed(2)} paid but ledger package is $${row.package_price.toFixed(2)}.`;
+        pushReview(reasonPay, false);
+        diagnostics.push({
+          ...diagBase,
+          outcome: "review",
+          rule: "incoming package_price < existing amount_paid → do not auto-apply",
+          reason: reasonPay,
+        });
+        summary.parser_needs_review++;
+        continue;
+      }
+
       const changes = buildChanges(row, chosen);
       const anyChange =
         changes.package_price.changed ||
@@ -772,6 +792,7 @@ export const previewNotesLedger = createServerFn({ method: "POST" })
         changes.package_start_date.changed ||
         changes.amount_paid.changed ||
         changes.internal_notes.changed;
+
       if (!anyChange) {
         skipped.push({ parsed: row, reason: "No changes vs current Admin data.", resolution: { state: "unresolved" } });
         diagnostics.push({

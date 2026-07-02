@@ -515,12 +515,14 @@ function AppointmentMobileCard({
   showCheckIn,
   onCheckIn,
   completingBookingId,
+  isCheckedIn,
 }: {
   appointment: ScheduleAppointment;
   isNext: boolean;
   showCheckIn: boolean;
   onCheckIn?: (clientId: string, bookingId: string) => void;
   completingBookingId: string | null;
+  isCheckedIn: boolean;
 }) {
   const remaining = a.client ? visitsRemaining(a.client) : 0;
   const hasPackage = !!a.client && (a.client.package_total_visits ?? 0) > 0;
@@ -534,15 +536,26 @@ function AppointmentMobileCard({
   return (
     <div
       className={`rounded-xl border bg-white p-3 shadow-sm ${
-        isNext ? "border-emerald-400 ring-2 ring-emerald-200" : ""
+        isCheckedIn
+          ? "border-emerald-300 bg-emerald-50/40"
+          : isNext
+            ? "border-emerald-400 ring-2 ring-emerald-200"
+            : ""
       }`}
     >
       <div className="min-w-0">
-        <div className="truncate text-base font-semibold">
-          {a.client ? (
-            `${a.client.first_name} ${a.client.last_name}`
-          ) : (
-            <span className="text-amber-800">Unmatched booking</span>
+        <div className="flex items-center gap-2">
+          <div className="truncate text-base font-semibold">
+            {a.client ? (
+              `${a.client.first_name} ${a.client.last_name}`
+            ) : (
+              <span className="text-amber-800">Unmatched booking</span>
+            )}
+          </div>
+          {isCheckedIn && (
+            <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-800">
+              ✓ Checked In
+            </span>
           )}
         </div>
         <div className="mt-0.5 text-xs text-slate-500">
@@ -592,10 +605,10 @@ function AppointmentMobileCard({
               <Button
                 size="lg"
                 className="h-11"
-                disabled={busy}
+                disabled={busy || isCheckedIn}
                 onClick={() => onCheckIn(a.client!.id, a.booking_id)}
               >
-                {busy ? "…" : "✓ Check in"}
+                {isCheckedIn ? "✓ Checked In" : busy ? "…" : "✓ Check in"}
               </Button>
             ) : (
               <div />

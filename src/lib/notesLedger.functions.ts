@@ -760,6 +760,7 @@ export type ApplyRowResult = {
   step: "read" | "update" | "activity" | "ok";
   error: string | null;
   fields: {
+    row_fingerprint: string | null;
     package_price: number;
     package_total_visits: number;
     package_start_date: string | null;
@@ -792,6 +793,7 @@ export const applyNotesLedger = createServerFn({ method: "POST" })
         client_name?: string | null;
         parsed_name?: string | null;
         line_number?: number | null;
+        resolution_row?: LedgerResolutionInput | null;
         package_price: number;
         package_total_visits: number;
         package_start_date: string | null;
@@ -808,6 +810,7 @@ export const applyNotesLedger = createServerFn({ method: "POST" })
 
     for (const u of data.updates) {
       const baseFields = {
+        row_fingerprint: u.resolution_row?.row_fingerprint ?? null,
         package_price: u.package_price,
         package_total_visits: u.package_total_visits,
         package_start_date: u.package_start_date,
@@ -895,6 +898,7 @@ export const applyNotesLedger = createServerFn({ method: "POST" })
           package_start_date: u.package_start_date,
           amount_paid: u.amount_paid,
           appended_note: u.appended_note,
+          row_fingerprint: u.resolution_row?.row_fingerprint ?? null,
         },
       });
       if (actErr) {
@@ -914,6 +918,34 @@ export const applyNotesLedger = createServerFn({ method: "POST" })
         continue;
       }
 
+      if (u.resolution_row) {
+        try {
+          await persistLedgerResolution(
+            supabase,
+            context.userId,
+            u.resolution_row,
+            "imported",
+            "Applied to selected client",
+            u.client_id,
+          );
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          errors.push({ client_id: u.client_id, error: `resolution: ${message}` });
+          rows.push({
+            client_id: u.client_id,
+            client_name: clientName,
+            parsed_name: u.parsed_name ?? null,
+            line_number: u.line_number ?? null,
+            status: "error",
+            step: "activity",
+            error: `Client update succeeded, but resolution record failed: ${message}`,
+            fields: baseFields,
+            before: beforeSnapshot,
+          });
+          continue;
+        }
+      }
+
       updated++;
       rows.push({
         client_id: u.client_id,
@@ -929,6 +961,26 @@ export const applyNotesLedger = createServerFn({ method: "POST" })
     }
 
     return { updated, errors, rows };
+  });
+
+export const resolveNotesLedgerRow = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    (input: {
+      row: LedgerResolutionInput;
+      status: Exclude<LedgerResolutionStatus, "imported">;
+      reason?: string | null;
+    }) => input,
+  )
+  .handler(async ({ data, context }) => {
+    const reason = data.reason?.trim() || (data.status === "skipped" ? "Skipped row" : "Marked resolved");
+    await persistLedgerResolution(context.supabase, context.userId, data.row, data.status, reason, null);
+    return {
+      ok: true,
+      row_fingerprint: data.row.row_fingerprint,
+      status: data.status,
+      reason,
+    };
   });
 
 export const undoNotesLedgerApply = createServerFn({ method: "POST" })

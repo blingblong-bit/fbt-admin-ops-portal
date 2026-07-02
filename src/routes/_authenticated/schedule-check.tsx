@@ -331,6 +331,424 @@ function ScheduleCheckPage() {
   );
 }
 
+function formatTimeLocal(iso: string): string {
+  const dt = new Date(iso);
+  if (isNaN(dt.getTime())) return "—";
+  let h = dt.getHours();
+  const m = String(dt.getMinutes()).padStart(2, "0");
+  const ampm = h >= 12 ? "PM" : "AM";
+  h = h % 12 || 12;
+  return `${h}:${m} ${ampm}`;
+}
+
+function groupByTime(appts: ScheduleAppointment[]): { key: string; label: string; items: ScheduleAppointment[] }[] {
+  const map = new Map<string, ScheduleAppointment[]>();
+  for (const a of appts) {
+    const key = a.start_at;
+    const arr = map.get(key) ?? [];
+    arr.push(a);
+    map.set(key, arr);
+  }
+  return Array.from(map.entries())
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([key, items]) => ({ key, label: formatTimeLocal(key), items }));
+}
+
+function ScheduleSection({
+  title,
+  description,
+  appointments,
+  defaultOpen,
+  showCheckIn = false,
+  checkedInIds,
+  onCheckIn,
+  completingBookingId,
+}: {
+  title: string;
+  description: string;
+  appointments: ScheduleAppointment[];
+  defaultOpen: boolean;
+  showCheckIn?: boolean;
+  checkedInIds?: Set<string>;
+  onCheckIn?: (clientId: string, bookingId: string) => void;
+  completingBookingId?: string | null;
+}) {
+  const checkedSet = checkedInIds ?? new Set<string>();
+  const activeAppts = appointments.filter((a) => !checkedSet.has(a.booking_id));
+  const checkedAppts = appointments.filter((a) => checkedSet.has(a.booking_id));
+  const groups = groupByTime(activeAppts);
+  const now = Date.now();
+  const nextGroupKey = showCheckIn
+    ? groups.find((g) => new Date(g.key).getTime() >= now)?.key ?? null
+    : null;
+
+  return (
+    <Card>
+      <details open={defaultOpen} className="group">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 p-6">
+          <div className="min-w-0">
+            <CardTitle>
+              {title}{" "}
+              <span className="text-sm font-normal text-slate-500">
+                ({appointments.length}
+                {checkedAppts.length > 0 ? ` · ${checkedAppts.length} checked in` : ""})
+              </span>
+            </CardTitle>
+            {description && (
+              <CardDescription className="mt-1">{description}</CardDescription>
+            )}
+          </div>
+          <ChevronDown className="h-5 w-5 shrink-0 text-slate-500 transition-transform group-open:rotate-180" />
+        </summary>
+        <div className="px-6 pb-6">
+          {activeAppts.length === 0 && checkedAppts.length === 0 ? (
+            <EmptyState text="No appointments." />
+          ) : (
+            <div className="space-y-4">
+              {groups.map((g) => (
+                <TimeGroupBlock
+                  key={g.key}
+                  timeLabel={g.label}
+                  appointments={g.items}
+                  isNext={g.key === nextGroupKey}
+                  showCheckIn={showCheckIn}
+                  onCheckIn={onCheckIn}
+                  completingBookingId={completingBookingId ?? null}
+                />
+              ))}
+              {activeAppts.length === 0 && (
+                <EmptyState text="All appointments checked in." />
+              )}
+              {checkedAppts.length > 0 && (
+                <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50/50 p-3">
+                  <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-emerald-800">
+                    ✓ Checked In ({checkedAppts.length})
+                  </div>
+                  <div className="space-y-1.5">
+                    {checkedAppts.map((a) => (
+                      <div
+                        key={a.booking_id}
+                        className="flex items-center justify-between gap-2 rounded-md bg-white px-3 py-2 text-sm"
+                      >
+                        <div className="min-w-0">
+                          <span className="font-medium">
+                            {a.client
+                              ? `${a.client.first_name} ${a.client.last_name}`
+                              : "Unmatched"}
+                          </span>
+                          <span className="ml-2 text-xs text-slate-500">
+                            {formatTimeLocal(a.start_at)}
+                            {a.team_member_name ? ` · ${a.team_member_name}` : ""}
+                          </span>
+                        </div>
+                        {a.client && (
+                          <Button asChild size="sm" variant="ghost" className="h-8">
+                            <Link to="/clients/$id" params={{ id: a.client.id }}>
+                              View
+                            </Link>
+                          </Button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </details>
+    </Card>
+  );
+}
+
+function TimeGroupBlock({
+  timeLabel,
+  appointments,
+  isNext,
+  showCheckIn,
+  onCheckIn,
+  completingBookingId,
+}: {
+  timeLabel: string;
+  appointments: ScheduleAppointment[];
+  isNext: boolean;
+  showCheckIn: boolean;
+  onCheckIn?: (clientId: string, bookingId: string) => void;
+  completingBookingId: string | null;
+}) {
+  return (
+    <div>
+      <div className="mb-2 flex items-center gap-2 border-b border-slate-200 pb-1">
+        <div className="text-sm font-semibold text-slate-800">{timeLabel}</div>
+        {isNext && (
+          <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-800">
+            Next
+          </span>
+        )}
+        <span className="ml-auto text-xs text-slate-500">
+          {appointments.length} appt{appointments.length === 1 ? "" : "s"}
+        </span>
+      </div>
+
+      {/* Mobile card list */}
+      <div className="space-y-2 md:hidden">
+        {appointments.map((a) => (
+          <AppointmentMobileCard
+            key={a.booking_id}
+            appointment={a}
+            isNext={isNext}
+            showCheckIn={showCheckIn}
+            onCheckIn={onCheckIn}
+            completingBookingId={completingBookingId}
+          />
+        ))}
+      </div>
+
+      {/* Desktop table */}
+      <div className="hidden md:block">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Client</TableHead>
+              <TableHead>Service</TableHead>
+              <TableHead>Provider</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead className="text-right">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {appointments.map((a) => (
+              <AppointmentDesktopRow
+                key={a.booking_id}
+                appointment={a}
+                isNext={isNext}
+                showCheckIn={showCheckIn}
+                onCheckIn={onCheckIn}
+                completingBookingId={completingBookingId}
+              />
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+    </div>
+  );
+}
+
+function AppointmentMobileCard({
+  appointment: a,
+  isNext,
+  showCheckIn,
+  onCheckIn,
+  completingBookingId,
+}: {
+  appointment: ScheduleAppointment;
+  isNext: boolean;
+  showCheckIn: boolean;
+  onCheckIn?: (clientId: string, bookingId: string) => void;
+  completingBookingId: string | null;
+}) {
+  const remaining = a.client ? visitsRemaining(a.client) : 0;
+  const hasPackage = !!a.client && (a.client.package_total_visits ?? 0) > 0;
+  const visitsUnknown = hasPackage && remaining === null;
+  const visitsZero = hasPackage && remaining === 0;
+  const owed = a.client
+    ? Math.max(0, Number(a.client.package_price ?? 0) - Number(a.client.amount_paid ?? 0))
+    : 0;
+  const busy = completingBookingId === a.booking_id;
+
+  return (
+    <div
+      className={`rounded-xl border bg-white p-3 shadow-sm ${
+        isNext ? "border-emerald-400 ring-2 ring-emerald-200" : ""
+      }`}
+    >
+      <div className="min-w-0">
+        <div className="truncate text-base font-semibold">
+          {a.client ? (
+            `${a.client.first_name} ${a.client.last_name}`
+          ) : (
+            <span className="text-amber-800">Unmatched booking</span>
+          )}
+        </div>
+        <div className="mt-0.5 text-xs text-slate-500">
+          {a.service_name ?? (a.duration_minutes ? `${a.duration_minutes} min` : "—")}
+          {" · "}
+          {a.status}
+        </div>
+        {a.team_member_name && (
+          <div className="mt-0.5 text-xs text-slate-600">
+            Scheduled with: <span className="font-medium">{a.team_member_name}</span>
+          </div>
+        )}
+      </div>
+      {a.client && (
+        <div className="mt-2 flex flex-wrap gap-1.5 text-[11px] font-medium">
+          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-slate-700">
+            {remaining === null
+              ? "Visits unknown"
+              : `${remaining}/${a.client.package_total_visits ?? 0} visits`}
+          </span>
+          {owed > 0 && (
+            <span className="rounded-full bg-red-100 px-2 py-0.5 text-red-800">
+              Owes {formatCurrency(owed)}
+            </span>
+          )}
+          {visitsZero && (
+            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-amber-900">
+              Package complete
+            </span>
+          )}
+          {visitsUnknown && (
+            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-amber-900">
+              ⚠ Verify visits
+            </span>
+          )}
+        </div>
+      )}
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        {a.client ? (
+          <>
+            <Button asChild size="lg" variant="outline" className="h-11">
+              <Link to="/clients/$id" params={{ id: a.client.id }}>
+                View
+              </Link>
+            </Button>
+            {showCheckIn && onCheckIn && !visitsZero ? (
+              <Button
+                size="lg"
+                className="h-11"
+                disabled={busy}
+                onClick={() => onCheckIn(a.client!.id, a.booking_id)}
+              >
+                {busy ? "…" : "✓ Check in"}
+              </Button>
+            ) : (
+              <div />
+            )}
+          </>
+        ) : (
+          <button
+            type="button"
+            onClick={() => {
+              const key = a.square_customer_id ?? a.booking_id;
+              const el = document.getElementById(`unmatched-${key}`);
+              if (el) {
+                el.scrollIntoView({ behavior: "smooth", block: "start" });
+                el.classList.add("ring-2", "ring-amber-400");
+                setTimeout(() => el.classList.remove("ring-2", "ring-amber-400"), 1600);
+              }
+            }}
+            className="col-span-2 rounded-md bg-amber-100 px-3 py-2 text-sm font-semibold text-amber-800"
+          >
+            Resolve Unmatched ↓
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function AppointmentDesktopRow({
+  appointment: a,
+  isNext,
+  showCheckIn,
+  onCheckIn,
+  completingBookingId,
+}: {
+  appointment: ScheduleAppointment;
+  isNext: boolean;
+  showCheckIn: boolean;
+  onCheckIn?: (clientId: string, bookingId: string) => void;
+  completingBookingId: string | null;
+}) {
+  const remaining = a.client ? visitsRemaining(a.client) : 0;
+  const hasPackage = !!a.client && (a.client.package_total_visits ?? 0) > 0;
+  const visitsUnknown = hasPackage && remaining === null;
+  const visitsZero = hasPackage && remaining === 0;
+  const busy = completingBookingId === a.booking_id;
+
+  return (
+    <TableRow className={isNext ? "bg-emerald-50/60" : undefined}>
+      <TableCell className="text-sm">
+        {a.client ? (
+          <div>
+            <div className="font-medium whitespace-nowrap">
+              {isNext && (
+                <span className="mr-2 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold uppercase text-emerald-800">
+                  Next
+                </span>
+              )}
+              {a.client.first_name} {a.client.last_name}
+            </div>
+            <div className="text-xs text-slate-500">
+              {remaining === null ? "Visits unknown" : `${remaining} visits left`}
+            </div>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => {
+              const key = a.square_customer_id ?? a.booking_id;
+              const el = document.getElementById(`unmatched-${key}`);
+              if (el) {
+                el.scrollIntoView({ behavior: "smooth", block: "start" });
+                el.classList.add("ring-2", "ring-amber-400");
+                setTimeout(() => el.classList.remove("ring-2", "ring-amber-400"), 1600);
+              }
+            }}
+            className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800 hover:bg-amber-200 hover:underline"
+          >
+            Unmatched ↓
+          </button>
+        )}
+      </TableCell>
+      <TableCell className="text-sm whitespace-nowrap">
+        {a.service_name ?? (a.duration_minutes ? `${a.duration_minutes} min` : "—")}
+      </TableCell>
+      <TableCell className="text-sm whitespace-nowrap text-slate-600">
+        {a.team_member_name ?? <span className="text-slate-400">—</span>}
+      </TableCell>
+      <TableCell className="text-xs whitespace-nowrap">{a.status}</TableCell>
+      <TableCell className="text-right whitespace-nowrap">
+        {a.client ? (
+          <div className="inline-flex flex-col items-end gap-1">
+            <div className="inline-flex gap-2">
+              <Button asChild size="sm" variant="outline">
+                <Link to="/clients/$id" params={{ id: a.client.id }}>
+                  View Client
+                </Link>
+              </Button>
+              {showCheckIn && onCheckIn && !visitsZero && (
+                <Button
+                  size="sm"
+                  disabled={busy}
+                  onClick={() => onCheckIn(a.client!.id, a.booking_id)}
+                  title={visitsUnknown ? "Visits unknown — verify before completing." : undefined}
+                >
+                  {busy ? "Recording…" : "Check In"}
+                </Button>
+              )}
+            </div>
+            {visitsUnknown && (
+              <span className="text-[11px] text-amber-700">
+                ⚠ Visits unknown — verify before completing.
+              </span>
+            )}
+            {visitsZero && (
+              <span className="text-[11px] text-amber-700">
+                ⚠ Visits show 0 — verify in Square before completing.
+              </span>
+            )}
+          </div>
+        ) : (
+          <span className="text-xs text-slate-400">—</span>
+        )}
+      </TableCell>
+    </TableRow>
+  );
+}
+
+
 function normNameForDup(s: string | null | undefined): string {
   return (s ?? "").trim().toLowerCase().replace(/\s+/g, " ");
 }

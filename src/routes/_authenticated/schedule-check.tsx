@@ -438,6 +438,7 @@ function TimeGroupBlock({
   showCheckIn,
   onCheckIn,
   completingBookingId,
+  checkedInIds,
 }: {
   timeLabel: string;
   appointments: ScheduleAppointment[];
@@ -445,7 +446,9 @@ function TimeGroupBlock({
   showCheckIn: boolean;
   onCheckIn?: (clientId: string, bookingId: string) => void;
   completingBookingId: string | null;
+  checkedInIds?: Set<string>;
 }) {
+  const checkedSet = checkedInIds ?? new Set<string>();
   return (
     <div>
       <div className="mb-2 flex items-center gap-2 border-b border-slate-200 pb-1">
@@ -470,6 +473,7 @@ function TimeGroupBlock({
             showCheckIn={showCheckIn}
             onCheckIn={onCheckIn}
             completingBookingId={completingBookingId}
+            isCheckedIn={checkedSet.has(a.booking_id)}
           />
         ))}
       </div>
@@ -495,6 +499,7 @@ function TimeGroupBlock({
                 showCheckIn={showCheckIn}
                 onCheckIn={onCheckIn}
                 completingBookingId={completingBookingId}
+                isCheckedIn={checkedSet.has(a.booking_id)}
               />
             ))}
           </TableBody>

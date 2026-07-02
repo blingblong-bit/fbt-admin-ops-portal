@@ -1004,7 +1004,8 @@ export const applyNotesLedger = createServerFn({ method: "POST" })
           package_price: u.package_price,
           package_total_visits: u.package_total_visits,
           package_start_date: u.package_start_date,
-          amount_paid: u.amount_paid,
+          amount_paid: baseFields.amount_paid,
+
           appended_note: u.appended_note,
           row_fingerprint: u.resolution_row?.row_fingerprint ?? null,
         },

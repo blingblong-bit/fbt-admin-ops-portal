@@ -57,12 +57,14 @@ export type ReviewCategory =
   | "missing_package_information"
   | "amount_only_package"
   | "leading_amount_mismatch"
+  | "payments_exceed_package"
   | "missing_phone"
   | "credit_special_balance"
   | "multiple_names_on_line"
   | "no_match"
   | "ambiguous_match"
   | "other";
+
 
 
 export type ReviewRow = ParsedRow & {
@@ -205,6 +207,8 @@ export const REVIEW_CATEGORY_LABELS: Record<ReviewCategory, string> = {
   missing_package_information: "Missing package information",
   amount_only_package: "Amount-only package / special billing",
   leading_amount_mismatch: "Leading amount differs from package amount",
+  payments_exceed_package: "Existing payments exceed imported package amount",
+
 
   missing_phone: "Missing phone",
   credit_special_balance: "Credit / special balance",
@@ -229,6 +233,8 @@ function classifyReview(
   const isAmountOnly = r.includes("amount-only") || (r.includes("special billing") && !r.includes("leading amount differs"));
   if (isAmountOnly) cats.add("amount_only_package");
   if (r.includes("leading amount differs")) cats.add("leading_amount_mismatch");
+  if (r.includes("existing payments exceed")) cats.add("payments_exceed_package");
+
 
   if (!isAmountOnly && (r.includes("no package price") || r.includes("no visit count"))) {
     cats.add("missing_package_information");
@@ -438,13 +444,17 @@ function buildChanges(parsed: ParsedRow, client: MatchClient): AutoUpdateRow["ch
   const newPrice = isMismatch ? clientPrice : (parsed.package_price ?? clientPrice);
   const newVisits = parsed.package_total_visits ?? Number(client.package_total_visits ?? 0);
   const newDate = parsed.package_start_date ?? client.package_start_date;
-  const newPaid = isMismatch
+  const parsedPaid = isMismatch
     ? Math.max(0, newPrice - Number(parsed.leading_amount ?? 0))
     : parsed.amount_paid !== null
       ? parsed.amount_paid
       : clientPaid;
+  // Financial history is monotonic: never reduce amount_paid below what the
+  // client has already been credited (Square payments, prior imports, etc.).
+  const newPaid = Math.max(clientPaid, parsedPaid);
   const newOwed = Math.max(0, newPrice - newPaid);
   const currentOwed = Math.max(0, clientPrice - clientPaid);
+
 
 
   const currentNotes = client.internal_notes ?? "";
@@ -755,6 +765,26 @@ export const previewNotesLedger = createServerFn({ method: "POST" })
       }
 
 
+      // Guardrail: never let a smaller imported package silently discard
+      // legitimate payment history (Square payments, prior imports, etc.).
+      const clientPaidNow = Number(chosen.amount_paid ?? 0);
+      if (
+        !row.leading_amount_mismatch &&
+        row.package_price !== null &&
+        row.package_price < clientPaidNow
+      ) {
+        const reasonPay = `Existing payments exceed imported package amount — client already has $${clientPaidNow.toFixed(2)} paid but ledger package is $${row.package_price.toFixed(2)}.`;
+        pushReview(reasonPay, false);
+        diagnostics.push({
+          ...diagBase,
+          outcome: "review",
+          rule: "incoming package_price < existing amount_paid → do not auto-apply",
+          reason: reasonPay,
+        });
+        summary.parser_needs_review++;
+        continue;
+      }
+
       const changes = buildChanges(row, chosen);
       const anyChange =
         changes.package_price.changed ||
@@ -762,6 +792,7 @@ export const previewNotesLedger = createServerFn({ method: "POST" })
         changes.package_start_date.changed ||
         changes.amount_paid.changed ||
         changes.internal_notes.changed;
+
       if (!anyChange) {
         skipped.push({ parsed: row, reason: "No changes vs current Admin data.", resolution: { state: "unresolved" } });
         diagnostics.push({
@@ -911,6 +942,29 @@ export const applyNotesLedger = createServerFn({ method: "POST" })
       }
       baseFields.internal_notes_after = newNotes;
 
+      // Defense-in-depth: never reduce amount_paid, and refuse to shrink
+      // package_price below what the client has already paid. This preserves
+      // legitimate payment history (Square, prior imports) even if the caller
+      // passed stale ledger values.
+      const currentPaid = beforeSnapshot.amount_paid;
+      if (u.package_price < currentPaid) {
+        const detail = `Refused: incoming package price $${u.package_price.toFixed(2)} is less than existing amount paid $${currentPaid.toFixed(2)}. Route this row to Needs Review instead.`;
+        errors.push({ client_id: u.client_id, error: detail });
+        rows.push({
+          client_id: u.client_id,
+          client_name: clientName,
+          parsed_name: u.parsed_name ?? null,
+          line_number: u.line_number ?? null,
+          status: "error",
+          step: "update",
+          error: detail,
+          fields: baseFields,
+          before: beforeSnapshot,
+        });
+        continue;
+      }
+      const safeAmountPaid = Math.max(currentPaid, u.amount_paid);
+      baseFields.amount_paid = safeAmountPaid;
 
       const { error: updErr } = await supabase
         .from("clients")
@@ -918,10 +972,11 @@ export const applyNotesLedger = createServerFn({ method: "POST" })
           package_price: u.package_price,
           package_total_visits: u.package_total_visits,
           package_start_date: u.package_start_date,
-          amount_paid: u.amount_paid,
+          amount_paid: safeAmountPaid,
           internal_notes: newNotes,
         })
         .eq("id", u.client_id);
+
       if (updErr) {
         const e = updErr as { message: string; hint?: string; details?: string; code?: string };
         const detail = `${e.message}${e.hint ? ` — ${e.hint}` : ""}${e.details ? ` (${e.details})` : ""}${e.code ? ` [${e.code}]` : ""}`;
@@ -949,7 +1004,8 @@ export const applyNotesLedger = createServerFn({ method: "POST" })
           package_price: u.package_price,
           package_total_visits: u.package_total_visits,
           package_start_date: u.package_start_date,
-          amount_paid: u.amount_paid,
+          amount_paid: baseFields.amount_paid,
+
           appended_note: u.appended_note,
           row_fingerprint: u.resolution_row?.row_fingerprint ?? null,
         },

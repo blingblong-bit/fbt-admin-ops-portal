@@ -56,12 +56,14 @@ export type ReviewCategory =
   | "multiple_square_linked"
   | "missing_package_information"
   | "amount_only_package"
+  | "leading_amount_mismatch"
   | "missing_phone"
   | "credit_special_balance"
   | "multiple_names_on_line"
   | "no_match"
   | "ambiguous_match"
   | "other";
+
 
 export type ReviewRow = ParsedRow & {
   candidates: MatchClient[];
@@ -202,6 +204,8 @@ export const REVIEW_CATEGORY_LABELS: Record<ReviewCategory, string> = {
   multiple_square_linked: "Multiple Square-linked clients",
   missing_package_information: "Missing package information",
   amount_only_package: "Amount-only package / special billing",
+  leading_amount_mismatch: "Leading amount differs from package amount",
+
   missing_phone: "Missing phone",
   credit_special_balance: "Credit / special balance",
   multiple_names_on_line: "Multiple names on one line",
@@ -222,8 +226,10 @@ function classifyReview(
   if (isDuplicate) cats.add("duplicate_ledger_entry");
   if (squareLinkedCount > 1) cats.add("multiple_square_linked");
   if (r.includes("no phone")) cats.add("missing_phone");
-  const isAmountOnly = r.includes("amount-only") || r.includes("special billing");
+  const isAmountOnly = r.includes("amount-only") || (r.includes("special billing") && !r.includes("leading amount differs"));
   if (isAmountOnly) cats.add("amount_only_package");
+  if (r.includes("leading amount differs")) cats.add("leading_amount_mismatch");
+
   if (!isAmountOnly && (r.includes("no package price") || r.includes("no visit count"))) {
     cats.add("missing_package_information");
   }
@@ -422,15 +428,24 @@ export function noteAlreadyExists(existing: string | null | undefined, incoming:
 }
 
 function buildChanges(parsed: ParsedRow, client: MatchClient): AutoUpdateRow["changes"] {
-  const newPrice = parsed.package_price ?? Number(client.package_price ?? 0);
+  const clientPrice = Number(client.package_price ?? 0);
+  const clientPaid = Number(client.amount_paid ?? 0);
+
+  // Leading-amount mismatch: the parenthetical package_price is informational
+  // only. Preserve the client's current package_price and set amount_paid so
+  // owed == leading_amount. Visits/date can still update from parsed values.
+  const isMismatch = parsed.leading_amount_mismatch === true;
+  const newPrice = isMismatch ? clientPrice : (parsed.package_price ?? clientPrice);
   const newVisits = parsed.package_total_visits ?? Number(client.package_total_visits ?? 0);
   const newDate = parsed.package_start_date ?? client.package_start_date;
-  const newPaid =
-    parsed.amount_paid !== null
+  const newPaid = isMismatch
+    ? Math.max(0, newPrice - Number(parsed.leading_amount ?? 0))
+    : parsed.amount_paid !== null
       ? parsed.amount_paid
-      : Number(client.amount_paid ?? 0);
+      : clientPaid;
   const newOwed = Math.max(0, newPrice - newPaid);
-  const currentOwed = Math.max(0, Number(client.package_price ?? 0) - Number(client.amount_paid ?? 0));
+  const currentOwed = Math.max(0, clientPrice - clientPaid);
+
 
   const currentNotes = client.internal_notes ?? "";
   let appendedNote: string | null = null;

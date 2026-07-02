@@ -23,7 +23,10 @@ export type ParsedRow = {
   review_reason: string | null;
   /** Dollar amount that appears before the client name (e.g. "100 (Elizabeth Banks) 931…"). */
   leading_amount: number | null;
+  /** True when leading_amount > 0 and differs from the parenthetical package_price. */
+  leading_amount_mismatch: boolean;
 };
+
 
 // Decorative markers to strip anywhere on the line (Apple Notes bullets/checks).
 // Includes common Unicode bullets/checkmarks and their mojibake forms (e.g. "%" or "◦"
@@ -170,6 +173,8 @@ export function parseLedger(text: string): ParsedRow[] {
       needs_review: false,
       review_reason: null,
       leading_amount: null,
+      leading_amount_mismatch: false,
+
     };
 
     // Assessment flag: leading "A " or "A:" or "A-"
@@ -293,7 +298,23 @@ export function parseLedger(text: string): ParsedRow[] {
       if (notes.length > 2) row.internal_notes = notes;
     }
 
+    // Special: leading amount (before the name) differs from the parenthetical
+    // package price. Treat leading_amount as the authoritative amount owed and
+    // route to Needs Review — do NOT silently reduce package_price or zero out owed.
+    if (
+      row.leading_amount !== null &&
+      row.leading_amount > 0 &&
+      row.package_price !== null &&
+      row.leading_amount !== row.package_price
+    ) {
+      row.leading_amount_mismatch = true;
+      row.amount_owed = row.leading_amount;
+      row.amount_paid = null; // computed at apply time against the client's current price
+      row.paid_in_full = false;
+    }
+
     // Review triggers
+
     const reasons: string[] = [];
     if (CREDIT_RE.test(line)) reasons.push("Credit / special balance — manual review required.");
     if (/[&]|\band\b/i.test(row.name ?? "") && /[A-Z][a-z]+\s+(&|and)\s+[A-Z][a-z]+/.test(row.name ?? "")) {
@@ -303,11 +324,18 @@ export function parseLedger(text: string): ParsedRow[] {
     if (row.package_price === null) reasons.push("No package price found.");
     if (row.package_total_visits === null) reasons.push("No visit count found.");
     if (!row.name) reasons.push("No client name found.");
+    if (row.leading_amount_mismatch) {
+      reasons.push(
+        `Leading amount differs from package amount / special billing — leading $${row.leading_amount} vs package $${row.package_price}${PD_RE.test(line) ? " (PD marker present)" : ""}.`,
+      );
+    }
+
 
     if (reasons.length > 0) {
       row.needs_review = true;
       row.review_reason = reasons.join(" ");
     }
+
 
     row.row_fingerprint = buildLedgerRowFingerprint(row);
 

@@ -132,6 +132,13 @@ export function parseLedger(text: string): ParsedRow[] {
       line = asmt[1].trim();
     }
 
+    // Leading amount: a bare number before a "(Name)" or before a name word.
+    // Must be followed by "(" or 2+ letters so we don't grab the first phone digits.
+    const leadingAmt = line.match(/^(\d{1,4}(?:\.\d{1,2})?)\s+(?=\(|[A-Za-z]{2,})/);
+    if (leadingAmt) {
+      row.leading_amount = Number(leadingAmt[1]);
+    }
+
     // Extract phone
     const phoneMatch = line.match(PHONE_RE);
     if (phoneMatch) {

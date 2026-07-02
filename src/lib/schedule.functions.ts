@@ -235,6 +235,48 @@ async function fetchServiceNames(
   return out;
 }
 
+async function fetchTeamMemberNames(
+  token: string,
+  ids: string[],
+): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  if (ids.length === 0) return out;
+  // eslint-disable-next-line no-control-regex
+  const cleanToken = (token ?? "").replace(/[^\x20-\x7E]/g, "").trim();
+  if (!cleanToken) return out;
+  try {
+    const res = await fetch(`${SQUARE_BASE}/v2/team-members/search`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${cleanToken}`,
+        "Square-Version": SQUARE_VERSION,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        query: { filter: { team_member_ids: ids } },
+        limit: 200,
+      }),
+    });
+    if (!res.ok) return out;
+    const json = (await res.json()) as {
+      team_members?: Array<{
+        id?: string;
+        given_name?: string | null;
+        family_name?: string | null;
+      }>;
+    };
+    for (const t of json.team_members ?? []) {
+      if (!t.id) continue;
+      const name = [t.given_name, t.family_name].filter(Boolean).join(" ").trim()
+        || t.given_name || t.family_name || null;
+      if (name) out.set(t.id, name);
+    }
+  } catch {
+    // ignore — provider names are optional
+  }
+  return out;
+}
+
 async function fetchProductionCustomers(
   token: string,
   customerIds: string[],

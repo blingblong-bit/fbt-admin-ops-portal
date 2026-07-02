@@ -68,6 +68,124 @@ function ledgerResolutionInput(row: ReviewRow | AutoUpdateRow["parsed"]): Ledger
   };
 }
 
+function csvEscape(v: unknown): string {
+  if (v === null || v === undefined) return "";
+  const s = String(v);
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+function downloadMigrationAuditCsv(
+  preview: PreviewResult,
+  resolvedReviews: Set<string>,
+  skippedReviews: Set<string>,
+) {
+  type Entry = {
+    parsed: PreviewResult["auto_updates"][number]["parsed"];
+    matched: MatchClient | null;
+    status: string;
+    reason: string;
+  };
+  const entries: Entry[] = [];
+
+  for (const r of preview.auto_updates) {
+    entries.push({ parsed: r.parsed, matched: r.client, status: "auto-update-candidate", reason: "" });
+  }
+  for (const r of preview.reviews) {
+    let status = "needs-review";
+    if (resolvedReviews.has(r.row_fingerprint)) status = "resolved";
+    else if (skippedReviews.has(r.row_fingerprint)) status = "skipped";
+    const matched = r.candidates.length === 1 ? r.candidates[0] : null;
+    entries.push({ parsed: r, matched, status, reason: r.reason ?? "" });
+  }
+  for (const s of preview.skipped) {
+    const res = s.resolution;
+    let status = "skipped-no-changes";
+    let reason = s.reason;
+    if (res.state === "previously_resolved") {
+      status =
+        res.status === "imported"
+          ? "manually-applied"
+          : res.status === "resolved"
+          ? "resolved"
+          : "skipped";
+      reason = res.reason ?? s.reason;
+    }
+    entries.push({ parsed: s.parsed, matched: null, status, reason });
+  }
+
+  entries.sort((a, b) => a.parsed.line_number - b.parsed.line_number);
+
+  const headers = [
+    "parsed_line_number",
+    "parsed_name",
+    "parsed_phone",
+    "parsed_package_price",
+    "parsed_amount_paid",
+    "parsed_amount_owed",
+    "parsed_start_date",
+    "parsed_visits",
+    "matched_client_id",
+    "matched_client_name",
+    "matched_client_phone",
+    "square_linked",
+    "admin_package_price",
+    "admin_amount_paid",
+    "admin_amount_owed",
+    "admin_package_start_date",
+    "admin_total_visits",
+    "admin_internal_notes",
+    "row_status",
+    "review_reason",
+  ];
+
+  const lines = [headers.join(",")];
+  for (const e of entries) {
+    const p = e.parsed;
+    const m = e.matched;
+    const adminOwed =
+      m ? Math.max(0, Number(m.package_price ?? 0) - Number(m.amount_paid ?? 0)) : null;
+    lines.push(
+      [
+        p.line_number,
+        p.name ?? "",
+        p.phone ?? "",
+        p.package_price ?? "",
+        p.amount_paid ?? "",
+        p.amount_owed ?? "",
+        p.package_start_date ?? "",
+        p.package_total_visits ?? "",
+        m?.id ?? "",
+        m ? `${m.first_name} ${m.last_name}`.trim() : "",
+        m?.phone ?? "",
+        m ? (m.square_customer_id ? "true" : "false") : "",
+        m?.package_price ?? "",
+        m?.amount_paid ?? "",
+        adminOwed ?? "",
+        m?.package_start_date ?? "",
+        m?.package_total_visits ?? "",
+        m?.internal_notes ?? "",
+        e.status,
+        e.reason,
+      ]
+        .map(csvEscape)
+        .join(","),
+    );
+  }
+
+  const csv = lines.join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  const ts = new Date().toISOString().replace(/[:.]/g, "-");
+  a.download = `notes_ledger_migration_audit_${ts}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+
 
 export const Route = createFileRoute("/_authenticated/notes-ledger")({
   head: () => ({ meta: [{ title: "Notes Ledger Import · FBT Admin" }] }),

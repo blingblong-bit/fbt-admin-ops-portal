@@ -30,6 +30,7 @@ const RECENTLY_APPLIED_TTL_MS = 12000;
 type RecentlyApplied = {
   id: string;
   line_number: number;
+  row_fingerprint: string;
   client_id: string;
   client_name: string;
   applied_at: number;
@@ -271,7 +272,13 @@ function NotesLedgerPage() {
 
   const undoMut = useMutation({
     mutationFn: async (entry: RecentlyApplied) => {
-      await undoFn({ data: { client_id: entry.client_id, before: entry.before } });
+      await undoFn({
+        data: {
+          client_id: entry.client_id,
+          before: entry.before,
+          row_fingerprint: entry.row_fingerprint,
+        },
+      });
       return entry;
     },
     onSuccess: (entry) => {
@@ -281,7 +288,7 @@ function NotesLedgerPage() {
       // Restore into Needs Review so the row can be re-applied.
       setResolvedReviews((prev) => {
         const next = new Set(prev);
-        next.delete(entry.line_number);
+        next.delete(entry.row_fingerprint);
         return next;
       });
       toast.success(`Reverted changes to ${entry.client_name}`);
@@ -592,13 +599,9 @@ function NotesLedgerPage() {
                     setReviewSelection(next);
                   }}
                   onApply={(client) => reviewApplyMut.mutate({ row: r, client })}
-                  onSkip={() =>
-                    setSkippedReviews((prev) => new Set(prev).add(r.line_number))
-                  }
-                  onMarkResolved={() =>
-                    setResolvedReviews((prev) => new Set(prev).add(r.line_number))
-                  }
-                  applying={reviewApplyMut.isPending}
+                  onSkip={() => resolveReviewMut.mutate({ row: r, status: "skipped" })}
+                  onMarkResolved={() => resolveReviewMut.mutate({ row: r, status: "resolved" })}
+                  applying={reviewApplyMut.isPending || resolveReviewMut.isPending}
                 />
               ))}
             </CardContent>

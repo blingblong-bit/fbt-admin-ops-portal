@@ -48,6 +48,7 @@ export type ScheduleAppointment = {
   status: string;
   duration_minutes: number | null;
   service_name: string | null;
+  team_member_name: string | null;
   square_customer_id: string | null;
   customer_info: ProductionCustomerInfo | null;
   client: ScheduleClientLite | null;

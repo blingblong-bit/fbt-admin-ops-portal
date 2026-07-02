@@ -861,6 +861,10 @@ function ReviewCard({
   applying: boolean;
 }) {
   const selectedClient = row.candidates.find((c) => c.id === selectedClientId) ?? null;
+  const resolutionText =
+    row.resolution.state === "previously_resolved"
+      ? `Previously resolved · ${row.resolution.status}`
+      : "Unresolved — no saved review decision yet";
   return (
     <div className="rounded border border-amber-200 bg-amber-50 p-3 text-sm">
       <div className="mb-2 flex flex-wrap items-center gap-2">
@@ -880,6 +884,10 @@ function ReviewCard({
         ))}
       </div>
       <div className="text-xs text-slate-600">{row.reason}</div>
+      <div className="mt-1 text-xs text-slate-500">
+        <span className="font-medium">Review persistence:</span> {resolutionText}
+        <span className="ml-2 font-mono">{row.row_fingerprint}</span>
+      </div>
       <pre className="mt-2 whitespace-pre-wrap font-mono text-xs text-slate-700">
         {row.raw}
       </pre>

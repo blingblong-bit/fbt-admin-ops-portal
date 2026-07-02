@@ -48,6 +48,7 @@ export type ScheduleAppointment = {
   status: string;
   duration_minutes: number | null;
   service_name: string | null;
+  team_member_name: string | null;
   square_customer_id: string | null;
   customer_info: ProductionCustomerInfo | null;
   client: ScheduleClientLite | null;
@@ -234,6 +235,48 @@ async function fetchServiceNames(
   return out;
 }
 
+async function fetchTeamMemberNames(
+  token: string,
+  ids: string[],
+): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  if (ids.length === 0) return out;
+  // eslint-disable-next-line no-control-regex
+  const cleanToken = (token ?? "").replace(/[^\x20-\x7E]/g, "").trim();
+  if (!cleanToken) return out;
+  try {
+    const res = await fetch(`${SQUARE_BASE}/v2/team-members/search`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${cleanToken}`,
+        "Square-Version": SQUARE_VERSION,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        query: { filter: { team_member_ids: ids } },
+        limit: 200,
+      }),
+    });
+    if (!res.ok) return out;
+    const json = (await res.json()) as {
+      team_members?: Array<{
+        id?: string;
+        given_name?: string | null;
+        family_name?: string | null;
+      }>;
+    };
+    for (const t of json.team_members ?? []) {
+      if (!t.id) continue;
+      const name = [t.given_name, t.family_name].filter(Boolean).join(" ").trim()
+        || t.given_name || t.family_name || null;
+      if (name) out.set(t.id, name);
+    }
+  } catch {
+    // ignore — provider names are optional
+  }
+  return out;
+}
+
 async function fetchProductionCustomers(
   token: string,
   customerIds: string[],
@@ -387,6 +430,17 @@ export const getScheduleCheck = createServerFn({ method: "GET" })
       .filter((b) => b.start_at)
       .sort((a, b) => (a.start_at ?? "").localeCompare(b.start_at ?? ""));
 
+    // Resolve team-member (provider/therapist) names (best-effort)
+    const teamMemberIds = Array.from(
+      new Set(
+        sorted
+          .flatMap((b) => b.appointment_segments ?? [])
+          .map((s) => s.team_member_id ?? "")
+          .filter(Boolean),
+      ),
+    );
+    const teamMemberNames = await fetchTeamMemberNames(token, teamMemberIds);
+
     // Fetch production customer info for unmatched booking customer IDs (best effort, to help linking)
     const unmatchedCustomerIds = Array.from(
       new Set(
@@ -400,6 +454,7 @@ export const getScheduleCheck = createServerFn({ method: "GET" })
     const all: ScheduleAppointment[] = sorted.map((b) => {
       const seg = b.appointment_segments?.[0];
       const svc = seg?.service_variation_id ? serviceNames.get(seg.service_variation_id) : null;
+      const tmName = seg?.team_member_id ? teamMemberNames.get(seg.team_member_id) ?? null : null;
       const client = matchClient(b.customer_id);
       return {
         booking_id: b.id,
@@ -407,6 +462,7 @@ export const getScheduleCheck = createServerFn({ method: "GET" })
         status: (b.status ?? "UNKNOWN").toString(),
         duration_minutes: seg?.duration_minutes ?? null,
         service_name: svc ?? null,
+        team_member_name: tmName,
         square_customer_id: b.customer_id ?? null,
         customer_info: b.customer_id ? customerInfoMap.get(b.customer_id) ?? null : null,
         client,

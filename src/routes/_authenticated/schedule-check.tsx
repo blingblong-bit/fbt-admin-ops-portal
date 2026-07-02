@@ -725,7 +725,132 @@ function AppointmentsCard({
         {appointments.length === 0 ? (
           <EmptyState text="No appointments." />
         ) : (
-          <div className="-mx-6 overflow-x-auto px-6">
+          <>
+            {/* Mobile card list */}
+            <div className="space-y-2 md:hidden">
+              {(() => {
+                const now = Date.now();
+                const nextIdx = showCompleteVisit
+                  ? appointments.findIndex((a) => new Date(a.start_at).getTime() >= now)
+                  : -1;
+                return appointments.map((a, i) => {
+                  const remaining = a.client ? visitsRemaining(a.client) : 0;
+                  const hasPackage = !!a.client && (a.client.package_total_visits ?? 0) > 0;
+                  const visitsUnknown = hasPackage && remaining === null;
+                  const visitsZero = hasPackage && remaining === 0;
+                  const owed = a.client
+                    ? Math.max(
+                        0,
+                        Number(a.client.package_price ?? 0) - Number(a.client.amount_paid ?? 0),
+                      )
+                    : 0;
+                  const isCurrent = i === nextIdx;
+                  return (
+                    <div
+                      key={a.booking_id}
+                      className={`rounded-xl border bg-white p-3 shadow-sm ${
+                        isCurrent ? "border-emerald-400 ring-2 ring-emerald-200" : ""
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                            {isCurrent && (
+                              <span className="mr-1 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-800">
+                                NEXT
+                              </span>
+                            )}
+                            {formatDateTimeLocal(a.start_at)}
+                          </div>
+                          <div className="mt-1 truncate text-base font-semibold">
+                            {a.client ? (
+                              `${a.client.first_name} ${a.client.last_name}`
+                            ) : (
+                              <span className="text-amber-800">Unmatched booking</span>
+                            )}
+                          </div>
+                          <div className="mt-0.5 text-xs text-slate-500">
+                            {a.service_name ??
+                              (a.duration_minutes ? `${a.duration_minutes} min` : "—")}
+                            {" · "}
+                            {a.status}
+                          </div>
+                        </div>
+                      </div>
+                      {a.client && (
+                        <div className="mt-2 flex flex-wrap gap-1.5 text-[11px] font-medium">
+                          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-slate-700">
+                            {remaining === null
+                              ? "Visits unknown"
+                              : `${remaining}/${a.client.package_total_visits ?? 0} visits`}
+                          </span>
+                          {owed > 0 && (
+                            <span className="rounded-full bg-red-100 px-2 py-0.5 text-red-800">
+                              Owes {formatCurrency(owed)}
+                            </span>
+                          )}
+                          {visitsZero && (
+                            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-amber-900">
+                              Package complete
+                            </span>
+                          )}
+                          {visitsUnknown && (
+                            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-amber-900">
+                              ⚠ Verify visits
+                            </span>
+                          )}
+                        </div>
+                      )}
+                      <div className="mt-3 grid grid-cols-2 gap-2">
+                        {a.client ? (
+                          <>
+                            <Button asChild size="lg" variant="outline" className="h-11">
+                              <Link to="/clients/$id" params={{ id: a.client.id }}>
+                                View
+                              </Link>
+                            </Button>
+                            {showCompleteVisit && onCompleteVisit && !visitsZero ? (
+                              <Button
+                                size="lg"
+                                className="h-11"
+                                disabled={completing === a.client.id}
+                                onClick={() => onCompleteVisit(a.client!.id)}
+                              >
+                                {completing === a.client.id ? "…" : "✓ Check in"}
+                              </Button>
+                            ) : (
+                              <div />
+                            )}
+                          </>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const key = a.square_customer_id ?? a.booking_id;
+                              const el = document.getElementById(`unmatched-${key}`);
+                              if (el) {
+                                el.scrollIntoView({ behavior: "smooth", block: "start" });
+                                el.classList.add("ring-2", "ring-amber-400");
+                                setTimeout(
+                                  () => el.classList.remove("ring-2", "ring-amber-400"),
+                                  1600,
+                                );
+                              }
+                            }}
+                            className="col-span-2 rounded-md bg-amber-100 px-3 py-2 text-sm font-semibold text-amber-800"
+                          >
+                            Resolve Unmatched ↓
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                });
+              })()}
+            </div>
+
+            {/* Desktop table */}
+            <div className="-mx-6 hidden overflow-x-auto px-6 md:block">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -829,9 +954,11 @@ function AppointmentsCard({
 
               </TableBody>
             </Table>
-          </div>
+            </div>
+          </>
         )}
       </CardContent>
+
     </Card>
 
   );

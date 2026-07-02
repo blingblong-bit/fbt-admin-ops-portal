@@ -233,6 +233,8 @@ function classifyReview(
   const isAmountOnly = r.includes("amount-only") || (r.includes("special billing") && !r.includes("leading amount differs"));
   if (isAmountOnly) cats.add("amount_only_package");
   if (r.includes("leading amount differs")) cats.add("leading_amount_mismatch");
+  if (r.includes("existing payments exceed")) cats.add("payments_exceed_package");
+
 
   if (!isAmountOnly && (r.includes("no package price") || r.includes("no visit count"))) {
     cats.add("missing_package_information");

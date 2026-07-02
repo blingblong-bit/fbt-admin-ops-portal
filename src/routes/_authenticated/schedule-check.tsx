@@ -277,28 +277,41 @@ function ScheduleCheckPage() {
           </CardContent>
         </Card>
 
-        <AppointmentsCard
-          title="Scheduled on Selected Date"
+        <ScheduleSection
+          title="Today"
           description={data ? formatDate(data.selected_date) : ""}
           appointments={data?.selected_day ?? []}
-          showCompleteVisit
-          onCompleteVisit={(clientId) => completeMut.mutate(clientId)}
-          completing={completeMut.isPending ? completeMut.variables ?? null : null}
+          defaultOpen
+          showCheckIn
+          checkedInIds={checkedIn}
+          onCheckIn={(clientId, bookingId) => completeMut.mutate({ clientId, bookingId })}
+          completingBookingId={
+            completeMut.isPending ? completeMut.variables?.bookingId ?? null : null
+          }
         />
 
-        <AppointmentsCard
-          title="Scheduled This Week"
-          description={data ? `${formatDate(data.week_start)} – ${formatDate(data.week_end)}` : ""}
-          appointments={data?.this_week ?? []}
+        <ScheduleSection
+          title="Remaining This Week"
+          description={
+            data
+              ? `After ${formatDate(data.selected_date)} — through ${formatDate(data.week_end)}`
+              : ""
+          }
+          appointments={(data?.this_week ?? []).filter(
+            (a) => a.start_at.slice(0, 10) > (data?.selected_date ?? ""),
+          )}
+          defaultOpen={false}
         />
 
-        <AppointmentsCard
-          title="Scheduled Next Week"
+        <ScheduleSection
+          title="Next Week"
           description={
             data ? `${formatDate(data.next_week_start)} – ${formatDate(data.next_week_end)}` : ""
           }
           appointments={data?.next_week ?? []}
+          defaultOpen={false}
         />
+
 
         <ClientsNeedingCard
           title="Needs Next Week Scheduling"

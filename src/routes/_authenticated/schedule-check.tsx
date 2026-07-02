@@ -62,6 +62,7 @@ function visitsRemaining(c: { package_total_visits: number; visits_used: number 
 
 function ScheduleCheckPage() {
   const [date, setDate] = useState<string>(todayYmd());
+  const [checkedIn, setCheckedIn] = useState<Set<string>>(new Set());
   const fetchSchedule = useServerFn(getScheduleCheck);
   const completeVisit = useServerFn(completeVisitForClient);
   const qc = useQueryClient();
@@ -72,8 +73,14 @@ function ScheduleCheckPage() {
   });
 
   const completeMut = useMutation({
-    mutationFn: (clientId: string) => completeVisit({ data: { clientId } }),
-    onSuccess: () => {
+    mutationFn: (vars: { clientId: string; bookingId: string }) =>
+      completeVisit({ data: { clientId: vars.clientId } }),
+    onSuccess: (_r, vars) => {
+      setCheckedIn((prev) => {
+        const next = new Set(prev);
+        next.add(vars.bookingId);
+        return next;
+      });
       toast.success("Visit recorded");
       qc.invalidateQueries({ queryKey: ["schedule-check"] });
       qc.invalidateQueries({ queryKey: ["clients"] });

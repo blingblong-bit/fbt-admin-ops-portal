@@ -226,8 +226,10 @@ function classifyReview(
   if (isDuplicate) cats.add("duplicate_ledger_entry");
   if (squareLinkedCount > 1) cats.add("multiple_square_linked");
   if (r.includes("no phone")) cats.add("missing_phone");
-  const isAmountOnly = r.includes("amount-only") || r.includes("special billing");
+  const isAmountOnly = r.includes("amount-only") || (r.includes("special billing") && !r.includes("leading amount differs"));
   if (isAmountOnly) cats.add("amount_only_package");
+  if (r.includes("leading amount differs")) cats.add("leading_amount_mismatch");
+
   if (!isAmountOnly && (r.includes("no package price") || r.includes("no visit count"))) {
     cats.add("missing_package_information");
   }

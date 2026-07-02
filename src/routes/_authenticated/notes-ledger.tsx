@@ -1028,6 +1028,34 @@ function ReviewCard({
         <div><span className="text-slate-500">Parsed start:</span> {row.package_start_date ? formatDate(row.package_start_date) : "—"}</div>
         <div><span className="text-slate-500">Parsed paid:</span> {row.amount_paid !== null ? formatCurrency(row.amount_paid) : "—"}</div>
       </div>
+      {row.leading_amount_mismatch && (
+        <div className="mt-2 rounded border border-orange-300 bg-orange-50 p-2 text-xs">
+          <div className="font-semibold text-orange-900">
+            Leading amount differs from parenthetical package amount
+          </div>
+          <div className="mt-1 grid grid-cols-1 gap-1 text-orange-900 sm:grid-cols-3">
+            <div>
+              <span className="text-orange-700">Leading amount owed:</span>{" "}
+              <span className="font-semibold">{formatCurrency(row.leading_amount ?? 0)}</span>
+            </div>
+            <div>
+              <span className="text-orange-700">Parenthetical package:</span>{" "}
+              <span className="font-semibold">
+                {row.package_price !== null ? formatCurrency(row.package_price) : "—"}
+              </span>
+            </div>
+            <div>
+              <span className="text-orange-700">PD marker:</span>{" "}
+              <span className="font-semibold">{row.paid_in_full ? "Yes" : "No"}</span>
+            </div>
+          </div>
+          <div className="mt-1 text-orange-800">
+            Applying preserves the client's current package price and sets amount paid so
+            owed equals the leading amount. Package price is not auto-reduced.
+          </div>
+        </div>
+      )}
+
 
       <div className="mt-2 text-xs">
         <span className="text-slate-500">Notes:</span>{" "}

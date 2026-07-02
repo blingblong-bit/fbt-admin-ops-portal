@@ -57,12 +57,14 @@ export type ReviewCategory =
   | "missing_package_information"
   | "amount_only_package"
   | "leading_amount_mismatch"
+  | "payments_exceed_package"
   | "missing_phone"
   | "credit_special_balance"
   | "multiple_names_on_line"
   | "no_match"
   | "ambiguous_match"
   | "other";
+
 
 
 export type ReviewRow = ParsedRow & {

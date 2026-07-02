@@ -207,6 +207,8 @@ export const REVIEW_CATEGORY_LABELS: Record<ReviewCategory, string> = {
   missing_package_information: "Missing package information",
   amount_only_package: "Amount-only package / special billing",
   leading_amount_mismatch: "Leading amount differs from package amount",
+  payments_exceed_package: "Existing payments exceed imported package amount",
+
 
   missing_phone: "Missing phone",
   credit_special_balance: "Credit / special balance",

@@ -428,15 +428,24 @@ export function noteAlreadyExists(existing: string | null | undefined, incoming:
 }
 
 function buildChanges(parsed: ParsedRow, client: MatchClient): AutoUpdateRow["changes"] {
-  const newPrice = parsed.package_price ?? Number(client.package_price ?? 0);
+  const clientPrice = Number(client.package_price ?? 0);
+  const clientPaid = Number(client.amount_paid ?? 0);
+
+  // Leading-amount mismatch: the parenthetical package_price is informational
+  // only. Preserve the client's current package_price and set amount_paid so
+  // owed == leading_amount. Visits/date can still update from parsed values.
+  const isMismatch = parsed.leading_amount_mismatch === true;
+  const newPrice = isMismatch ? clientPrice : (parsed.package_price ?? clientPrice);
   const newVisits = parsed.package_total_visits ?? Number(client.package_total_visits ?? 0);
   const newDate = parsed.package_start_date ?? client.package_start_date;
-  const newPaid =
-    parsed.amount_paid !== null
+  const newPaid = isMismatch
+    ? Math.max(0, newPrice - Number(parsed.leading_amount ?? 0))
+    : parsed.amount_paid !== null
       ? parsed.amount_paid
-      : Number(client.amount_paid ?? 0);
+      : clientPaid;
   const newOwed = Math.max(0, newPrice - newPaid);
-  const currentOwed = Math.max(0, Number(client.package_price ?? 0) - Number(client.amount_paid ?? 0));
+  const currentOwed = Math.max(0, clientPrice - clientPaid);
+
 
   const currentNotes = client.internal_notes ?? "";
   let appendedNote: string | null = null;

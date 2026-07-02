@@ -988,6 +988,7 @@ export const undoNotesLedgerApply = createServerFn({ method: "POST" })
   .inputValidator(
     (input: {
       client_id: string;
+      row_fingerprint?: string | null;
       before: {
         package_price: number;
         package_total_visits: number;
@@ -1016,6 +1017,13 @@ export const undoNotesLedgerApply = createServerFn({ method: "POST" })
       description: "Reverted a Notes Ledger import (undo)",
       metadata: data.before,
     });
+    if (data.row_fingerprint) {
+      const { error: resolutionErr } = await supabase
+        .from("notes_ledger_resolutions")
+        .delete()
+        .eq("row_fingerprint", data.row_fingerprint);
+      if (resolutionErr) throw new Error(resolutionErr.message);
+    }
     return { ok: true };
   });
 

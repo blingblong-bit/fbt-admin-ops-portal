@@ -627,6 +627,9 @@ function NotesLedgerPage() {
                         Previously resolved · {s.resolution.status}
                       </span>
                     )}
+                    {s.resolution.state === "unresolved" && (
+                      <span className="block">Unresolved — no saved review decision yet</span>
+                    )}
                   </span>
                 </div>
               ))}
@@ -813,6 +816,10 @@ function AutoUpdateCard({
         </div>
       </div>
       <div className="mt-2 text-xs text-slate-500 font-mono">{row.parsed.raw}</div>
+      <div className="mt-1 text-xs text-slate-500">
+        <span className="font-medium">Review persistence:</span> Unresolved — no saved review decision yet
+        <span className="ml-2 font-mono">{row.parsed.row_fingerprint}</span>
+      </div>
     </div>
   );
 }

@@ -56,12 +56,14 @@ export type ReviewCategory =
   | "multiple_square_linked"
   | "missing_package_information"
   | "amount_only_package"
+  | "leading_amount_mismatch"
   | "missing_phone"
   | "credit_special_balance"
   | "multiple_names_on_line"
   | "no_match"
   | "ambiguous_match"
   | "other";
+
 
 export type ReviewRow = ParsedRow & {
   candidates: MatchClient[];

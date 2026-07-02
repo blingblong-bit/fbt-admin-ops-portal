@@ -442,13 +442,17 @@ function buildChanges(parsed: ParsedRow, client: MatchClient): AutoUpdateRow["ch
   const newPrice = isMismatch ? clientPrice : (parsed.package_price ?? clientPrice);
   const newVisits = parsed.package_total_visits ?? Number(client.package_total_visits ?? 0);
   const newDate = parsed.package_start_date ?? client.package_start_date;
-  const newPaid = isMismatch
+  const parsedPaid = isMismatch
     ? Math.max(0, newPrice - Number(parsed.leading_amount ?? 0))
     : parsed.amount_paid !== null
       ? parsed.amount_paid
       : clientPaid;
+  // Financial history is monotonic: never reduce amount_paid below what the
+  // client has already been credited (Square payments, prior imports, etc.).
+  const newPaid = Math.max(clientPaid, parsedPaid);
   const newOwed = Math.max(0, newPrice - newPaid);
   const currentOwed = Math.max(0, clientPrice - clientPaid);
+
 
 
   const currentNotes = client.internal_notes ?? "";

@@ -324,11 +324,17 @@ export function parseLedger(text: string): ParsedRow[] {
     if (row.package_price === null) reasons.push("No package price found.");
     if (row.package_total_visits === null) reasons.push("No visit count found.");
     if (!row.name) reasons.push("No client name found.");
+    if (row.leading_amount_mismatch) {
+      reasons.push(
+        `Leading amount differs from package amount / special billing — leading $${row.leading_amount} vs package $${row.package_price}${row.paid_in_full ? " (PD marker present)" : ""}.`,
+      );
+    }
 
     if (reasons.length > 0) {
       row.needs_review = true;
       row.review_reason = reasons.join(" ");
     }
+
 
     row.row_fingerprint = buildLedgerRowFingerprint(row);
 

@@ -642,12 +642,14 @@ function AppointmentDesktopRow({
   showCheckIn,
   onCheckIn,
   completingBookingId,
+  isCheckedIn,
 }: {
   appointment: ScheduleAppointment;
   isNext: boolean;
   showCheckIn: boolean;
   onCheckIn?: (clientId: string, bookingId: string) => void;
   completingBookingId: string | null;
+  isCheckedIn: boolean;
 }) {
   const remaining = a.client ? visitsRemaining(a.client) : 0;
   const hasPackage = !!a.client && (a.client.package_total_visits ?? 0) > 0;
@@ -656,15 +658,25 @@ function AppointmentDesktopRow({
   const busy = completingBookingId === a.booking_id;
 
   return (
-    <TableRow className={isNext ? "bg-emerald-50/60" : undefined}>
+    <TableRow
+      className={
+        isCheckedIn ? "bg-emerald-50/40" : isNext ? "bg-emerald-50/60" : undefined
+      }
+    >
       <TableCell className="text-sm">
         {a.client ? (
           <div>
             <div className="font-medium whitespace-nowrap">
-              {isNext && (
+              {isCheckedIn ? (
                 <span className="mr-2 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold uppercase text-emerald-800">
-                  Next
+                  ✓ Checked In
                 </span>
+              ) : (
+                isNext && (
+                  <span className="mr-2 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold uppercase text-emerald-800">
+                    Next
+                  </span>
+                )
               )}
               {a.client.first_name} {a.client.last_name}
             </div>
@@ -696,7 +708,13 @@ function AppointmentDesktopRow({
       <TableCell className="text-sm whitespace-nowrap text-slate-600">
         {a.team_member_name ?? <span className="text-slate-400">—</span>}
       </TableCell>
-      <TableCell className="text-xs whitespace-nowrap">{a.status}</TableCell>
+      <TableCell className="text-xs whitespace-nowrap">
+        {isCheckedIn ? (
+          <span className="font-semibold text-emerald-700">Checked In</span>
+        ) : (
+          a.status
+        )}
+      </TableCell>
       <TableCell className="text-right whitespace-nowrap">
         {a.client ? (
           <div className="inline-flex flex-col items-end gap-1">
@@ -709,15 +727,15 @@ function AppointmentDesktopRow({
               {showCheckIn && onCheckIn && !visitsZero && (
                 <Button
                   size="sm"
-                  disabled={busy}
+                  disabled={busy || isCheckedIn}
                   onClick={() => onCheckIn(a.client!.id, a.booking_id)}
                   title={visitsUnknown ? "Visits unknown — verify before completing." : undefined}
                 >
-                  {busy ? "Recording…" : "Check In"}
+                  {isCheckedIn ? "✓ Checked In" : busy ? "Recording…" : "Check In"}
                 </Button>
               )}
             </div>
-            {visitsUnknown && (
+            {visitsUnknown && !isCheckedIn && (
               <span className="text-[11px] text-amber-700">
                 ⚠ Visits unknown — verify before completing.
               </span>

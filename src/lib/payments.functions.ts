@@ -630,3 +630,174 @@ export const suggestPaymentMatches = createServerFn({ method: "POST" })
     return { suggestions, note };
   });
 
+
+export type RetryPaymentResult = {
+  payment_row_id: string;
+  square_payment_id: string;
+  outcome: "applied" | "already_applied" | "blocked" | "no_client";
+  applied_amount: number;
+  reason?: string;
+};
+
+async function retryOnePayment(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabaseAdmin: any,
+  paymentRowId: string,
+): Promise<RetryPaymentResult> {
+  const { data: payment, error: pErr } = await supabaseAdmin
+    .from("square_payments")
+    .select("id, square_payment_id, client_id, amount_cents, applied, status")
+    .eq("id", paymentRowId)
+    .single();
+  if (pErr) throw pErr;
+
+  // Already applied — just clear needs_review flag
+  if (payment.applied) {
+    await supabaseAdmin
+      .from("square_payments")
+      .update({ needs_review: false })
+      .eq("id", payment.id);
+    return {
+      payment_row_id: payment.id,
+      square_payment_id: payment.square_payment_id,
+      outcome: "already_applied",
+      applied_amount: 0,
+      reason: "Payment was already applied",
+    };
+  }
+
+  if (!payment.client_id) {
+    return {
+      payment_row_id: payment.id,
+      square_payment_id: payment.square_payment_id,
+      outcome: "no_client",
+      applied_amount: 0,
+      reason: "No matched client — use Resolve to link manually",
+    };
+  }
+
+  // Existing activity guard — payment already recorded on client
+  const { data: existingActivity } = await supabaseAdmin
+    .from("client_activities")
+    .select("id")
+    .eq("client_id", payment.client_id)
+    .contains("metadata", { square_payment_id: payment.square_payment_id })
+    .limit(1);
+  if (existingActivity && existingActivity.length > 0) {
+    await supabaseAdmin
+      .from("square_payments")
+      .update({ applied: true, needs_review: false })
+      .eq("id", payment.id);
+    await supabaseAdmin.from("square_sync_log").insert({
+      event_type: "manual.payment_retry",
+      client_id: payment.client_id,
+      status: "skipped",
+      action: "retry_already_recorded",
+      message: `Retry: payment ${payment.square_payment_id} already recorded on client — marked resolved`,
+    });
+    return {
+      payment_row_id: payment.id,
+      square_payment_id: payment.square_payment_id,
+      outcome: "already_applied",
+      applied_amount: 0,
+      reason: "Activity already exists for this Square payment",
+    };
+  }
+
+  try {
+    const result = await applyPaymentOnce(supabaseAdmin, {
+      clientId: payment.client_id,
+      squarePaymentId: payment.square_payment_id,
+      amountCents: payment.amount_cents,
+      matchMethod: "manual_retry",
+    });
+    await supabaseAdmin
+      .from("square_payments")
+      .update({ applied: true, needs_review: false })
+      .eq("id", payment.id);
+    await supabaseAdmin.from("square_sync_log").insert({
+      event_type: "manual.payment_retry",
+      client_id: payment.client_id,
+      status: "success",
+      action: result.alreadyApplied ? "retry_already_credited" : "retry_applied",
+      message: result.alreadyApplied
+        ? `Retry: payment ${payment.square_payment_id} already credited — flags reconciled`
+        : `Retry: applied $${(payment.amount_cents / 100).toFixed(2)} for payment ${payment.square_payment_id}`,
+    });
+    return {
+      payment_row_id: payment.id,
+      square_payment_id: payment.square_payment_id,
+      outcome: result.alreadyApplied ? "already_applied" : "applied",
+      applied_amount: result.appliedAmount,
+    };
+  } catch (e) {
+    const msg = (e as Error).message ?? "Unknown error";
+    let hint = msg;
+    if (/amount_paid.*exceed.*package_price/i.test(msg)) {
+      hint = "Client package_price is $0 or lower than payment — set package price first";
+    }
+    await supabaseAdmin
+      .from("square_payments")
+      .update({ needs_review: true })
+      .eq("id", payment.id);
+    await supabaseAdmin.from("square_sync_log").insert({
+      event_type: "manual.payment_retry",
+      client_id: payment.client_id,
+      status: "error",
+      action: "retry_blocked",
+      message: `Retry blocked for payment ${payment.square_payment_id}: ${hint}`,
+    });
+    return {
+      payment_row_id: payment.id,
+      square_payment_id: payment.square_payment_id,
+      outcome: "blocked",
+      applied_amount: 0,
+      reason: hint,
+    };
+  }
+}
+
+export const retryApplyPayment = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { payment_row_id: string }) => d)
+  .handler(async ({ data }): Promise<RetryPaymentResult> => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    return retryOnePayment(supabaseAdmin, data.payment_row_id);
+  });
+
+export const retryAllMatchedBlockedPayments = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async (): Promise<{ results: RetryPaymentResult[]; summary: { applied: number; already_applied: number; blocked: number; no_client: number } }> => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: rows, error } = await supabaseAdmin
+      .from("square_payments")
+      .select("id")
+      .eq("needs_review", true)
+      .eq("applied", false)
+      .not("client_id", "is", null)
+      .order("created_at", { ascending: true })
+      .limit(500);
+    if (error) throw error;
+
+    const results: RetryPaymentResult[] = [];
+    for (const r of rows ?? []) {
+      try {
+        results.push(await retryOnePayment(supabaseAdmin, r.id));
+      } catch (e) {
+        results.push({
+          payment_row_id: r.id,
+          square_payment_id: "",
+          outcome: "blocked",
+          applied_amount: 0,
+          reason: (e as Error).message,
+        });
+      }
+    }
+    const summary = {
+      applied: results.filter((r) => r.outcome === "applied").length,
+      already_applied: results.filter((r) => r.outcome === "already_applied").length,
+      blocked: results.filter((r) => r.outcome === "blocked").length,
+      no_client: results.filter((r) => r.outcome === "no_client").length,
+    };
+    return { results, summary };
+  });

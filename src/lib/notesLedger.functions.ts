@@ -501,10 +501,6 @@ export const previewNotesLedger = createServerFn({ method: "POST" })
   .handler(async ({ data, context }): Promise<PreviewResult> => {
     const parsed = parseLedger(data.text);
     const clients = await loadAllClients(context.supabase);
-  const resolvedByFingerprint = await loadResolvedFingerprints(
-    context.supabase,
-    parsed.map((r) => r.row_fingerprint),
-  );
 
     // Build index
     const byName = new Map<string, MatchClient[]>();
@@ -523,6 +519,44 @@ export const previewNotesLedger = createServerFn({ method: "POST" })
         byPhone.set(p, list);
       }
     }
+
+    const activeCandidatesFor = (row: ParsedRow) => {
+      const key = normName(row.name ?? "");
+      const nameHitsRaw = key ? (byName.get(key) ?? []) : [];
+      const phoneHitsRaw = row.phone ? (byPhone.get(row.phone) ?? []) : [];
+      const isArchived = (c: MatchClient) => c.status === "archived";
+      return dedupe([
+        ...nameHitsRaw.filter((c) => !isArchived(c)),
+        ...phoneHitsRaw.filter((c) => !isArchived(c)),
+      ]);
+    };
+
+    // Normalize special amount-only rows before fingerprint lookup so the
+    // durable key includes the package fields staff will actually apply.
+    for (const row of parsed) {
+      const combined = activeCandidatesFor(row);
+      if (
+        row.leading_amount !== null &&
+        row.leading_amount > 0 &&
+        row.package_price === null &&
+        row.package_total_visits === null &&
+        combined.length === 1
+      ) {
+        row.package_price = row.leading_amount;
+        row.amount_paid = 0;
+        row.amount_owed = row.leading_amount;
+        row.paid_in_full = false;
+        row.needs_review = true;
+        row.review_reason =
+          "Amount-only package / special billing — leading amount before name, no package price or visit count in ledger.";
+        row.row_fingerprint = buildLedgerRowFingerprint(row);
+      }
+    }
+
+    const resolvedByFingerprint = await loadResolvedFingerprints(
+      context.supabase,
+      parsed.map((r) => r.row_fingerprint),
+    );
 
     const auto: AutoUpdateRow[] = [];
     const reviews: ReviewRow[] = [];
@@ -608,26 +642,6 @@ export const previewNotesLedger = createServerFn({ method: "POST" })
           resolution: { state: "unresolved" },
         });
       };
-
-      // Amount-only package / special billing: a leading dollar amount before
-      // the name, no package price, no visit count, and exactly one active
-      // matched client. Reclassify + surface as a review row so staff can
-      // apply it manually (never auto-updated).
-      if (
-        row.leading_amount !== null &&
-        row.leading_amount > 0 &&
-        row.package_price === null &&
-        row.package_total_visits === null &&
-        combined.length === 1
-      ) {
-        row.package_price = row.leading_amount;
-        row.amount_paid = 0;
-        row.amount_owed = row.leading_amount;
-        row.paid_in_full = false;
-        row.needs_review = true;
-        row.review_reason =
-          "Amount-only package / special billing — leading amount before name, no package price or visit count in ledger.";
-      }
 
       if (row.needs_review) {
         const reason = row.review_reason ?? "Needs manual review.";

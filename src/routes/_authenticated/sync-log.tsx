@@ -247,12 +247,18 @@ function SyncLogPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Needs Review — Square Payments</CardTitle>
-            <CardDescription>
-              Payments we couldn’t confidently match to a client, or that arrived in a non-completed
-              state. Use Add/Edit Client to record manually if needed.
-            </CardDescription>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <CardTitle>Needs Review — Square Payments</CardTitle>
+                <CardDescription>
+                  Payments we couldn’t confidently match to a client, or that arrived in a non-completed
+                  state. Use Add/Edit Client to record manually if needed.
+                </CardDescription>
+              </div>
+              <RetryAllButton />
+            </div>
           </CardHeader>
+
           <CardContent>
             {review.isLoading ? (
               <div className="text-sm text-slate-500">Loading…</div>

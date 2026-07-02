@@ -20,6 +20,8 @@ export type ParsedRow = {
   internal_notes: string | null;
   needs_review: boolean;
   review_reason: string | null;
+  /** Dollar amount that appears before the client name (e.g. "100 (Elizabeth Banks) 931…"). */
+  leading_amount: number | null;
 };
 
 // Decorative markers to strip anywhere on the line (Apple Notes bullets/checks).

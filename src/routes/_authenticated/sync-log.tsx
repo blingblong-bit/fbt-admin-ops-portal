@@ -31,9 +31,12 @@ import { formatCurrency, formatDateTimeLocal } from "@/lib/clients";
 import {
   resolvePaymentCreateClient,
   resolvePaymentLink,
+  retryAllMatchedBlockedPayments,
+  retryApplyPayment,
   searchClientsForPayment,
   suggestPaymentMatches,
 } from "@/lib/payments.functions";
+
 
 export const Route = createFileRoute("/_authenticated/sync-log")({
   head: () => ({
@@ -244,12 +247,18 @@ function SyncLogPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Needs Review — Square Payments</CardTitle>
-            <CardDescription>
-              Payments we couldn’t confidently match to a client, or that arrived in a non-completed
-              state. Use Add/Edit Client to record manually if needed.
-            </CardDescription>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <CardTitle>Needs Review — Square Payments</CardTitle>
+                <CardDescription>
+                  Payments we couldn’t confidently match to a client, or that arrived in a non-completed
+                  state. Use Add/Edit Client to record manually if needed.
+                </CardDescription>
+              </div>
+              <RetryAllButton />
+            </div>
           </CardHeader>
+
           <CardContent>
             {review.isLoading ? (
               <div className="text-sm text-slate-500">Loading…</div>
@@ -323,12 +332,18 @@ function SyncLogPage() {
                         </TableCell>
                         <TableCell className="text-xs text-slate-600">{p.note ?? "—"}</TableCell>
                         <TableCell className="text-right">
-                          {!p.square_customer_id ? (
-                            <ResolvePaymentDialog payment={p} />
-                          ) : (
-                            <span className="text-xs text-slate-400">—</span>
-                          )}
+                          <div className="flex flex-col items-end gap-1">
+                            {p.client_id && !p.applied ? (
+                              <RetryPaymentButton paymentRowId={p.id} />
+                            ) : null}
+                            {!p.square_customer_id ? (
+                              <ResolvePaymentDialog payment={p} />
+                            ) : !p.client_id ? (
+                              <span className="text-xs text-slate-400">—</span>
+                            ) : null}
+                          </div>
                         </TableCell>
+
                       </TableRow>
                     );
                   })}
@@ -719,5 +734,56 @@ function ResolvePaymentDialog({ payment }: { payment: PaymentRow }) {
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function RetryPaymentButton({ paymentRowId }: { paymentRowId: string }) {
+  const queryClient = useQueryClient();
+  const retryFn = useServerFn(retryApplyPayment);
+  const mut = useMutation({
+    mutationFn: async () => retryFn({ data: { payment_row_id: paymentRowId } }),
+    onSuccess: (r) => {
+      if (r.outcome === "applied") {
+        toast.success(`Applied $${r.applied_amount.toFixed(2)}.`);
+      } else if (r.outcome === "already_applied") {
+        toast.success(r.reason ?? "Already applied — marked resolved.");
+      } else if (r.outcome === "blocked") {
+        toast.error(`Still blocked: ${r.reason ?? "unknown reason"}`);
+      } else {
+        toast.error(r.reason ?? "No matched client.");
+      }
+      queryClient.invalidateQueries({ queryKey: ["square_payments_needs_review"] });
+      queryClient.invalidateQueries({ queryKey: ["square_payments_pending"] });
+      queryClient.invalidateQueries({ queryKey: ["square_sync_log"] });
+    },
+    onError: (e) => toast.error(`Retry failed: ${(e as Error).message}`),
+  });
+  return (
+    <Button size="sm" variant="outline" disabled={mut.isPending} onClick={() => mut.mutate()}>
+      {mut.isPending ? "Retrying…" : "Retry Apply"}
+    </Button>
+  );
+}
+
+function RetryAllButton() {
+  const queryClient = useQueryClient();
+  const retryAll = useServerFn(retryAllMatchedBlockedPayments);
+  const mut = useMutation({
+    mutationFn: async () => retryAll({}),
+    onSuccess: (r) => {
+      const s = r.summary;
+      toast.success(
+        `Retry complete — ${s.applied} applied, ${s.already_applied} already applied, ${s.blocked} still blocked.`,
+      );
+      queryClient.invalidateQueries({ queryKey: ["square_payments_needs_review"] });
+      queryClient.invalidateQueries({ queryKey: ["square_payments_pending"] });
+      queryClient.invalidateQueries({ queryKey: ["square_sync_log"] });
+    },
+    onError: (e) => toast.error(`Retry all failed: ${(e as Error).message}`),
+  });
+  return (
+    <Button variant="secondary" disabled={mut.isPending} onClick={() => mut.mutate()}>
+      {mut.isPending ? "Retrying all…" : "Retry All Matched Blocked Payments"}
+    </Button>
   );
 }

@@ -63,6 +63,7 @@ function visitsRemaining(c: { package_total_visits: number; visits_used: number 
 function ScheduleCheckPage() {
   const [date, setDate] = useState<string>(todayYmd());
   const [checkedIn, setCheckedIn] = useState<Set<string>>(new Set());
+  const [search, setSearch] = useState<string>("");
   const fetchSchedule = useServerFn(getScheduleCheck);
   const completeVisit = useServerFn(completeVisitForClient);
   const qc = useQueryClient();
@@ -102,8 +103,6 @@ function ScheduleCheckPage() {
     onError: (e: Error) => toast.error(`Backfill failed: ${e.message}`),
   });
 
-  // Load linkable clients up-front so we can reconcile any Unmatched appointments
-  // whose square_customer_id has since been linked to an Admin client.
   const listClientsFn = useServerFn(listLinkableClients);
   const linkableQuery = useQuery({
     queryKey: ["linkable-clients"],
@@ -117,13 +116,11 @@ function ScheduleCheckPage() {
     if (!rawData) return rawData;
     if (!linkable || linkable.length === 0) return rawData;
 
-    // Build map: square_customer_id -> linkable client
     const bySquare = new Map<string, LinkableClient>();
     for (const c of linkable) {
       if (c.square_customer_id) bySquare.set(c.square_customer_id, c);
     }
 
-    // Find unmatched appts that now resolve
     const resolvedIds = new Set<string>();
     const promoted: ScheduleAppointment[] = [];
     for (const a of rawData.unmatched) {
@@ -177,8 +174,6 @@ function ScheduleCheckPage() {
     };
   }, [rawData, linkable]);
 
-  // If reconciliation found stale unmatched entries, ask the server to rebuild
-  // its matched booking list so the enriched client data (visits, balance) shows up.
   useEffect(() => {
     if (!rawData || !linkable) return;
     const bySquare = new Set(
@@ -192,6 +187,40 @@ function ScheduleCheckPage() {
     }
   }, [rawData, linkable, qc]);
 
+  const remainingThisWeek = useMemo(
+    () =>
+      (data?.this_week ?? []).filter(
+        (a) => a.start_at.slice(0, 10) > (data?.selected_date ?? ""),
+      ),
+    [data],
+  );
+  const nextWeekAppts = data?.next_week ?? [];
+  const nextWeekClientIds = useMemo(() => {
+    const s = new Set<string>();
+    for (const a of nextWeekAppts) if (a.client) s.add(a.client.id);
+    return s;
+  }, [nextWeekAppts]);
+  const thisWeekNotNextWeek = useMemo(
+    () =>
+      (data?.this_week ?? []).filter(
+        (a) => a.client && !nextWeekClientIds.has(a.client.id),
+      ),
+    [data, nextWeekClientIds],
+  );
+
+  const q = search.trim();
+  const summary = useMemo(() => {
+    if (!q) return null;
+    const has = (arr: ScheduleAppointment[]) => arr.some((a) => matchesSearch(a, q));
+    return {
+      today: has(data?.selected_day ?? []),
+      thisWeek: has(remainingThisWeek),
+      nextWeek: has(nextWeekAppts),
+      notNext: has(thisWeekNotNextWeek),
+    };
+  }, [q, data, remainingThisWeek, nextWeekAppts, thisWeekNotNextWeek]);
+  const anyMatch =
+    !!summary && (summary.today || summary.thisWeek || summary.nextWeek || summary.notNext);
 
   return (
     <AppShell>
@@ -223,9 +252,48 @@ function ScheduleCheckPage() {
           </div>
         </header>
 
+        <div className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+          <label className="mb-1 block text-xs font-medium text-slate-600">
+            Search a client to see where they're scheduled
+          </label>
+          <Input
+            placeholder="Search client name…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="h-11"
+          />
+          {q && (
+            <div className="mt-2 flex flex-wrap gap-1.5 text-xs">
+              {!anyMatch && (
+                <span className="rounded-full bg-slate-100 px-2 py-0.5 font-medium text-slate-700">
+                  Not Scheduled — no scheduled appointments found for this client.
+                </span>
+              )}
+              {summary?.today && (
+                <span className="rounded-full bg-emerald-100 px-2 py-0.5 font-semibold text-emerald-800">
+                  Scheduled Today
+                </span>
+              )}
+              {summary?.thisWeek && (
+                <span className="rounded-full bg-sky-100 px-2 py-0.5 font-semibold text-sky-800">
+                  Scheduled Remaining This Week
+                </span>
+              )}
+              {summary?.nextWeek && (
+                <span className="rounded-full bg-indigo-100 px-2 py-0.5 font-semibold text-indigo-800">
+                  Scheduled Next Week
+                </span>
+              )}
+              {summary?.notNext && !summary?.nextWeek && (
+                <span className="rounded-full bg-amber-100 px-2 py-0.5 font-semibold text-amber-900">
+                  Scheduled This Week but Not Next Week
+                </span>
+              )}
+            </div>
+          )}
+        </div>
 
         <SquareReviewCard />
-
 
         <Card>
           <CardHeader>
@@ -288,6 +356,8 @@ function ScheduleCheckPage() {
           completingBookingId={
             completeMut.isPending ? completeMut.variables?.bookingId ?? null : null
           }
+          groupBy="time"
+          filter={q}
         />
 
         <ScheduleSection
@@ -297,10 +367,10 @@ function ScheduleCheckPage() {
               ? `After ${formatDate(data.selected_date)} — through ${formatDate(data.week_end)}`
               : ""
           }
-          appointments={(data?.this_week ?? []).filter(
-            (a) => a.start_at.slice(0, 10) > (data?.selected_date ?? ""),
-          )}
+          appointments={remainingThisWeek}
           defaultOpen={false}
+          groupBy="dayTime"
+          filter={q}
         />
 
         <ScheduleSection
@@ -308,10 +378,20 @@ function ScheduleCheckPage() {
           description={
             data ? `${formatDate(data.next_week_start)} – ${formatDate(data.next_week_end)}` : ""
           }
-          appointments={data?.next_week ?? []}
+          appointments={nextWeekAppts}
           defaultOpen={false}
+          groupBy="dayTime"
+          filter={q}
         />
 
+        <ScheduleSection
+          title="Scheduled This Week But Not Next Week"
+          description="Clients with an appointment this week but nothing on the books next week — good candidates to re-book."
+          appointments={thisWeekNotNextWeek}
+          defaultOpen={false}
+          groupBy="dayTime"
+          filter={q}
+        />
 
         <ClientsNeedingCard
           title="Needs Next Week Scheduling"

@@ -8,7 +8,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { AppShell } from "@/components/AppShell";
 import { StatusBadge } from "@/components/StatusBadge";
-import { getScheduledClientIds } from "@/lib/schedule.functions";
+import { getScheduledClientIds, getClientAppointments, type ClientAppointment } from "@/lib/schedule.functions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 import { Button } from "@/components/ui/button";
@@ -267,6 +267,9 @@ function ClientDetailPage() {
             </p>
           </CardContent>
         </Card>
+
+        <AppointmentsCard clientId={id} />
+
 
 
         <Card className="lg:col-span-3">
@@ -734,3 +737,143 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
     </div>
   );
 }
+
+function formatApptDate(iso: string) {
+  const d = new Date(iso);
+  return d.toLocaleDateString(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+function formatApptTime(iso: string) {
+  return new Date(iso).toLocaleTimeString(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function AppointmentRow({ a }: { a: ClientAppointment }) {
+  const status = a.status.replace(/_/g, " ");
+  const statusClass = /CANCEL|NO_SHOW|DECLINE/i.test(a.status)
+    ? "bg-red-50 text-red-700 border-red-200"
+    : /ACCEPTED|CONFIRMED/i.test(a.status)
+      ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+      : "bg-slate-50 text-slate-700 border-slate-200";
+  return (
+    <li className="rounded-lg border bg-white p-3 shadow-sm">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="text-sm font-semibold text-slate-800">
+            {formatApptDate(a.start_at)}
+          </div>
+          <div className="text-xs text-slate-500">{formatApptTime(a.start_at)}</div>
+        </div>
+        <span
+          className={`inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium capitalize ${statusClass}`}
+        >
+          {status.toLowerCase()}
+        </span>
+      </div>
+      <div className="mt-2 space-y-0.5 text-xs text-slate-600">
+        <div>
+          <span className="text-slate-400">Type: </span>
+          {a.service_name ?? "—"}
+        </div>
+        <div>
+          <span className="text-slate-400">Provider: </span>
+          {a.team_member_name ?? "—"}
+        </div>
+      </div>
+    </li>
+  );
+}
+
+function AppointmentsCard({ clientId }: { clientId: string }) {
+  const fetchAppts = useServerFn(getClientAppointments);
+  const q = useQuery({
+    queryKey: ["client-appointments", clientId],
+    queryFn: () => fetchAppts({ data: { clientId } }),
+    staleTime: 60_000,
+  });
+  const [showAllPrev, setShowAllPrev] = useState(false);
+  const [showPrev, setShowPrev] = useState(false);
+
+  const upcoming = q.data?.upcoming ?? [];
+  const previous = q.data?.previous ?? [];
+  const visiblePrev = showAllPrev ? previous : previous.slice(0, 10);
+
+  return (
+    <Card className="lg:col-span-3">
+      <CardHeader>
+        <CardTitle>Appointments</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        {q.isLoading ? (
+          <p className="text-sm text-slate-500">Loading appointments…</p>
+        ) : q.data?.error ? (
+          <p className="text-sm text-red-600">{q.data.error}</p>
+        ) : (
+          <>
+            <section>
+              <h3 className="mb-2 text-sm font-semibold text-slate-700">
+                Upcoming ({upcoming.length})
+              </h3>
+              {upcoming.length === 0 ? (
+                <p className="text-sm text-slate-500">
+                  No upcoming appointments scheduled.
+                </p>
+              ) : (
+                <ul className="grid gap-2 sm:grid-cols-2">
+                  {upcoming.map((a) => (
+                    <AppointmentRow key={a.booking_id} a={a} />
+                  ))}
+                </ul>
+              )}
+            </section>
+
+            <section>
+              <button
+                type="button"
+                onClick={() => setShowPrev((s) => !s)}
+                className="mb-2 flex w-full items-center justify-between text-sm font-semibold text-slate-700 cursor-pointer hover:underline"
+              >
+                <span>Previous Appointments ({previous.length})</span>
+                <span className="text-xs text-slate-400">
+                  {showPrev ? "Hide" : "Show"}
+                </span>
+              </button>
+              {showPrev &&
+                (previous.length === 0 ? (
+                  <p className="text-sm text-slate-500">No previous appointments.</p>
+                ) : (
+                  <>
+                    <ul className="grid gap-2 sm:grid-cols-2">
+                      {visiblePrev.map((a) => (
+                        <AppointmentRow key={a.booking_id} a={a} />
+                      ))}
+                    </ul>
+                    {previous.length > 10 && (
+                      <div className="mt-3">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setShowAllPrev((s) => !s)}
+                        >
+                          {showAllPrev
+                            ? "Show less"
+                            : `Show more (${previous.length - 10} more)`}
+                        </Button>
+                      </div>
+                    )}
+                  </>
+                ))}
+            </section>
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+

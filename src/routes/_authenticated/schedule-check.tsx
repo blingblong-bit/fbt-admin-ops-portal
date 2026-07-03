@@ -434,6 +434,41 @@ function groupByTime(appts: ScheduleAppointment[]): { key: string; label: string
     .map(([key, items]) => ({ key, label: formatTimeLocal(key), items }));
 }
 
+function groupByDayThenTime(
+  appts: ScheduleAppointment[],
+): { day: string; groups: { key: string; label: string; items: ScheduleAppointment[] }[] }[] {
+  const byDay = new Map<string, ScheduleAppointment[]>();
+  for (const a of appts) {
+    const day = a.start_at.slice(0, 10);
+    const arr = byDay.get(day) ?? [];
+    arr.push(a);
+    byDay.set(day, arr);
+  }
+  return Array.from(byDay.entries())
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([day, items]) => ({ day, groups: groupByTime(items) }));
+}
+
+function formatDayHeader(ymd: string): string {
+  const [y, m, d] = ymd.split("-").map(Number);
+  const dt = new Date(y, m - 1, d);
+  const dow = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][dt.getDay()];
+  return `${dow} ${String(m).padStart(2, "0")}/${String(d).padStart(2, "0")}/${y}`;
+}
+
+function matchesSearch(a: ScheduleAppointment, q: string): boolean {
+  if (!q) return true;
+  const s = q.toLowerCase();
+  const clientName = a.client
+    ? `${a.client.first_name} ${a.client.last_name}`.toLowerCase()
+    : "";
+  const custName = a.customer_info
+    ? `${a.customer_info.given_name ?? ""} ${a.customer_info.family_name ?? ""}`.toLowerCase()
+    : "";
+  const tm = (a.team_member_name ?? "").toLowerCase();
+  return clientName.includes(s) || custName.includes(s) || tm.includes(s);
+}
+
 function ScheduleSection({
   title,
   description,

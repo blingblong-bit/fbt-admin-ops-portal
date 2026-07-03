@@ -478,6 +478,8 @@ function ScheduleSection({
   checkedInIds,
   onCheckIn,
   completingBookingId,
+  groupBy = "time",
+  filter = "",
 }: {
   title: string;
   description: string;
@@ -487,32 +489,42 @@ function ScheduleSection({
   checkedInIds?: Set<string>;
   onCheckIn?: (clientId: string, bookingId: string) => void;
   completingBookingId?: string | null;
+  groupBy?: "time" | "dayTime";
+  filter?: string;
 }) {
   const checkedSet = checkedInIds ?? new Set<string>();
-  const checkedCount = appointments.reduce(
+  const q = filter.trim();
+  const filtered = q ? appointments.filter((a) => matchesSearch(a, q)) : appointments;
+  const checkedCount = filtered.reduce(
     (n, a) => (checkedSet.has(a.booking_id) ? n + 1 : n),
     0,
   );
-  const groups = groupByTime(appointments);
+  const flatGroups = groupByTime(filtered);
   const now = Date.now();
   const nextGroupKey = showCheckIn
-    ? groups.find(
+    ? flatGroups.find(
         (g) =>
           new Date(g.key).getTime() >= now &&
           g.items.some((a) => !checkedSet.has(a.booking_id)),
       )?.key ?? null
     : null;
+  const dayGroups = groupBy === "dayTime" ? groupByDayThenTime(filtered) : null;
+  const isOpen = defaultOpen || (q.length > 0 && filtered.length > 0);
 
   return (
     <Card>
-      <details open={defaultOpen} className="group">
+      <details open={isOpen} className="group">
         <summary className="flex cursor-pointer list-none items-center justify-between gap-3 p-6">
           <div className="min-w-0">
             <CardTitle>
               {title}{" "}
               <span className="text-sm font-normal text-slate-500">
-                ({appointments.length}
-                {checkedCount > 0 ? ` · ${checkedCount} checked in` : ""})
+                ({filtered.length}
+                {checkedCount > 0 ? ` · ${checkedCount} checked in` : ""}
+                {q && filtered.length !== appointments.length
+                  ? ` · filtered from ${appointments.length}`
+                  : ""}
+                )
               </span>
             </CardTitle>
             {description && (
@@ -522,11 +534,37 @@ function ScheduleSection({
           <ChevronDown className="h-5 w-5 shrink-0 text-slate-500 transition-transform group-open:rotate-180" />
         </summary>
         <div className="px-6 pb-6">
-          {appointments.length === 0 ? (
-            <EmptyState text="No appointments." />
+          {filtered.length === 0 ? (
+            <EmptyState
+              text={q ? "No scheduled appointments found for this client." : "No appointments."}
+            />
+          ) : dayGroups ? (
+            <div className="space-y-6">
+              {dayGroups.map(({ day, groups }) => (
+                <div key={day}>
+                  <div className="mb-3 border-b border-slate-300 pb-1 text-base font-semibold text-slate-900">
+                    {formatDayHeader(day)}
+                  </div>
+                  <div className="space-y-4">
+                    {groups.map((g) => (
+                      <TimeGroupBlock
+                        key={g.key}
+                        timeLabel={g.label}
+                        appointments={g.items}
+                        isNext={false}
+                        showCheckIn={showCheckIn}
+                        onCheckIn={onCheckIn}
+                        completingBookingId={completingBookingId ?? null}
+                        checkedInIds={checkedSet}
+                      />
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
           ) : (
             <div className="space-y-4">
-              {groups.map((g) => (
+              {flatGroups.map((g) => (
                 <TimeGroupBlock
                   key={g.key}
                   timeLabel={g.label}

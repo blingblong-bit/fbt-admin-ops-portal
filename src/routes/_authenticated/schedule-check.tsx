@@ -677,10 +677,10 @@ function AppointmentMobileCard({
   completingBookingId: string | null;
   isCheckedIn: boolean;
 }) {
-  const remaining = a.client ? visitsRemaining(a.client) : 0;
-  const hasPackage = !!a.client && (a.client.package_total_visits ?? 0) > 0;
-  const visitsUnknown = hasPackage && remaining === null;
-  const visitsZero = hasPackage && remaining === 0;
+  const total = a.client?.package_total_visits ?? 0;
+  const used = a.client?.visits_used ?? 0;
+  const hasPackage = !!a.client && total > 0;
+  const packageComplete = hasPackage && used >= total;
   const owed = a.client
     ? Math.max(0, Number(a.client.package_price ?? 0) - Number(a.client.amount_paid ?? 0))
     : 0;

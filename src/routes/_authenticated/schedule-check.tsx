@@ -870,25 +870,19 @@ function AppointmentDesktopRow({
                   View Client
                 </Link>
               </Button>
-              {showCheckIn && onCheckIn && !visitsZero && (
+              {showCheckIn && onCheckIn && !packageComplete && (
                 <Button
                   size="sm"
                   disabled={busy || isCheckedIn}
                   onClick={() => onCheckIn(a.client!.id, a.booking_id)}
-                  title={visitsUnknown ? "Visits unknown — verify before completing." : undefined}
                 >
                   {isCheckedIn ? "✓ Checked In" : busy ? "Recording…" : "Check In"}
                 </Button>
               )}
             </div>
-            {visitsUnknown && !isCheckedIn && (
+            {packageComplete && (
               <span className="text-[11px] text-amber-700">
-                ⚠ Visits unknown — verify before completing.
-              </span>
-            )}
-            {visitsZero && (
-              <span className="text-[11px] text-amber-700">
-                ⚠ Visits show 0 — verify in Square before completing.
+                ⚠ Package complete — verify before recording another visit.
               </span>
             )}
           </div>

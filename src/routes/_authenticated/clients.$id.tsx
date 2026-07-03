@@ -257,6 +257,8 @@ function ClientDetailPage() {
           </CardContent>
         </Card>
 
+        <AppointmentsCard clientId={id} />
+
         <Card>
           <CardHeader>
             <CardTitle>Internal Notes</CardTitle>
@@ -268,7 +270,7 @@ function ClientDetailPage() {
           </CardContent>
         </Card>
 
-        <AppointmentsCard clientId={id} />
+
 
 
 

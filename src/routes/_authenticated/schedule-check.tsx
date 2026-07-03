@@ -63,6 +63,7 @@ function visitsRemaining(c: { package_total_visits: number; visits_used: number 
 function ScheduleCheckPage() {
   const [date, setDate] = useState<string>(todayYmd());
   const [checkedIn, setCheckedIn] = useState<Set<string>>(new Set());
+  const [search, setSearch] = useState<string>("");
   const fetchSchedule = useServerFn(getScheduleCheck);
   const completeVisit = useServerFn(completeVisitForClient);
   const qc = useQueryClient();
@@ -102,8 +103,6 @@ function ScheduleCheckPage() {
     onError: (e: Error) => toast.error(`Backfill failed: ${e.message}`),
   });
 
-  // Load linkable clients up-front so we can reconcile any Unmatched appointments
-  // whose square_customer_id has since been linked to an Admin client.
   const listClientsFn = useServerFn(listLinkableClients);
   const linkableQuery = useQuery({
     queryKey: ["linkable-clients"],
@@ -117,13 +116,11 @@ function ScheduleCheckPage() {
     if (!rawData) return rawData;
     if (!linkable || linkable.length === 0) return rawData;
 
-    // Build map: square_customer_id -> linkable client
     const bySquare = new Map<string, LinkableClient>();
     for (const c of linkable) {
       if (c.square_customer_id) bySquare.set(c.square_customer_id, c);
     }
 
-    // Find unmatched appts that now resolve
     const resolvedIds = new Set<string>();
     const promoted: ScheduleAppointment[] = [];
     for (const a of rawData.unmatched) {
@@ -177,8 +174,6 @@ function ScheduleCheckPage() {
     };
   }, [rawData, linkable]);
 
-  // If reconciliation found stale unmatched entries, ask the server to rebuild
-  // its matched booking list so the enriched client data (visits, balance) shows up.
   useEffect(() => {
     if (!rawData || !linkable) return;
     const bySquare = new Set(
@@ -192,6 +187,40 @@ function ScheduleCheckPage() {
     }
   }, [rawData, linkable, qc]);
 
+  const remainingThisWeek = useMemo(
+    () =>
+      (data?.this_week ?? []).filter(
+        (a) => a.start_at.slice(0, 10) > (data?.selected_date ?? ""),
+      ),
+    [data],
+  );
+  const nextWeekAppts = data?.next_week ?? [];
+  const nextWeekClientIds = useMemo(() => {
+    const s = new Set<string>();
+    for (const a of nextWeekAppts) if (a.client) s.add(a.client.id);
+    return s;
+  }, [nextWeekAppts]);
+  const thisWeekNotNextWeek = useMemo(
+    () =>
+      (data?.this_week ?? []).filter(
+        (a) => a.client && !nextWeekClientIds.has(a.client.id),
+      ),
+    [data, nextWeekClientIds],
+  );
+
+  const q = search.trim();
+  const summary = useMemo(() => {
+    if (!q) return null;
+    const has = (arr: ScheduleAppointment[]) => arr.some((a) => matchesSearch(a, q));
+    return {
+      today: has(data?.selected_day ?? []),
+      thisWeek: has(remainingThisWeek),
+      nextWeek: has(nextWeekAppts),
+      notNext: has(thisWeekNotNextWeek),
+    };
+  }, [q, data, remainingThisWeek, nextWeekAppts, thisWeekNotNextWeek]);
+  const anyMatch =
+    !!summary && (summary.today || summary.thisWeek || summary.nextWeek || summary.notNext);
 
   return (
     <AppShell>
@@ -223,9 +252,48 @@ function ScheduleCheckPage() {
           </div>
         </header>
 
+        <div className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+          <label className="mb-1 block text-xs font-medium text-slate-600">
+            Search a client to see where they're scheduled
+          </label>
+          <Input
+            placeholder="Search client name…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="h-11"
+          />
+          {q && (
+            <div className="mt-2 flex flex-wrap gap-1.5 text-xs">
+              {!anyMatch && (
+                <span className="rounded-full bg-slate-100 px-2 py-0.5 font-medium text-slate-700">
+                  Not Scheduled — no scheduled appointments found for this client.
+                </span>
+              )}
+              {summary?.today && (
+                <span className="rounded-full bg-emerald-100 px-2 py-0.5 font-semibold text-emerald-800">
+                  Scheduled Today
+                </span>
+              )}
+              {summary?.thisWeek && (
+                <span className="rounded-full bg-sky-100 px-2 py-0.5 font-semibold text-sky-800">
+                  Scheduled Remaining This Week
+                </span>
+              )}
+              {summary?.nextWeek && (
+                <span className="rounded-full bg-indigo-100 px-2 py-0.5 font-semibold text-indigo-800">
+                  Scheduled Next Week
+                </span>
+              )}
+              {summary?.notNext && !summary?.nextWeek && (
+                <span className="rounded-full bg-amber-100 px-2 py-0.5 font-semibold text-amber-900">
+                  Scheduled This Week but Not Next Week
+                </span>
+              )}
+            </div>
+          )}
+        </div>
 
         <SquareReviewCard />
-
 
         <Card>
           <CardHeader>
@@ -288,6 +356,8 @@ function ScheduleCheckPage() {
           completingBookingId={
             completeMut.isPending ? completeMut.variables?.bookingId ?? null : null
           }
+          groupBy="time"
+          filter={q}
         />
 
         <ScheduleSection
@@ -297,10 +367,10 @@ function ScheduleCheckPage() {
               ? `After ${formatDate(data.selected_date)} — through ${formatDate(data.week_end)}`
               : ""
           }
-          appointments={(data?.this_week ?? []).filter(
-            (a) => a.start_at.slice(0, 10) > (data?.selected_date ?? ""),
-          )}
+          appointments={remainingThisWeek}
           defaultOpen={false}
+          groupBy="dayTime"
+          filter={q}
         />
 
         <ScheduleSection
@@ -308,10 +378,20 @@ function ScheduleCheckPage() {
           description={
             data ? `${formatDate(data.next_week_start)} – ${formatDate(data.next_week_end)}` : ""
           }
-          appointments={data?.next_week ?? []}
+          appointments={nextWeekAppts}
           defaultOpen={false}
+          groupBy="dayTime"
+          filter={q}
         />
 
+        <ScheduleSection
+          title="Scheduled This Week But Not Next Week"
+          description="Clients with an appointment this week but nothing on the books next week — good candidates to re-book."
+          appointments={thisWeekNotNextWeek}
+          defaultOpen={false}
+          groupBy="dayTime"
+          filter={q}
+        />
 
         <ClientsNeedingCard
           title="Needs Next Week Scheduling"
@@ -354,6 +434,41 @@ function groupByTime(appts: ScheduleAppointment[]): { key: string; label: string
     .map(([key, items]) => ({ key, label: formatTimeLocal(key), items }));
 }
 
+function groupByDayThenTime(
+  appts: ScheduleAppointment[],
+): { day: string; groups: { key: string; label: string; items: ScheduleAppointment[] }[] }[] {
+  const byDay = new Map<string, ScheduleAppointment[]>();
+  for (const a of appts) {
+    const day = a.start_at.slice(0, 10);
+    const arr = byDay.get(day) ?? [];
+    arr.push(a);
+    byDay.set(day, arr);
+  }
+  return Array.from(byDay.entries())
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([day, items]) => ({ day, groups: groupByTime(items) }));
+}
+
+function formatDayHeader(ymd: string): string {
+  const [y, m, d] = ymd.split("-").map(Number);
+  const dt = new Date(y, m - 1, d);
+  const dow = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][dt.getDay()];
+  return `${dow} ${String(m).padStart(2, "0")}/${String(d).padStart(2, "0")}/${y}`;
+}
+
+function matchesSearch(a: ScheduleAppointment, q: string): boolean {
+  if (!q) return true;
+  const s = q.toLowerCase();
+  const clientName = a.client
+    ? `${a.client.first_name} ${a.client.last_name}`.toLowerCase()
+    : "";
+  const custName = a.customer_info
+    ? `${a.customer_info.given_name ?? ""} ${a.customer_info.family_name ?? ""}`.toLowerCase()
+    : "";
+  const tm = (a.team_member_name ?? "").toLowerCase();
+  return clientName.includes(s) || custName.includes(s) || tm.includes(s);
+}
+
 function ScheduleSection({
   title,
   description,
@@ -363,6 +478,8 @@ function ScheduleSection({
   checkedInIds,
   onCheckIn,
   completingBookingId,
+  groupBy = "time",
+  filter = "",
 }: {
   title: string;
   description: string;
@@ -372,32 +489,42 @@ function ScheduleSection({
   checkedInIds?: Set<string>;
   onCheckIn?: (clientId: string, bookingId: string) => void;
   completingBookingId?: string | null;
+  groupBy?: "time" | "dayTime";
+  filter?: string;
 }) {
   const checkedSet = checkedInIds ?? new Set<string>();
-  const checkedCount = appointments.reduce(
+  const q = filter.trim();
+  const filtered = q ? appointments.filter((a) => matchesSearch(a, q)) : appointments;
+  const checkedCount = filtered.reduce(
     (n, a) => (checkedSet.has(a.booking_id) ? n + 1 : n),
     0,
   );
-  const groups = groupByTime(appointments);
+  const flatGroups = groupByTime(filtered);
   const now = Date.now();
   const nextGroupKey = showCheckIn
-    ? groups.find(
+    ? flatGroups.find(
         (g) =>
           new Date(g.key).getTime() >= now &&
           g.items.some((a) => !checkedSet.has(a.booking_id)),
       )?.key ?? null
     : null;
+  const dayGroups = groupBy === "dayTime" ? groupByDayThenTime(filtered) : null;
+  const isOpen = defaultOpen || (q.length > 0 && filtered.length > 0);
 
   return (
     <Card>
-      <details open={defaultOpen} className="group">
+      <details open={isOpen} className="group">
         <summary className="flex cursor-pointer list-none items-center justify-between gap-3 p-6">
           <div className="min-w-0">
             <CardTitle>
               {title}{" "}
               <span className="text-sm font-normal text-slate-500">
-                ({appointments.length}
-                {checkedCount > 0 ? ` · ${checkedCount} checked in` : ""})
+                ({filtered.length}
+                {checkedCount > 0 ? ` · ${checkedCount} checked in` : ""}
+                {q && filtered.length !== appointments.length
+                  ? ` · filtered from ${appointments.length}`
+                  : ""}
+                )
               </span>
             </CardTitle>
             {description && (
@@ -407,11 +534,37 @@ function ScheduleSection({
           <ChevronDown className="h-5 w-5 shrink-0 text-slate-500 transition-transform group-open:rotate-180" />
         </summary>
         <div className="px-6 pb-6">
-          {appointments.length === 0 ? (
-            <EmptyState text="No appointments." />
+          {filtered.length === 0 ? (
+            <EmptyState
+              text={q ? "No scheduled appointments found for this client." : "No appointments."}
+            />
+          ) : dayGroups ? (
+            <div className="space-y-6">
+              {dayGroups.map(({ day, groups }) => (
+                <div key={day}>
+                  <div className="mb-3 border-b border-slate-300 pb-1 text-base font-semibold text-slate-900">
+                    {formatDayHeader(day)}
+                  </div>
+                  <div className="space-y-4">
+                    {groups.map((g) => (
+                      <TimeGroupBlock
+                        key={g.key}
+                        timeLabel={g.label}
+                        appointments={g.items}
+                        isNext={false}
+                        showCheckIn={showCheckIn}
+                        onCheckIn={onCheckIn}
+                        completingBookingId={completingBookingId ?? null}
+                        checkedInIds={checkedSet}
+                      />
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
           ) : (
             <div className="space-y-4">
-              {groups.map((g) => (
+              {flatGroups.map((g) => (
                 <TimeGroupBlock
                   key={g.key}
                   timeLabel={g.label}
@@ -524,10 +677,10 @@ function AppointmentMobileCard({
   completingBookingId: string | null;
   isCheckedIn: boolean;
 }) {
-  const remaining = a.client ? visitsRemaining(a.client) : 0;
-  const hasPackage = !!a.client && (a.client.package_total_visits ?? 0) > 0;
-  const visitsUnknown = hasPackage && remaining === null;
-  const visitsZero = hasPackage && remaining === 0;
+  const total = a.client?.package_total_visits ?? 0;
+  const used = a.client?.visits_used ?? 0;
+  const hasPackage = !!a.client && total > 0;
+  const packageComplete = hasPackage && used >= total;
   const owed = a.client
     ? Math.max(0, Number(a.client.package_price ?? 0) - Number(a.client.amount_paid ?? 0))
     : 0;
@@ -572,23 +725,16 @@ function AppointmentMobileCard({
       {a.client && (
         <div className="mt-2 flex flex-wrap gap-1.5 text-[11px] font-medium">
           <span className="rounded-full bg-slate-100 px-2 py-0.5 text-slate-700">
-            {remaining === null
-              ? "Visits unknown"
-              : `${remaining}/${a.client.package_total_visits ?? 0} visits`}
+            {hasPackage ? `${used}/${total} visits` : "No visit package"}
           </span>
           {owed > 0 && (
             <span className="rounded-full bg-red-100 px-2 py-0.5 text-red-800">
               Owes {formatCurrency(owed)}
             </span>
           )}
-          {visitsZero && (
+          {packageComplete && (
             <span className="rounded-full bg-amber-100 px-2 py-0.5 text-amber-900">
               Package complete
-            </span>
-          )}
-          {visitsUnknown && (
-            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-amber-900">
-              ⚠ Verify visits
             </span>
           )}
         </div>
@@ -601,7 +747,7 @@ function AppointmentMobileCard({
                 View
               </Link>
             </Button>
-            {showCheckIn && onCheckIn && !visitsZero ? (
+            {showCheckIn && onCheckIn && !packageComplete ? (
               <Button
                 size="lg"
                 className="h-11"
@@ -651,10 +797,10 @@ function AppointmentDesktopRow({
   completingBookingId: string | null;
   isCheckedIn: boolean;
 }) {
-  const remaining = a.client ? visitsRemaining(a.client) : 0;
-  const hasPackage = !!a.client && (a.client.package_total_visits ?? 0) > 0;
-  const visitsUnknown = hasPackage && remaining === null;
-  const visitsZero = hasPackage && remaining === 0;
+  const total = a.client?.package_total_visits ?? 0;
+  const used = a.client?.visits_used ?? 0;
+  const hasPackage = !!a.client && total > 0;
+  const packageComplete = hasPackage && used >= total;
   const busy = completingBookingId === a.booking_id;
 
   return (
@@ -681,7 +827,7 @@ function AppointmentDesktopRow({
               {a.client.first_name} {a.client.last_name}
             </div>
             <div className="text-xs text-slate-500">
-              {remaining === null ? "Visits unknown" : `${remaining} visits left`}
+              {hasPackage ? `${used}/${total} visits` : "No visit package"}
             </div>
           </div>
         ) : (
@@ -724,25 +870,19 @@ function AppointmentDesktopRow({
                   View Client
                 </Link>
               </Button>
-              {showCheckIn && onCheckIn && !visitsZero && (
+              {showCheckIn && onCheckIn && !packageComplete && (
                 <Button
                   size="sm"
                   disabled={busy || isCheckedIn}
                   onClick={() => onCheckIn(a.client!.id, a.booking_id)}
-                  title={visitsUnknown ? "Visits unknown — verify before completing." : undefined}
                 >
                   {isCheckedIn ? "✓ Checked In" : busy ? "Recording…" : "Check In"}
                 </Button>
               )}
             </div>
-            {visitsUnknown && !isCheckedIn && (
+            {packageComplete && (
               <span className="text-[11px] text-amber-700">
-                ⚠ Visits unknown — verify before completing.
-              </span>
-            )}
-            {visitsZero && (
-              <span className="text-[11px] text-amber-700">
-                ⚠ Visits show 0 — verify in Square before completing.
+                ⚠ Package complete — verify before recording another visit.
               </span>
             )}
           </div>

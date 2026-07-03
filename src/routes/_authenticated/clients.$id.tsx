@@ -911,5 +911,5 @@ function AppointmentsCard({ clientId }: { clientId: string }) {
   );
 }
 
-}
+
 

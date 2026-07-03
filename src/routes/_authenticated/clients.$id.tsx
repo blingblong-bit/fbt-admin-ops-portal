@@ -257,6 +257,8 @@ function ClientDetailPage() {
           </CardContent>
         </Card>
 
+        <AppointmentsCard clientId={id} />
+
         <Card>
           <CardHeader>
             <CardTitle>Internal Notes</CardTitle>
@@ -268,7 +270,7 @@ function ClientDetailPage() {
           </CardContent>
         </Card>
 
-        <AppointmentsCard clientId={id} />
+
 
 
 
@@ -790,19 +792,51 @@ function AppointmentRow({ a }: { a: ClientAppointment }) {
   );
 }
 
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+const WINDOW_DAYS = 31;
+
+function windowIso(offsetDaysStart: number, offsetDaysEnd: number) {
+  const now = Date.now();
+  return {
+    startIso: new Date(now + offsetDaysStart * MS_PER_DAY).toISOString(),
+    endIso: new Date(now + offsetDaysEnd * MS_PER_DAY).toISOString(),
+  };
+}
+
 function AppointmentsCard({ clientId }: { clientId: string }) {
   const fetchAppts = useServerFn(getClientAppointments);
-  const q = useQuery({
-    queryKey: ["client-appointments", clientId],
-    queryFn: () => fetchAppts({ data: { clientId } }),
+  const [showPrev, setShowPrev] = useState(false);
+  // Number of 31-day windows into the past we've loaded (starts at 1 = last 31 days).
+  const [pastWindows, setPastWindows] = useState(1);
+
+  const upcomingQuery = useQuery({
+    queryKey: ["client-appointments", clientId, "upcoming"],
+    queryFn: () => fetchAppts({ data: { clientId, ...windowIso(0, WINDOW_DAYS) } }),
     staleTime: 60_000,
   });
-  const [showAllPrev, setShowAllPrev] = useState(false);
-  const [showPrev, setShowPrev] = useState(false);
 
-  const upcoming = q.data?.upcoming ?? [];
-  const previous = q.data?.previous ?? [];
-  const visiblePrev = showAllPrev ? previous : previous.slice(0, 10);
+  const previousQuery = useQuery({
+    queryKey: ["client-appointments", clientId, "previous", pastWindows],
+    queryFn: async () => {
+      const results: ClientAppointment[] = [];
+      let errored = false;
+      for (let i = 0; i < pastWindows; i++) {
+        const range = windowIso(-WINDOW_DAYS * (i + 1), -WINDOW_DAYS * i);
+        const res = await fetchAppts({ data: { clientId, ...range } });
+        if (res.error) errored = true;
+        results.push(...res.appointments);
+      }
+      return {
+        appointments: results.sort((a, b) => b.start_at.localeCompare(a.start_at)),
+        error: errored ? ("unavailable" as const) : null,
+      };
+    },
+    enabled: showPrev,
+    staleTime: 60_000,
+  });
+
+  const upcoming = upcomingQuery.data?.appointments ?? [];
+  const previous = previousQuery.data?.appointments ?? [];
 
   return (
     <Card className="lg:col-span-3">
@@ -810,70 +844,72 @@ function AppointmentsCard({ clientId }: { clientId: string }) {
         <CardTitle>Appointments</CardTitle>
       </CardHeader>
       <CardContent className="space-y-6">
-        {q.isLoading ? (
-          <p className="text-sm text-slate-500">Loading appointments…</p>
-        ) : q.data?.error ? (
-          <p className="text-sm text-red-600">{q.data.error}</p>
-        ) : (
-          <>
-            <section>
-              <h3 className="mb-2 text-sm font-semibold text-slate-700">
-                Upcoming ({upcoming.length})
-              </h3>
-              {upcoming.length === 0 ? (
-                <p className="text-sm text-slate-500">
-                  No upcoming appointments scheduled.
+        <section>
+          <h3 className="mb-2 text-sm font-semibold text-slate-700">
+            Upcoming ({upcoming.length})
+          </h3>
+          {upcomingQuery.isLoading ? (
+            <p className="text-sm text-slate-500">Loading appointments…</p>
+          ) : upcomingQuery.isError || upcomingQuery.data?.error ? (
+            <p className="text-sm text-red-600">
+              Unable to load appointments. Please try again.
+            </p>
+          ) : upcoming.length === 0 ? (
+            <p className="text-sm text-slate-500">No appointments found.</p>
+          ) : (
+            <ul className="grid gap-2 sm:grid-cols-2">
+              {upcoming.map((a) => (
+                <AppointmentRow key={a.booking_id} a={a} />
+              ))}
+            </ul>
+          )}
+        </section>
+
+        <section>
+          <button
+            type="button"
+            onClick={() => setShowPrev((s) => !s)}
+            className="mb-2 flex min-h-11 w-full items-center justify-between text-sm font-semibold text-slate-700 cursor-pointer hover:underline"
+          >
+            <span>Previous Appointments</span>
+            <span className="text-xs text-slate-400">{showPrev ? "Hide" : "Show"}</span>
+          </button>
+          {showPrev && (
+            <>
+              {previousQuery.isLoading ? (
+                <p className="text-sm text-slate-500">Loading appointments…</p>
+              ) : previousQuery.isError || previousQuery.data?.error ? (
+                <p className="text-sm text-red-600">
+                  Unable to load appointments. Please try again.
                 </p>
+              ) : previous.length === 0 ? (
+                <p className="text-sm text-slate-500">No appointments found.</p>
               ) : (
                 <ul className="grid gap-2 sm:grid-cols-2">
-                  {upcoming.map((a) => (
+                  {previous.map((a) => (
                     <AppointmentRow key={a.booking_id} a={a} />
                   ))}
                 </ul>
               )}
-            </section>
-
-            <section>
-              <button
-                type="button"
-                onClick={() => setShowPrev((s) => !s)}
-                className="mb-2 flex w-full items-center justify-between text-sm font-semibold text-slate-700 cursor-pointer hover:underline"
-              >
-                <span>Previous Appointments ({previous.length})</span>
-                <span className="text-xs text-slate-400">
-                  {showPrev ? "Hide" : "Show"}
-                </span>
-              </button>
-              {showPrev &&
-                (previous.length === 0 ? (
-                  <p className="text-sm text-slate-500">No previous appointments.</p>
-                ) : (
-                  <>
-                    <ul className="grid gap-2 sm:grid-cols-2">
-                      {visiblePrev.map((a) => (
-                        <AppointmentRow key={a.booking_id} a={a} />
-                      ))}
-                    </ul>
-                    {previous.length > 10 && (
-                      <div className="mt-3">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setShowAllPrev((s) => !s)}
-                        >
-                          {showAllPrev
-                            ? "Show less"
-                            : `Show more (${previous.length - 10} more)`}
-                        </Button>
-                      </div>
-                    )}
-                  </>
-                ))}
-            </section>
-          </>
-        )}
+              <div className="mt-3">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPastWindows((n) => n + 1)}
+                  disabled={previousQuery.isFetching}
+                >
+                  {previousQuery.isFetching
+                    ? "Loading…"
+                    : `Load Older Appointments (previous ${WINDOW_DAYS} days)`}
+                </Button>
+              </div>
+            </>
+          )}
+        </section>
       </CardContent>
     </Card>
   );
 }
+
+
 

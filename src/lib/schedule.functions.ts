@@ -773,36 +773,45 @@ export type ClientAppointment = {
 };
 
 export type ClientAppointmentsResult = {
-  upcoming: ClientAppointment[];
-  previous: ClientAppointment[];
+  appointments: ClientAppointment[];
   fetched_count: number;
   error: string | null;
 };
 
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+const MAX_WINDOW_MS = 31 * MS_PER_DAY;
+
 /**
- * Fetch all Square bookings for a single client (past + upcoming) within a
- * bounded window. Read-only; scheduling itself is still managed in Square.
+ * Fetch Square bookings for a single client within a bounded time window.
+ * Square's Bookings API rejects windows longer than 31 days, so callers must
+ * paginate by requesting multiple 31-day windows. Read-only; scheduling
+ * itself is still managed in Square.
  */
 export const getClientAppointments = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { clientId: string; pastDays?: number; futureDays?: number }) => {
+  .inputValidator((d: { clientId: string; startIso: string; endIso: string }) => {
     if (!d?.clientId || typeof d.clientId !== "string") throw new Error("clientId required");
-    return {
-      clientId: d.clientId,
-      pastDays: Math.min(365, Math.max(1, Number(d.pastDays ?? 180))),
-      futureDays: Math.min(180, Math.max(1, Number(d.futureDays ?? 90))),
-    };
+    const start = new Date(d.startIso);
+    const end = new Date(d.endIso);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+      throw new Error("Invalid time range");
+    }
+    if (end.getTime() <= start.getTime()) throw new Error("endIso must be after startIso");
+    if (end.getTime() - start.getTime() > MAX_WINDOW_MS) {
+      throw new Error("Time range exceeds 31 days");
+    }
+    return { clientId: d.clientId, startIso: start.toISOString(), endIso: end.toISOString() };
   })
   .handler(async ({ data, context }): Promise<ClientAppointmentsResult> => {
     const token = process.env.SQUARE_PRODUCTION_ACCESS_TOKEN;
     const empty: ClientAppointmentsResult = {
-      upcoming: [],
-      previous: [],
+      appointments: [],
       fetched_count: 0,
       error: null,
     };
     if (!token) {
-      empty.error = "SQUARE_PRODUCTION_ACCESS_TOKEN is not configured";
+      console.error("[appointments] SQUARE_PRODUCTION_ACCESS_TOKEN missing");
+      empty.error = "unavailable";
       return empty;
     }
 
@@ -816,17 +825,12 @@ export const getClientAppointments = createServerFn({ method: "GET" })
       ?.square_customer_id;
     if (!squareCustomerId) return empty;
 
-    const now = new Date();
-    const start = new Date(now.getTime() - data.pastDays * 24 * 60 * 60 * 1000);
-    const end = new Date(now.getTime() + data.futureDays * 24 * 60 * 60 * 1000);
-
-    const { bookings, error } = await fetchSquareBookings(
-      token,
-      start.toISOString(),
-      end.toISOString(),
-    );
+    const { bookings, error } = await fetchSquareBookings(token, data.startIso, data.endIso);
     if (error) {
-      empty.error = error;
+      console.error(
+        `[appointments] Square error for client=${data.clientId} window=${data.startIso}..${data.endIso}: ${error}`,
+      );
+      empty.error = "unavailable";
       empty.fetched_count = bookings.length;
       return empty;
     }
@@ -854,32 +858,27 @@ export const getClientAppointments = createServerFn({ method: "GET" })
       fetchTeamMemberNames(token, teamMemberIds),
     ]);
 
-    const mapped: ClientAppointment[] = mine.map((b) => {
-      const seg = b.appointment_segments?.[0];
-      return {
-        booking_id: b.id,
-        start_at: b.start_at as string,
-        status: (b.status ?? "UNKNOWN").toString(),
-        duration_minutes: seg?.duration_minutes ?? null,
-        service_name: seg?.service_variation_id
-          ? serviceNames.get(seg.service_variation_id) ?? null
-          : null,
-        team_member_name: seg?.team_member_id
-          ? teamMemberNames.get(seg.team_member_id) ?? null
-          : null,
-      };
-    });
-
-    const nowIso = now.toISOString();
-    const upcoming = mapped
-      .filter((a) => a.start_at >= nowIso)
+    const appointments: ClientAppointment[] = mine
+      .map((b) => {
+        const seg = b.appointment_segments?.[0];
+        return {
+          booking_id: b.id,
+          start_at: b.start_at as string,
+          status: (b.status ?? "UNKNOWN").toString(),
+          duration_minutes: seg?.duration_minutes ?? null,
+          service_name: seg?.service_variation_id
+            ? serviceNames.get(seg.service_variation_id) ?? null
+            : null,
+          team_member_name: seg?.team_member_id
+            ? teamMemberNames.get(seg.team_member_id) ?? null
+            : null,
+        };
+      })
       .sort((a, b) => a.start_at.localeCompare(b.start_at));
-    const previous = mapped
-      .filter((a) => a.start_at < nowIso)
-      .sort((a, b) => b.start_at.localeCompare(a.start_at));
 
-    return { upcoming, previous, fetched_count: bookings.length, error: null };
+    return { appointments, fetched_count: bookings.length, error: null };
   });
+
 
 
 

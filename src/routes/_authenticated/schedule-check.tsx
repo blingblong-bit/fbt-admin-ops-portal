@@ -827,7 +827,7 @@ function AppointmentDesktopRow({
               {a.client.first_name} {a.client.last_name}
             </div>
             <div className="text-xs text-slate-500">
-              {remaining === null ? "Visits unknown" : `${remaining} visits left`}
+              {hasPackage ? `${used}/${total} visits` : "No visit package"}
             </div>
           </div>
         ) : (

@@ -886,7 +886,7 @@ function AppointmentsCard({ clientId }: { clientId: string }) {
                 <p className="text-sm text-slate-500">No appointments found.</p>
               ) : (
                 <ul className="grid gap-2 sm:grid-cols-2">
-                  {previous.slice(0, Math.max(10, previous.length)).map((a) => (
+                  {previous.map((a) => (
                     <AppointmentRow key={a.booking_id} a={a} />
                   ))}
                 </ul>

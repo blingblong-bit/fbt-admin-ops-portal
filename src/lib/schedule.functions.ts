@@ -763,5 +763,124 @@ export const getScheduledClientIds = createServerFn({ method: "GET" })
     },
   );
 
+export type ClientAppointment = {
+  booking_id: string;
+  start_at: string;
+  status: string;
+  duration_minutes: number | null;
+  service_name: string | null;
+  team_member_name: string | null;
+};
+
+export type ClientAppointmentsResult = {
+  upcoming: ClientAppointment[];
+  previous: ClientAppointment[];
+  fetched_count: number;
+  error: string | null;
+};
+
+/**
+ * Fetch all Square bookings for a single client (past + upcoming) within a
+ * bounded window. Read-only; scheduling itself is still managed in Square.
+ */
+export const getClientAppointments = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { clientId: string; pastDays?: number; futureDays?: number }) => {
+    if (!d?.clientId || typeof d.clientId !== "string") throw new Error("clientId required");
+    return {
+      clientId: d.clientId,
+      pastDays: Math.min(365, Math.max(1, Number(d.pastDays ?? 180))),
+      futureDays: Math.min(180, Math.max(1, Number(d.futureDays ?? 90))),
+    };
+  })
+  .handler(async ({ data, context }): Promise<ClientAppointmentsResult> => {
+    const token = process.env.SQUARE_PRODUCTION_ACCESS_TOKEN;
+    const empty: ClientAppointmentsResult = {
+      upcoming: [],
+      previous: [],
+      fetched_count: 0,
+      error: null,
+    };
+    if (!token) {
+      empty.error = "SQUARE_PRODUCTION_ACCESS_TOKEN is not configured";
+      return empty;
+    }
+
+    const { data: client, error: cErr } = await context.supabase
+      .from("clients")
+      .select("square_customer_id")
+      .eq("id", data.clientId)
+      .single();
+    if (cErr) throw cErr;
+    const squareCustomerId = (client as { square_customer_id: string | null } | null)
+      ?.square_customer_id;
+    if (!squareCustomerId) return empty;
+
+    const now = new Date();
+    const start = new Date(now.getTime() - data.pastDays * 24 * 60 * 60 * 1000);
+    const end = new Date(now.getTime() + data.futureDays * 24 * 60 * 60 * 1000);
+
+    const { bookings, error } = await fetchSquareBookings(
+      token,
+      start.toISOString(),
+      end.toISOString(),
+    );
+    if (error) {
+      empty.error = error;
+      empty.fetched_count = bookings.length;
+      return empty;
+    }
+
+    const mine = bookings.filter((b) => b.customer_id === squareCustomerId && b.start_at);
+
+    const variationIds = Array.from(
+      new Set(
+        mine
+          .flatMap((b) => b.appointment_segments ?? [])
+          .map((s) => s.service_variation_id ?? "")
+          .filter(Boolean),
+      ),
+    );
+    const teamMemberIds = Array.from(
+      new Set(
+        mine
+          .flatMap((b) => b.appointment_segments ?? [])
+          .map((s) => s.team_member_id ?? "")
+          .filter(Boolean),
+      ),
+    );
+    const [serviceNames, teamMemberNames] = await Promise.all([
+      fetchServiceNames(token, variationIds),
+      fetchTeamMemberNames(token, teamMemberIds),
+    ]);
+
+    const mapped: ClientAppointment[] = mine.map((b) => {
+      const seg = b.appointment_segments?.[0];
+      return {
+        booking_id: b.id,
+        start_at: b.start_at as string,
+        status: (b.status ?? "UNKNOWN").toString(),
+        duration_minutes: seg?.duration_minutes ?? null,
+        service_name: seg?.service_variation_id
+          ? serviceNames.get(seg.service_variation_id) ?? null
+          : null,
+        team_member_name: seg?.team_member_id
+          ? teamMemberNames.get(seg.team_member_id) ?? null
+          : null,
+      };
+    });
+
+    const nowIso = now.toISOString();
+    const upcoming = mapped
+      .filter((a) => a.start_at >= nowIso)
+      .sort((a, b) => a.start_at.localeCompare(b.start_at));
+    const previous = mapped
+      .filter((a) => a.start_at < nowIso)
+      .sort((a, b) => b.start_at.localeCompare(a.start_at));
+
+    return { upcoming, previous, fetched_count: bookings.length, error: null };
+  });
+
+
 
 

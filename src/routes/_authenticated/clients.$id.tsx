@@ -268,6 +268,9 @@ function ClientDetailPage() {
           </CardContent>
         </Card>
 
+        <AppointmentsCard clientId={id} />
+
+
 
         <Card className="lg:col-span-3">
           <CardHeader>

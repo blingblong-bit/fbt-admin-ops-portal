@@ -1,17 +1,25 @@
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState, type ReactNode } from "react";
-import { useQueryClient } from "@tanstack/react-query";
-import { Menu, X } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Menu, X, ChevronDown } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import {
+  Collapsible,
+  CollapsibleTrigger,
+  CollapsibleContent,
+} from "@/components/ui/collapsible";
 
 export function AppShell({ children }: { children: ReactNode }) {
-  const nav = [
+  const primaryNav = [
     { to: "/", label: "Dashboard" },
     { to: "/clients", label: "All Clients" },
     { to: "/clients/new", label: "Add Client" },
     { to: "/schedule-check", label: "Schedule Check" },
+    { to: "/clients/deleted", label: "Deleted Clients" },
+  ] as const;
+
+  const adminNav = [
     { to: "/merge-center", label: "Merge Center" },
-    { to: "/clients/deleted", label: "Deleted" },
     { to: "/import", label: "Import" },
     { to: "/notes-ledger", label: "Notes Ledger" },
     { to: "/backup", label: "Backup" },
@@ -22,6 +30,23 @@ export function AppShell({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
   const [email, setEmail] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [adminOpen, setAdminOpen] = useState(false);
+
+  const { data: adminRoles } = useQuery({
+    queryKey: ["user-roles"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("user_roles" as any)
+        .select("role")
+        .in("role", ["admin", "superadmin"]);
+      if (error) {
+        console.warn("user_roles query failed:", error);
+        return [];
+      }
+      return data ?? [];
+    },
+  });
+  const isAdmin = (adminRoles ?? []).length > 0;
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setEmail(data.user?.email ?? null));
@@ -33,6 +58,9 @@ export function AppShell({ children }: { children: ReactNode }) {
     await supabase.auth.signOut();
     navigate({ to: "/auth", replace: true });
   }
+
+  const desktopLinkClass =
+    "rounded-md px-3 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 data-[status=active]:bg-slate-900 data-[status=active]:text-white";
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
@@ -52,16 +80,31 @@ export function AppShell({ children }: { children: ReactNode }) {
 
           {/* Desktop nav */}
           <nav className="hidden items-center gap-1 lg:flex">
-            {nav.map((n) => (
+            {primaryNav.map((n) => (
               <Link
                 key={n.to}
                 to={n.to}
                 activeOptions={{ exact: n.to === "/" }}
-                className="rounded-md px-3 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 data-[status=active]:bg-slate-900 data-[status=active]:text-white"
+                className={desktopLinkClass}
               >
                 {n.label}
               </Link>
             ))}
+            {isAdmin && (
+              <>
+                <div className="mx-1 h-6 w-px bg-slate-200" />
+                {adminNav.map((n) => (
+                  <Link
+                    key={n.to}
+                    to={n.to}
+                    activeOptions={{ exact: false }}
+                    className={desktopLinkClass}
+                  >
+                    {n.label}
+                  </Link>
+                ))}
+              </>
+            )}
           </nav>
 
           <div className="flex shrink-0 items-center gap-2">
@@ -90,7 +133,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         {menuOpen && (
           <div className="border-t bg-white lg:hidden">
             <nav className="mx-auto flex max-w-7xl flex-col px-4 py-2 sm:px-6">
-              {nav.map((n) => (
+              {primaryNav.map((n) => (
                 <Link
                   key={n.to}
                   to={n.to}
@@ -101,6 +144,36 @@ export function AppShell({ children }: { children: ReactNode }) {
                   {n.label}
                 </Link>
               ))}
+              {isAdmin && (
+                <Collapsible open={adminOpen} onOpenChange={setAdminOpen}>
+                  <CollapsibleTrigger asChild>
+                    <button
+                      type="button"
+                      className="flex w-full items-center justify-between rounded-md px-3 py-3 text-base font-medium text-slate-700 hover:bg-slate-100"
+                    >
+                      <span>Admin Tools</span>
+                      <ChevronDown
+                        className={`h-5 w-5 shrink-0 transition-transform ${adminOpen ? "rotate-180" : ""}`}
+                      />
+                    </button>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <div className="ml-3 flex flex-col border-l-2 border-slate-100">
+                      {adminNav.map((n) => (
+                        <Link
+                          key={n.to}
+                          to={n.to}
+                          activeOptions={{ exact: false }}
+                          onClick={() => setMenuOpen(false)}
+                          className="rounded-md px-3 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-100 data-[status=active]:bg-slate-900 data-[status=active]:text-white"
+                        >
+                          {n.label}
+                        </Link>
+                      ))}
+                    </div>
+                  </CollapsibleContent>
+                </Collapsible>
+              )}
               <div className="mt-2 flex items-center justify-between border-t pt-2">
                 {email && (
                   <span className="truncate text-xs text-slate-500">{email}</span>

@@ -86,7 +86,9 @@ export const resolvePaymentLink = createServerFn({ method: "POST" })
       squarePaymentId: payment.square_payment_id,
       amountCents: payment.amount_cents,
       matchMethod: "manual_resolution",
+      manualResolution: true,
     });
+
 
     await supabaseAdmin
       .from("square_payments")

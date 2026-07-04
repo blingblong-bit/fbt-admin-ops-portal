@@ -168,7 +168,9 @@ export const resolvePaymentCreateClient = createServerFn({ method: "POST" })
         squarePaymentId: payment.square_payment_id,
         amountCents: payment.amount_cents,
         matchMethod: "manual_create_client",
+        manualResolution: true,
       });
+
       appliedAmount = result.appliedAmount;
       alreadyApplied = result.alreadyApplied;
     }

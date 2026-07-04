@@ -266,14 +266,18 @@ async function fetchCustomer(token: string, id: string): Promise<SquareCustomerL
         "Square-Version": SQUARE_VERSION,
         "Content-Type": "application/json",
       },
+      signal: AbortSignal.timeout(5000),
     });
     if (!res.ok) return null;
     const json = (await res.json()) as { customer?: SquareCustomerLite };
     return json.customer ?? null;
   } catch {
+    // Includes AbortError from the 5s timeout — swallow and let the caller
+    // build suggestions from the remaining customers.
     return null;
   }
 }
+
 
 function normName(s: string | null | undefined): string {
   return (s ?? "").toLowerCase().replace(/[^a-z]/g, "");

@@ -222,16 +222,28 @@ export function parseLedger(text: string): ParsedRow[] {
     // PD / paid in full
     if (PD_RE.test(line)) row.paid_in_full = true;
 
-    // Owed
+    // Owed (explicit "owes $X" phrasing)
     const owedMatch = line.match(OWED_RE);
     if (owedMatch) {
       const v = owedMatch[1] ?? owedMatch[2];
       if (v) row.amount_owed = Number(v);
     }
 
-    // Compute amount_paid
+    // Compute amount_paid / amount_owed.
+    // Priority: leading_amount (when present with a package_price) is the
+    // authoritative amount owed. Falls back to explicit "owes" phrasing,
+    // then PD marker.
     if (row.package_price !== null) {
-      if (row.amount_owed !== null) {
+      if (row.leading_amount !== null) {
+        const owed = Math.min(row.leading_amount, row.package_price);
+        row.amount_owed = owed;
+        row.amount_paid = Math.max(0, row.package_price - owed);
+        // PD only overrides when leading amount is zero (fully paid).
+        if (row.paid_in_full && row.leading_amount === 0) {
+          row.amount_paid = row.package_price;
+          row.amount_owed = 0;
+        }
+      } else if (row.amount_owed !== null) {
         row.amount_paid = Math.max(0, row.package_price - row.amount_owed);
       } else if (row.paid_in_full) {
         row.amount_paid = row.package_price;

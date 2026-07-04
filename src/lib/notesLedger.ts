@@ -338,7 +338,7 @@ export function parseLedger(text: string): ParsedRow[] {
     if (!row.name) reasons.push("No client name found.");
     if (row.leading_amount_mismatch) {
       reasons.push(
-        `Leading amount differs from package amount / special billing — leading $${row.leading_amount} vs package $${row.package_price}${PD_RE.test(line) ? " (PD marker present)" : ""}.`,
+        `Leading amount doesn't fit package rules — leading $${row.leading_amount} vs package $${row.package_price}${PD_RE.test(line) ? " (PD marker present)" : ""}.`,
       );
     }
 

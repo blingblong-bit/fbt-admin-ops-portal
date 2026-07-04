@@ -310,20 +310,20 @@ export function parseLedger(text: string): ParsedRow[] {
       if (notes.length > 2) row.internal_notes = notes;
     }
 
-    // Special: leading amount (before the name) differs from the parenthetical
-    // package price. Treat leading_amount as the authoritative amount owed and
-    // route to Needs Review — do NOT silently reduce package_price or zero out owed.
+    // Flag rows for review when the leading amount doesn't fit the clean
+    // "leading = amount owed, paid = price - owed" pattern:
+    //   - leading amount exceeds the package price, or
+    //   - PD marker present with a non-zero leading amount (conflict).
+    // Amounts stay as computed above so preview shows realistic paid/owed.
     if (
       row.leading_amount !== null &&
-      row.leading_amount > 0 &&
       row.package_price !== null &&
-      row.leading_amount !== row.package_price
+      (row.leading_amount > row.package_price ||
+        (row.paid_in_full && row.leading_amount > 0))
     ) {
       row.leading_amount_mismatch = true;
-      row.amount_owed = row.leading_amount;
-      row.amount_paid = null; // computed at apply time against the client's current price
-      row.paid_in_full = false;
     }
+
 
     // Review triggers
 

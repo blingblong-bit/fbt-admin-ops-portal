@@ -1,5 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { createHmac, timingSafeEqual } from "crypto";
+import { applyPaymentOnce } from "@/lib/payment-apply";
+
 
 // Square sends webhook events with this shape:
 // { type, event_id, created_at, data: { type, id, object: { customer|payment: {...} } } }

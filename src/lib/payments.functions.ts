@@ -655,7 +655,9 @@ async function retryOnePayment(
       squarePaymentId: payment.square_payment_id,
       amountCents: payment.amount_cents,
       matchMethod: "manual_retry",
+      manualResolution: true,
     });
+
     await supabaseAdmin
       .from("square_payments")
       .update({ applied: true, needs_review: false })

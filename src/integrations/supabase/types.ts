@@ -58,7 +58,6 @@ export type Database = {
           first_name: string
           id: string
           internal_notes: string | null
-          is_scheduled: boolean
           last_name: string
           manual_active: boolean
           needs_review: boolean
@@ -81,7 +80,6 @@ export type Database = {
           first_name: string
           id?: string
           internal_notes?: string | null
-          is_scheduled?: boolean
           last_name: string
           manual_active?: boolean
           needs_review?: boolean
@@ -104,7 +102,6 @@ export type Database = {
           first_name?: string
           id?: string
           internal_notes?: string | null
-          is_scheduled?: boolean
           last_name?: string
           manual_active?: boolean
           needs_review?: boolean

@@ -1169,6 +1169,25 @@ function ReviewCard({
       )}
 
 
+      <label className={`mt-3 flex items-start gap-2 rounded border p-2 text-xs ${forced ? "border-rose-400 bg-rose-50 text-rose-900" : "border-slate-200 bg-white text-slate-700"}`}>
+        <input
+          type="checkbox"
+          className="mt-0.5"
+          checked={forced}
+          onChange={onToggleForce}
+        />
+        <span>
+          <span className="font-semibold">Force update (bypass monotonic amount_paid guard)</span>
+          <span className="block text-[11px] opacity-80">
+            Applies the note's parsed amount_paid even if it is lower than the
+            client's current value, and allows package_price below current paid.
+            Use only when you've manually verified the Hub value is wrong
+            (e.g. corrupted by a prior bad merge). The activity log records
+            <code className="mx-1">forced: true</code> and the previous amount.
+          </span>
+        </span>
+      </label>
+
       <div className="mt-3 flex flex-wrap gap-2">
         <Button
           size="sm"

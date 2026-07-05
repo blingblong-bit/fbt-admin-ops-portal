@@ -26,9 +26,11 @@ import {
 import { formatCurrency, formatDate, formatDateTimeLocal } from "@/lib/clients";
 import {
   completeVisitForClient,
+  getContactedClientIds,
   getScheduleCheck,
   linkSquareCustomer,
   listLinkableClients,
+  markClientContacted,
   type LinkableClient,
   type NeedsScheduleClient,
   type ScheduleAppointment,
@@ -41,6 +43,7 @@ import {
   listSquareCustomerReviews,
   type SquareCustomerReview,
 } from "@/lib/backfill.functions";
+
 
 export const Route = createFileRoute("/_authenticated/schedule-check")({
   head: () => ({ meta: [{ title: "Schedule Check — FIT Beyond Therapy" }] }),

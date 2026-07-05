@@ -233,6 +233,7 @@ function NotesLedgerPage() {
       setSkippedReviews(new Set());
       setActiveCategories(new Set());
       setRecentlyApplied([]);
+      setForcedRows(new Set());
       toast.success(`Parsed ${r.parsed_count} rows`);
     },
     onError: (e: Error) => toast.error(e.message),

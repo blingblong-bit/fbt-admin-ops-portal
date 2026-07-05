@@ -267,6 +267,7 @@ function Dashboard() {
       count: reviewCount,
       tone: reviewCount > 0 ? "amber" : "slate",
       href: "/sync-log",
+      countLabel: "payment",
     },
     {
       key: "package_complete",

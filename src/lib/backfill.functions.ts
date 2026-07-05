@@ -494,13 +494,17 @@ export const backfillProductionCustomers = createServerFn({ method: "POST" })
       }
     }
 
+    result.processed = slice.length;
+    result.next_offset = offset + slice.length;
+    result.done = result.next_offset >= customers.length;
+
     try {
       const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
       await supabaseAdmin.from("square_sync_log").insert({
         event_type: "customer.backfill",
         status: result.errors.length ? "partial" : "success",
-        action: "production_backfill",
-        message: `Backfill: fetched=${result.fetched_customers} auto_linked=${result.auto_linked} review=${result.queued_for_review} updated=${result.updated_contact} errors=${result.errors.length}`,
+        action: result.done ? "production_backfill" : "production_backfill_batch",
+        message: `Backfill batch [${offset}-${result.next_offset}/${customers.length}]: auto_linked=${result.auto_linked} review=${result.queued_for_review} updated=${result.updated_contact} errors=${result.errors.length}${result.done ? " (complete)" : ""}`,
       });
     } catch {
       // ignore logging errors

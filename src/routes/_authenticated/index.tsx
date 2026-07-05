@@ -436,7 +436,7 @@ function Tile({
       <div className="text-2xl font-semibold tracking-tight text-slate-900">
         {tile.count}
         <span className="ml-1 text-sm font-normal text-slate-500">
-          {tile.count === 1 ? "payment" : "payments"}
+          {tile.count === 1 ? tile.countLabel ?? "client" : `${tile.countLabel ?? "client"}s`}
         </span>
       </div>
       {tile.money !== undefined && tile.money > 0 && (

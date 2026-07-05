@@ -652,13 +652,6 @@ function EditDialog({
               placeholder="Leave blank to skip"
             />
           </Field>
-          <Field label="Square Visit Note (e.g. 3/8)">
-            <Input
-              value={form.square_visit_note ?? ""}
-              onChange={(e) => up("square_visit_note", e.target.value)}
-              placeholder="Optional"
-            />
-          </Field>
           <Field label="Package Price">
             <Input type="number" min={0} step="0.01" value={form.package_price} onChange={(e) => up("package_price", Number(e.target.value))} />
           </Field>

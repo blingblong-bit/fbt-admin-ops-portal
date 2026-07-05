@@ -1090,13 +1090,16 @@ export const applyNotesLedger = createServerFn({ method: "POST" })
       const { error: actErr } = await supabase.from("client_activities").insert({
         client_id: u.client_id,
         activity_type: "notes_ledger_import",
-        description: "Updated from latest Apple Notes package ledger",
+        description: forced
+          ? "Updated from latest Apple Notes package ledger (FORCED — bypassed monotonic amount_paid guard)"
+          : "Updated from latest Apple Notes package ledger",
         metadata: {
           package_price: u.package_price,
           package_total_visits: u.package_total_visits,
           package_start_date: u.package_start_date,
           amount_paid: baseFields.amount_paid,
-
+          amount_paid_before: beforeSnapshot.amount_paid,
+          forced,
           appended_note: u.appended_note,
           row_fingerprint: u.resolution_row?.row_fingerprint ?? null,
         },

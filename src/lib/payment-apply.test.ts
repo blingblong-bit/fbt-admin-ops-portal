@@ -1,86 +1,118 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { applyPaymentOnce } from "./payment-apply";
 
 /**
- * Minimal chain-mock for the exact supabase-js call shapes used inside
- * applyPaymentOnce. We do NOT try to mimic the whole client — only the
- * three query shapes the function actually uses:
+ * `applyPaymentOnce` now delegates to the Postgres function
+ * `apply_square_payment` via `supabaseAdmin.rpc(...)`. The mock below emulates
+ * that RPC's transactional behavior:
  *
- *   1) from("client_activities").select().eq().contains().limit()
- *      -> idempotency guard: returns { data, error }
- *   2) from("clients").select().eq().single()
- *      -> returns { data, error }
- *   3) from("clients").update().eq()
- *      -> returns { error }
- *   4) from("client_activities").insert()
- *      -> returns { error }
+ *   - a per-client async mutex simulates `SELECT ... FOR UPDATE` on the client
+ *     row, serializing concurrent calls for the same client
+ *   - inside the "transaction" we check the idempotency set, cap the applied
+ *     amount at package_price, mutate amount_paid, and record the activity
+ *   - returns `[{ newly_applied, applied_amount }]` like a real Postgres row set
  */
 type ClientRow = { amount_paid: number | null; package_price: number | null };
 
+type ActivityRow = {
+  client_id: string;
+  activity_type: string;
+  description: string;
+  metadata: Record<string, unknown>;
+};
+
 type MockState = {
-  // idempotency guard result (existing activity rows) per squarePaymentId
-  existingActivityForPayment: Set<string>;
+  // one client for these tests (keyed by clientId)
+  clientId: string;
   client: ClientRow;
-  // spies / recorded writes
-  updates: Array<{ table: string; values: Record<string, unknown>; eqId: string }>;
-  inserts: Array<{ table: string; values: Record<string, unknown> }>;
+  // square_payment_ids already recorded as activities
+  recordedPayments: Set<string>;
+  activities: ActivityRow[];
   // failure injection
-  failActivityInsert?: boolean;
-  failGuardSelect?: boolean;
+  failRpc?: boolean;
+  // optional hook to inspect / delay individual rpc invocations
+  onRpcEnter?: (paymentId: string) => Promise<void> | void;
+};
+
+type RpcArgs = {
+  p_client_id: string;
+  p_square_payment_id: string;
+  p_amount_cents: number;
+  p_match_method: string | null;
+  p_manual_resolution?: boolean;
 };
 
 function makeSupabaseMock(state: MockState) {
-  const from = vi.fn((table: string) => {
-    if (table === "client_activities") {
-      return {
-        // guard: .select().eq().contains().limit()
-        select: (_cols: string) => ({
-          eq: (_col: string, _val: string) => ({
-            contains: (_col2: string, payload: { square_payment_id: string }) => ({
-              limit: async (_n: number) => {
-                if (state.failGuardSelect) {
-                  return { data: null, error: { message: "boom" } };
-                }
-                const hit = state.existingActivityForPayment.has(payload.square_payment_id);
-                return { data: hit ? [{ id: "act-1" }] : [], error: null };
-              },
-            }),
-          }),
-        }),
-        // .insert(...)
-        insert: async (values: Record<string, unknown>) => {
-          if (state.failActivityInsert) {
-            return { error: { message: "activity insert failed" } };
-          }
-          state.inserts.push({ table, values });
-          const md = values.metadata as { square_payment_id?: string } | undefined;
-          if (md?.square_payment_id) state.existingActivityForPayment.add(md.square_payment_id);
-          return { error: null };
-        },
-      };
+  // Per-client mutex — models the row lock taken by SELECT ... FOR UPDATE.
+  const locks = new Map<string, Promise<void>>();
+  async function withRowLock<T>(clientId: string, fn: () => Promise<T>): Promise<T> {
+    const prev = locks.get(clientId) ?? Promise.resolve();
+    let release!: () => void;
+    const next = new Promise<void>((r) => {
+      release = r;
+    });
+    locks.set(clientId, prev.then(() => next));
+    await prev;
+    try {
+      return await fn();
+    } finally {
+      release();
     }
-    if (table === "clients") {
-      return {
-        select: (_cols: string) => ({
-          eq: (_col: string, _val: string) => ({
-            single: async () => ({ data: { ...state.client }, error: null }),
-          }),
-        }),
-        update: (values: Record<string, unknown>) => ({
-          eq: async (_col: string, id: string) => {
-            state.updates.push({ table, values, eqId: id });
-            if (typeof values.amount_paid === "number") {
-              state.client.amount_paid = values.amount_paid;
-            }
-            return { error: null };
-          },
-        }),
-      };
+  }
+
+  const rpc = vi.fn(async (name: string, args: RpcArgs) => {
+    if (name !== "apply_square_payment") {
+      throw new Error(`unexpected rpc: ${name}`);
     }
-    throw new Error(`unexpected table: ${table}`);
+    if (state.failRpc) {
+      return { data: null, error: { message: "rpc boom" } };
+    }
+
+    return withRowLock(args.p_client_id, async () => {
+      if (state.onRpcEnter) await state.onRpcEnter(args.p_square_payment_id);
+
+      // Idempotency check (inside the lock, like the SQL function).
+      if (state.recordedPayments.has(args.p_square_payment_id)) {
+        return {
+          data: [{ newly_applied: false, applied_amount: 0 }],
+          error: null,
+        };
+      }
+
+      const amountDollars = args.p_amount_cents / 100;
+      const currentPaid = Number(state.client.amount_paid ?? 0);
+      const price = Number(state.client.package_price ?? 0);
+      const newPaid =
+        price > 0 ? Math.min(price, currentPaid + amountDollars) : currentPaid + amountDollars;
+      const applied = Math.max(0, newPaid - currentPaid);
+
+      state.client.amount_paid = newPaid;
+
+      const metadata: Record<string, unknown> = {
+        source: "square",
+        square_payment_id: args.p_square_payment_id,
+        amount: amountDollars,
+        applied_amount: applied,
+        match_method: args.p_match_method,
+      };
+      if (args.p_manual_resolution) metadata.manual_resolution = true;
+
+      state.activities.push({
+        client_id: args.p_client_id,
+        activity_type: "payment",
+        description: `Square payment synced — $${amountDollars.toFixed(2)}`,
+        metadata,
+      });
+      state.recordedPayments.add(args.p_square_payment_id);
+
+      return {
+        data: [{ newly_applied: true, applied_amount: applied }],
+        error: null,
+      };
+    });
   });
 
-  return { from } as unknown as Parameters<typeof applyPaymentOnce>[0];
+  return { rpc } as unknown as Parameters<typeof applyPaymentOnce>[0];
 }
 
 const baseArgs = {
@@ -90,41 +122,35 @@ const baseArgs = {
   matchMethod: "square_customer_id",
 } as const;
 
-describe("applyPaymentOnce", () => {
+describe("applyPaymentOnce (via apply_square_payment RPC)", () => {
   let state: MockState;
 
   beforeEach(() => {
     state = {
-      existingActivityForPayment: new Set(),
+      clientId: "client-1",
       client: { amount_paid: 100, package_price: 300 },
-      updates: [],
-      inserts: [],
+      recordedPayments: new Set(),
+      activities: [],
     };
   });
 
-  it("applies a normal payment: credits the amount and writes an activity marker", async () => {
+  it("applies a normal payment: credits the amount and records an activity", async () => {
     const supabase = makeSupabaseMock(state);
 
     const result = await applyPaymentOnce(supabase, { ...baseArgs });
 
     expect(result).toEqual({ credited: true, appliedAmount: 50, alreadyApplied: false });
-    // amount_paid moved 100 -> 150
-    expect(state.updates).toHaveLength(1);
-    expect(state.updates[0]).toMatchObject({
-      table: "clients",
-      values: { amount_paid: 150 },
-      eqId: "client-1",
-    });
-    // idempotency marker inserted with the square_payment_id
-    expect(state.inserts).toHaveLength(1);
-    expect(state.inserts[0].values).toMatchObject({
+    expect(state.client.amount_paid).toBe(150);
+    expect(state.activities).toHaveLength(1);
+    expect(state.activities[0]).toMatchObject({
       client_id: "client-1",
       activity_type: "payment",
     });
-    const md = state.inserts[0].values.metadata as Record<string, unknown>;
-    expect(md.square_payment_id).toBe("sq_pay_1");
-    expect(md.applied_amount).toBe(50);
-    expect(md.match_method).toBe("square_customer_id");
+    expect(state.activities[0].metadata).toMatchObject({
+      square_payment_id: "sq_pay_1",
+      applied_amount: 50,
+      match_method: "square_customer_id",
+    });
   });
 
   it("does NOT double-apply when the same webhook event is delivered twice", async () => {
@@ -134,19 +160,14 @@ describe("applyPaymentOnce", () => {
     expect(first.credited).toBe(true);
     expect(state.client.amount_paid).toBe(150);
 
-    // Second delivery for the same square_payment_id
     const second = await applyPaymentOnce(supabase, { ...baseArgs });
 
     expect(second).toEqual({ credited: false, appliedAmount: 0, alreadyApplied: true });
-    // amount_paid unchanged after the second call
     expect(state.client.amount_paid).toBe(150);
-    // no additional update, no additional activity row
-    expect(state.updates).toHaveLength(1);
-    expect(state.inserts).toHaveLength(1);
+    expect(state.activities).toHaveLength(1);
   });
 
   it("caps amount_paid at package_price when the payment would overpay", async () => {
-    // Client owes $50 ($250 paid of $300). Incoming payment is $200.
     state.client = { amount_paid: 250, package_price: 300 };
     const supabase = makeSupabaseMock(state);
 
@@ -155,19 +176,12 @@ describe("applyPaymentOnce", () => {
       amountCents: 20000, // $200
     });
 
-    // Only $50 of headroom is applied; the rest is dropped by the cap.
     expect(result).toEqual({ credited: true, appliedAmount: 50, alreadyApplied: false });
     expect(state.client.amount_paid).toBe(300);
-    expect(state.updates[0].values).toMatchObject({ amount_paid: 300 });
-
-    // Activity still records the original $200 payment amount and the actual $50 applied.
-    const md = state.inserts[0].values.metadata as Record<string, unknown>;
-    expect(md.amount).toBe(200);
-    expect(md.applied_amount).toBe(50);
+    expect(state.activities[0].metadata).toMatchObject({ amount: 200, applied_amount: 50 });
   });
 
-  it("applies correctly to a client with no existing amount_paid (null or 0)", async () => {
-    // Simulate a fresh client with amount_paid = null.
+  it("applies correctly to a client with no existing amount_paid (null)", async () => {
     state.client = { amount_paid: null, package_price: 400 };
     const supabase = makeSupabaseMock(state);
 
@@ -177,9 +191,52 @@ describe("applyPaymentOnce", () => {
     });
 
     expect(result).toEqual({ credited: true, appliedAmount: 125, alreadyApplied: false });
-    expect(state.updates[0].values).toMatchObject({ amount_paid: 125 });
-    const md = state.inserts[0].values.metadata as Record<string, unknown>;
-    expect(md.amount).toBe(125);
-    expect(md.applied_amount).toBe(125);
+    expect(state.client.amount_paid).toBe(125);
+    expect(state.activities[0].metadata).toMatchObject({ amount: 125, applied_amount: 125 });
+  });
+
+  it("serializes concurrent calls for the same square_payment_id — exactly one credit wins", async () => {
+    state.client = { amount_paid: 100, package_price: 300 };
+
+    // Force interleaving: hold the first RPC entry until the second has started,
+    // so both would race past a naive read-modify-write. The per-client lock
+    // (SELECT ... FOR UPDATE) must still serialize them.
+    let releaseFirst!: () => void;
+    const firstEntered = new Promise<void>((r) => {
+      releaseFirst = r;
+    });
+    let seen = 0;
+    state.onRpcEnter = async () => {
+      seen += 1;
+      if (seen === 1) {
+        // First call parks briefly to give the second call a chance to enter.
+        await firstEntered;
+      }
+    };
+
+    const supabase = makeSupabaseMock(state);
+
+    const p1 = applyPaymentOnce(supabase, { ...baseArgs });
+    const p2 = applyPaymentOnce(supabase, { ...baseArgs });
+
+    // Let the second call queue up on the row lock, then release the first.
+    await Promise.resolve();
+    await Promise.resolve();
+    releaseFirst();
+
+    const [r1, r2] = await Promise.all([p1, p2]);
+
+    const results = [r1, r2];
+    const applied = results.filter((r) => r.alreadyApplied === false);
+    const skipped = results.filter((r) => r.alreadyApplied === true);
+
+    expect(applied).toHaveLength(1);
+    expect(skipped).toHaveLength(1);
+    expect(applied[0]).toEqual({ credited: true, appliedAmount: 50, alreadyApplied: false });
+    expect(skipped[0]).toEqual({ credited: false, appliedAmount: 0, alreadyApplied: true });
+
+    // Only one credit lands on the client, and only one activity row is written.
+    expect(state.client.amount_paid).toBe(150);
+    expect(state.activities).toHaveLength(1);
   });
 });

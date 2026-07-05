@@ -207,6 +207,7 @@ function NotesLedgerPage() {
   const [skippedReviews, setSkippedReviews] = useState<Set<string>>(new Set());
   const [activeCategories, setActiveCategories] = useState<Set<ReviewCategory>>(new Set());
   const [recentlyApplied, setRecentlyApplied] = useState<RecentlyApplied[]>([]);
+  const [forcedRows, setForcedRows] = useState<Set<string>>(new Set());
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
@@ -232,6 +233,7 @@ function NotesLedgerPage() {
       setSkippedReviews(new Set());
       setActiveCategories(new Set());
       setRecentlyApplied([]);
+      setForcedRows(new Set());
       toast.success(`Parsed ${r.parsed_count} rows`);
     },
     onError: (e: Error) => toast.error(e.message),
@@ -244,18 +246,27 @@ function NotesLedgerPage() {
       if (!preview) throw new Error("Run preview first");
       const updates = preview.auto_updates
         .filter((r) => !excluded.has(r.client.id))
-        .map((r) => ({
-          client_id: r.client.id,
-          client_name: fullName(r.client),
-          parsed_name: r.parsed.name ?? null,
-          line_number: r.parsed.line_number,
-          resolution_row: ledgerResolutionInput(r.parsed),
-          package_price: r.changes.package_price.after,
-          package_total_visits: r.changes.package_total_visits.after,
-          package_start_date: r.changes.package_start_date.after,
-          amount_paid: r.changes.amount_paid.after,
-          appended_note: r.changes.internal_notes.appended,
-        }));
+        .map((r) => {
+          const forced = forcedRows.has(r.parsed.row_fingerprint);
+          // When forced, apply the parsed amount_paid verbatim (bypassing
+          // the monotonic guard baked into changes.amount_paid.after).
+          const parsedPaid = r.parsed.amount_paid !== null
+            ? r.parsed.amount_paid
+            : r.changes.amount_paid.after;
+          return {
+            client_id: r.client.id,
+            client_name: fullName(r.client),
+            parsed_name: r.parsed.name ?? null,
+            line_number: r.parsed.line_number,
+            resolution_row: ledgerResolutionInput(r.parsed),
+            package_price: r.changes.package_price.after,
+            package_total_visits: r.changes.package_total_visits.after,
+            package_start_date: r.changes.package_start_date.after,
+            amount_paid: forced ? parsedPaid : r.changes.amount_paid.after,
+            appended_note: r.changes.internal_notes.appended,
+            force: forced,
+          };
+        });
       return applyFn({ data: { updates } });
     },
     onSuccess: (r) => {
@@ -278,8 +289,8 @@ function NotesLedgerPage() {
   });
 
   const reviewApplyMut = useMutation({
-    mutationFn: async (args: { row: ReviewRow; client: MatchClient }) => {
-      const { row, client } = args;
+    mutationFn: async (args: { row: ReviewRow; client: MatchClient; force?: boolean }) => {
+      const { row, client, force } = args;
       const price = row.package_price ?? Number(client.package_price ?? 0);
       const visits = row.package_total_visits ?? Number(client.package_total_visits ?? 0);
       const startDate = row.package_start_date ?? client.package_start_date;
@@ -302,6 +313,7 @@ function NotesLedgerPage() {
               package_start_date: startDate,
               amount_paid: paid,
               appended_note: appended,
+              force: force === true,
             },
           ],
         },
@@ -615,6 +627,15 @@ function NotesLedgerPage() {
                     row={r}
                     excluded={excluded.has(r.client.id)}
                     result={result}
+                    forced={forcedRows.has(r.parsed.row_fingerprint)}
+                    onToggleForce={() => {
+                      setForcedRows((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(r.parsed.row_fingerprint)) next.delete(r.parsed.row_fingerprint);
+                        else next.add(r.parsed.row_fingerprint);
+                        return next;
+                      });
+                    }}
                     onToggle={() => {
                       const next = new Set(excluded);
                       if (next.has(r.client.id)) next.delete(r.client.id);
@@ -713,12 +734,27 @@ function NotesLedgerPage() {
                   key={r.row_fingerprint}
                   row={r}
                   selectedClientId={reviewSelection.get(r.line_number) ?? null}
+                  forced={forcedRows.has(r.row_fingerprint)}
+                  onToggleForce={() => {
+                    setForcedRows((prev) => {
+                      const next = new Set(prev);
+                      if (next.has(r.row_fingerprint)) next.delete(r.row_fingerprint);
+                      else next.add(r.row_fingerprint);
+                      return next;
+                    });
+                  }}
                   onSelect={(clientId) => {
                     const next = new Map(reviewSelection);
                     next.set(r.line_number, clientId);
                     setReviewSelection(next);
                   }}
-                  onApply={(client) => reviewApplyMut.mutate({ row: r, client })}
+                  onApply={(client) =>
+                    reviewApplyMut.mutate({
+                      row: r,
+                      client,
+                      force: forcedRows.has(r.row_fingerprint),
+                    })
+                  }
                   onSkip={() => resolveReviewMut.mutate({ row: r, status: "skipped" })}
                   onMarkResolved={() => resolveReviewMut.mutate({ row: r, status: "resolved" })}
                   applying={reviewApplyMut.isPending || resolveReviewMut.isPending}
@@ -881,11 +917,15 @@ function AutoUpdateCard({
   excluded,
   onToggle,
   result,
+  forced,
+  onToggleForce,
 }: {
   row: AutoUpdateRow;
   excluded: boolean;
   onToggle: () => void;
   result?: ApplyRowResult;
+  forced: boolean;
+  onToggleForce: () => void;
 }) {
   const c = row.changes;
   const border = result?.status === "error"
@@ -944,6 +984,28 @@ function AutoUpdateCard({
         <span className="font-medium">Review persistence:</span> Unresolved — no saved review decision yet
         <span className="ml-2 font-mono">{row.parsed.row_fingerprint}</span>
       </div>
+      <label
+        className={`mt-2 flex items-start gap-2 rounded border p-2 text-xs ${
+          forced ? "border-rose-400 bg-rose-50 text-rose-900" : "border-slate-200 bg-white text-slate-700"
+        }`}
+      >
+        <input type="checkbox" className="mt-0.5" checked={forced} onChange={onToggleForce} />
+        <span>
+          <span className="font-semibold">Force update (bypass monotonic amount_paid guard)</span>
+          {forced && row.parsed.amount_paid !== null && row.parsed.amount_paid !== c.amount_paid.after && (
+            <span className="block">
+              Will write amount_paid ={" "}
+              <span className="font-semibold">{formatCurrency(row.parsed.amount_paid)}</span> (parsed
+              from note) instead of the preview value{" "}
+              <span className="font-semibold">{formatCurrency(c.amount_paid.after)}</span>.
+            </span>
+          )}
+          <span className="block text-[11px] opacity-80">
+            Use only when the Hub value is known to be wrong (e.g. corrupted by a prior bad merge).
+            Audit trail records forced: true and the previous amount.
+          </span>
+        </span>
+      </label>
     </div>
   );
 }
@@ -982,6 +1044,8 @@ function ReviewCard({
   onSkip,
   onMarkResolved,
   applying,
+  forced,
+  onToggleForce,
 }: {
   row: ReviewRow;
   selectedClientId: string | null;
@@ -990,6 +1054,8 @@ function ReviewCard({
   onSkip: () => void;
   onMarkResolved: () => void;
   applying: boolean;
+  forced: boolean;
+  onToggleForce: () => void;
 }) {
   const selectedClient = row.candidates.find((c) => c.id === selectedClientId) ?? null;
   const resolutionText =
@@ -1137,6 +1203,25 @@ function ReviewCard({
         </details>
       )}
 
+
+      <label className={`mt-3 flex items-start gap-2 rounded border p-2 text-xs ${forced ? "border-rose-400 bg-rose-50 text-rose-900" : "border-slate-200 bg-white text-slate-700"}`}>
+        <input
+          type="checkbox"
+          className="mt-0.5"
+          checked={forced}
+          onChange={onToggleForce}
+        />
+        <span>
+          <span className="font-semibold">Force update (bypass monotonic amount_paid guard)</span>
+          <span className="block text-[11px] opacity-80">
+            Applies the note's parsed amount_paid even if it is lower than the
+            client's current value, and allows package_price below current paid.
+            Use only when you've manually verified the Hub value is wrong
+            (e.g. corrupted by a prior bad merge). The activity log records
+            <code className="mx-1">forced: true</code> and the previous amount.
+          </span>
+        </span>
+      </label>
 
       <div className="mt-3 flex flex-wrap gap-2">
         <Button

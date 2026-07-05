@@ -113,7 +113,7 @@ export const Route = createFileRoute("/api/public/square/webhook")({
 
         const eventType = event.type ?? "unknown";
         const obj = event.data?.object ?? {};
-        console.log(
+        console.info(
           `[square-webhook] event_type=${eventType} ` +
             `customer_id=${obj.customer?.id ?? obj.payment?.customer_id ?? obj.booking?.customer_id ?? "none"} ` +
             `payment_id=${obj.payment?.id ?? "none"} booking_id=${obj.booking?.id ?? "none"}`,

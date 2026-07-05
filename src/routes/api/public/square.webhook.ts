@@ -156,9 +156,9 @@ export const Route = createFileRoute("/api/public/square/webhook")({
               raw_event: event as unknown as never,
             });
           } catch {
-            // Swallow logging errors so we always return 200.
+            // Logging failed; still return 500 so Square retries the webhook.
           }
-          return new Response("ok");
+          return new Response("Internal error", { status: 500 });
         }
       },
     },

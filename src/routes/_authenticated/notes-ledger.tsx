@@ -725,12 +725,27 @@ function NotesLedgerPage() {
                   key={r.row_fingerprint}
                   row={r}
                   selectedClientId={reviewSelection.get(r.line_number) ?? null}
+                  forced={forcedRows.has(r.row_fingerprint)}
+                  onToggleForce={() => {
+                    setForcedRows((prev) => {
+                      const next = new Set(prev);
+                      if (next.has(r.row_fingerprint)) next.delete(r.row_fingerprint);
+                      else next.add(r.row_fingerprint);
+                      return next;
+                    });
+                  }}
                   onSelect={(clientId) => {
                     const next = new Map(reviewSelection);
                     next.set(r.line_number, clientId);
                     setReviewSelection(next);
                   }}
-                  onApply={(client) => reviewApplyMut.mutate({ row: r, client })}
+                  onApply={(client) =>
+                    reviewApplyMut.mutate({
+                      row: r,
+                      client,
+                      force: forcedRows.has(r.row_fingerprint),
+                    })
+                  }
                   onSkip={() => resolveReviewMut.mutate({ row: r, status: "skipped" })}
                   onMarkResolved={() => resolveReviewMut.mutate({ row: r, status: "resolved" })}
                   applying={reviewApplyMut.isPending || resolveReviewMut.isPending}

@@ -195,6 +195,39 @@ describe("applyPaymentOnce (via apply_square_payment RPC)", () => {
     expect(state.activities[0].metadata).toMatchObject({ amount: 125, applied_amount: 125 });
   });
 
+  it("applies partial payments sequentially: two $100 credits on a $375 package", async () => {
+    state.client = { amount_paid: 0, package_price: 375 };
+    const supabase = makeSupabaseMock(state);
+
+    // First $100 payment
+    const first = await applyPaymentOnce(supabase, {
+      ...baseArgs,
+      squarePaymentId: "sq_pay_100a",
+      amountCents: 10000,
+    });
+    expect(first).toEqual({ credited: true, appliedAmount: 100, alreadyApplied: false });
+    expect(state.client.amount_paid).toBe(100);
+    expect(state.activities).toHaveLength(1);
+    expect(state.activities[0].metadata).toMatchObject({
+      square_payment_id: "sq_pay_100a",
+      applied_amount: 100,
+    });
+
+    // Second $100 payment
+    const second = await applyPaymentOnce(supabase, {
+      ...baseArgs,
+      squarePaymentId: "sq_pay_100b",
+      amountCents: 10000,
+    });
+    expect(second).toEqual({ credited: true, appliedAmount: 100, alreadyApplied: false });
+    expect(state.client.amount_paid).toBe(200);
+    expect(state.activities).toHaveLength(2);
+    expect(state.activities[1].metadata).toMatchObject({
+      square_payment_id: "sq_pay_100b",
+      applied_amount: 100,
+    });
+  });
+
   it("serializes concurrent calls for the same square_payment_id — exactly one credit wins", async () => {
     state.client = { amount_paid: 100, package_price: 300 };
 

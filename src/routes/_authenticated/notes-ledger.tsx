@@ -627,6 +627,15 @@ function NotesLedgerPage() {
                     row={r}
                     excluded={excluded.has(r.client.id)}
                     result={result}
+                    forced={forcedRows.has(r.parsed.row_fingerprint)}
+                    onToggleForce={() => {
+                      setForcedRows((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(r.parsed.row_fingerprint)) next.delete(r.parsed.row_fingerprint);
+                        else next.add(r.parsed.row_fingerprint);
+                        return next;
+                      });
+                    }}
                     onToggle={() => {
                       const next = new Set(excluded);
                       if (next.has(r.client.id)) next.delete(r.client.id);

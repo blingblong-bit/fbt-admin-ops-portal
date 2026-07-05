@@ -769,11 +769,42 @@ function RetryAllButton() {
   const queryClient = useQueryClient();
   const retryAll = useServerFn(retryAllMatchedBlockedPayments);
   const mut = useMutation({
-    mutationFn: async () => retryAll({}),
+    mutationFn: async () => {
+      // Batched loop — server processes ~50 payments per call to stay under
+      // Cloudflare Workers' 1000-subrequest / 30s limit (each retry uses
+      // ~4-6 supabase calls). Loop until server reports done=true.
+      const agg = { applied: 0, already_applied: 0, blocked: 0, no_client: 0 };
+      let offset = 0;
+      let total = 0;
+      let processedTotal = 0;
+      const progressToast = toast.loading("Retry starting…");
+      try {
+        for (let i = 0; i < 20; i++) {
+          const r = await retryAll({ data: { offset } });
+          agg.applied += r.summary.applied;
+          agg.already_applied += r.summary.already_applied;
+          agg.blocked += r.summary.blocked;
+          agg.no_client += r.summary.no_client;
+          processedTotal += r.processed;
+          total = r.total_matched;
+          offset = r.next_offset;
+          toast.loading(
+            `Retry: ${processedTotal} of ~${total} processed…`,
+            { id: progressToast },
+          );
+          if (r.done) break;
+        }
+        toast.dismiss(progressToast);
+      } catch (e) {
+        toast.dismiss(progressToast);
+        throw e;
+      }
+      return { summary: agg, processed: processedTotal, total };
+    },
     onSuccess: (r) => {
       const s = r.summary;
       toast.success(
-        `Retry complete — ${s.applied} applied, ${s.already_applied} already applied, ${s.blocked} still blocked.`,
+        `Retry complete — ${r.processed} processed · ${s.applied} applied, ${s.already_applied} already applied, ${s.blocked} still blocked.`,
       );
       queryClient.invalidateQueries({ queryKey: ["square_payments_needs_review"] });
       queryClient.invalidateQueries({ queryKey: ["square_payments_pending"] });

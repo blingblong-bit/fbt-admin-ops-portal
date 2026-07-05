@@ -299,7 +299,8 @@ export const backfillProductionCustomers = createServerFn({ method: "POST" })
       }
     }
 
-    for (const cust of customers) {
+    const slice = customers.slice(offset, offset + batchSize);
+    for (const cust of slice) {
       try {
         const sqEmail = normEmail(cust.email_address);
         const sqPhone = normPhone(cust.phone_number);

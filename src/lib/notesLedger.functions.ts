@@ -148,8 +148,7 @@ function resolutionStateFor(
 }
 
 async function loadResolvedFingerprints(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  supabase: any,
+  supabase: SupabaseClient<Database>,
   fingerprints: string[],
 ): Promise<Map<string, StoredLedgerResolution>> {
   const unique = Array.from(new Set(fingerprints.filter(Boolean)));

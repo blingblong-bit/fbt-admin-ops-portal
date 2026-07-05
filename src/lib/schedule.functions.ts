@@ -74,31 +74,77 @@ export type ScheduleCheckResult = {
   error: string | null;
 };
 
-function ymd(d: Date): string {
-  const y = d.getUTCFullYear();
-  const m = String(d.getUTCMonth() + 1).padStart(2, "0");
-  const day = String(d.getUTCDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
+// Clinic operates in Tullahoma, TN. All week/day bucketing is done in this
+// local timezone so late-evening appointments don't roll into the next UTC day.
+const CLINIC_TZ = "America/Chicago";
+
+// Format an instant as YYYY-MM-DD in the clinic's local timezone.
+function ymdInTz(d: Date): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: CLINIC_TZ,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(d);
+  const get = (t: string) => parts.find((p) => p.type === t)!.value;
+  return `${get("year")}-${get("month")}-${get("day")}`;
 }
 
-function parseYmdUTC(s: string): Date {
+// Offset (minutes) of the clinic tz relative to UTC at the given instant.
+// Negative for America/Chicago (CST = -360, CDT = -300).
+function tzOffsetMinutes(d: Date): number {
+  const dtf = new Intl.DateTimeFormat("en-US", {
+    timeZone: CLINIC_TZ,
+    hour12: false,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+  const map: Record<string, string> = {};
+  for (const p of dtf.formatToParts(d)) if (p.type !== "literal") map[p.type] = p.value;
+  const hour = Number(map.hour) === 24 ? 0 : Number(map.hour);
+  const asUTC = Date.UTC(
+    Number(map.year),
+    Number(map.month) - 1,
+    Number(map.day),
+    hour,
+    Number(map.minute),
+    Number(map.second),
+  );
+  return (asUTC - d.getTime()) / 60000;
+}
+
+// Convert a clinic-local YYYY-MM-DD (calendar date) to the UTC instant of
+// midnight at the start of that day in the clinic timezone.
+function ymdLocalToInstant(s: string): Date {
   const [y, m, d] = s.split("-").map(Number);
-  return new Date(Date.UTC(y, m - 1, d));
+  const utcMidnight = Date.UTC(y, m - 1, d);
+  // Compute the tz offset for that moment and shift so the resulting instant
+  // renders as 00:00 in the clinic tz.
+  const off = tzOffsetMinutes(new Date(utcMidnight));
+  return new Date(utcMidnight - off * 60000);
 }
 
-function addDays(d: Date, n: number): Date {
-  const r = new Date(d.getTime());
-  r.setUTCDate(r.getUTCDate() + n);
-  return r;
+// Weekday (0=Sun..6=Sat) for a calendar date string. Purely calendar math —
+// no timezone needed since the date is already specified in local terms.
+function ymdWeekday(s: string): number {
+  const [y, m, d] = s.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d)).getUTCDay();
 }
 
-// Sunday-start week
-function weekRange(d: Date): { start: Date; end: Date } {
-  const dow = d.getUTCDay(); // 0=Sun
-  const start = addDays(d, -dow);
-  const end = addDays(start, 6);
-  return { start, end };
+function addDaysYmd(s: string, n: number): string {
+  const [y, m, d] = s.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  dt.setUTCDate(dt.getUTCDate() + n);
+  const yy = dt.getUTCFullYear();
+  const mm = String(dt.getUTCMonth() + 1).padStart(2, "0");
+  const dd = String(dt.getUTCDate()).padStart(2, "0");
+  return `${yy}-${mm}-${dd}`;
 }
+
 
 async function fetchSquareBookings(
   token: string,

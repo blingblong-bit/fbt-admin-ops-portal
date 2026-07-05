@@ -625,13 +625,20 @@ async function retryOnePayment(
     };
   }
 
-  // Existing activity guard — payment already recorded on client
-  const { data: existingActivity } = await supabaseAdmin
+  // Existing activity guard — payment already recorded on client.
+  // Fail closed on query error so we never skip idempotency silently.
+  const { data: existingActivity, error: guardErr } = await supabaseAdmin
     .from("client_activities")
     .select("id")
     .eq("client_id", payment.client_id)
     .contains("metadata", { square_payment_id: payment.square_payment_id })
     .limit(1);
+  if (guardErr) {
+    console.error(
+      `[payment-retry] Idempotency guard query failed for client=${payment.client_id} payment=${payment.square_payment_id}: ${guardErr.message ?? String(guardErr)}`,
+    );
+    throw guardErr;
+  }
   if (existingActivity && existingActivity.length > 0) {
     await supabaseAdmin
       .from("square_payments")

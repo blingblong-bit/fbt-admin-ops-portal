@@ -912,6 +912,22 @@ function StatCard({
   );
 }
 
+function SquarePaymentWarning({ client }: { client: MatchClient }) {
+  const p = client.latest_square_payment;
+  if (!p) return null;
+  return (
+    <div className="mt-2 rounded border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900">
+      <span className="font-semibold">⚠ Square payment synced {formatDate(p.synced_at)}</span>
+      {" — "}${p.amount.toFixed(2)} confirmed via Square after this note was likely written.
+      Hub may be the more accurate source; do not force-lower amount_paid without
+      re-checking Square first.
+      {p.square_payment_id && (
+        <span className="ml-1 font-mono opacity-70">({p.square_payment_id})</span>
+      )}
+    </div>
+  );
+}
+
 function AutoUpdateCard({
   row,
   excluded,
@@ -984,6 +1000,8 @@ function AutoUpdateCard({
         <span className="font-medium">Review persistence:</span> Unresolved — no saved review decision yet
         <span className="ml-2 font-mono">{row.parsed.row_fingerprint}</span>
       </div>
+      <SquarePaymentWarning client={row.client} />
+
       <label
         className={`mt-2 flex items-start gap-2 rounded border p-2 text-xs ${
           forced ? "border-rose-400 bg-rose-50 text-rose-900" : "border-slate-200 bg-white text-slate-700"
@@ -1175,10 +1193,12 @@ function ReviewCard({
                     <span className="text-slate-500">Notes:</span> {c.internal_notes}
                   </div>
                 )}
+                <SquarePaymentWarning client={c} />
               </label>
             );
           })}
         </div>
+
       ) : (
         <div className="mt-3 text-xs text-slate-500">No active candidate clients found for this row.</div>
       )}

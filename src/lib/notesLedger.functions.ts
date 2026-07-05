@@ -10,6 +10,12 @@ import {
   type ParsedRow,
 } from "./notesLedger";
 
+export type LatestSquarePayment = {
+  synced_at: string;
+  amount: number;
+  square_payment_id: string | null;
+};
+
 export type MatchClient = {
   id: string;
   first_name: string;
@@ -23,6 +29,7 @@ export type MatchClient = {
   package_start_date: string | null;
   amount_paid: number;
   internal_notes: string | null;
+  latest_square_payment: LatestSquarePayment | null;
 };
 
 export type RowDiagnostic = {
@@ -301,9 +308,36 @@ async function loadAllClients(
       .range(from, from + pageSize - 1);
     if (error) throw error;
     if (!data || data.length === 0) break;
-    out.push(...(data as MatchClient[]));
+    for (const row of data) {
+      out.push({ ...(row as Omit<MatchClient, "latest_square_payment">), latest_square_payment: null });
+    }
     if (data.length < pageSize) break;
     from += pageSize;
+  }
+
+  // Enrich with most-recent Square-sourced payment activity per client so the
+  // UI can warn admins before a Notes-ledger apply lowers a paid amount that
+  // Square has already confirmed post-import.
+  const { data: acts, error: actsErr } = await supabase
+    .from("client_activities")
+    .select("client_id, created_at, metadata")
+    .eq("activity_type", "payment")
+    .order("created_at", { ascending: false });
+  if (actsErr) throw actsErr;
+  const latestByClient = new Map<string, LatestSquarePayment>();
+  for (const a of acts ?? []) {
+    const meta = (a.metadata ?? {}) as Record<string, unknown>;
+    if (meta.source !== "square") continue;
+    if (!a.client_id || latestByClient.has(a.client_id)) continue;
+    const amt = Number(meta.amount ?? meta.applied_amount ?? 0);
+    latestByClient.set(a.client_id, {
+      synced_at: a.created_at,
+      amount: Number.isFinite(amt) ? amt : 0,
+      square_payment_id: (meta.square_payment_id as string) ?? null,
+    });
+  }
+  for (const c of out) {
+    c.latest_square_payment = latestByClient.get(c.id) ?? null;
   }
   return out;
 }

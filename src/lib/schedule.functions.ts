@@ -370,23 +370,28 @@ export const getScheduleCheck = createServerFn({ method: "GET" })
   })
   .handler(async ({ data, context }): Promise<ScheduleCheckResult> => {
     const token = process.env.SQUARE_PRODUCTION_ACCESS_TOKEN;
-    const selected = parseYmdUTC(data.date);
-    const { start: weekStart, end: weekEnd } = weekRange(selected);
-    const nextWeekStart = addDays(weekEnd, 1);
-    const nextWeekEnd = addDays(nextWeekStart, 6);
+    const selectedYmd = data.date;
+    const dow = ymdWeekday(selectedYmd); // 0=Sun in clinic-local calendar
+    const weekStartYmd = addDaysYmd(selectedYmd, -dow);
+    const weekEndYmd = addDaysYmd(weekStartYmd, 6);
+    const nextWeekStartYmd = addDaysYmd(weekEndYmd, 1);
+    const nextWeekEndYmd = addDaysYmd(nextWeekStartYmd, 6);
 
-    // Fetch window: beginning of selected week through end of next week (max ~14 days, well under Square's 31-day limit)
-    const fetchStart = weekStart;
-    const fetchEnd = nextWeekEnd;
+    // Fetch window: local midnight at week start through the last instant of
+    // next week's Saturday in clinic-local time (America/Chicago). Converted
+    // to UTC ISO for the Square API. Max ~14 local days, well under Square's
+    // 31-day limit.
+    const fetchStart = ymdLocalToInstant(weekStartYmd);
+    const fetchEnd = new Date(ymdLocalToInstant(addDaysYmd(nextWeekEndYmd, 1)).getTime() - 1);
     const startIso = fetchStart.toISOString();
     const endIso = fetchEnd.toISOString();
 
     const empty: ScheduleCheckResult = {
       selected_date: data.date,
-      week_start: ymd(weekStart),
-      week_end: ymd(weekEnd),
-      next_week_start: ymd(nextWeekStart),
-      next_week_end: ymd(nextWeekEnd),
+      week_start: weekStartYmd,
+      week_end: weekEndYmd,
+      next_week_start: nextWeekStartYmd,
+      next_week_end: nextWeekEndYmd,
       selected_day: [],
       this_week: [],
       next_week: [],
@@ -498,13 +503,9 @@ export const getScheduleCheck = createServerFn({ method: "GET" })
     // Only show appointments that aren't cancelled/no-show by default? Keep all but mark via status.
     const active = all.filter((a) => !/(CANCELLED|DECLINED|NO_SHOW)/i.test(a.status));
 
-    const selectedYmd = data.date;
-    const weekStartYmd = ymd(weekStart);
-    const weekEndYmd = ymd(weekEnd);
-    const nextWeekStartYmd = ymd(nextWeekStart);
-    const nextWeekEndYmd = ymd(nextWeekEnd);
-
-    const dayOf = (iso: string) => iso.slice(0, 10);
+    // Bucket by clinic-local calendar day (America/Chicago), so a 7pm
+    // appointment doesn't leak into the next UTC day.
+    const dayOf = (iso: string) => ymdInTz(new Date(iso));
     const inRange = (iso: string, a: string, b: string) => {
       const d = dayOf(iso);
       return d >= a && d <= b;

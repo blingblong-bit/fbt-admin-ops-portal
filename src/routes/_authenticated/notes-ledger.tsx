@@ -1177,10 +1177,12 @@ function ReviewCard({
                     <span className="text-slate-500">Notes:</span> {c.internal_notes}
                   </div>
                 )}
+                <SquarePaymentWarning client={c} />
               </label>
             );
           })}
         </div>
+
       ) : (
         <div className="mt-3 text-xs text-slate-500">No active candidate clients found for this row.</div>
       )}

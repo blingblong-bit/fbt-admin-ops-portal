@@ -32,6 +32,12 @@ export type BackfillResult = {
   skipped_already_linked: number;
   skipped_deleted: number;
   errors: string[];
+  // Progress fields (batched execution)
+  processed: number;
+  total: number;
+  next_offset: number;
+  done: boolean;
+  batch_size: number;
 };
 
 export type ReviewRelevance =

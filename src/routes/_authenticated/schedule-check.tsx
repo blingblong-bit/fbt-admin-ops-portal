@@ -26,9 +26,11 @@ import {
 import { formatCurrency, formatDate, formatDateTimeLocal } from "@/lib/clients";
 import {
   completeVisitForClient,
+  getContactedClientIds,
   getScheduleCheck,
   linkSquareCustomer,
   listLinkableClients,
+  markClientContacted,
   type LinkableClient,
   type NeedsScheduleClient,
   type ScheduleAppointment,
@@ -41,6 +43,7 @@ import {
   listSquareCustomerReviews,
   type SquareCustomerReview,
 } from "@/lib/backfill.functions";
+
 
 export const Route = createFileRoute("/_authenticated/schedule-check")({
   head: () => ({ meta: [{ title: "Schedule Check — FIT Beyond Therapy" }] }),
@@ -384,14 +387,11 @@ function ScheduleCheckPage() {
           filter={q}
         />
 
-        <ScheduleSection
-          title="Scheduled This Week But Not Next Week"
-          description="Clients with an appointment this week but nothing on the books next week — good candidates to re-book."
+        <NotNextWeekSection
           appointments={thisWeekNotNextWeek}
-          defaultOpen={false}
-          groupBy="dayTime"
           filter={q}
         />
+
 
         <ClientsNeedingCard
           title="Needs Next Week Scheduling"
@@ -1833,3 +1833,154 @@ function ReviewRow({
     </div>
   );
 }
+
+function NotNextWeekSection({
+  appointments,
+  filter = "",
+}: {
+  appointments: ScheduleAppointment[];
+  filter?: string;
+}) {
+  const q = filter.trim();
+  const filtered = q ? appointments.filter((a) => matchesSearch(a, q)) : appointments;
+
+  // Dedupe to one row per client, keeping earliest appointment this week.
+  const perClient = useMemo(() => {
+    const map = new Map<string, ScheduleAppointment>();
+    for (const a of filtered) {
+      if (!a.client) continue;
+      const existing = map.get(a.client.id);
+      if (!existing || a.start_at < existing.start_at) map.set(a.client.id, a);
+    }
+    return Array.from(map.values());
+  }, [filtered]);
+
+  const clientIds = useMemo(() => perClient.map((a) => a.client!.id), [perClient]);
+
+  const fetchContacted = useServerFn(getContactedClientIds);
+  const markContacted = useServerFn(markClientContacted);
+  const qc = useQueryClient();
+
+  const contactedQuery = useQuery({
+    queryKey: ["contacted-not-next-week", clientIds.slice().sort().join(",")],
+    queryFn: () => fetchContacted({ data: { clientIds } }),
+    enabled: clientIds.length > 0,
+    staleTime: 60_000,
+  });
+
+  const contactedSet = useMemo(
+    () => new Set<string>(contactedQuery.data?.client_ids ?? []),
+    [contactedQuery.data],
+  );
+
+  const markMut = useMutation({
+    mutationFn: (clientId: string) => markContacted({ data: { clientId } }),
+    onSuccess: (_r, clientId) => {
+      toast.success("Marked as contacted");
+      qc.setQueriesData<{ client_ids: string[] } | undefined>(
+        { queryKey: ["contacted-not-next-week"] },
+        (prev) => {
+          const cur = new Set(prev?.client_ids ?? []);
+          cur.add(clientId);
+          return { client_ids: Array.from(cur) };
+        },
+      );
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  // Sort: contacted first, then by appointment time.
+  const sorted = useMemo(() => {
+    return [...perClient].sort((a, b) => {
+      const ac = contactedSet.has(a.client!.id) ? 0 : 1;
+      const bc = contactedSet.has(b.client!.id) ? 0 : 1;
+      if (ac !== bc) return ac - bc;
+      return a.start_at.localeCompare(b.start_at);
+    });
+  }, [perClient, contactedSet]);
+
+  const isOpen = q.length > 0 && sorted.length > 0;
+  const contactedCount = sorted.reduce(
+    (n, a) => (contactedSet.has(a.client!.id) ? n + 1 : n),
+    0,
+  );
+
+  return (
+    <Card>
+      <details open={isOpen} className="group">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 p-6">
+          <div className="min-w-0">
+            <CardTitle>
+              Scheduled This Week But Not Next Week{" "}
+              <span className="text-sm font-normal text-slate-500">
+                ({sorted.length}
+                {contactedCount > 0 ? ` · ${contactedCount} contacted` : ""})
+              </span>
+            </CardTitle>
+            <CardDescription className="mt-1">
+              Clients with an appointment this week but nothing on the books next week —
+              good candidates to re-book. Once a client books next week, they drop out of
+              this list automatically.
+            </CardDescription>
+          </div>
+          <ChevronDown className="h-5 w-5 shrink-0 text-slate-500 transition-transform group-open:rotate-180" />
+        </summary>
+        <div className="px-6 pb-6">
+          {sorted.length === 0 ? (
+            <EmptyState
+              text={q ? "No scheduled appointments found for this client." : "No clients."}
+            />
+          ) : (
+            <div className="space-y-2">
+              {sorted.map((a) => {
+                const c = a.client!;
+                const isContacted = contactedSet.has(c.id);
+                const busy = markMut.isPending && markMut.variables === c.id;
+                return (
+                  <div
+                    key={c.id}
+                    className={`flex flex-wrap items-center gap-3 rounded-lg border bg-white p-3 shadow-sm ${
+                      isContacted ? "border-emerald-300 bg-emerald-50/40" : ""
+                    }`}
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <div className="truncate text-sm font-semibold text-slate-900">
+                          {c.first_name} {c.last_name}
+                        </div>
+                        {isContacted && (
+                          <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-800">
+                            Contacted ✓
+                          </span>
+                        )}
+                      </div>
+                      <div className="mt-0.5 text-xs text-slate-500">
+                        {formatDayHeader(a.start_at.slice(0, 10))} · {formatTimeLocal(a.start_at)}
+                        {a.team_member_name ? ` · ${a.team_member_name}` : ""}
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button asChild size="sm" variant="outline">
+                        <Link to="/clients/$id" params={{ id: c.id }}>
+                          View
+                        </Link>
+                      </Button>
+                      <Button
+                        size="sm"
+                        disabled={isContacted || busy}
+                        onClick={() => markMut.mutate(c.id)}
+                      >
+                        {isContacted ? "Contacted ✓" : busy ? "…" : "Mark as Contacted"}
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </details>
+    </Card>
+  );
+}
+

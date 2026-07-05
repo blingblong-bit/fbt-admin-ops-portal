@@ -92,7 +92,7 @@ export const Route = createFileRoute("/api/public/square/webhook")({
         }
 
         const verified = signature ? verifySignature(notificationUrl, rawBody, signature, sigKey) : false;
-        console.log(`[square-webhook] signature_verified=${verified}`);
+        console.info(`[square-webhook] signature_verified=${verified}`);
         if (!verified) {
           return new Response("Invalid signature", { status: 401 });
         }

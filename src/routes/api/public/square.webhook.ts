@@ -530,8 +530,7 @@ async function handlePaymentEvent(supabaseAdmin: SupabaseClient<Database>, event
 }
 
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function handleBookingEvent(supabaseAdmin: any, eventType: string, event: SquareEvent) {
+async function handleBookingEvent(supabaseAdmin: SupabaseClient<Database>, eventType: string, event: SquareEvent) {
   const booking = event.data?.object?.booking;
   const bookingId = booking?.id ?? event.data?.id ?? null;
   const status = (booking?.status ?? "").toString().toUpperCase();

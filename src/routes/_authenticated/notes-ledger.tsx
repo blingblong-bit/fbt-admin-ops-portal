@@ -246,18 +246,27 @@ function NotesLedgerPage() {
       if (!preview) throw new Error("Run preview first");
       const updates = preview.auto_updates
         .filter((r) => !excluded.has(r.client.id))
-        .map((r) => ({
-          client_id: r.client.id,
-          client_name: fullName(r.client),
-          parsed_name: r.parsed.name ?? null,
-          line_number: r.parsed.line_number,
-          resolution_row: ledgerResolutionInput(r.parsed),
-          package_price: r.changes.package_price.after,
-          package_total_visits: r.changes.package_total_visits.after,
-          package_start_date: r.changes.package_start_date.after,
-          amount_paid: r.changes.amount_paid.after,
-          appended_note: r.changes.internal_notes.appended,
-        }));
+        .map((r) => {
+          const forced = forcedRows.has(r.parsed.row_fingerprint);
+          // When forced, apply the parsed amount_paid verbatim (bypassing
+          // the monotonic guard baked into changes.amount_paid.after).
+          const parsedPaid = r.parsed.amount_paid !== null
+            ? r.parsed.amount_paid
+            : r.changes.amount_paid.after;
+          return {
+            client_id: r.client.id,
+            client_name: fullName(r.client),
+            parsed_name: r.parsed.name ?? null,
+            line_number: r.parsed.line_number,
+            resolution_row: ledgerResolutionInput(r.parsed),
+            package_price: r.changes.package_price.after,
+            package_total_visits: r.changes.package_total_visits.after,
+            package_start_date: r.changes.package_start_date.after,
+            amount_paid: forced ? parsedPaid : r.changes.amount_paid.after,
+            appended_note: r.changes.internal_notes.appended,
+            force: forced,
+          };
+        });
       return applyFn({ data: { updates } });
     },
     onSuccess: (r) => {

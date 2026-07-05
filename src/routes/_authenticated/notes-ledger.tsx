@@ -984,6 +984,28 @@ function AutoUpdateCard({
         <span className="font-medium">Review persistence:</span> Unresolved — no saved review decision yet
         <span className="ml-2 font-mono">{row.parsed.row_fingerprint}</span>
       </div>
+      <label
+        className={`mt-2 flex items-start gap-2 rounded border p-2 text-xs ${
+          forced ? "border-rose-400 bg-rose-50 text-rose-900" : "border-slate-200 bg-white text-slate-700"
+        }`}
+      >
+        <input type="checkbox" className="mt-0.5" checked={forced} onChange={onToggleForce} />
+        <span>
+          <span className="font-semibold">Force update (bypass monotonic amount_paid guard)</span>
+          {forced && row.parsed.amount_paid !== null && row.parsed.amount_paid !== c.amount_paid.after && (
+            <span className="block">
+              Will write amount_paid ={" "}
+              <span className="font-semibold">{formatCurrency(row.parsed.amount_paid)}</span> (parsed
+              from note) instead of the preview value{" "}
+              <span className="font-semibold">{formatCurrency(c.amount_paid.after)}</span>.
+            </span>
+          )}
+          <span className="block text-[11px] opacity-80">
+            Use only when the Hub value is known to be wrong (e.g. corrupted by a prior bad merge).
+            Audit trail records forced: true and the previous amount.
+          </span>
+        </span>
+      </label>
     </div>
   );
 }

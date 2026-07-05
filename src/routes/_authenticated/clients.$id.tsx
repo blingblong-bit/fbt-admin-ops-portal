@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { fallback, zodValidator } from "@tanstack/zod-adapter";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
+import { applyPaymentOnce } from "@/lib/payment-apply";
 import { AppShell } from "@/components/AppShell";
 import { StatusBadge } from "@/components/StatusBadge";
 import { getScheduledClientIds, getClientAppointments, type ClientAppointment } from "@/lib/schedule.functions";
@@ -356,18 +357,25 @@ function PaymentDialog({
       const amt = Number(amount);
       if (!(amt > 0)) throw new Error("Enter an amount greater than 0");
       if (amt > owed) throw new Error(`Cannot exceed balance of ${formatCurrency(owed)}`);
-      const newPaid = Number(client.amount_paid) + amt;
-      const { error } = await supabase
-        .from("clients")
-        .update({ amount_paid: newPaid })
-        .eq("id", client.id);
-      if (error) throw error;
-      await supabase.from("client_activities").insert({
-        client_id: client.id,
-        activity_type: "payment",
-        description: `Payment of ${formatCurrency(amt)} recorded`,
-        metadata: { amount: amt },
+      // Route manual entries through the same apply_square_payment RPC that
+      // webhook payments use. The RPC locks the client row, checks
+      // idempotency by payment id, caps at package_price, updates
+      // amount_paid, and inserts the client_activities row — all in one
+      // transaction. Using a synthetic manual:<uuid> id guarantees a
+      // simultaneous webhook and manual entry can't overwrite each other:
+      // the two calls serialize on the row lock, and each is idempotent
+      // on its own unique payment id.
+      const amountCents = Math.round(amt * 100);
+      const result = await applyPaymentOnce(supabase, {
+        clientId: client.id,
+        squarePaymentId: `manual:${crypto.randomUUID()}`,
+        amountCents,
+        matchMethod: "manual",
+        manualResolution: true,
       });
+      if (!result.credited) {
+        throw new Error("Payment was not applied (duplicate id — try again).");
+      }
     },
     onSuccess: () => {
       toast.success("Payment recorded");

@@ -263,9 +263,8 @@ async function handleCustomerEvent(supabaseAdmin: SupabaseClient<Database>, even
   });
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function matchClient(
-  supabaseAdmin: any,
+  supabaseAdmin: SupabaseClient<Database>,
   {
     existingClientId,
     squareCustomerId,

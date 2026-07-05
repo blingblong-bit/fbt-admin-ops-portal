@@ -466,6 +466,19 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      apply_square_payment: {
+        Args: {
+          p_amount_cents: number
+          p_client_id: string
+          p_manual_resolution?: boolean
+          p_match_method: string
+          p_square_payment_id: string
+        }
+        Returns: {
+          applied_amount: number
+          newly_applied: boolean
+        }[]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]

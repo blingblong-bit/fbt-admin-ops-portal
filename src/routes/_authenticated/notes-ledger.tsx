@@ -984,6 +984,8 @@ function AutoUpdateCard({
         <span className="font-medium">Review persistence:</span> Unresolved — no saved review decision yet
         <span className="ml-2 font-mono">{row.parsed.row_fingerprint}</span>
       </div>
+      <SquarePaymentWarning client={row.client} />
+
       <label
         className={`mt-2 flex items-start gap-2 rounded border p-2 text-xs ${
           forced ? "border-rose-400 bg-rose-50 text-rose-900" : "border-slate-200 bg-white text-slate-700"

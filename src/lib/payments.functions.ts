@@ -591,8 +591,7 @@ export type RetryPaymentResult = {
 };
 
 async function retryOnePayment(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  supabaseAdmin: any,
+  supabaseAdmin: SupabaseClient<Database>,
   paymentRowId: string,
 ): Promise<RetryPaymentResult> {
   const { data: payment, error: pErr } = await supabaseAdmin

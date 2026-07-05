@@ -212,89 +212,6 @@ function Dashboard() {
     return [...searched].sort((a, b) => fullName(a).localeCompare(fullName(b)));
   }, [visibleClients, filter, search, scheduledSet]);
 
-
-  const tiles: TileDef[] = [
-    {
-      key: "payment_due",
-      label: "Payment Due",
-      icon: <CircleDollarSign className="h-5 w-5" />,
-      count: counts.payment_due,
-      money: counts.payment_due_total,
-      moneyLabel: "outstanding",
-      tone: "red",
-    },
-    {
-      key: "not_scheduled",
-      label: "Not Scheduled",
-      icon: <CalendarClock className="h-5 w-5" />,
-      count: counts.not_scheduled,
-      tone: "amber",
-    },
-    {
-      key: "almost_finished",
-      label: "Almost Finished",
-      icon: <Hourglass className="h-5 w-5" />,
-      count: counts.almost_finished,
-      tone: "amber",
-    },
-    {
-      key: "critical",
-      label: "Critical",
-      icon: <AlertTriangle className="h-5 w-5" />,
-      count: counts.critical,
-      money: counts.critical_total,
-      moneyLabel: "outstanding",
-      tone: "red",
-    },
-    {
-      key: "package_complete",
-      label: "Package Complete",
-      icon: <CircleSlash className="h-5 w-5" />,
-      count: counts.package_complete,
-      tone: "slate",
-    },
-    {
-      key: "all",
-      label: "All Active",
-      icon: <Users className="h-5 w-5" />,
-      count: counts.all,
-      tone: "slate",
-    },
-  ];
-
-  return (
-    <AppShell>
-      <div className="mb-4 flex flex-wrap items-end justify-between gap-3 md:mb-8">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">Today</h1>
-          <p className="mt-1 text-sm text-slate-500">
-            {isLoading
-              ? "Loading…"
-              : `${visibleClients.length} shown · ${clients.length} total`}
-          </p>
-        </div>
-        <div className="flex w-full flex-wrap items-center gap-2 md:w-auto">
-          <label className="text-xs font-medium uppercase tracking-wide text-slate-500">
-            Status
-          </label>
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
-            className="h-11 flex-1 rounded-md border border-slate-300 bg-white px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-400 md:h-9 md:flex-none md:py-2"
-          >
-            {(Object.keys(STATUS_FILTER_LABEL) as StatusFilter[]).map((k) => (
-              <option key={k} value={k}>
-                {STATUS_FILTER_LABEL[k]}
-              </option>
-            ))}
-          </select>
-          <Link to="/clients/new" className="shrink-0">
-            <Button className="h-11 md:h-9">+ Add</Button>
-          </Link>
-        </div>
-      </div>
-
-
   const reviewCountQuery = useQuery({
     queryKey: ["square_payments_needs_review_count"],
     queryFn: async () => {
@@ -462,7 +379,7 @@ function Dashboard() {
           <p className="rounded-lg border border-dashed bg-white p-6 text-sm text-slate-500">
             {search
               ? "No matches in this view."
-              : `No clients in “${FILTER_LABEL[filter]}”.`}
+              : `No clients in "${FILTER_LABEL[filter]}".`}
           </p>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -508,14 +425,8 @@ function Tile({
       : tile.tone === "amber"
         ? "text-amber-600 bg-amber-100"
         : "text-slate-700 bg-slate-100";
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`flex flex-col items-start gap-2 rounded-xl border bg-white p-4 text-left shadow-sm transition-all hover:border-slate-300 hover:shadow ${
-        active ? `ring-2 ${activeRing}` : ""
-      }`}
-    >
+  const inner = (
+    <>
       <div className={`flex h-9 w-9 items-center justify-center rounded-lg ${iconTone}`}>
         {tile.icon}
       </div>
@@ -523,7 +434,7 @@ function Tile({
       <div className="text-2xl font-semibold tracking-tight text-slate-900">
         {tile.count}
         <span className="ml-1 text-sm font-normal text-slate-500">
-          {tile.count === 1 ? "client" : "clients"}
+          {tile.count === 1 ? "payment" : "payments"}
         </span>
       </div>
       {tile.money !== undefined && tile.money > 0 && (
@@ -531,6 +442,24 @@ function Tile({
           {formatCurrency(tile.money)} {tile.moneyLabel}
         </div>
       )}
+    </>
+  );
+
+  const baseClass = `flex flex-col items-start gap-2 rounded-xl border bg-white p-4 text-left shadow-sm transition-all hover:border-slate-300 hover:shadow ${
+    active ? `ring-2 ${activeRing}` : ""
+  }`;
+
+  if (tile.href) {
+    return (
+      <Link to={tile.href} className={baseClass}>
+        {inner}
+      </Link>
+    );
+  }
+
+  return (
+    <button type="button" onClick={onClick} className={baseClass}>
+      {inner}
     </button>
   );
 }

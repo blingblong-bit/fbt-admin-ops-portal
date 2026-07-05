@@ -372,13 +372,14 @@ function Dashboard() {
 }
 
 type TileDef = {
-  key: FilterKey;
+  key: string;
   label: string;
   icon: React.ReactNode;
   count: number;
   money?: number;
   moneyLabel?: string;
   tone: "red" | "amber" | "slate";
+  href?: string;
 };
 
 function Tile({

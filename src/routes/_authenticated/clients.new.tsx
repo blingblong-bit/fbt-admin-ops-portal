@@ -75,7 +75,6 @@ function AddClientPage() {
           package_start_date: form.begin_date,
           amount_paid: paid,
           visits_used: 0,
-          is_scheduled: false,
           internal_notes: form.internal_notes.trim() || null,
 
         } as never)

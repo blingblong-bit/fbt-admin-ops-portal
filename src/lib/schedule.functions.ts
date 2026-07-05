@@ -74,31 +74,77 @@ export type ScheduleCheckResult = {
   error: string | null;
 };
 
-function ymd(d: Date): string {
-  const y = d.getUTCFullYear();
-  const m = String(d.getUTCMonth() + 1).padStart(2, "0");
-  const day = String(d.getUTCDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
+// Clinic operates in Tullahoma, TN. All week/day bucketing is done in this
+// local timezone so late-evening appointments don't roll into the next UTC day.
+const CLINIC_TZ = "America/Chicago";
+
+// Format an instant as YYYY-MM-DD in the clinic's local timezone.
+function ymdInTz(d: Date): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: CLINIC_TZ,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(d);
+  const get = (t: string) => parts.find((p) => p.type === t)!.value;
+  return `${get("year")}-${get("month")}-${get("day")}`;
 }
 
-function parseYmdUTC(s: string): Date {
+// Offset (minutes) of the clinic tz relative to UTC at the given instant.
+// Negative for America/Chicago (CST = -360, CDT = -300).
+function tzOffsetMinutes(d: Date): number {
+  const dtf = new Intl.DateTimeFormat("en-US", {
+    timeZone: CLINIC_TZ,
+    hour12: false,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+  const map: Record<string, string> = {};
+  for (const p of dtf.formatToParts(d)) if (p.type !== "literal") map[p.type] = p.value;
+  const hour = Number(map.hour) === 24 ? 0 : Number(map.hour);
+  const asUTC = Date.UTC(
+    Number(map.year),
+    Number(map.month) - 1,
+    Number(map.day),
+    hour,
+    Number(map.minute),
+    Number(map.second),
+  );
+  return (asUTC - d.getTime()) / 60000;
+}
+
+// Convert a clinic-local YYYY-MM-DD (calendar date) to the UTC instant of
+// midnight at the start of that day in the clinic timezone.
+function ymdLocalToInstant(s: string): Date {
   const [y, m, d] = s.split("-").map(Number);
-  return new Date(Date.UTC(y, m - 1, d));
+  const utcMidnight = Date.UTC(y, m - 1, d);
+  // Compute the tz offset for that moment and shift so the resulting instant
+  // renders as 00:00 in the clinic tz.
+  const off = tzOffsetMinutes(new Date(utcMidnight));
+  return new Date(utcMidnight - off * 60000);
 }
 
-function addDays(d: Date, n: number): Date {
-  const r = new Date(d.getTime());
-  r.setUTCDate(r.getUTCDate() + n);
-  return r;
+// Weekday (0=Sun..6=Sat) for a calendar date string. Purely calendar math —
+// no timezone needed since the date is already specified in local terms.
+function ymdWeekday(s: string): number {
+  const [y, m, d] = s.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d)).getUTCDay();
 }
 
-// Sunday-start week
-function weekRange(d: Date): { start: Date; end: Date } {
-  const dow = d.getUTCDay(); // 0=Sun
-  const start = addDays(d, -dow);
-  const end = addDays(start, 6);
-  return { start, end };
+function addDaysYmd(s: string, n: number): string {
+  const [y, m, d] = s.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  dt.setUTCDate(dt.getUTCDate() + n);
+  const yy = dt.getUTCFullYear();
+  const mm = String(dt.getUTCMonth() + 1).padStart(2, "0");
+  const dd = String(dt.getUTCDate()).padStart(2, "0");
+  return `${yy}-${mm}-${dd}`;
 }
+
 
 async function fetchSquareBookings(
   token: string,
@@ -324,23 +370,28 @@ export const getScheduleCheck = createServerFn({ method: "GET" })
   })
   .handler(async ({ data, context }): Promise<ScheduleCheckResult> => {
     const token = process.env.SQUARE_PRODUCTION_ACCESS_TOKEN;
-    const selected = parseYmdUTC(data.date);
-    const { start: weekStart, end: weekEnd } = weekRange(selected);
-    const nextWeekStart = addDays(weekEnd, 1);
-    const nextWeekEnd = addDays(nextWeekStart, 6);
+    const selectedYmd = data.date;
+    const dow = ymdWeekday(selectedYmd); // 0=Sun in clinic-local calendar
+    const weekStartYmd = addDaysYmd(selectedYmd, -dow);
+    const weekEndYmd = addDaysYmd(weekStartYmd, 6);
+    const nextWeekStartYmd = addDaysYmd(weekEndYmd, 1);
+    const nextWeekEndYmd = addDaysYmd(nextWeekStartYmd, 6);
 
-    // Fetch window: beginning of selected week through end of next week (max ~14 days, well under Square's 31-day limit)
-    const fetchStart = weekStart;
-    const fetchEnd = nextWeekEnd;
+    // Fetch window: local midnight at week start through the last instant of
+    // next week's Saturday in clinic-local time (America/Chicago). Converted
+    // to UTC ISO for the Square API. Max ~14 local days, well under Square's
+    // 31-day limit.
+    const fetchStart = ymdLocalToInstant(weekStartYmd);
+    const fetchEnd = new Date(ymdLocalToInstant(addDaysYmd(nextWeekEndYmd, 1)).getTime() - 1);
     const startIso = fetchStart.toISOString();
     const endIso = fetchEnd.toISOString();
 
     const empty: ScheduleCheckResult = {
       selected_date: data.date,
-      week_start: ymd(weekStart),
-      week_end: ymd(weekEnd),
-      next_week_start: ymd(nextWeekStart),
-      next_week_end: ymd(nextWeekEnd),
+      week_start: weekStartYmd,
+      week_end: weekEndYmd,
+      next_week_start: nextWeekStartYmd,
+      next_week_end: nextWeekEndYmd,
       selected_day: [],
       this_week: [],
       next_week: [],
@@ -452,13 +503,9 @@ export const getScheduleCheck = createServerFn({ method: "GET" })
     // Only show appointments that aren't cancelled/no-show by default? Keep all but mark via status.
     const active = all.filter((a) => !/(CANCELLED|DECLINED|NO_SHOW)/i.test(a.status));
 
-    const selectedYmd = data.date;
-    const weekStartYmd = ymd(weekStart);
-    const weekEndYmd = ymd(weekEnd);
-    const nextWeekStartYmd = ymd(nextWeekStart);
-    const nextWeekEndYmd = ymd(nextWeekEnd);
-
-    const dayOf = (iso: string) => iso.slice(0, 10);
+    // Bucket by clinic-local calendar day (America/Chicago), so a 7pm
+    // appointment doesn't leak into the next UTC day.
+    const dayOf = (iso: string) => ymdInTz(new Date(iso));
     const inRange = (iso: string, a: string, b: string) => {
       const d = dayOf(iso);
       return d >= a && d <= b;

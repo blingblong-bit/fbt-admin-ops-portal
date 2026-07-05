@@ -81,7 +81,7 @@ export const Route = createFileRoute("/api/public/square/webhook")({
           "";
 
         // Production read-only webhook receiver. Log non-secret diagnostics only.
-        console.log(
+        console.info(
           `[square-webhook] env=production base=https://connect.squareup.com ` +
             `secret_name=SQUARE_WEBHOOK_SIGNATURE_KEY url_name=SQUARE_WEBHOOK_NOTIFICATION_URL ` +
             `sig_present=${Boolean(signature)} sig_key_present=${Boolean(sigKey)} url_present=${Boolean(notificationUrl)}`,

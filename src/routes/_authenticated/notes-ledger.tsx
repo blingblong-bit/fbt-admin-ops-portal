@@ -207,6 +207,7 @@ function NotesLedgerPage() {
   const [skippedReviews, setSkippedReviews] = useState<Set<string>>(new Set());
   const [activeCategories, setActiveCategories] = useState<Set<ReviewCategory>>(new Set());
   const [recentlyApplied, setRecentlyApplied] = useState<RecentlyApplied[]>([]);
+  const [forcedRows, setForcedRows] = useState<Set<string>>(new Set());
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {

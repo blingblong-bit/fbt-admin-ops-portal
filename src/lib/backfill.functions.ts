@@ -167,10 +167,23 @@ async function fetchRecentPaymentCustomerIds(token: string, days = 60): Promise<
   return out;
 }
 
+// Batch size chosen for Cloudflare Workers 1000-subrequest / 30s limit.
+// Setup (Square customer pagination + future bookings + recent payments +
+// clients pagination + reviews pagination) costs ~250-350 subrequests before
+// the loop even starts. Each customer in the loop uses 0-2 Supabase writes.
+// 200/batch keeps total under ~700 subrequests with safe headroom.
+const BACKFILL_BATCH_SIZE = 200;
+
 export const backfillProductionCustomers = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .handler(async ({ context }): Promise<BackfillResult> => {
+  .inputValidator((d?: { offset?: number; batch_size?: number }) => d ?? {})
+  .handler(async ({ data, context }): Promise<BackfillResult> => {
     const token = cleanToken(process.env.SQUARE_PRODUCTION_ACCESS_TOKEN);
+    const offset = Math.max(0, data.offset ?? 0);
+    const batchSize = Math.min(
+      BACKFILL_BATCH_SIZE,
+      Math.max(1, data.batch_size ?? BACKFILL_BATCH_SIZE),
+    );
     const result: BackfillResult = {
       fetched_customers: 0,
       fetched_bookings: 0,
@@ -182,6 +195,11 @@ export const backfillProductionCustomers = createServerFn({ method: "POST" })
       skipped_already_linked: 0,
       skipped_deleted: 0,
       errors: [],
+      processed: 0,
+      total: 0,
+      next_offset: offset,
+      done: true,
+      batch_size: batchSize,
     };
     if (!token) {
       result.errors.push("SQUARE_PRODUCTION_ACCESS_TOKEN not configured");
@@ -198,6 +216,7 @@ export const backfillProductionCustomers = createServerFn({ method: "POST" })
     result.fetched_customers = customers.length;
     result.fetched_bookings = futureCustomerIds.size;
     result.fetched_recent_payments = recentPaymentCustomerIds.size;
+    result.total = customers.length;
 
     // Paginate to bypass PostgREST's 1000-row default cap
     type ExistingClient = {

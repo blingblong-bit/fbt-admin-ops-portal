@@ -1033,10 +1033,13 @@ export const applyNotesLedger = createServerFn({ method: "POST" })
       // Defense-in-depth: never reduce amount_paid, and refuse to shrink
       // package_price below what the client has already paid. This preserves
       // legitimate payment history (Square, prior imports) even if the caller
-      // passed stale ledger values.
+      // passed stale ledger values. Bypassed when `force: true` is set —
+      // used when the admin has manually verified the Hub value is wrong
+      // (e.g. corrupted by a prior bad merge).
       const currentPaid = beforeSnapshot.amount_paid;
-      if (u.package_price < currentPaid) {
-        const detail = `Refused: incoming package price $${u.package_price.toFixed(2)} is less than existing amount paid $${currentPaid.toFixed(2)}. Route this row to Needs Review instead.`;
+      const forced = u.force === true;
+      if (!forced && u.package_price < currentPaid) {
+        const detail = `Refused: incoming package price $${u.package_price.toFixed(2)} is less than existing amount paid $${currentPaid.toFixed(2)}. Route this row to Needs Review instead, or re-apply with Force update if the Hub value is known to be wrong.`;
         errors.push({ client_id: u.client_id, error: detail });
         rows.push({
           client_id: u.client_id,
@@ -1051,7 +1054,7 @@ export const applyNotesLedger = createServerFn({ method: "POST" })
         });
         continue;
       }
-      const safeAmountPaid = Math.max(currentPaid, u.amount_paid);
+      const safeAmountPaid = forced ? u.amount_paid : Math.max(currentPaid, u.amount_paid);
       baseFields.amount_paid = safeAmountPaid;
 
       const { error: updErr } = await supabase

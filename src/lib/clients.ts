@@ -17,7 +17,6 @@ export interface Client {
   amount_paid: number;
   internal_notes: string | null;
   square_visit_note: string | null;
-  is_scheduled: boolean;
   status: LifecycleStatus | string;
   manual_active: boolean;
   square_customer_id: string | null;
@@ -80,8 +79,7 @@ type SimpleClient = Pick<
 
 /**
  * Schedule status is derived entirely from live Square bookings. Callers must
- * pass `isScheduled` based on the current Square booking window — the legacy
- * clients.is_scheduled column is not consulted anywhere.
+ * pass `isScheduled` based on the current Square booking window.
  */
 export function simpleStatus(c: SimpleClient, isScheduled: boolean): SimpleStatus {
   const owed = amountOwed(c);

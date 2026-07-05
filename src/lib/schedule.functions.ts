@@ -688,7 +688,7 @@ export const unlinkSquareCustomer = createServerFn({ method: "POST" })
  *
  * A client is scheduled iff at least one ACTIVE Square booking exists for their
  * linked square_customer_id within the lookahead window (today → +days). The
- * legacy clients.is_scheduled column is NOT consulted.
+ * scheduling status is derived live from Square bookings only.
  */
 export const getScheduledClientIds = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])

@@ -724,10 +724,38 @@ export const retryApplyPayment = createServerFn({ method: "POST" })
     return retryOnePayment(supabaseAdmin, data.payment_row_id);
   });
 
+// Batch size chosen for Cloudflare Workers 1000-subrequest / 30s limit.
+// Each retryOnePayment uses ~4-6 Supabase subrequests, so 50/batch = ~250
+// subrequests — well under cap with headroom for the count query and retries.
+const RETRY_BATCH_SIZE = 50;
+const RETRY_HARD_CAP = 500;
+
 export const retryAllMatchedBlockedPayments = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .handler(async (): Promise<{ results: RetryPaymentResult[]; summary: { applied: number; already_applied: number; blocked: number; no_client: number } }> => {
+  .inputValidator((d?: { offset?: number; batch_size?: number }) => d ?? {})
+  .handler(async ({ data }): Promise<{
+    results: RetryPaymentResult[];
+    summary: { applied: number; already_applied: number; blocked: number; no_client: number };
+    processed: number;
+    total_matched: number;
+    next_offset: number;
+    done: boolean;
+    batch_size: number;
+  }> => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const offset = Math.max(0, data.offset ?? 0);
+    const batchSize = Math.min(RETRY_BATCH_SIZE, Math.max(1, data.batch_size ?? RETRY_BATCH_SIZE));
+
+    // Get total up to the hard cap so the UI can show "X of N".
+    const { count: totalMatched, error: countErr } = await supabaseAdmin
+      .from("square_payments")
+      .select("id", { count: "exact", head: true })
+      .eq("needs_review", true)
+      .eq("applied", false)
+      .not("client_id", "is", null);
+    if (countErr) throw countErr;
+    const total = Math.min(totalMatched ?? 0, RETRY_HARD_CAP);
+
     const { data: rows, error } = await supabaseAdmin
       .from("square_payments")
       .select("id")
@@ -735,7 +763,7 @@ export const retryAllMatchedBlockedPayments = createServerFn({ method: "POST" })
       .eq("applied", false)
       .not("client_id", "is", null)
       .order("created_at", { ascending: true })
-      .limit(500);
+      .range(offset, offset + batchSize - 1);
     if (error) throw error;
 
     const results: RetryPaymentResult[] = [];
@@ -758,5 +786,24 @@ export const retryAllMatchedBlockedPayments = createServerFn({ method: "POST" })
       blocked: results.filter((r) => r.outcome === "blocked").length,
       no_client: results.filter((r) => r.outcome === "no_client").length,
     };
-    return { results, summary };
+    const processed = results.length;
+    // "applied" rows leave the query set, so the next offset stays put for
+    // those (they no longer appear). "blocked"/"already_applied" that still
+    // match the filter would repeat — advance past them.
+    const stillMatchedProcessed = results.filter(
+      (r) => r.outcome === "blocked",
+    ).length;
+    const nextOffset = offset + stillMatchedProcessed;
+    // done when this batch returned less than requested (no more rows)
+    const done = processed < batchSize;
+
+    return {
+      results,
+      summary,
+      processed,
+      total_matched: total,
+      next_offset: nextOffset,
+      done,
+      batch_size: batchSize,
+    };
   });

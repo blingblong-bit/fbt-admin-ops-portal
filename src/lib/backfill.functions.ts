@@ -32,6 +32,12 @@ export type BackfillResult = {
   skipped_already_linked: number;
   skipped_deleted: number;
   errors: string[];
+  // Progress fields (batched execution)
+  processed: number;
+  total: number;
+  next_offset: number;
+  done: boolean;
+  batch_size: number;
 };
 
 export type ReviewRelevance =
@@ -161,10 +167,23 @@ async function fetchRecentPaymentCustomerIds(token: string, days = 60): Promise<
   return out;
 }
 
+// Batch size chosen for Cloudflare Workers 1000-subrequest / 30s limit.
+// Setup (Square customer pagination + future bookings + recent payments +
+// clients pagination + reviews pagination) costs ~250-350 subrequests before
+// the loop even starts. Each customer in the loop uses 0-2 Supabase writes.
+// 200/batch keeps total under ~700 subrequests with safe headroom.
+const BACKFILL_BATCH_SIZE = 200;
+
 export const backfillProductionCustomers = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .handler(async ({ context }): Promise<BackfillResult> => {
+  .inputValidator((d?: { offset?: number; batch_size?: number }) => d ?? {})
+  .handler(async ({ data, context }): Promise<BackfillResult> => {
     const token = cleanToken(process.env.SQUARE_PRODUCTION_ACCESS_TOKEN);
+    const offset = Math.max(0, data.offset ?? 0);
+    const batchSize = Math.min(
+      BACKFILL_BATCH_SIZE,
+      Math.max(1, data.batch_size ?? BACKFILL_BATCH_SIZE),
+    );
     const result: BackfillResult = {
       fetched_customers: 0,
       fetched_bookings: 0,
@@ -176,6 +195,11 @@ export const backfillProductionCustomers = createServerFn({ method: "POST" })
       skipped_already_linked: 0,
       skipped_deleted: 0,
       errors: [],
+      processed: 0,
+      total: 0,
+      next_offset: offset,
+      done: true,
+      batch_size: batchSize,
     };
     if (!token) {
       result.errors.push("SQUARE_PRODUCTION_ACCESS_TOKEN not configured");
@@ -192,6 +216,7 @@ export const backfillProductionCustomers = createServerFn({ method: "POST" })
     result.fetched_customers = customers.length;
     result.fetched_bookings = futureCustomerIds.size;
     result.fetched_recent_payments = recentPaymentCustomerIds.size;
+    result.total = customers.length;
 
     // Paginate to bypass PostgREST's 1000-row default cap
     type ExistingClient = {
@@ -274,7 +299,8 @@ export const backfillProductionCustomers = createServerFn({ method: "POST" })
       }
     }
 
-    for (const cust of customers) {
+    const slice = customers.slice(offset, offset + batchSize);
+    for (const cust of slice) {
       try {
         const sqEmail = normEmail(cust.email_address);
         const sqPhone = normPhone(cust.phone_number);
@@ -468,13 +494,17 @@ export const backfillProductionCustomers = createServerFn({ method: "POST" })
       }
     }
 
+    result.processed = slice.length;
+    result.next_offset = offset + slice.length;
+    result.done = result.next_offset >= customers.length;
+
     try {
       const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
       await supabaseAdmin.from("square_sync_log").insert({
         event_type: "customer.backfill",
         status: result.errors.length ? "partial" : "success",
-        action: "production_backfill",
-        message: `Backfill: fetched=${result.fetched_customers} auto_linked=${result.auto_linked} review=${result.queued_for_review} updated=${result.updated_contact} errors=${result.errors.length}`,
+        action: result.done ? "production_backfill" : "production_backfill_batch",
+        message: `Backfill batch [${offset}-${result.next_offset}/${customers.length}]: auto_linked=${result.auto_linked} review=${result.queued_for_review} updated=${result.updated_contact} errors=${result.errors.length}${result.done ? " (complete)" : ""}`,
       });
     } catch {
       // ignore logging errors

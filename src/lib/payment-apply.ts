@@ -1,6 +1,9 @@
 // Shared helper for applying a Square payment to a client's balance exactly once.
-// Preserves the exact behavior previously duplicated in
-// src/lib/payments.functions.ts and src/routes/api/public/square.webhook.ts.
+// Delegates to the `apply_square_payment` SECURITY DEFINER Postgres function,
+// which performs the idempotency check, balance read, capped update, and
+// activity insert atomically inside a single transaction with a row-level
+// lock on the target client. This prevents the read-modify-write race that
+// existed when the same steps ran as four separate Supabase calls.
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/integrations/supabase/types";
@@ -21,73 +24,36 @@ export async function applyPaymentOnce(
     manualResolution?: boolean;
   },
 ): Promise<{ credited: boolean; appliedAmount: number; alreadyApplied: boolean }> {
-  // Guard 1: activity already logged for this payment id.
-  // We MUST fail closed on a query error here — silently continuing would
-  // skip idempotency and can double-credit the client on retry.
-  const { data: existingActivity, error: guardErr } = await supabaseAdmin
-    .from("client_activities")
-    .select("id")
-    .eq("client_id", clientId)
-    .contains("metadata", { square_payment_id: squarePaymentId } as unknown as never)
-    .limit(1);
-  if (guardErr) {
+  const { data, error } = await supabaseAdmin.rpc("apply_square_payment", {
+    p_client_id: clientId,
+    p_square_payment_id: squarePaymentId,
+    p_amount_cents: amountCents,
+    p_match_method: matchMethod,
+    p_manual_resolution: manualResolution ?? false,
+  } as never);
+
+  if (error) {
     console.error(
-      `[payment-apply] Idempotency guard query failed for client=${clientId} payment=${squarePaymentId}: ${guardErr.message ?? String(guardErr)}`,
+      `[payment-apply] apply_square_payment RPC failed for client=${clientId} payment=${squarePaymentId}: ${error.message ?? String(error)}`,
     );
-    throw guardErr;
-  }
-  if (existingActivity && existingActivity.length > 0) {
-    return { credited: false, appliedAmount: 0, alreadyApplied: true };
+    throw error;
   }
 
-  const { data: client, error: clientErr } = await supabaseAdmin
-    .from("clients")
-    .select("amount_paid, package_price")
-    .eq("id", clientId)
-    .single();
-  if (clientErr) throw clientErr;
+  // The function returns a single row: { newly_applied: bool, applied_amount: numeric }.
+  const row = Array.isArray(data) ? data[0] : data;
+  if (!row) {
+    const msg = `[payment-apply] apply_square_payment returned no row for client=${clientId} payment=${squarePaymentId}`;
+    console.error(msg);
+    throw new Error(msg);
+  }
 
-  const amountDollars = amountCents / 100;
-  const currentPaid = Number(client.amount_paid ?? 0);
-  const price = Number(client.package_price ?? 0);
-  const newPaid =
-    price > 0 ? Math.min(price, currentPaid + amountDollars) : currentPaid + amountDollars;
-  const appliedAmount = Math.max(0, newPaid - currentPaid);
+  const typed = row as { newly_applied: boolean; applied_amount: number | string };
+  const newlyApplied = Boolean(typed.newly_applied);
+  const appliedAmount = Number(typed.applied_amount ?? 0);
 
-  const { error: updErr } = await supabaseAdmin
-    .from("clients")
-    .update({ amount_paid: newPaid })
-    .eq("id", clientId);
-  if (updErr) throw updErr;
-
-  const metadata: Record<string, unknown> = {
-    source: "square",
-    square_payment_id: squarePaymentId,
-    amount: amountDollars,
-    applied_amount: appliedAmount,
-    match_method: matchMethod,
+  return {
+    credited: newlyApplied,
+    appliedAmount,
+    alreadyApplied: !newlyApplied,
   };
-  if (manualResolution) {
-    metadata.manual_resolution = true;
-  }
-
-  // CRITICAL: the activity row is the idempotency marker for this payment id.
-  // If it fails to insert we've already updated amount_paid, so the write is
-  // half-done. Surface it LOUDLY (throw + error log) rather than swallowing —
-  // silent failure here is what enables double-credit on retry.
-  const { error: activityErr } = await supabaseAdmin.from("client_activities").insert({
-    client_id: clientId,
-    activity_type: "payment",
-    description: `Square payment synced — $${amountDollars.toFixed(2)}`,
-    metadata: metadata as unknown as never,
-  });
-  if (activityErr) {
-    console.error(
-      `[payment-apply] PARTIAL WRITE: credited client=${clientId} $${amountDollars.toFixed(2)} for payment=${squarePaymentId} but idempotency marker insert failed: ${activityErr.message ?? String(activityErr)}. Manual reconciliation required before retrying.`,
-    );
-    throw activityErr;
-  }
-
-  return { credited: true, appliedAmount, alreadyApplied: false };
 }
-

@@ -36,7 +36,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     queryKey: ["user-roles"],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("user_roles" as any)
+        .from("user_roles")
         .select("role")
         .in("role", ["admin", "superadmin"]);
       if (error) {

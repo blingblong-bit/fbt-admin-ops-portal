@@ -286,8 +286,7 @@ function normPhone(s: string | null | undefined): string | null {
 }
 
 async function loadAllClients(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  supabase: any,
+  supabase: SupabaseClient<Database>,
 ): Promise<MatchClient[]> {
   const out: MatchClient[] = [];
   const pageSize = 1000;

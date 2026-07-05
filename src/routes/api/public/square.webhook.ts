@@ -81,7 +81,7 @@ export const Route = createFileRoute("/api/public/square/webhook")({
           "";
 
         // Production read-only webhook receiver. Log non-secret diagnostics only.
-        console.log(
+        console.info(
           `[square-webhook] env=production base=https://connect.squareup.com ` +
             `secret_name=SQUARE_WEBHOOK_SIGNATURE_KEY url_name=SQUARE_WEBHOOK_NOTIFICATION_URL ` +
             `sig_present=${Boolean(signature)} sig_key_present=${Boolean(sigKey)} url_present=${Boolean(notificationUrl)}`,
@@ -92,7 +92,7 @@ export const Route = createFileRoute("/api/public/square/webhook")({
         }
 
         const verified = signature ? verifySignature(notificationUrl, rawBody, signature, sigKey) : false;
-        console.log(`[square-webhook] signature_verified=${verified}`);
+        console.info(`[square-webhook] signature_verified=${verified}`);
         if (!verified) {
           return new Response("Invalid signature", { status: 401 });
         }
@@ -113,7 +113,7 @@ export const Route = createFileRoute("/api/public/square/webhook")({
 
         const eventType = event.type ?? "unknown";
         const obj = event.data?.object ?? {};
-        console.log(
+        console.info(
           `[square-webhook] event_type=${eventType} ` +
             `customer_id=${obj.customer?.id ?? obj.payment?.customer_id ?? obj.booking?.customer_id ?? "none"} ` +
             `payment_id=${obj.payment?.id ?? "none"} booking_id=${obj.booking?.id ?? "none"}`,

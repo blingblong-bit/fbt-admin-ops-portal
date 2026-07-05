@@ -123,12 +123,6 @@ async function fetchSquareBookings(
   if (!cleanToken) {
     return { bookings: all, error: "SQUARE_PRODUCTION_ACCESS_TOKEN is empty after sanitization" };
   }
-  console.log(
-    `[schedule] Square request → env=PRODUCTION base=${SQUARE_BASE} ` +
-      `token_len=${cleanToken.length} token_first4=${cleanToken.slice(0, 4)} ` +
-      `token_last4=${cleanToken.slice(-4)} ` +
-      `secret_name=SQUARE_PRODUCTION_ACCESS_TOKEN`,
-  );
   try {
     for (let i = 0; i < 10; i++) {
       const url = new URL(`${SQUARE_BASE}/v2/bookings`);
@@ -136,7 +130,6 @@ async function fetchSquareBookings(
       url.searchParams.set("start_at_min", startIso);
       url.searchParams.set("start_at_max", endIso);
       if (cursor) url.searchParams.set("cursor", cursor);
-      console.log(`[schedule] GET ${url.toString()}`);
       const res = await fetch(url.toString(), {
         headers: {
           Authorization: `Bearer ${cleanToken}`,
@@ -144,27 +137,10 @@ async function fetchSquareBookings(
           "Content-Type": "application/json",
         },
       });
-      console.log(`[schedule] Square responded ${res.status} ${res.statusText}`);
       if (!res.ok) {
         const body = await res.text();
-        console.log(`[schedule] Square error body (raw): ${body.slice(0, 600)}`);
-        console.log(
-          `[schedule] Token shape check → prefix3=${cleanToken.slice(0, 3)} ` +
-            `looks_like=${
-              cleanToken.startsWith("EAAAl")
-                ? "production_personal_access_token"
-                : cleanToken.startsWith("EAAAE")
-                  ? "SANDBOX_personal_access_token"
-                  : cleanToken.startsWith("sq0csp-")
-                    ? "OAUTH_CLIENT_SECRET (NOT an access token)"
-                    : cleanToken.startsWith("sq0atp-")
-                      ? "oauth_access_token"
-                      : cleanToken.startsWith("sq0idp-")
-                        ? "OAUTH_APPLICATION_ID (NOT an access token)"
-                        : "unknown_format"
-            }`,
-        );
         let friendly = `Square ${res.status}: ${body.slice(0, 300)}`;
+
         try {
           const parsed = JSON.parse(body) as {
             errors?: Array<{ code?: string; detail?: string; category?: string }>;
@@ -399,7 +375,7 @@ export const getScheduleCheck = createServerFn({ method: "GET" })
         from += pageSize;
       }
     }
-    console.log(
+    console.info(
       `[schedule] Loaded ${clients.length} non-deleted clients (` +
         `${clients.filter((c) => c.square_customer_id).length} with square_customer_id)`,
     );

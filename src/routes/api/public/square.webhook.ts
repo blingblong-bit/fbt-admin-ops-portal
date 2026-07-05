@@ -180,8 +180,7 @@ function formatErr(err: unknown): string {
   return String(err);
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function handleCustomerEvent(supabaseAdmin: any, eventType: string, event: SquareEvent) {
+async function handleCustomerEvent(supabaseAdmin: SupabaseClient<Database>, eventType: string, event: SquareEvent) {
   const customer = event.data?.object?.customer;
   const squareCustomerId = customer?.id ?? event.data?.id ?? null;
 

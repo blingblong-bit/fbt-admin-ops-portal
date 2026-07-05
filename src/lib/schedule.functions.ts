@@ -375,7 +375,7 @@ export const getScheduleCheck = createServerFn({ method: "GET" })
         from += pageSize;
       }
     }
-    console.log(
+    console.info(
       `[schedule] Loaded ${clients.length} non-deleted clients (` +
         `${clients.filter((c) => c.square_customer_id).length} with square_customer_id)`,
     );

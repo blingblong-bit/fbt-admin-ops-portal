@@ -1,5 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import type { Database } from "@/integrations/supabase/types";
 import { applyPaymentOnce } from "@/lib/payment-apply";
 
 export type PaymentResolutionResult = {
@@ -589,8 +591,7 @@ export type RetryPaymentResult = {
 };
 
 async function retryOnePayment(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  supabaseAdmin: any,
+  supabaseAdmin: SupabaseClient<Database>,
   paymentRowId: string,
 ): Promise<RetryPaymentResult> {
   const { data: payment, error: pErr } = await supabaseAdmin

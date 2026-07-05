@@ -1,5 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createHmac, timingSafeEqual } from "crypto";
+import type { Database } from "@/integrations/supabase/types";
 import { applyPaymentOnce } from "@/lib/payment-apply";
 
 
@@ -178,8 +180,7 @@ function formatErr(err: unknown): string {
   return String(err);
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function handleCustomerEvent(supabaseAdmin: any, eventType: string, event: SquareEvent) {
+async function handleCustomerEvent(supabaseAdmin: SupabaseClient<Database>, eventType: string, event: SquareEvent) {
   const customer = event.data?.object?.customer;
   const squareCustomerId = customer?.id ?? event.data?.id ?? null;
 
@@ -262,9 +263,8 @@ async function handleCustomerEvent(supabaseAdmin: any, eventType: string, event:
   });
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function matchClient(
-  supabaseAdmin: any,
+  supabaseAdmin: SupabaseClient<Database>,
   {
     existingClientId,
     squareCustomerId,
@@ -299,8 +299,7 @@ async function matchClient(
 // in @/lib/payment-apply and is shared with the manual-resolution flows.
 
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function handlePaymentEvent(supabaseAdmin: any, eventType: string, event: SquareEvent) {
+async function handlePaymentEvent(supabaseAdmin: SupabaseClient<Database>, eventType: string, event: SquareEvent) {
   const payment = event.data?.object?.payment;
   const squarePaymentId = payment?.id ?? event.data?.id ?? null;
 
@@ -531,8 +530,7 @@ async function handlePaymentEvent(supabaseAdmin: any, eventType: string, event: 
 }
 
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function handleBookingEvent(supabaseAdmin: any, eventType: string, event: SquareEvent) {
+async function handleBookingEvent(supabaseAdmin: SupabaseClient<Database>, eventType: string, event: SquareEvent) {
   const booking = event.data?.object?.booking;
   const bookingId = booking?.id ?? event.data?.id ?? null;
   const status = (booking?.status ?? "").toString().toUpperCase();

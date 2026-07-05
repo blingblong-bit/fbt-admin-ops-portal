@@ -2,10 +2,11 @@
 // Preserves the exact behavior previously duplicated in
 // src/lib/payments.functions.ts and src/routes/api/public/square.webhook.ts.
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Database } from "@/integrations/supabase/types";
+
 export async function applyPaymentOnce(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  supabaseAdmin: any,
+  supabaseAdmin: SupabaseClient<Database>,
   {
     clientId,
     squarePaymentId,

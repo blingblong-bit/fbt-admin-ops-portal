@@ -1,5 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import type { Database } from "@/integrations/supabase/types";
 import {
   buildLedgerRowFingerprint,
   normalizeLedgerText,
@@ -146,8 +148,7 @@ function resolutionStateFor(
 }
 
 async function loadResolvedFingerprints(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  supabase: any,
+  supabase: SupabaseClient<Database>,
   fingerprints: string[],
 ): Promise<Map<string, StoredLedgerResolution>> {
   const unique = Array.from(new Set(fingerprints.filter(Boolean)));
@@ -169,8 +170,7 @@ async function loadResolvedFingerprints(
 }
 
 async function persistLedgerResolution(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  supabase: any,
+  supabase: SupabaseClient<Database>,
   userId: string,
   row: LedgerResolutionInput,
   status: LedgerResolutionStatus,
@@ -286,8 +286,7 @@ function normPhone(s: string | null | undefined): string | null {
 }
 
 async function loadAllClients(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  supabase: any,
+  supabase: SupabaseClient<Database>,
 ): Promise<MatchClient[]> {
   const out: MatchClient[] = [];
   const pageSize = 1000;

@@ -855,6 +855,42 @@ export const getClientAppointments = createServerFn({ method: "GET" })
     return { appointments, fetched_count: bookings.length, error: null };
   });
 
+export const getContactedClientIds = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { clientIds: string[] }) => {
+    if (!d || !Array.isArray(d.clientIds)) throw new Error("clientIds required");
+    return d;
+  })
+  .handler(async ({ data, context }): Promise<{ client_ids: string[] }> => {
+    if (data.clientIds.length === 0) return { client_ids: [] };
+    const { data: rows, error } = await context.supabase
+      .from("client_activities")
+      .select("client_id")
+      .eq("activity_type", "contacted")
+      .in("client_id", data.clientIds);
+    if (error) throw error;
+    const set = new Set<string>();
+    for (const r of rows ?? []) if (r.client_id) set.add(r.client_id as string);
+    return { client_ids: Array.from(set) };
+  });
+
+export const markClientContacted = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { clientId: string }) => {
+    if (!d?.clientId || typeof d.clientId !== "string") throw new Error("clientId required");
+    return d;
+  })
+  .handler(async ({ data, context }) => {
+    const { error } = await context.supabase.from("client_activities").insert({
+      client_id: data.clientId,
+      activity_type: "contacted",
+      description: "Marked as contacted — from Schedule Check (This Week But Not Next Week)",
+    });
+    if (error) throw error;
+    return { ok: true };
+  });
+
+
 
 
 

@@ -1009,6 +1009,8 @@ function ReviewCard({
   onSkip,
   onMarkResolved,
   applying,
+  forced,
+  onToggleForce,
 }: {
   row: ReviewRow;
   selectedClientId: string | null;
@@ -1017,6 +1019,8 @@ function ReviewCard({
   onSkip: () => void;
   onMarkResolved: () => void;
   applying: boolean;
+  forced: boolean;
+  onToggleForce: () => void;
 }) {
   const selectedClient = row.candidates.find((c) => c.id === selectedClientId) ?? null;
   const resolutionText =

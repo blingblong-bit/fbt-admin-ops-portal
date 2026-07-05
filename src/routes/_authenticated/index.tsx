@@ -7,6 +7,7 @@ import {
   CircleDollarSign,
   CircleSlash,
   Hourglass,
+  Receipt,
   Users,
 } from "lucide-react";
 import { useServerFn } from "@tanstack/react-start";
@@ -211,6 +212,20 @@ function Dashboard() {
     return [...searched].sort((a, b) => fullName(a).localeCompare(fullName(b)));
   }, [visibleClients, filter, search, scheduledSet]);
 
+  const reviewCountQuery = useQuery({
+    queryKey: ["square_payments_needs_review_count"],
+    queryFn: async () => {
+      const { count, error } = await supabase
+        .from("square_payments")
+        .select("id", { count: "exact", head: true })
+        .eq("needs_review", true);
+      if (error) throw error;
+      return count ?? 0;
+    },
+    refetchInterval: 30_000,
+  });
+
+  const reviewCount = reviewCountQuery.data ?? 0;
 
   const tiles: TileDef[] = [
     {
@@ -244,6 +259,15 @@ function Dashboard() {
       money: counts.critical_total,
       moneyLabel: "outstanding",
       tone: "red",
+    },
+    {
+      key: "payments_review",
+      label: "Payments Review",
+      icon: <Receipt className="h-5 w-5" />,
+      count: reviewCount,
+      tone: reviewCount > 0 ? "amber" : "slate",
+      href: "/sync-log",
+      countLabel: "payment",
     },
     {
       key: "package_complete",
@@ -295,13 +319,13 @@ function Dashboard() {
 
 
       {/* Tiles */}
-      <div className="mb-6 grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 lg:grid-cols-6 md:mb-8">
+      <div className="mb-6 grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 lg:grid-cols-4 xl:grid-cols-7 md:mb-8">
         {tiles.map((t) => (
           <Tile
             key={t.key}
             tile={t}
-            active={filter === t.key}
-            onClick={() => setFilter(t.key)}
+            active={!t.href && filter === t.key}
+            onClick={() => { if (!t.href) setFilter(t.key as FilterKey); }}
           />
         ))}
       </div>
@@ -356,7 +380,7 @@ function Dashboard() {
           <p className="rounded-lg border border-dashed bg-white p-6 text-sm text-slate-500">
             {search
               ? "No matches in this view."
-              : `No clients in “${FILTER_LABEL[filter]}”.`}
+              : `No clients in "${FILTER_LABEL[filter]}".`}
           </p>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -371,13 +395,15 @@ function Dashboard() {
 }
 
 type TileDef = {
-  key: FilterKey;
+  key: string;
   label: string;
   icon: React.ReactNode;
   count: number;
   money?: number;
   moneyLabel?: string;
   tone: "red" | "amber" | "slate";
+  href?: string;
+  countLabel?: string;
 };
 
 function Tile({
@@ -401,14 +427,8 @@ function Tile({
       : tile.tone === "amber"
         ? "text-amber-600 bg-amber-100"
         : "text-slate-700 bg-slate-100";
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`flex flex-col items-start gap-2 rounded-xl border bg-white p-4 text-left shadow-sm transition-all hover:border-slate-300 hover:shadow ${
-        active ? `ring-2 ${activeRing}` : ""
-      }`}
-    >
+  const inner = (
+    <>
       <div className={`flex h-9 w-9 items-center justify-center rounded-lg ${iconTone}`}>
         {tile.icon}
       </div>
@@ -416,7 +436,7 @@ function Tile({
       <div className="text-2xl font-semibold tracking-tight text-slate-900">
         {tile.count}
         <span className="ml-1 text-sm font-normal text-slate-500">
-          {tile.count === 1 ? "client" : "clients"}
+          {tile.count === 1 ? tile.countLabel ?? "client" : `${tile.countLabel ?? "client"}s`}
         </span>
       </div>
       {tile.money !== undefined && tile.money > 0 && (
@@ -424,6 +444,24 @@ function Tile({
           {formatCurrency(tile.money)} {tile.moneyLabel}
         </div>
       )}
+    </>
+  );
+
+  const baseClass = `flex flex-col items-start gap-2 rounded-xl border bg-white p-4 text-left shadow-sm transition-all hover:border-slate-300 hover:shadow ${
+    active ? `ring-2 ${activeRing}` : ""
+  }`;
+
+  if (tile.href) {
+    return (
+      <Link to={tile.href} className={baseClass}>
+        {inner}
+      </Link>
+    );
+  }
+
+  return (
+    <button type="button" onClick={onClick} className={baseClass}>
+      {inner}
     </button>
   );
 }

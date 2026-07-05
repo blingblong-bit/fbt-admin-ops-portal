@@ -123,12 +123,6 @@ async function fetchSquareBookings(
   if (!cleanToken) {
     return { bookings: all, error: "SQUARE_PRODUCTION_ACCESS_TOKEN is empty after sanitization" };
   }
-  console.log(
-    `[schedule] Square request → env=PRODUCTION base=${SQUARE_BASE} ` +
-      `token_len=${cleanToken.length} token_first4=${cleanToken.slice(0, 4)} ` +
-      `token_last4=${cleanToken.slice(-4)} ` +
-      `secret_name=SQUARE_PRODUCTION_ACCESS_TOKEN`,
-  );
   try {
     for (let i = 0; i < 10; i++) {
       const url = new URL(`${SQUARE_BASE}/v2/bookings`);

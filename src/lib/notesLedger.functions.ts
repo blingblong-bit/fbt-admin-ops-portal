@@ -170,8 +170,7 @@ async function loadResolvedFingerprints(
 }
 
 async function persistLedgerResolution(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  supabase: any,
+  supabase: SupabaseClient<Database>,
   userId: string,
   row: LedgerResolutionInput,
   status: LedgerResolutionStatus,

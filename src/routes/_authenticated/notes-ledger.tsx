@@ -271,7 +271,7 @@ function NotesLedgerPage() {
       });
       if (r.errors.length) toast.error(`${r.errors.length} row(s) failed — see Apply Results below`);
       else toast.success(`Updated ${r.updated} clients`);
-      console.log("Ledger apply results:", r);
+      
       if (r.errors.length) console.error("Ledger apply errors:", r.rows.filter((x) => x.status === "error"));
     },
     onError: (e: Error) => toast.error(e.message),

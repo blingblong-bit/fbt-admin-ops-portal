@@ -1,5 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createHmac, timingSafeEqual } from "crypto";
+import type { Database } from "@/integrations/supabase/types";
 import { applyPaymentOnce } from "@/lib/payment-apply";
 
 

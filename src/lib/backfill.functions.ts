@@ -72,6 +72,7 @@ async function squareGet<T>(
       "Square-Version": SQUARE_VERSION,
       "Content-Type": "application/json",
     },
+    signal: AbortSignal.timeout(5000),
   });
   if (!res.ok) {
     const body = await res.text();

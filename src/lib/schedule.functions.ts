@@ -136,6 +136,7 @@ async function fetchSquareBookings(
           "Square-Version": SQUARE_VERSION,
           "Content-Type": "application/json",
         },
+        signal: AbortSignal.timeout(5000),
       });
       if (!res.ok) {
         const body = await res.text();
@@ -196,6 +197,7 @@ async function fetchServiceNames(
         "Content-Type": "application/json",
       },
       body: JSON.stringify({ object_ids: variationIds }),
+      signal: AbortSignal.timeout(5000),
     });
     if (!res.ok) return out;
     const json = (await res.json()) as {
@@ -232,6 +234,7 @@ async function fetchTeamMemberNames(
         query: { filter: { team_member_ids: ids } },
         limit: 200,
       }),
+      signal: AbortSignal.timeout(5000),
     });
     if (!res.ok) return out;
     const json = (await res.json()) as {
@@ -283,6 +286,7 @@ async function fetchProductionCustomers(
               "Square-Version": SQUARE_VERSION,
               "Content-Type": "application/json",
             },
+            signal: AbortSignal.timeout(5000),
           });
           if (!res.ok) return;
           const json = (await res.json()) as {

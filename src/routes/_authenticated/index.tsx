@@ -402,6 +402,7 @@ type TileDef = {
   moneyLabel?: string;
   tone: "red" | "amber" | "slate";
   href?: string;
+  countLabel?: string;
 };
 
 function Tile({

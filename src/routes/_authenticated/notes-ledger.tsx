@@ -289,8 +289,8 @@ function NotesLedgerPage() {
   });
 
   const reviewApplyMut = useMutation({
-    mutationFn: async (args: { row: ReviewRow; client: MatchClient }) => {
-      const { row, client } = args;
+    mutationFn: async (args: { row: ReviewRow; client: MatchClient; force?: boolean }) => {
+      const { row, client, force } = args;
       const price = row.package_price ?? Number(client.package_price ?? 0);
       const visits = row.package_total_visits ?? Number(client.package_total_visits ?? 0);
       const startDate = row.package_start_date ?? client.package_start_date;
@@ -313,6 +313,7 @@ function NotesLedgerPage() {
               package_start_date: startDate,
               amount_paid: paid,
               appended_note: appended,
+              force: force === true,
             },
           ],
         },

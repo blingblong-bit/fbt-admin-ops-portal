@@ -963,6 +963,14 @@ export const applyNotesLedger = createServerFn({ method: "POST" })
         package_start_date: string | null;
         amount_paid: number;
         appended_note: string | null;
+        /**
+         * Bypass the monotonic amount_paid guard and the
+         * "package_price < existing amount_paid" refusal. Use only when the
+         * admin has manually verified the current Hub value is wrong
+         * (e.g. corrupted by a prior bad merge) and wants the note's
+         * parsed value applied even though it's lower.
+         */
+        force?: boolean;
       }[];
     }) => input,
   )

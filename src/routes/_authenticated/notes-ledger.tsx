@@ -917,11 +917,15 @@ function AutoUpdateCard({
   excluded,
   onToggle,
   result,
+  forced,
+  onToggleForce,
 }: {
   row: AutoUpdateRow;
   excluded: boolean;
   onToggle: () => void;
   result?: ApplyRowResult;
+  forced: boolean;
+  onToggleForce: () => void;
 }) {
   const c = row.changes;
   const border = result?.status === "error"

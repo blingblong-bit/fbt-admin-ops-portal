@@ -387,14 +387,11 @@ function ScheduleCheckPage() {
           filter={q}
         />
 
-        <ScheduleSection
-          title="Scheduled This Week But Not Next Week"
-          description="Clients with an appointment this week but nothing on the books next week — good candidates to re-book."
+        <NotNextWeekSection
           appointments={thisWeekNotNextWeek}
-          defaultOpen={false}
-          groupBy="dayTime"
           filter={q}
         />
+
 
         <ClientsNeedingCard
           title="Needs Next Week Scheduling"

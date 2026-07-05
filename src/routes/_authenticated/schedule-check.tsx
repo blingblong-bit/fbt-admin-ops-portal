@@ -94,10 +94,47 @@ function ScheduleCheckPage() {
 
   const runBackfill = useServerFn(backfillProductionCustomers);
   const backfillMut = useMutation({
-    mutationFn: () => runBackfill({}),
+    mutationFn: async () => {
+      // Batched loop — server processes ~200 customers per call to stay
+      // under Cloudflare Workers' 1000-subrequest / 30s limit. Keep looping
+      // until the server reports done=true so a large customer set completes
+      // across multiple safe requests instead of failing silently.
+      let offset = 0;
+      let total = 0;
+      const agg = {
+        auto_linked: 0,
+        queued_for_review: 0,
+        hidden_old: 0,
+        updated_contact: 0,
+        errors: [] as string[],
+      };
+      const progressToast = toast.loading("Backfill starting…");
+      try {
+        for (let i = 0; i < 50; i++) {
+          const r = await runBackfill({ data: { offset } });
+          agg.auto_linked += r.auto_linked;
+          agg.queued_for_review += r.queued_for_review;
+          agg.hidden_old += r.hidden_old;
+          agg.updated_contact += r.updated_contact;
+          agg.errors.push(...r.errors);
+          total = r.total;
+          offset = r.next_offset;
+          toast.loading(
+            `Backfill: ${Math.min(offset, total)} of ${total} processed…`,
+            { id: progressToast },
+          );
+          if (r.done) break;
+        }
+        toast.dismiss(progressToast);
+      } catch (e) {
+        toast.dismiss(progressToast);
+        throw e;
+      }
+      return { ...agg, processed: offset, total };
+    },
     onSuccess: (r) => {
       toast.success(
-        `Backfill: ${r.auto_linked} auto-linked · ${r.queued_for_review} need review · ${r.hidden_old} hidden (old) · ${r.updated_contact} contact updates · ${r.errors.length} errors`,
+        `Backfill complete — ${r.processed}/${r.total} processed · ${r.auto_linked} auto-linked · ${r.queued_for_review} need review · ${r.hidden_old} hidden (old) · ${r.updated_contact} contact updates · ${r.errors.length} errors`,
       );
       qc.invalidateQueries({ queryKey: ["schedule-check"] });
       qc.invalidateQueries({ queryKey: ["clients"] });

@@ -10,6 +10,12 @@ import {
   type ParsedRow,
 } from "./notesLedger";
 
+export type LatestSquarePayment = {
+  synced_at: string;
+  amount: number;
+  square_payment_id: string | null;
+};
+
 export type MatchClient = {
   id: string;
   first_name: string;
@@ -23,6 +29,7 @@ export type MatchClient = {
   package_start_date: string | null;
   amount_paid: number;
   internal_notes: string | null;
+  latest_square_payment: LatestSquarePayment | null;
 };
 
 export type RowDiagnostic = {

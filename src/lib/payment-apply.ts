@@ -20,13 +20,21 @@ export async function applyPaymentOnce(
     manualResolution?: boolean;
   },
 ): Promise<{ credited: boolean; appliedAmount: number; alreadyApplied: boolean }> {
-  // Guard 1: activity already logged for this payment id
-  const { data: existingActivity } = await supabaseAdmin
+  // Guard 1: activity already logged for this payment id.
+  // We MUST fail closed on a query error here — silently continuing would
+  // skip idempotency and can double-credit the client on retry.
+  const { data: existingActivity, error: guardErr } = await supabaseAdmin
     .from("client_activities")
     .select("id")
     .eq("client_id", clientId)
     .contains("metadata", { square_payment_id: squarePaymentId } as unknown as never)
     .limit(1);
+  if (guardErr) {
+    console.error(
+      `[payment-apply] Idempotency guard query failed for client=${clientId} payment=${squarePaymentId}: ${guardErr.message ?? String(guardErr)}`,
+    );
+    throw guardErr;
+  }
   if (existingActivity && existingActivity.length > 0) {
     return { credited: false, appliedAmount: 0, alreadyApplied: true };
   }
@@ -62,12 +70,23 @@ export async function applyPaymentOnce(
     metadata.manual_resolution = true;
   }
 
-  await supabaseAdmin.from("client_activities").insert({
+  // CRITICAL: the activity row is the idempotency marker for this payment id.
+  // If it fails to insert we've already updated amount_paid, so the write is
+  // half-done. Surface it LOUDLY (throw + error log) rather than swallowing —
+  // silent failure here is what enables double-credit on retry.
+  const { error: activityErr } = await supabaseAdmin.from("client_activities").insert({
     client_id: clientId,
     activity_type: "payment",
     description: `Square payment synced — $${amountDollars.toFixed(2)}`,
     metadata: metadata as unknown as never,
   });
+  if (activityErr) {
+    console.error(
+      `[payment-apply] PARTIAL WRITE: credited client=${clientId} $${amountDollars.toFixed(2)} for payment=${squarePaymentId} but idempotency marker insert failed: ${activityErr.message ?? String(activityErr)}. Manual reconciliation required before retrying.`,
+    );
+    throw activityErr;
+  }
 
   return { credited: true, appliedAmount, alreadyApplied: false };
 }
+

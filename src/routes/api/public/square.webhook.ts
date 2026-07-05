@@ -299,8 +299,7 @@ async function matchClient(
 // in @/lib/payment-apply and is shared with the manual-resolution flows.
 
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function handlePaymentEvent(supabaseAdmin: any, eventType: string, event: SquareEvent) {
+async function handlePaymentEvent(supabaseAdmin: SupabaseClient<Database>, eventType: string, event: SquareEvent) {
   const payment = event.data?.object?.payment;
   const squarePaymentId = payment?.id ?? event.data?.id ?? null;
 

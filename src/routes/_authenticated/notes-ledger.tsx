@@ -912,6 +912,22 @@ function StatCard({
   );
 }
 
+function SquarePaymentWarning({ client }: { client: MatchClient }) {
+  const p = client.latest_square_payment;
+  if (!p) return null;
+  return (
+    <div className="mt-2 rounded border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900">
+      <span className="font-semibold">⚠ Square payment synced {formatDate(p.synced_at)}</span>
+      {" — "}${p.amount.toFixed(2)} confirmed via Square after this note was likely written.
+      Hub may be the more accurate source; do not force-lower amount_paid without
+      re-checking Square first.
+      {p.square_payment_id && (
+        <span className="ml-1 font-mono opacity-70">({p.square_payment_id})</span>
+      )}
+    </div>
+  );
+}
+
 function AutoUpdateCard({
   row,
   excluded,

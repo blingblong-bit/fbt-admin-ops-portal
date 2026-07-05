@@ -7,6 +7,7 @@ import {
   CircleDollarSign,
   CircleSlash,
   Hourglass,
+  Receipt,
   Users,
 } from "lucide-react";
 import { useServerFn } from "@tanstack/react-start";

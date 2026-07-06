@@ -271,6 +271,15 @@ function Dashboard() {
       tone: "red",
     },
     {
+      key: "payment_due_this_week",
+      label: "Payment Due — This Week",
+      icon: <CircleDollarSign className="h-5 w-5" />,
+      count: counts.payment_due_this_week,
+      money: counts.payment_due_this_week_total,
+      moneyLabel: "outstanding",
+      tone: "red",
+    },
+    {
       key: "not_scheduled",
       label: "Not Scheduled",
       icon: <CalendarClock className="h-5 w-5" />,

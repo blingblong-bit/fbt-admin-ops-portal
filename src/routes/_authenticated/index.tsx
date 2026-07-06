@@ -430,7 +430,7 @@ function Dashboard() {
         </div>
 
 
-        {(filter === "payment_due" || filter === "payment_due_this_week") && filtered.length > 0 && (
+        {!isStaff && (filter === "payment_due" || filter === "payment_due_this_week") && filtered.length > 0 && (
           <PaymentTotals clients={filtered} />
         )}
 
@@ -443,7 +443,7 @@ function Dashboard() {
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {filtered.map((c) => (
-              <SmartClientCard key={c.id} client={c} isScheduled={isScheduled(c.id)} />
+              <SmartClientCard key={c.id} client={c} isScheduled={isScheduled(c.id)} hideAmount={isStaff} />
             ))}
           </div>
         )}

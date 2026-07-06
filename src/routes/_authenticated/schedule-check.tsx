@@ -719,6 +719,7 @@ function AppointmentMobileCard({
   onCheckIn,
   completingBookingId,
   isCheckedIn,
+  hideOwed = false,
 }: {
   appointment: ScheduleAppointment;
   isNext: boolean;
@@ -726,6 +727,7 @@ function AppointmentMobileCard({
   onCheckIn?: (clientId: string, bookingId: string) => void;
   completingBookingId: string | null;
   isCheckedIn: boolean;
+  hideOwed?: boolean;
 }) {
   const total = a.client?.package_total_visits ?? 0;
   const used = a.client?.visits_used ?? 0;

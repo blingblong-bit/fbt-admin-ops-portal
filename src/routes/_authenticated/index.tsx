@@ -72,6 +72,7 @@ function useClients() {
 type FilterKey =
   | "all"
   | "payment_due"
+  | "payment_due_this_week"
   | "not_scheduled"
   | "almost_finished"
   | "critical"
@@ -80,6 +81,7 @@ type FilterKey =
 const FILTER_LABEL: Record<FilterKey, string> = {
   all: "All Active",
   payment_due: "Payment Due",
+  payment_due_this_week: "Payment Due — This Week",
   not_scheduled: "Not Scheduled",
   almost_finished: "Almost Finished",
   critical: "Critical",

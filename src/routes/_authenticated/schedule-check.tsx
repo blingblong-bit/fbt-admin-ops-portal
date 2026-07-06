@@ -883,7 +883,7 @@ function AppointmentDesktopRow({
               {a.client.first_name} {a.client.last_name}
               {owed > 0 && (
                 <span className="ml-2 rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-red-800">
-                  Owes
+                  OWES
                 </span>
               )}
             </div>

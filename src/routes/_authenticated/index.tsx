@@ -113,7 +113,12 @@ function matchesStatus(eff: LifecycleStatus, f: StatusFilter): boolean {
   }
 }
 
-function matchesFilter(c: Client, f: FilterKey, isScheduled: boolean): boolean {
+function matchesFilter(
+  c: Client,
+  f: FilterKey,
+  isScheduled: boolean,
+  isScheduledThisWeek: boolean,
+): boolean {
   const owed = amountOwed(c);
   const r = visitsRemaining(c);
   switch (f) {
@@ -121,6 +126,8 @@ function matchesFilter(c: Client, f: FilterKey, isScheduled: boolean): boolean {
       return true;
     case "payment_due":
       return owed > 0;
+    case "payment_due_this_week":
+      return owed > 0 && isScheduledThisWeek;
     case "not_scheduled":
       return !isScheduled;
     case "almost_finished":

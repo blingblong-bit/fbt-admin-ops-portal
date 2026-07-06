@@ -270,7 +270,7 @@ function Dashboard() {
 
   const reviewCount = reviewCountQuery.data ?? 0;
 
-  const tiles: TileDef[] = [
+  const allTiles: (TileDef & { staffHidden?: boolean })[] = [
     {
       key: "payment_due",
       label: "Payment Due",
@@ -279,6 +279,7 @@ function Dashboard() {
       money: counts.payment_due_total,
       moneyLabel: "outstanding",
       tone: "red",
+      staffHidden: true,
     },
     {
       key: "payment_due_this_week",
@@ -288,6 +289,7 @@ function Dashboard() {
       money: counts.payment_due_this_week_total,
       moneyLabel: "outstanding",
       tone: "red",
+      staffHidden: true,
     },
     {
       key: "not_scheduled",
@@ -308,7 +310,9 @@ function Dashboard() {
       label: "Critical",
       icon: <AlertTriangle className="h-5 w-5" />,
       count: counts.critical,
-      money: counts.critical_total,
+      // Hide the aggregate $ for staff, but keep the count/list — Critical is
+      // the "almost finished AND owes" cohort which is useful signal.
+      money: isStaff ? undefined : counts.critical_total,
       moneyLabel: "outstanding",
       tone: "red",
     },
@@ -320,6 +324,7 @@ function Dashboard() {
       tone: reviewCount > 0 ? "amber" : "slate",
       href: "/sync-log",
       countLabel: "payment",
+      staffHidden: true,
     },
     {
       key: "package_complete",
@@ -336,6 +341,7 @@ function Dashboard() {
       tone: "slate",
     },
   ];
+  const tiles = allTiles.filter((t) => !(isStaff && t.staffHidden));
 
   return (
     <AppShell>

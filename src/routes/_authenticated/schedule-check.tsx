@@ -2041,9 +2041,31 @@ function NotNextWeekSection({
                           </span>
                         )}
                       </div>
-                      <div className="mt-0.5 text-xs text-slate-500">
-                        {formatDayHeader(a.start_at.slice(0, 10))} · {formatTimeLocal(a.start_at)}
-                        {a.team_member_name ? ` · ${a.team_member_name}` : ""}
+                      <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-slate-500">
+                        <span>
+                          {formatDayHeader(a.start_at.slice(0, 10))} · {formatTimeLocal(a.start_at)}
+                          {a.team_member_name ? ` · ${a.team_member_name}` : ""}
+                        </span>
+                        {c.phone && (
+                          <span className="inline-flex items-center gap-1">
+                            <a
+                              href={`tel:${formatPhoneLink(c.phone)}`}
+                              className="inline-flex items-center gap-0.5 rounded-full bg-sky-50 px-1.5 py-0.5 text-sky-700 hover:bg-sky-100 hover:underline"
+                              title="Call"
+                            >
+                              <Phone className="h-3 w-3" />
+                              <span className="hidden sm:inline">{formatPhoneDisplay(c.phone)}</span>
+                            </a>
+                            <a
+                              href={`sms:${formatPhoneLink(c.phone)}`}
+                              className="inline-flex items-center gap-0.5 rounded-full bg-emerald-50 px-1.5 py-0.5 text-emerald-700 hover:bg-emerald-100 hover:underline"
+                              title="Text"
+                            >
+                              <MessageSquare className="h-3 w-3" />
+                              <span className="hidden sm:inline">Text</span>
+                            </a>
+                          </span>
+                        )}
                       </div>
                     </div>
                     <div className="flex gap-2">

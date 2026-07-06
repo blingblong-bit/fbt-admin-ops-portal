@@ -28,6 +28,7 @@ import {
   type LifecycleStatus,
 } from "@/lib/clients";
 import { getScheduledClientIds, getThisWeekScheduledClientIds } from "@/lib/schedule.functions";
+import { useRole } from "@/hooks/useRole";
 
 
 export const Route = createFileRoute("/_authenticated/")({

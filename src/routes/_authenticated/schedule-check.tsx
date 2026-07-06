@@ -676,6 +676,7 @@ function TimeGroupBlock({
             onCheckIn={onCheckIn}
             completingBookingId={completingBookingId}
             isCheckedIn={checkedSet.has(a.booking_id)}
+            hideOwed={hideOwed}
           />
         ))}
       </div>

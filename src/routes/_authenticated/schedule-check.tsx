@@ -443,13 +443,6 @@ function ScheduleCheckPage() {
 
 
         <ClientsNeedingCard
-          title="Needs Next Week Scheduling"
-          description="Active clients with appointments this week but none next week."
-          clients={data?.needs_next_week_scheduling ?? []}
-          hideOwed={isStaff}
-        />
-
-        <ClientsNeedingCard
           title="Not Scheduled After Selected Date"
           description="Active clients with visits remaining and no Square appointment after this date."
           clients={data?.not_scheduled_after ?? []}

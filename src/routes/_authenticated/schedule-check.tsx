@@ -782,7 +782,7 @@ function AppointmentMobileCard({
           </span>
           {owed > 0 && (
             <span className="rounded-full bg-red-100 px-2 py-0.5 text-red-800">
-              {hideOwed ? "Owes balance" : `Owes ${formatCurrency(owed)}`}
+              {hideOwed ? "OWES" : `Owes ${formatCurrency(owed)}`}
             </span>
           )}
           {packageComplete && (
@@ -854,6 +854,9 @@ function AppointmentDesktopRow({
   const used = a.client?.visits_used ?? 0;
   const hasPackage = !!a.client && total > 0;
   const packageComplete = hasPackage && used >= total;
+  const owed = a.client
+    ? Math.max(0, Number(a.client.package_price ?? 0) - Number(a.client.amount_paid ?? 0))
+    : 0;
   const busy = completingBookingId === a.booking_id;
 
   return (
@@ -878,6 +881,11 @@ function AppointmentDesktopRow({
                 )
               )}
               {a.client.first_name} {a.client.last_name}
+              {owed > 0 && (
+                <span className="ml-2 rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-red-800">
+                  OWES
+                </span>
+              )}
             </div>
             <div className="text-xs text-slate-500">
               {hasPackage ? `${used}/${total} visits` : "No visit package"}

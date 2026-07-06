@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { requireAdmin } from "@/lib/require-admin";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -25,6 +26,7 @@ import {
 import { amountOwed, formatCurrency, formatDate, fullName, type Client } from "@/lib/clients";
 
 export const Route = createFileRoute("/_authenticated/clients/deleted")({
+  beforeLoad: requireAdmin,
   head: () => ({ meta: [{ title: "Deleted Clients · FIT Beyond Therapy Admin" }] }),
   component: DeletedClientsPage,
 });

@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { requireAdmin } from "@/lib/require-admin";
 import { useServerFn } from "@tanstack/react-start";
 import { useMutation } from "@tanstack/react-query";
 import { useState, useEffect } from "react";
@@ -188,6 +189,7 @@ function downloadMigrationAuditCsv(
 
 
 export const Route = createFileRoute("/_authenticated/notes-ledger")({
+  beforeLoad: requireAdmin,
   head: () => ({ meta: [{ title: "Notes Ledger Import · FBT Admin" }] }),
   component: NotesLedgerPage,
 });

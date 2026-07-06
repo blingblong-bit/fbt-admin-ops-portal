@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { requireAdmin } from "@/lib/require-admin";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
@@ -18,6 +19,7 @@ import { archiveInactiveSquareImports } from "@/lib/cleanup.functions";
 
 
 export const Route = createFileRoute("/_authenticated/backup")({
+  beforeLoad: requireAdmin,
   head: () => ({
     meta: [{ title: "Backup & Data Management — FIT Beyond Therapy" }],
   }),

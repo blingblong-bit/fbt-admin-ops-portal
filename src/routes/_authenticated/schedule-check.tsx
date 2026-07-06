@@ -523,6 +523,7 @@ function ScheduleSection({
   completingBookingId,
   groupBy = "time",
   filter = "",
+  hideOwed = false,
 }: {
   title: string;
   description: string;
@@ -534,6 +535,7 @@ function ScheduleSection({
   completingBookingId?: string | null;
   groupBy?: "time" | "dayTime";
   filter?: string;
+  hideOwed?: boolean;
 }) {
   const checkedSet = checkedInIds ?? new Set<string>();
   const q = filter.trim();

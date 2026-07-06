@@ -910,5 +910,27 @@ function AppointmentsCard({ clientId }: { clientId: string }) {
   );
 }
 
+function BackLink() {
+  const router = useRouter();
+  const canGoBack = router.history.length > 1;
+  if (!canGoBack) {
+    return (
+      <Link to="/clients" className="text-sm text-slate-500 hover:underline">
+        ← All clients
+      </Link>
+    );
+  }
+  return (
+    <button
+      type="button"
+      onClick={() => router.history.back()}
+      className="text-sm text-slate-500 hover:underline"
+    >
+      ← Back
+    </button>
+  );
+}
+
+
 
 

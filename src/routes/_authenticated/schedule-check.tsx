@@ -639,6 +639,7 @@ function TimeGroupBlock({
   onCheckIn,
   completingBookingId,
   checkedInIds,
+  hideOwed = false,
 }: {
   timeLabel: string;
   appointments: ScheduleAppointment[];
@@ -647,6 +648,7 @@ function TimeGroupBlock({
   onCheckIn?: (clientId: string, bookingId: string) => void;
   completingBookingId: string | null;
   checkedInIds?: Set<string>;
+  hideOwed?: boolean;
 }) {
   const checkedSet = checkedInIds ?? new Set<string>();
   return (

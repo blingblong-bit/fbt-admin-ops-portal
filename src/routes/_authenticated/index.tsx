@@ -155,6 +155,18 @@ function Dashboard() {
   );
   const isScheduled = (id: string) => scheduledSet.has(id);
 
+  const fetchThisWeekIds = useServerFn(getThisWeekScheduledClientIds);
+  const thisWeekQuery = useQuery({
+    queryKey: ["scheduled-this-week-client-ids"],
+    queryFn: () => fetchThisWeekIds(),
+    staleTime: 60_000,
+  });
+  const thisWeekSet = useMemo(
+    () => new Set<string>(thisWeekQuery.data?.client_ids ?? []),
+    [thisWeekQuery.data],
+  );
+  const isScheduledThisWeek = (id: string) => thisWeekSet.has(id);
+
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<FilterKey>("payment_due");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("active_assessment");

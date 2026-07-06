@@ -63,6 +63,7 @@ function matchesStatusFilter(eff: LifecycleStatus, f: StatusFilter): boolean {
 }
 
 function ClientsListPage() {
+  const { isStaff } = useRole();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("active_assessment");
   const fetchScheduledIds = useServerFn(getScheduledClientIds);

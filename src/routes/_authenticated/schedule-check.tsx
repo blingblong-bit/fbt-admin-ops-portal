@@ -400,7 +400,7 @@ function ScheduleCheckPage() {
           }
           groupBy="time"
           filter={q}
-          hideOwed={false}
+          hideOwed={isStaff}
         />
 
         <ScheduleSection

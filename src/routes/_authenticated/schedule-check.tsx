@@ -2031,15 +2031,8 @@ function NotNextWeekSection({
                     }`}
                   >
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <div className="truncate text-sm font-semibold text-slate-900">
-                          {c.first_name} {c.last_name}
-                        </div>
-                        {isContacted && (
-                          <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-800">
-                            Contacted ✓
-                          </span>
-                        )}
+                      <div className="truncate text-sm font-semibold text-slate-900">
+                        {c.first_name} {c.last_name}
                       </div>
                       <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-slate-500">
                         <span>

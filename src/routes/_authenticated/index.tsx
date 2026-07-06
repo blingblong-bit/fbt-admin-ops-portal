@@ -230,7 +230,11 @@ function Dashboard() {
         )
       : list;
     // Sort: payment-due-ish filters by balance desc; others by name
-    if (filter === "payment_due" || filter === "critical") {
+    if (
+      filter === "payment_due" ||
+      filter === "payment_due_this_week" ||
+      filter === "critical"
+    ) {
       return [...searched].sort((a, b) => amountOwed(b) - amountOwed(a));
     }
     if (filter === "almost_finished") {
@@ -239,7 +243,7 @@ function Dashboard() {
       );
     }
     return [...searched].sort((a, b) => fullName(a).localeCompare(fullName(b)));
-  }, [visibleClients, filter, search, scheduledSet]);
+  }, [visibleClients, filter, search, scheduledSet, thisWeekSet]);
 
   const reviewCountQuery = useQuery({
     queryKey: ["square_payments_needs_review_count"],

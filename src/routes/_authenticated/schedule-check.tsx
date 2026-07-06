@@ -959,6 +959,7 @@ function normPhoneForDup(s: string | null | undefined): string | null {
 }
 
 function UnmatchedAppointmentsCard({ appointments }: { appointments: ScheduleAppointment[] }) {
+  const { isStaff } = useRole();
   const listFn = useServerFn(listLinkableClients);
   const linkFn = useServerFn(linkSquareCustomer);
   const qc = useQueryClient();

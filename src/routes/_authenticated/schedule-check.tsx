@@ -782,7 +782,7 @@ function AppointmentMobileCard({
           </span>
           {owed > 0 && (
             <span className="rounded-full bg-red-100 px-2 py-0.5 text-red-800">
-              {hideOwed ? "Owes balance" : `Owes ${formatCurrency(owed)}`}
+              {hideOwed ? "OWES" : `Owes ${formatCurrency(owed)}`}
             </span>
           )}
           {packageComplete && (

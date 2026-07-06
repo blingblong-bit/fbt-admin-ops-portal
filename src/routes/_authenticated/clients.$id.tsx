@@ -149,10 +149,9 @@ function ClientDetailPage() {
   return (
     <AppShell>
       <div className="mb-6">
-        <Link to="/clients" className="text-sm text-slate-500 hover:underline">
-          ← All clients
-        </Link>
+        <BackLink />
       </div>
+
 
       <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
         <div>

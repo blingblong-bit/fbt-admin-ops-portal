@@ -27,7 +27,7 @@ import {
   type Client,
   type LifecycleStatus,
 } from "@/lib/clients";
-import { getScheduledClientIds } from "@/lib/schedule.functions";
+import { getScheduledClientIds, getThisWeekScheduledClientIds } from "@/lib/schedule.functions";
 
 
 export const Route = createFileRoute("/_authenticated/")({
@@ -72,6 +72,7 @@ function useClients() {
 type FilterKey =
   | "all"
   | "payment_due"
+  | "payment_due_this_week"
   | "not_scheduled"
   | "almost_finished"
   | "critical"
@@ -80,6 +81,7 @@ type FilterKey =
 const FILTER_LABEL: Record<FilterKey, string> = {
   all: "All Active",
   payment_due: "Payment Due",
+  payment_due_this_week: "Payment Due — This Week",
   not_scheduled: "Not Scheduled",
   almost_finished: "Almost Finished",
   critical: "Critical",
@@ -111,7 +113,12 @@ function matchesStatus(eff: LifecycleStatus, f: StatusFilter): boolean {
   }
 }
 
-function matchesFilter(c: Client, f: FilterKey, isScheduled: boolean): boolean {
+function matchesFilter(
+  c: Client,
+  f: FilterKey,
+  isScheduled: boolean,
+  isScheduledThisWeek: boolean,
+): boolean {
   const owed = amountOwed(c);
   const r = visitsRemaining(c);
   switch (f) {
@@ -119,6 +126,8 @@ function matchesFilter(c: Client, f: FilterKey, isScheduled: boolean): boolean {
       return true;
     case "payment_due":
       return owed > 0;
+    case "payment_due_this_week":
+      return owed > 0 && isScheduledThisWeek;
     case "not_scheduled":
       return !isScheduled;
     case "almost_finished":
@@ -146,6 +155,18 @@ function Dashboard() {
   );
   const isScheduled = (id: string) => scheduledSet.has(id);
 
+  const fetchThisWeekIds = useServerFn(getThisWeekScheduledClientIds);
+  const thisWeekQuery = useQuery({
+    queryKey: ["scheduled-this-week-client-ids"],
+    queryFn: () => fetchThisWeekIds(),
+    staleTime: 60_000,
+  });
+  const thisWeekSet = useMemo(
+    () => new Set<string>(thisWeekQuery.data?.client_ids ?? []),
+    [thisWeekQuery.data],
+  );
+  const isScheduledThisWeek = (id: string) => thisWeekSet.has(id);
+
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<FilterKey>("payment_due");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("active_assessment");
@@ -162,6 +183,8 @@ function Dashboard() {
       all: 0,
       payment_due: 0,
       payment_due_total: 0,
+      payment_due_this_week: 0,
+      payment_due_this_week_total: 0,
       not_scheduled: 0,
       almost_finished: 0,
       critical: 0,
@@ -175,6 +198,10 @@ function Dashboard() {
       if (owed > 0) {
         c.payment_due += 1;
         c.payment_due_total += owed;
+        if (isScheduledThisWeek(cl.id)) {
+          c.payment_due_this_week += 1;
+          c.payment_due_this_week_total += owed;
+        }
       }
       if (!isScheduled(cl.id)) c.not_scheduled += 1;
       if (r !== null && r > 0 && r <= 2) c.almost_finished += 1;
@@ -186,11 +213,13 @@ function Dashboard() {
         c.package_complete += 1;
     }
     return c;
-  }, [visibleClients, scheduledSet]);
+  }, [visibleClients, scheduledSet, thisWeekSet]);
 
 
   const filtered = useMemo(() => {
-    const list = visibleClients.filter((c) => matchesFilter(c, filter, isScheduled(c.id)));
+    const list = visibleClients.filter((c) =>
+      matchesFilter(c, filter, isScheduled(c.id), isScheduledThisWeek(c.id)),
+    );
     const q = search.trim().toLowerCase();
 
     const searched = q
@@ -201,7 +230,11 @@ function Dashboard() {
         )
       : list;
     // Sort: payment-due-ish filters by balance desc; others by name
-    if (filter === "payment_due" || filter === "critical") {
+    if (
+      filter === "payment_due" ||
+      filter === "payment_due_this_week" ||
+      filter === "critical"
+    ) {
       return [...searched].sort((a, b) => amountOwed(b) - amountOwed(a));
     }
     if (filter === "almost_finished") {
@@ -210,7 +243,7 @@ function Dashboard() {
       );
     }
     return [...searched].sort((a, b) => fullName(a).localeCompare(fullName(b)));
-  }, [visibleClients, filter, search, scheduledSet]);
+  }, [visibleClients, filter, search, scheduledSet, thisWeekSet]);
 
   const reviewCountQuery = useQuery({
     queryKey: ["square_payments_needs_review_count"],
@@ -234,6 +267,15 @@ function Dashboard() {
       icon: <CircleDollarSign className="h-5 w-5" />,
       count: counts.payment_due,
       money: counts.payment_due_total,
+      moneyLabel: "outstanding",
+      tone: "red",
+    },
+    {
+      key: "payment_due_this_week",
+      label: "Payment Due — This Week",
+      icon: <CircleDollarSign className="h-5 w-5" />,
+      count: counts.payment_due_this_week,
+      money: counts.payment_due_this_week_total,
       moneyLabel: "outstanding",
       tone: "red",
     },
@@ -338,7 +380,7 @@ function Dashboard() {
             Showing: {FILTER_LABEL[filter]}
           </h2>
           <div className="flex items-center gap-3">
-            {filter === "payment_due" && filtered.length > 0 && (
+            {(filter === "payment_due" || filter === "payment_due_this_week") && filtered.length > 0 && (
               <button
                 type="button"
                 onClick={() => exportPaymentDueCsv(filtered)}
@@ -372,7 +414,7 @@ function Dashboard() {
         </div>
 
 
-        {filter === "payment_due" && filtered.length > 0 && (
+        {(filter === "payment_due" || filter === "payment_due_this_week") && filtered.length > 0 && (
           <PaymentTotals clients={filtered} />
         )}
 

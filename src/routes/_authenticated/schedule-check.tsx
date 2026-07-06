@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, MessageSquare, Phone } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -955,6 +955,24 @@ function AppointmentDesktopRow({
   );
 }
 
+
+function formatPhoneLink(s: string | null | undefined): string {
+  if (!s) return "";
+  const digits = s.replace(/\D+/g, "");
+  if (!digits) return "";
+  // If 10 digits, add US country code
+  const num = digits.length === 10 ? `+1${digits}` : digits.startsWith("1") && digits.length === 11 ? `+${digits}` : digits;
+  return num;
+}
+
+function formatPhoneDisplay(s: string | null | undefined): string {
+  if (!s) return "";
+  const digits = s.replace(/\D+/g, "");
+  if (digits.length === 10) {
+    return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+  }
+  return s;
+}
 
 function normNameForDup(s: string | null | undefined): string {
   return (s ?? "").trim().toLowerCase().replace(/\s+/g, " ");
@@ -2023,9 +2041,31 @@ function NotNextWeekSection({
                           </span>
                         )}
                       </div>
-                      <div className="mt-0.5 text-xs text-slate-500">
-                        {formatDayHeader(a.start_at.slice(0, 10))} · {formatTimeLocal(a.start_at)}
-                        {a.team_member_name ? ` · ${a.team_member_name}` : ""}
+                      <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-slate-500">
+                        <span>
+                          {formatDayHeader(a.start_at.slice(0, 10))} · {formatTimeLocal(a.start_at)}
+                          {a.team_member_name ? ` · ${a.team_member_name}` : ""}
+                        </span>
+                        {c.phone && (
+                          <span className="inline-flex items-center gap-1">
+                            <a
+                              href={`tel:${formatPhoneLink(c.phone)}`}
+                              className="inline-flex items-center gap-0.5 rounded-full bg-sky-50 px-1.5 py-0.5 text-sky-700 hover:bg-sky-100 hover:underline"
+                              title="Call"
+                            >
+                              <Phone className="h-3 w-3" />
+                              <span className="hidden sm:inline">{formatPhoneDisplay(c.phone)}</span>
+                            </a>
+                            <a
+                              href={`sms:${formatPhoneLink(c.phone)}`}
+                              className="inline-flex items-center gap-0.5 rounded-full bg-emerald-50 px-1.5 py-0.5 text-emerald-700 hover:bg-emerald-100 hover:underline"
+                              title="Text"
+                            >
+                              <MessageSquare className="h-3 w-3" />
+                              <span className="hidden sm:inline">Text</span>
+                            </a>
+                          </span>
+                        )}
                       </div>
                     </div>
                     <div className="flex gap-2">

@@ -1,4 +1,4 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate, useRouter } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { z } from "zod";
@@ -149,10 +149,9 @@ function ClientDetailPage() {
   return (
     <AppShell>
       <div className="mb-6">
-        <Link to="/clients" className="text-sm text-slate-500 hover:underline">
-          ← All clients
-        </Link>
+        <BackLink />
       </div>
+
 
       <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
         <div>
@@ -910,6 +909,28 @@ function AppointmentsCard({ clientId }: { clientId: string }) {
     </Card>
   );
 }
+
+function BackLink() {
+  const router = useRouter();
+  const canGoBack = router.history.length > 1;
+  if (!canGoBack) {
+    return (
+      <Link to="/clients" className="text-sm text-slate-500 hover:underline">
+        ← All clients
+      </Link>
+    );
+  }
+  return (
+    <button
+      type="button"
+      onClick={() => router.history.back()}
+      className="text-sm text-slate-500 hover:underline"
+    >
+      ← Back
+    </button>
+  );
+}
+
 
 
 

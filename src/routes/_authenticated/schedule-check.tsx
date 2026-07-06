@@ -400,6 +400,7 @@ function ScheduleCheckPage() {
           }
           groupBy="time"
           filter={q}
+          hideOwed={false}
         />
 
         <ScheduleSection
@@ -413,6 +414,7 @@ function ScheduleCheckPage() {
           defaultOpen={false}
           groupBy="dayTime"
           filter={q}
+          hideOwed={isStaff}
         />
 
         <ScheduleSection
@@ -424,6 +426,7 @@ function ScheduleCheckPage() {
           defaultOpen={false}
           groupBy="dayTime"
           filter={q}
+          hideOwed={isStaff}
         />
 
         <NotNextWeekSection
@@ -436,6 +439,7 @@ function ScheduleCheckPage() {
           title="Needs Next Week Scheduling"
           description="Active clients with appointments this week but none next week."
           clients={data?.needs_next_week_scheduling ?? []}
+          hideOwed={isStaff}
         />
 
         <ClientsNeedingCard

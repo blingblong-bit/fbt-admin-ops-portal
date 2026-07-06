@@ -211,7 +211,9 @@ function Dashboard() {
 
 
   const filtered = useMemo(() => {
-    const list = visibleClients.filter((c) => matchesFilter(c, filter, isScheduled(c.id)));
+    const list = visibleClients.filter((c) =>
+      matchesFilter(c, filter, isScheduled(c.id), isScheduledThisWeek(c.id)),
+    );
     const q = search.trim().toLowerCase();
 
     const searched = q

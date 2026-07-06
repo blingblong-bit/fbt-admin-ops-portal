@@ -183,10 +183,14 @@ function ClientsListPage() {
                 <div className="text-right text-slate-800">{progress(c)}</div>
                 <div className="text-slate-500">Scheduled</div>
                 <div className="text-right">{scheduledSet.has(c.id) ? "✅" : "⭕"}</div>
-                <div className="text-slate-500">Owed</div>
-                <div className={`text-right font-semibold ${owed > 0 ? "text-red-600" : "text-slate-700"}`}>
-                  {formatCurrency(owed)}
-                </div>
+                {!isStaff && (
+                  <>
+                    <div className="text-slate-500">Owed</div>
+                    <div className={`text-right font-semibold ${owed > 0 ? "text-red-600" : "text-slate-700"}`}>
+                      {formatCurrency(owed)}
+                    </div>
+                  </>
+                )}
               </div>
             </Link>
           );

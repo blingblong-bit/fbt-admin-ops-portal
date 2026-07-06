@@ -220,7 +220,7 @@ function ClientsListPage() {
                   <TableHead>Package</TableHead>
                   <TableHead>Progress</TableHead>
                   <TableHead>Scheduled</TableHead>
-                  <TableHead>Amount Owed</TableHead>
+                  {!isStaff && <TableHead>Amount Owed</TableHead>}
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
@@ -235,9 +235,11 @@ function ClientsListPage() {
                     <TableCell>
                       {scheduledSet.has(c.id) ? "✅" : "⭕"}
                     </TableCell>
-                    <TableCell className={amountOwed(c) > 0 ? "font-medium text-red-600 whitespace-nowrap" : "whitespace-nowrap"}>
-                      {formatCurrency(amountOwed(c))}
-                    </TableCell>
+                    {!isStaff && (
+                      <TableCell className={amountOwed(c) > 0 ? "font-medium text-red-600 whitespace-nowrap" : "whitespace-nowrap"}>
+                        {formatCurrency(amountOwed(c))}
+                      </TableCell>
+                    )}
                     <TableCell>
                       <StatusBadge client={c} isScheduled={scheduledSet.has(c.id)} />
                     </TableCell>

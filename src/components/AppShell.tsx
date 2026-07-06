@@ -1,8 +1,9 @@
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState, type ReactNode } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { Menu, X, ChevronDown } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { useRole } from "@/hooks/useRole";
 import {
   Collapsible,
   CollapsibleTrigger,
@@ -10,12 +11,12 @@ import {
 } from "@/components/ui/collapsible";
 
 export function AppShell({ children }: { children: ReactNode }) {
-  const primaryNav = [
+  const primaryNavAll = [
     { to: "/", label: "Dashboard" },
     { to: "/clients", label: "All Clients" },
     { to: "/clients/new", label: "Add Client" },
     { to: "/schedule-check", label: "Schedule Check" },
-    { to: "/clients/deleted", label: "Deleted Clients" },
+    { to: "/clients/deleted", label: "Deleted Clients", adminOnly: true },
   ] as const;
 
   const adminNav = [
@@ -32,21 +33,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
 
-  const { data: adminRoles } = useQuery({
-    queryKey: ["user-roles"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("user_roles")
-        .select("role")
-        .in("role", ["admin", "superadmin"]);
-      if (error) {
-        console.warn("user_roles query failed:", error);
-        return [];
-      }
-      return data ?? [];
-    },
-  });
-  const isAdmin = (adminRoles ?? []).length > 0;
+  const { isAdmin } = useRole();
+  const primaryNav = primaryNavAll.filter((n) => isAdmin || !("adminOnly" in n && n.adminOnly));
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setEmail(data.user?.email ?? null));

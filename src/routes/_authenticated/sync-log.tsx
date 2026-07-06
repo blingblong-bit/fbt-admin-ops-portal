@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { requireAdmin } from "@/lib/require-admin";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
@@ -39,6 +40,7 @@ import {
 
 
 export const Route = createFileRoute("/_authenticated/sync-log")({
+  beforeLoad: requireAdmin,
   head: () => ({
     meta: [{ title: "Square Sync — FIT Beyond Therapy" }],
   }),

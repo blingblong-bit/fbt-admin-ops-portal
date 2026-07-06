@@ -1,4 +1,5 @@
 import { createFileRoute, useRouter } from "@tanstack/react-router";
+import { requireAdmin } from "@/lib/require-admin";
 import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
 import {
@@ -12,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 
 export const Route = createFileRoute("/_authenticated/square-diagnostic")({
+  beforeLoad: requireAdmin,
   component: SquareDiagnosticPage,
   errorComponent: ({ error, reset }) => {
     const router = useRouter();

@@ -26,6 +26,7 @@ import {
   type LifecycleStatus,
 } from "@/lib/clients";
 import { getScheduledClientIds } from "@/lib/schedule.functions";
+import { useRole } from "@/hooks/useRole";
 
 
 export const Route = createFileRoute("/_authenticated/clients/")({
@@ -62,6 +63,7 @@ function matchesStatusFilter(eff: LifecycleStatus, f: StatusFilter): boolean {
 }
 
 function ClientsListPage() {
+  const { isStaff } = useRole();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("active_assessment");
   const fetchScheduledIds = useServerFn(getScheduledClientIds);
@@ -181,10 +183,14 @@ function ClientsListPage() {
                 <div className="text-right text-slate-800">{progress(c)}</div>
                 <div className="text-slate-500">Scheduled</div>
                 <div className="text-right">{scheduledSet.has(c.id) ? "✅" : "⭕"}</div>
-                <div className="text-slate-500">Owed</div>
-                <div className={`text-right font-semibold ${owed > 0 ? "text-red-600" : "text-slate-700"}`}>
-                  {formatCurrency(owed)}
-                </div>
+                {!isStaff && (
+                  <>
+                    <div className="text-slate-500">Owed</div>
+                    <div className={`text-right font-semibold ${owed > 0 ? "text-red-600" : "text-slate-700"}`}>
+                      {formatCurrency(owed)}
+                    </div>
+                  </>
+                )}
               </div>
             </Link>
           );
@@ -214,7 +220,7 @@ function ClientsListPage() {
                   <TableHead>Package</TableHead>
                   <TableHead>Progress</TableHead>
                   <TableHead>Scheduled</TableHead>
-                  <TableHead>Amount Owed</TableHead>
+                  {!isStaff && <TableHead>Amount Owed</TableHead>}
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
@@ -229,9 +235,11 @@ function ClientsListPage() {
                     <TableCell>
                       {scheduledSet.has(c.id) ? "✅" : "⭕"}
                     </TableCell>
-                    <TableCell className={amountOwed(c) > 0 ? "font-medium text-red-600 whitespace-nowrap" : "whitespace-nowrap"}>
-                      {formatCurrency(amountOwed(c))}
-                    </TableCell>
+                    {!isStaff && (
+                      <TableCell className={amountOwed(c) > 0 ? "font-medium text-red-600 whitespace-nowrap" : "whitespace-nowrap"}>
+                        {formatCurrency(amountOwed(c))}
+                      </TableCell>
+                    )}
                     <TableCell>
                       <StatusBadge client={c} isScheduled={scheduledSet.has(c.id)} />
                     </TableCell>

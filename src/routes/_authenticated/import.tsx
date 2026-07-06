@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { requireAdmin } from "@/lib/require-admin";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -9,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 
 export const Route = createFileRoute("/_authenticated/import")({
+  beforeLoad: requireAdmin,
   head: () => ({ meta: [{ title: "Import · FIT Beyond Therapy Admin" }] }),
   component: ImportPage,
 });

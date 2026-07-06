@@ -24,6 +24,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { formatCurrency, formatDate, formatDateTimeLocal } from "@/lib/clients";
+import { useRole } from "@/hooks/useRole";
 import {
   completeVisitForClient,
   getContactedClientIds,
@@ -64,6 +65,7 @@ function visitsRemaining(c: { package_total_visits: number; visits_used: number 
 }
 
 function ScheduleCheckPage() {
+  const { isStaff } = useRole();
   const [date, setDate] = useState<string>(todayYmd());
   const [checkedIn, setCheckedIn] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState<string>("");
@@ -398,6 +400,7 @@ function ScheduleCheckPage() {
           }
           groupBy="time"
           filter={q}
+          hideOwed={false}
         />
 
         <ScheduleSection
@@ -411,6 +414,7 @@ function ScheduleCheckPage() {
           defaultOpen={false}
           groupBy="dayTime"
           filter={q}
+          hideOwed={isStaff}
         />
 
         <ScheduleSection
@@ -422,6 +426,7 @@ function ScheduleCheckPage() {
           defaultOpen={false}
           groupBy="dayTime"
           filter={q}
+          hideOwed={isStaff}
         />
 
         <NotNextWeekSection
@@ -434,12 +439,14 @@ function ScheduleCheckPage() {
           title="Needs Next Week Scheduling"
           description="Active clients with appointments this week but none next week."
           clients={data?.needs_next_week_scheduling ?? []}
+          hideOwed={isStaff}
         />
 
         <ClientsNeedingCard
           title="Not Scheduled After Selected Date"
           description="Active clients with visits remaining and no Square appointment after this date."
           clients={data?.not_scheduled_after ?? []}
+          hideOwed={isStaff}
         />
 
         <UnmatchedAppointmentsCard appointments={data?.unmatched ?? []} />
@@ -517,6 +524,7 @@ function ScheduleSection({
   completingBookingId,
   groupBy = "time",
   filter = "",
+  hideOwed = false,
 }: {
   title: string;
   description: string;
@@ -528,6 +536,7 @@ function ScheduleSection({
   completingBookingId?: string | null;
   groupBy?: "time" | "dayTime";
   filter?: string;
+  hideOwed?: boolean;
 }) {
   const checkedSet = checkedInIds ?? new Set<string>();
   const q = filter.trim();
@@ -593,6 +602,7 @@ function ScheduleSection({
                         onCheckIn={onCheckIn}
                         completingBookingId={completingBookingId ?? null}
                         checkedInIds={checkedSet}
+                        hideOwed={hideOwed}
                       />
                     ))}
                   </div>
@@ -611,6 +621,7 @@ function ScheduleSection({
                   onCheckIn={onCheckIn}
                   completingBookingId={completingBookingId ?? null}
                   checkedInIds={checkedSet}
+                  hideOwed={hideOwed}
                 />
               ))}
             </div>
@@ -629,6 +640,7 @@ function TimeGroupBlock({
   onCheckIn,
   completingBookingId,
   checkedInIds,
+  hideOwed = false,
 }: {
   timeLabel: string;
   appointments: ScheduleAppointment[];
@@ -637,6 +649,7 @@ function TimeGroupBlock({
   onCheckIn?: (clientId: string, bookingId: string) => void;
   completingBookingId: string | null;
   checkedInIds?: Set<string>;
+  hideOwed?: boolean;
 }) {
   const checkedSet = checkedInIds ?? new Set<string>();
   return (
@@ -664,6 +677,7 @@ function TimeGroupBlock({
             onCheckIn={onCheckIn}
             completingBookingId={completingBookingId}
             isCheckedIn={checkedSet.has(a.booking_id)}
+            hideOwed={hideOwed}
           />
         ))}
       </div>
@@ -706,6 +720,7 @@ function AppointmentMobileCard({
   onCheckIn,
   completingBookingId,
   isCheckedIn,
+  hideOwed = false,
 }: {
   appointment: ScheduleAppointment;
   isNext: boolean;
@@ -713,6 +728,7 @@ function AppointmentMobileCard({
   onCheckIn?: (clientId: string, bookingId: string) => void;
   completingBookingId: string | null;
   isCheckedIn: boolean;
+  hideOwed?: boolean;
 }) {
   const total = a.client?.package_total_visits ?? 0;
   const used = a.client?.visits_used ?? 0;
@@ -766,7 +782,7 @@ function AppointmentMobileCard({
           </span>
           {owed > 0 && (
             <span className="rounded-full bg-red-100 px-2 py-0.5 text-red-800">
-              Owes {formatCurrency(owed)}
+              {hideOwed ? "Owes balance" : `Owes ${formatCurrency(owed)}`}
             </span>
           )}
           {packageComplete && (
@@ -943,6 +959,7 @@ function normPhoneForDup(s: string | null | undefined): string | null {
 }
 
 function UnmatchedAppointmentsCard({ appointments }: { appointments: ScheduleAppointment[] }) {
+  const { isStaff } = useRole();
   const listFn = useServerFn(listLinkableClients);
   const linkFn = useServerFn(linkSquareCustomer);
   const qc = useQueryClient();
@@ -1156,14 +1173,19 @@ function UnmatchedAppointmentsCard({ appointments }: { appointments: ScheduleApp
                                     )}
                                   </div>
                                   <div className="text-slate-600">
-                                    {remaining}/{c.package_total_visits} visits left ·{" "}
-                                    {formatCurrency(Number(c.amount_paid ?? 0))} /{" "}
-                                    {formatCurrency(Number(c.package_price ?? 0))}
-                                    {owed > 0 && (
-                                      <span className="text-red-700">
+                                    {remaining}/{c.package_total_visits} visits left
+                                    {!isStaff && (
+                                      <>
                                         {" · "}
-                                        Owes {formatCurrency(owed)}
-                                      </span>
+                                        {formatCurrency(Number(c.amount_paid ?? 0))} /{" "}
+                                        {formatCurrency(Number(c.package_price ?? 0))}
+                                        {owed > 0 && (
+                                          <span className="text-red-700">
+                                            {" · "}
+                                            Owes {formatCurrency(owed)}
+                                          </span>
+                                        )}
+                                      </>
                                     )}
                                   </div>
                                 </div>
@@ -1592,10 +1614,12 @@ function ClientsNeedingCard({
   title,
   description,
   clients,
+  hideOwed = false,
 }: {
   title: string;
   description: string;
   clients: NeedsScheduleClient[];
+  hideOwed?: boolean;
 }) {
   return (
     <Card>
@@ -1613,7 +1637,7 @@ function ClientsNeedingCard({
                 <TableHead>Client</TableHead>
                 <TableHead>Phone</TableHead>
                 <TableHead>Visits Left</TableHead>
-                <TableHead>Owed</TableHead>
+                {!hideOwed && <TableHead>Owed</TableHead>}
                 <TableHead>Last Appt</TableHead>
                 <TableHead>Notes</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
@@ -1630,7 +1654,7 @@ function ClientsNeedingCard({
                     </TableCell>
                     <TableCell className="text-sm text-slate-600">{c.phone ?? "—"}</TableCell>
                     <TableCell className="text-sm">{remaining}</TableCell>
-                    <TableCell className="text-sm">{formatCurrency(owed)}</TableCell>
+                    {!hideOwed && <TableCell className="text-sm">{formatCurrency(owed)}</TableCell>}
                     <TableCell className="text-sm">
                       {c.last_appointment_at ? formatDate(c.last_appointment_at.slice(0, 10)) : "—"}
                     </TableCell>

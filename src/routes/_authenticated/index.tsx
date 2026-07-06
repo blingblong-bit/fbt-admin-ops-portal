@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   CalendarClock,
@@ -28,6 +28,7 @@ import {
   type LifecycleStatus,
 } from "@/lib/clients";
 import { getScheduledClientIds, getThisWeekScheduledClientIds } from "@/lib/schedule.functions";
+import { useRole } from "@/hooks/useRole";
 
 
 export const Route = createFileRoute("/_authenticated/")({
@@ -142,6 +143,7 @@ function matchesFilter(
 
 
 function Dashboard() {
+  const { isStaff } = useRole();
   const { data: clients = [], isLoading } = useClients();
   const fetchScheduledIds = useServerFn(getScheduledClientIds);
   const scheduledQuery = useQuery({
@@ -168,8 +170,16 @@ function Dashboard() {
   const isScheduledThisWeek = (id: string) => thisWeekSet.has(id);
 
   const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState<FilterKey>("payment_due");
+  // Staff never see the payment-due (aggregate) list — default to "all" instead.
+  const [filter, setFilter] = useState<FilterKey>(isStaff ? "all" : "payment_due");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("active_assessment");
+
+  // Role can resolve after first render; force off payment-due filters for staff.
+  useEffect(() => {
+    if (isStaff && (filter === "payment_due" || filter === "payment_due_this_week")) {
+      setFilter("all");
+    }
+  }, [isStaff, filter]);
 
   // Apply lifecycle status filter first — by default this hides archived clients.
   const visibleClients = useMemo(() => {
@@ -260,7 +270,7 @@ function Dashboard() {
 
   const reviewCount = reviewCountQuery.data ?? 0;
 
-  const tiles: TileDef[] = [
+  const allTiles: (TileDef & { staffHidden?: boolean })[] = [
     {
       key: "payment_due",
       label: "Payment Due",
@@ -269,6 +279,7 @@ function Dashboard() {
       money: counts.payment_due_total,
       moneyLabel: "outstanding",
       tone: "red",
+      staffHidden: true,
     },
     {
       key: "payment_due_this_week",
@@ -278,6 +289,7 @@ function Dashboard() {
       money: counts.payment_due_this_week_total,
       moneyLabel: "outstanding",
       tone: "red",
+      staffHidden: true,
     },
     {
       key: "not_scheduled",
@@ -298,7 +310,9 @@ function Dashboard() {
       label: "Critical",
       icon: <AlertTriangle className="h-5 w-5" />,
       count: counts.critical,
-      money: counts.critical_total,
+      // Hide the aggregate $ for staff, but keep the count/list — Critical is
+      // the "almost finished AND owes" cohort which is useful signal.
+      money: isStaff ? undefined : counts.critical_total,
       moneyLabel: "outstanding",
       tone: "red",
     },
@@ -310,6 +324,7 @@ function Dashboard() {
       tone: reviewCount > 0 ? "amber" : "slate",
       href: "/sync-log",
       countLabel: "payment",
+      staffHidden: true,
     },
     {
       key: "package_complete",
@@ -326,6 +341,7 @@ function Dashboard() {
       tone: "slate",
     },
   ];
+  const tiles = allTiles.filter((t) => !(isStaff && t.staffHidden));
 
   return (
     <AppShell>
@@ -380,7 +396,7 @@ function Dashboard() {
             Showing: {FILTER_LABEL[filter]}
           </h2>
           <div className="flex items-center gap-3">
-            {(filter === "payment_due" || filter === "payment_due_this_week") && filtered.length > 0 && (
+            {!isStaff && (filter === "payment_due" || filter === "payment_due_this_week") && filtered.length > 0 && (
               <button
                 type="button"
                 onClick={() => exportPaymentDueCsv(filtered)}
@@ -414,7 +430,7 @@ function Dashboard() {
         </div>
 
 
-        {(filter === "payment_due" || filter === "payment_due_this_week") && filtered.length > 0 && (
+        {!isStaff && (filter === "payment_due" || filter === "payment_due_this_week") && filtered.length > 0 && (
           <PaymentTotals clients={filtered} />
         )}
 
@@ -427,7 +443,7 @@ function Dashboard() {
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {filtered.map((c) => (
-              <SmartClientCard key={c.id} client={c} isScheduled={isScheduled(c.id)} />
+              <SmartClientCard key={c.id} client={c} isScheduled={isScheduled(c.id)} hideAmount={isStaff} />
             ))}
           </div>
         )}

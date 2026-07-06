@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { requireAdmin } from "@/lib/require-admin";
 import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -30,6 +31,7 @@ import {
 import { formatCurrency, formatDate, fullName, amountOwed, visitsRemaining } from "@/lib/clients";
 
 export const Route = createFileRoute("/_authenticated/merge-center")({
+  beforeLoad: requireAdmin,
   component: MergeCenterPage,
 });
 

@@ -25,10 +25,13 @@ import {
 export function SmartClientCard({
   client,
   isScheduled,
+  hideAmount = false,
 }: {
   client: Client;
   /** Derived from live Square bookings. */
   isScheduled: boolean;
+  /** For staff role: hide the dollar balance chip on this card (multi-client grid). */
+  hideAmount?: boolean;
 }) {
   const qc = useQueryClient();
   const owed = amountOwed(client);
@@ -107,7 +110,7 @@ export function SmartClientCard({
               owed > 0 ? "text-red-600" : "text-slate-700"
             }`}
           >
-            {owed > 0 ? formatCurrency(owed) : "Paid"}
+            {hideAmount ? (owed > 0 ? "Owes" : "Paid") : owed > 0 ? formatCurrency(owed) : "Paid"}
           </dd>
         </div>
       </dl>

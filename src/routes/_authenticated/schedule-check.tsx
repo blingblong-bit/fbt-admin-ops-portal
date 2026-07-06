@@ -244,9 +244,16 @@ function ScheduleCheckPage() {
   }, [nextWeekAppts]);
   const thisWeekNotNextWeek = useMemo(
     () =>
-      (data?.this_week ?? []).filter(
-        (a) => a.client && !nextWeekClientIds.has(a.client.id),
-      ),
+      (data?.this_week ?? []).filter((a) => {
+        if (!a.client) return false;
+        if (nextWeekClientIds.has(a.client.id)) return false;
+        if (a.client.status === "archived") return false;
+        const total = a.client.package_total_visits ?? 0;
+        const used = a.client.visits_used;
+        const left = used === null || used === undefined ? total : Math.max(0, total - used);
+        if (left <= 0) return false;
+        return true;
+      }),
     [data, nextWeekClientIds],
   );
 
@@ -434,13 +441,6 @@ function ScheduleCheckPage() {
           filter={q}
         />
 
-
-        <ClientsNeedingCard
-          title="Needs Next Week Scheduling"
-          description="Active clients with appointments this week but none next week."
-          clients={data?.needs_next_week_scheduling ?? []}
-          hideOwed={isStaff}
-        />
 
         <ClientsNeedingCard
           title="Not Scheduled After Selected Date"

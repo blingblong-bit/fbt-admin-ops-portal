@@ -183,6 +183,8 @@ function Dashboard() {
       all: 0,
       payment_due: 0,
       payment_due_total: 0,
+      payment_due_this_week: 0,
+      payment_due_this_week_total: 0,
       not_scheduled: 0,
       almost_finished: 0,
       critical: 0,
@@ -196,6 +198,10 @@ function Dashboard() {
       if (owed > 0) {
         c.payment_due += 1;
         c.payment_due_total += owed;
+        if (isScheduledThisWeek(cl.id)) {
+          c.payment_due_this_week += 1;
+          c.payment_due_this_week_total += owed;
+        }
       }
       if (!isScheduled(cl.id)) c.not_scheduled += 1;
       if (r !== null && r > 0 && r <= 2) c.almost_finished += 1;
@@ -207,7 +213,7 @@ function Dashboard() {
         c.package_complete += 1;
     }
     return c;
-  }, [visibleClients, scheduledSet]);
+  }, [visibleClients, scheduledSet, thisWeekSet]);
 
 
   const filtered = useMemo(() => {

@@ -174,10 +174,12 @@ function Dashboard() {
   const [filter, setFilter] = useState<FilterKey>(isStaff ? "all" : "payment_due");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("active_assessment");
 
-  // Safety: if role loads late and lands us on a payment-due filter as staff, flip.
-  if (isStaff && (filter === "payment_due" || filter === "payment_due_this_week")) {
-    setFilter("all");
-  }
+  // Role can resolve after first render; force off payment-due filters for staff.
+  useEffect(() => {
+    if (isStaff && (filter === "payment_due" || filter === "payment_due_this_week")) {
+      setFilter("all");
+    }
+  }, [isStaff, filter]);
 
   // Apply lifecycle status filter first — by default this hides archived clients.
   const visibleClients = useMemo(() => {

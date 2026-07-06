@@ -414,7 +414,7 @@ function Dashboard() {
         </div>
 
 
-        {filter === "payment_due" && filtered.length > 0 && (
+        {(filter === "payment_due" || filter === "payment_due_this_week") && filtered.length > 0 && (
           <PaymentTotals clients={filtered} />
         )}
 

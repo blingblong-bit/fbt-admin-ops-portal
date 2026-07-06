@@ -446,6 +446,7 @@ function ScheduleCheckPage() {
           title="Not Scheduled After Selected Date"
           description="Active clients with visits remaining and no Square appointment after this date."
           clients={data?.not_scheduled_after ?? []}
+          hideOwed={isStaff}
         />
 
         <UnmatchedAppointmentsCard appointments={data?.unmatched ?? []} />

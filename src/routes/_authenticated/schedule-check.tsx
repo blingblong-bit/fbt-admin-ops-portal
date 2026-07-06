@@ -65,6 +65,7 @@ function visitsRemaining(c: { package_total_visits: number; visits_used: number 
 }
 
 function ScheduleCheckPage() {
+  const { isStaff } = useRole();
   const [date, setDate] = useState<string>(todayYmd());
   const [checkedIn, setCheckedIn] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState<string>("");

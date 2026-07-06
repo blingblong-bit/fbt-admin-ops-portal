@@ -1173,14 +1173,19 @@ function UnmatchedAppointmentsCard({ appointments }: { appointments: ScheduleApp
                                     )}
                                   </div>
                                   <div className="text-slate-600">
-                                    {remaining}/{c.package_total_visits} visits left ·{" "}
-                                    {formatCurrency(Number(c.amount_paid ?? 0))} /{" "}
-                                    {formatCurrency(Number(c.package_price ?? 0))}
-                                    {owed > 0 && (
-                                      <span className="text-red-700">
+                                    {remaining}/{c.package_total_visits} visits left
+                                    {!isStaff && (
+                                      <>
                                         {" · "}
-                                        Owes {formatCurrency(owed)}
-                                      </span>
+                                        {formatCurrency(Number(c.amount_paid ?? 0))} /{" "}
+                                        {formatCurrency(Number(c.package_price ?? 0))}
+                                        {owed > 0 && (
+                                          <span className="text-red-700">
+                                            {" · "}
+                                            Owes {formatCurrency(owed)}
+                                          </span>
+                                        )}
+                                      </>
                                     )}
                                   </div>
                                 </div>

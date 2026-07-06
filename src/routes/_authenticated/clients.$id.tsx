@@ -649,7 +649,7 @@ function EditDialog({
           <Field label="Total Visits">
             <Input type="number" min={0} value={form.package_total_visits} onChange={(e) => up("package_total_visits", Number(e.target.value))} />
           </Field>
-          <Field label="Visits Used (optional — Square is source of truth)">
+          <Field label="Visits Used">
             <Input
               type="number"
               min={0}
@@ -657,7 +657,6 @@ function EditDialog({
               onChange={(e) =>
                 up("visits_used", e.target.value === "" ? null : Number(e.target.value))
               }
-              placeholder="Leave blank to skip"
             />
           </Field>
           <Field label="Package Price">

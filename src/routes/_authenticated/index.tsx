@@ -143,6 +143,7 @@ function matchesFilter(
 
 
 function Dashboard() {
+  const { isStaff } = useRole();
   const { data: clients = [], isLoading } = useClients();
   const fetchScheduledIds = useServerFn(getScheduledClientIds);
   const scheduledQuery = useQuery({

@@ -1607,10 +1607,12 @@ function ClientsNeedingCard({
   title,
   description,
   clients,
+  hideOwed = false,
 }: {
   title: string;
   description: string;
   clients: NeedsScheduleClient[];
+  hideOwed?: boolean;
 }) {
   return (
     <Card>
@@ -1628,7 +1630,7 @@ function ClientsNeedingCard({
                 <TableHead>Client</TableHead>
                 <TableHead>Phone</TableHead>
                 <TableHead>Visits Left</TableHead>
-                <TableHead>Owed</TableHead>
+                {!hideOwed && <TableHead>Owed</TableHead>}
                 <TableHead>Last Appt</TableHead>
                 <TableHead>Notes</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
@@ -1645,7 +1647,7 @@ function ClientsNeedingCard({
                     </TableCell>
                     <TableCell className="text-sm text-slate-600">{c.phone ?? "—"}</TableCell>
                     <TableCell className="text-sm">{remaining}</TableCell>
-                    <TableCell className="text-sm">{formatCurrency(owed)}</TableCell>
+                    {!hideOwed && <TableCell className="text-sm">{formatCurrency(owed)}</TableCell>}
                     <TableCell className="text-sm">
                       {c.last_appointment_at ? formatDate(c.last_appointment_at.slice(0, 10)) : "—"}
                     </TableCell>

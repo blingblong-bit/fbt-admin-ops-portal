@@ -24,6 +24,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { formatCurrency, formatDate, formatDateTimeLocal } from "@/lib/clients";
+import { useRole } from "@/hooks/useRole";
 import {
   completeVisitForClient,
   getContactedClientIds,

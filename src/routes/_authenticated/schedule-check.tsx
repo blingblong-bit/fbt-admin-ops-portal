@@ -601,6 +601,7 @@ function ScheduleSection({
                         onCheckIn={onCheckIn}
                         completingBookingId={completingBookingId ?? null}
                         checkedInIds={checkedSet}
+                        hideOwed={hideOwed}
                       />
                     ))}
                   </div>
@@ -619,6 +620,7 @@ function ScheduleSection({
                   onCheckIn={onCheckIn}
                   completingBookingId={completingBookingId ?? null}
                   checkedInIds={checkedSet}
+                  hideOwed={hideOwed}
                 />
               ))}
             </div>

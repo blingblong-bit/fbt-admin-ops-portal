@@ -76,6 +76,10 @@ function ScheduleCheckPage() {
   const query = useQuery({
     queryKey: ["schedule-check", date],
     queryFn: () => fetchSchedule({ data: { date } }),
+    refetchInterval: (q) =>
+      typeof document !== "undefined" && document.visibilityState === "visible" ? 60_000 : false,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: true,
   });
 
   const completeMut = useMutation({

@@ -241,6 +241,24 @@ function ClientDetailPage() {
               value={formatCurrency(owed)}
               valueClass={owed > 0 ? "text-red-600 font-semibold" : ""}
             />
+            {(() => {
+              const last = activities.find(
+                (a) =>
+                  a.activity_type === "payment" &&
+                  (a.metadata as Record<string, unknown> | null)?.source === "square",
+              );
+              if (!last) {
+                return <Row label="Last paid" value="No Square payment on record" />;
+              }
+              const meta = last.metadata as Record<string, unknown> | null;
+              const amt = Number(meta?.applied_amount ?? meta?.amount ?? 0);
+              return (
+                <Row
+                  label="Last paid"
+                  value={`${formatCurrency(amt)} on ${formatDate(last.created_at)}`}
+                />
+              );
+            })()}
           </CardContent>
         </Card>
 

@@ -122,8 +122,31 @@ export const Route = createFileRoute("/api/public/booking-note-sweep")({
         }
 
 
-        // Classify
-        const strictRe = /^\d+ of \d+$/;
+        // Also fetch upcoming bookings so we can compute union/overlap.
+        const upcomingCustomerIds = new Set<string>();
+        {
+          let cursor: string | undefined;
+          for (let p = 0; p < 50; p++) {
+            const url = new URL(`${SQUARE_BASE}/v2/bookings`);
+            url.searchParams.set("limit", "200");
+            if (cursor) url.searchParams.set("cursor", cursor);
+            const r = await fetch(url.toString(), {
+              headers: { Authorization: `Bearer ${token}`, "Square-Version": SQUARE_VERSION },
+            });
+            if (!r.ok) break;
+            const j = (await r.json()) as { bookings?: SquareBooking[]; cursor?: string };
+            for (const b of j.bookings ?? []) {
+              if (b.customer_id && linkedIds.has(b.customer_id)) upcomingCustomerIds.add(b.customer_id);
+            }
+            cursor = j.cursor;
+            if (!cursor) break;
+          }
+        }
+        const pastCustomerIds = new Set(latestByCustomer.keys());
+        const additional = [...pastCustomerIds].filter((x) => !upcomingCustomerIds.has(x)).length;
+        const overlap = [...pastCustomerIds].filter((x) => upcomingCustomerIds.has(x)).length;
+
+
         const trimmedRe = /^\s*\d+\s+of\s+\d+\s*$/i;
         let exact = 0;
         let whitespace = 0;

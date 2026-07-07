@@ -564,7 +564,7 @@ async function handleBookingEvent(supabaseAdmin: SupabaseClient<Database>, event
     }
   }
 
-  const isCancelled = /^(CANCELLED|CANCELED|DECLINED|NO_SHOW)$/.test(status);
+  const isCancelled = /(CANCELLED|CANCELED|DECLINED|NO_SHOW)/i.test(status);
   const isDeleted = eventType === "booking.updated" && /^DELETED$/.test(status);
   const treatAsNotScheduled = isCancelled || isDeleted;
   const isActiveBooking = !treatAsNotScheduled;

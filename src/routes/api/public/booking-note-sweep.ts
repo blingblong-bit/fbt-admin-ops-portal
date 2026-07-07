@@ -147,7 +147,9 @@ export const Route = createFileRoute("/api/public/booking-note-sweep")({
         const overlap = [...pastCustomerIds].filter((x) => upcomingCustomerIds.has(x)).length;
 
 
+        const strictRe = /^\d+ of \d+$/;
         const trimmedRe = /^\s*\d+\s+of\s+\d+\s*$/i;
+
         let exact = 0;
         let whitespace = 0;
         let blank = 0;

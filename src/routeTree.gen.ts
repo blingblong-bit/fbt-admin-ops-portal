@@ -20,6 +20,7 @@ import { Route as AuthenticatedMergeCenterRouteImport } from './routes/_authenti
 import { Route as AuthenticatedImportRouteImport } from './routes/_authenticated/import'
 import { Route as AuthenticatedBackupRouteImport } from './routes/_authenticated/backup'
 import { Route as AuthenticatedClientsIndexRouteImport } from './routes/_authenticated/clients.index'
+import { Route as ApiPublicVisitBackfillRouteImport } from './routes/api/public/visit-backfill'
 import { Route as ApiPublicSquareDiagRouteImport } from './routes/api/public/square-diag'
 import { Route as AuthenticatedClientsNewRouteImport } from './routes/_authenticated/clients.new'
 import { Route as AuthenticatedClientsDeletedRouteImport } from './routes/_authenticated/clients.deleted'
@@ -85,6 +86,11 @@ const AuthenticatedClientsIndexRoute =
     path: '/clients/',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const ApiPublicVisitBackfillRoute = ApiPublicVisitBackfillRouteImport.update({
+  id: '/api/public/visit-backfill',
+  path: '/api/public/visit-backfill',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicSquareDiagRoute = ApiPublicSquareDiagRouteImport.update({
   id: '/api/public/square-diag',
   path: '/api/public/square-diag',
@@ -126,6 +132,7 @@ export interface FileRoutesByFullPath {
   '/clients/deleted': typeof AuthenticatedClientsDeletedRoute
   '/clients/new': typeof AuthenticatedClientsNewRoute
   '/api/public/square-diag': typeof ApiPublicSquareDiagRoute
+  '/api/public/visit-backfill': typeof ApiPublicVisitBackfillRoute
   '/clients/': typeof AuthenticatedClientsIndexRoute
   '/api/public/square/webhook': typeof ApiPublicSquareWebhookRoute
 }
@@ -143,6 +150,7 @@ export interface FileRoutesByTo {
   '/clients/deleted': typeof AuthenticatedClientsDeletedRoute
   '/clients/new': typeof AuthenticatedClientsNewRoute
   '/api/public/square-diag': typeof ApiPublicSquareDiagRoute
+  '/api/public/visit-backfill': typeof ApiPublicVisitBackfillRoute
   '/clients': typeof AuthenticatedClientsIndexRoute
   '/api/public/square/webhook': typeof ApiPublicSquareWebhookRoute
 }
@@ -162,6 +170,7 @@ export interface FileRoutesById {
   '/_authenticated/clients/deleted': typeof AuthenticatedClientsDeletedRoute
   '/_authenticated/clients/new': typeof AuthenticatedClientsNewRoute
   '/api/public/square-diag': typeof ApiPublicSquareDiagRoute
+  '/api/public/visit-backfill': typeof ApiPublicVisitBackfillRoute
   '/_authenticated/clients/': typeof AuthenticatedClientsIndexRoute
   '/api/public/square/webhook': typeof ApiPublicSquareWebhookRoute
 }
@@ -181,6 +190,7 @@ export interface FileRouteTypes {
     | '/clients/deleted'
     | '/clients/new'
     | '/api/public/square-diag'
+    | '/api/public/visit-backfill'
     | '/clients/'
     | '/api/public/square/webhook'
   fileRoutesByTo: FileRoutesByTo
@@ -198,6 +208,7 @@ export interface FileRouteTypes {
     | '/clients/deleted'
     | '/clients/new'
     | '/api/public/square-diag'
+    | '/api/public/visit-backfill'
     | '/clients'
     | '/api/public/square/webhook'
   id:
@@ -216,6 +227,7 @@ export interface FileRouteTypes {
     | '/_authenticated/clients/deleted'
     | '/_authenticated/clients/new'
     | '/api/public/square-diag'
+    | '/api/public/visit-backfill'
     | '/_authenticated/clients/'
     | '/api/public/square/webhook'
   fileRoutesById: FileRoutesById
@@ -224,6 +236,7 @@ export interface RootRouteChildren {
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRoute
   ApiPublicSquareDiagRoute: typeof ApiPublicSquareDiagRoute
+  ApiPublicVisitBackfillRoute: typeof ApiPublicVisitBackfillRoute
   ApiPublicSquareWebhookRoute: typeof ApiPublicSquareWebhookRoute
 }
 
@@ -306,6 +319,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedClientsIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/api/public/visit-backfill': {
+      id: '/api/public/visit-backfill'
+      path: '/api/public/visit-backfill'
+      fullPath: '/api/public/visit-backfill'
+      preLoaderRoute: typeof ApiPublicVisitBackfillRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/square-diag': {
       id: '/api/public/square-diag'
       path: '/api/public/square-diag'
@@ -381,18 +401,9 @@ const rootRouteChildren: RootRouteChildren = {
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRoute,
   ApiPublicSquareDiagRoute: ApiPublicSquareDiagRoute,
+  ApiPublicVisitBackfillRoute: ApiPublicVisitBackfillRoute,
   ApiPublicSquareWebhookRoute: ApiPublicSquareWebhookRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}

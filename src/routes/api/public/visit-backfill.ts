@@ -283,44 +283,24 @@ export const Route = createFileRoute("/api/public/visit-backfill")({
           const applying = body.proposals.filter((p) => p.will_apply);
           if (applying.length === 0) return Response.json({ applied: 0, note: "nothing to apply" });
 
-          // Build one SQL statement with a VALUES table so all updates run in one tx.
-          const values = applying
-            .map(
-              (p) =>
-                `('${p.client_id.replace(/'/g, "''")}'::uuid, ${p.proposed_visits_used}::int)`,
-            )
-            .join(",");
-          const sql = `
-            with v(id, new_used) as (values ${values})
-            update public.clients c
-               set visits_used = v.new_used
-              from v
-             where c.id = v.id
-               and c.visits_used is distinct from v.new_used
-          returning c.id, c.visits_used;`;
-
-          const { data, error } = await supabaseAdmin.rpc("exec_sql_admin", { sql });
-          if (error) {
-            // Fallback: apply row-by-row when no RPC exists (there isn't one here).
-            let applied = 0;
-            const failures: Array<{ client_id: string; error: string }> = [];
-            for (const p of applying) {
-              const { error: uerr } = await supabaseAdmin
-                .from("clients")
-                .update({ visits_used: p.proposed_visits_used })
-                .eq("id", p.client_id);
-              if (uerr) failures.push({ client_id: p.client_id, error: uerr.message });
-              else applied++;
-            }
-            return Response.json({
-              applied,
-              failed: failures.length,
-              failures,
-              mode: "row-by-row (no exec_sql_admin RPC)",
-            });
+          let applied = 0;
+          const failures: Array<{ client_id: string; name: string; error: string }> = [];
+          for (const p of applying) {
+            const { error: uerr } = await supabaseAdmin
+              .from("clients")
+              .update({ visits_used: p.proposed_visits_used })
+              .eq("id", p.client_id);
+            if (uerr) failures.push({ client_id: p.client_id, name: p.name, error: uerr.message });
+            else applied++;
           }
-          return Response.json({ applied: (data as unknown[])?.length ?? applying.length, rpc: true });
+          return Response.json({
+            requested: applying.length,
+            applied,
+            failed: failures.length,
+            failures,
+          });
         }
+
 
         return new Response("bad mode", { status: 400 });
       },

@@ -62,52 +62,65 @@ export const Route = createFileRoute("/api/public/booking-note-sweep")({
           from += step;
         }
 
-        // Sweep past bookings via GET /v2/bookings paginated, start_at_max=now.
-        // Take latest booking per customer_id that falls in our linked set.
-        const nowIso = new Date().toISOString();
+        // Sweep past bookings via GET /v2/bookings paginated. Square's default
+        // window is 31 days from start_at_min (which defaults to "now"), so we
+        // iterate month-by-month backwards to cover history.
+        const now = new Date();
+        const MONTHS_BACK = 30;
+        let scanned = 0;
+        let pages = 0;
         const latestByCustomer = new Map<
           string,
           { seller_note: string | null; start_at: string; booking_id: string; status: string | null }
         >();
 
-        let cursor: string | undefined;
-        let pages = 0;
-        let scanned = 0;
-        for (; pages < 400; pages++) {
-          const url = new URL(`${SQUARE_BASE}/v2/bookings`);
-          url.searchParams.set("limit", "200");
-          url.searchParams.set("start_at_max", nowIso);
-          if (cursor) url.searchParams.set("cursor", cursor);
-          const r = await fetch(url.toString(), {
-            headers: {
-              Authorization: `Bearer ${token}`,
-              "Square-Version": SQUARE_VERSION,
-            },
-          });
-          if (!r.ok) {
-            const t = await r.text();
-            return new Response(
-              JSON.stringify({ error: `HTTP ${r.status}`, body: t.slice(0, 400), pages, scanned }),
-              { status: 500, headers: { "content-type": "application/json" } },
-            );
-          }
-          const j = (await r.json()) as { bookings?: SquareBooking[]; cursor?: string };
-          for (const b of j.bookings ?? []) {
-            scanned++;
-            if (!b.customer_id || !linkedIds.has(b.customer_id) || !b.start_at) continue;
-            const prev = latestByCustomer.get(b.customer_id);
-            if (!prev || b.start_at > prev.start_at) {
-              latestByCustomer.set(b.customer_id, {
-                seller_note: b.seller_note ?? null,
-                start_at: b.start_at,
-                booking_id: b.id,
-                status: b.status ?? null,
-              });
+        for (let m = 0; m < MONTHS_BACK; m++) {
+          const maxD = new Date(now);
+          maxD.setUTCMonth(maxD.getUTCMonth() - m);
+          const minD = new Date(maxD);
+          minD.setUTCMonth(minD.getUTCMonth() - 1);
+          const startMax = maxD.toISOString();
+          const startMin = minD.toISOString();
+          let cursor: string | undefined;
+          for (let p = 0; p < 50; p++) {
+            const url = new URL(`${SQUARE_BASE}/v2/bookings`);
+            url.searchParams.set("limit", "200");
+            url.searchParams.set("start_at_min", startMin);
+            url.searchParams.set("start_at_max", startMax);
+            if (cursor) url.searchParams.set("cursor", cursor);
+            const r = await fetch(url.toString(), {
+              headers: {
+                Authorization: `Bearer ${token}`,
+                "Square-Version": SQUARE_VERSION,
+              },
+            });
+            pages++;
+            if (!r.ok) {
+              const t = await r.text();
+              return new Response(
+                JSON.stringify({ error: `HTTP ${r.status}`, body: t.slice(0, 400), window: [startMin, startMax], pages, scanned }),
+                { status: 500, headers: { "content-type": "application/json" } },
+              );
             }
+            const j = (await r.json()) as { bookings?: SquareBooking[]; cursor?: string };
+            for (const b of j.bookings ?? []) {
+              scanned++;
+              if (!b.customer_id || !linkedIds.has(b.customer_id) || !b.start_at) continue;
+              const prev = latestByCustomer.get(b.customer_id);
+              if (!prev || b.start_at > prev.start_at) {
+                latestByCustomer.set(b.customer_id, {
+                  seller_note: b.seller_note ?? null,
+                  start_at: b.start_at,
+                  booking_id: b.id,
+                  status: b.status ?? null,
+                });
+              }
+            }
+            cursor = j.cursor;
+            if (!cursor) break;
           }
-          cursor = j.cursor;
-          if (!cursor) break;
         }
+
 
         // Classify
         const strictRe = /^\d+ of \d+$/;

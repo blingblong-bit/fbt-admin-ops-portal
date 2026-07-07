@@ -183,7 +183,10 @@ export const Route = createFileRoute("/api/public/booking-note-sweep")({
             linked_clients: linkedIds.size,
             pages_fetched: pages + 1,
             bookings_scanned: scanned,
-            covered_clients: latestByCustomer.size,
+            covered_clients_past: latestByCustomer.size,
+            covered_clients_upcoming: upcomingCustomerIds.size,
+            overlap_upcoming_and_past: overlap,
+            additional_beyond_upcoming: additional,
             distribution: {
               exact_N_of_M: exact,
               whitespace_variant: whitespace,

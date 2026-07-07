@@ -601,10 +601,43 @@ async function handleBookingEvent(supabaseAdmin: SupabaseClient<Database>, event
     }
   }
 
+  // Leave a visible trail on the client's activity feed when Square reports
+  // a cancellation / decline / no-show / deletion. Read-only w.r.t. payments
+  // and everything else — just an activity row.
+  let cancellationLogged = false;
+  if (matchedClientId && treatAsNotScheduled) {
+    const startDisplayForActivity = startAt ? new Date(startAt).toISOString() : "unknown time";
+    // Dedup on booking_id so Square webhook retries don't spam the feed.
+    const { data: existingActivity } = await supabaseAdmin
+      .from("client_activities")
+      .select("id")
+      .eq("client_id", matchedClientId)
+      .eq("activity_type", "appointment_cancelled")
+      .contains("metadata", { source: "square_booking", booking_id: bookingId } as unknown as never)
+      .limit(1)
+      .maybeSingle();
+    if (!existingActivity) {
+      await supabaseAdmin.from("client_activities").insert({
+        client_id: matchedClientId,
+        activity_type: "appointment_cancelled",
+        description: `Square appointment on ${startDisplayForActivity} was ${(status || "cancelled").toLowerCase().replace(/_/g, " ")}.`,
+        metadata: {
+          source: "square_booking",
+          booking_id: bookingId,
+          status,
+          start_at: startAt,
+        } as unknown as never,
+      });
+      cancellationLogged = true;
+    }
+  }
+
   const action = restored
     ? "booking_restored_from_archive"
     : treatAsNotScheduled
-      ? "booking_not_scheduled"
+      ? cancellationLogged
+        ? "booking_not_scheduled_logged"
+        : "booking_not_scheduled"
       : status === "ACCEPTED" || status === "PENDING"
         ? "booking_active"
         : `booking_status_${status.toLowerCase() || "unknown"}`;

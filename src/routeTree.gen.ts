@@ -21,7 +21,6 @@ import { Route as AuthenticatedImportRouteImport } from './routes/_authenticated
 import { Route as AuthenticatedBackupRouteImport } from './routes/_authenticated/backup'
 import { Route as AuthenticatedClientsIndexRouteImport } from './routes/_authenticated/clients.index'
 import { Route as ApiPublicSquareDiagRouteImport } from './routes/api/public/square-diag'
-import { Route as ApiPublicBookingNoteSweepRouteImport } from './routes/api/public/booking-note-sweep'
 import { Route as AuthenticatedClientsNewRouteImport } from './routes/_authenticated/clients.new'
 import { Route as AuthenticatedClientsDeletedRouteImport } from './routes/_authenticated/clients.deleted'
 import { Route as AuthenticatedClientsIdRouteImport } from './routes/_authenticated/clients.$id'
@@ -91,12 +90,6 @@ const ApiPublicSquareDiagRoute = ApiPublicSquareDiagRouteImport.update({
   path: '/api/public/square-diag',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiPublicBookingNoteSweepRoute =
-  ApiPublicBookingNoteSweepRouteImport.update({
-    id: '/api/public/booking-note-sweep',
-    path: '/api/public/booking-note-sweep',
-    getParentRoute: () => rootRouteImport,
-  } as any)
 const AuthenticatedClientsNewRoute = AuthenticatedClientsNewRouteImport.update({
   id: '/clients/new',
   path: '/clients/new',
@@ -132,7 +125,6 @@ export interface FileRoutesByFullPath {
   '/clients/$id': typeof AuthenticatedClientsIdRoute
   '/clients/deleted': typeof AuthenticatedClientsDeletedRoute
   '/clients/new': typeof AuthenticatedClientsNewRoute
-  '/api/public/booking-note-sweep': typeof ApiPublicBookingNoteSweepRoute
   '/api/public/square-diag': typeof ApiPublicSquareDiagRoute
   '/clients/': typeof AuthenticatedClientsIndexRoute
   '/api/public/square/webhook': typeof ApiPublicSquareWebhookRoute
@@ -150,7 +142,6 @@ export interface FileRoutesByTo {
   '/clients/$id': typeof AuthenticatedClientsIdRoute
   '/clients/deleted': typeof AuthenticatedClientsDeletedRoute
   '/clients/new': typeof AuthenticatedClientsNewRoute
-  '/api/public/booking-note-sweep': typeof ApiPublicBookingNoteSweepRoute
   '/api/public/square-diag': typeof ApiPublicSquareDiagRoute
   '/clients': typeof AuthenticatedClientsIndexRoute
   '/api/public/square/webhook': typeof ApiPublicSquareWebhookRoute
@@ -170,7 +161,6 @@ export interface FileRoutesById {
   '/_authenticated/clients/$id': typeof AuthenticatedClientsIdRoute
   '/_authenticated/clients/deleted': typeof AuthenticatedClientsDeletedRoute
   '/_authenticated/clients/new': typeof AuthenticatedClientsNewRoute
-  '/api/public/booking-note-sweep': typeof ApiPublicBookingNoteSweepRoute
   '/api/public/square-diag': typeof ApiPublicSquareDiagRoute
   '/_authenticated/clients/': typeof AuthenticatedClientsIndexRoute
   '/api/public/square/webhook': typeof ApiPublicSquareWebhookRoute
@@ -190,7 +180,6 @@ export interface FileRouteTypes {
     | '/clients/$id'
     | '/clients/deleted'
     | '/clients/new'
-    | '/api/public/booking-note-sweep'
     | '/api/public/square-diag'
     | '/clients/'
     | '/api/public/square/webhook'
@@ -208,7 +197,6 @@ export interface FileRouteTypes {
     | '/clients/$id'
     | '/clients/deleted'
     | '/clients/new'
-    | '/api/public/booking-note-sweep'
     | '/api/public/square-diag'
     | '/clients'
     | '/api/public/square/webhook'
@@ -227,7 +215,6 @@ export interface FileRouteTypes {
     | '/_authenticated/clients/$id'
     | '/_authenticated/clients/deleted'
     | '/_authenticated/clients/new'
-    | '/api/public/booking-note-sweep'
     | '/api/public/square-diag'
     | '/_authenticated/clients/'
     | '/api/public/square/webhook'
@@ -236,7 +223,6 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRoute
-  ApiPublicBookingNoteSweepRoute: typeof ApiPublicBookingNoteSweepRoute
   ApiPublicSquareDiagRoute: typeof ApiPublicSquareDiagRoute
   ApiPublicSquareWebhookRoute: typeof ApiPublicSquareWebhookRoute
 }
@@ -327,13 +313,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicSquareDiagRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/public/booking-note-sweep': {
-      id: '/api/public/booking-note-sweep'
-      path: '/api/public/booking-note-sweep'
-      fullPath: '/api/public/booking-note-sweep'
-      preLoaderRoute: typeof ApiPublicBookingNoteSweepRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/_authenticated/clients/new': {
       id: '/_authenticated/clients/new'
       path: '/clients/new'
@@ -401,7 +380,6 @@ const AuthenticatedRouteRouteWithChildren =
 const rootRouteChildren: RootRouteChildren = {
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRoute,
-  ApiPublicBookingNoteSweepRoute: ApiPublicBookingNoteSweepRoute,
   ApiPublicSquareDiagRoute: ApiPublicSquareDiagRoute,
   ApiPublicSquareWebhookRoute: ApiPublicSquareWebhookRoute,
 }

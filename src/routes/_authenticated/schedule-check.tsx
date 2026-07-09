@@ -29,13 +29,16 @@ import {
   completeVisitForClient,
   getContactedClientIds,
   getScheduleCheck,
+  getUnavailableNextWeekClientIds,
   linkSquareCustomer,
   listLinkableClients,
   markClientContacted,
+  markClientUnavailableNextWeek,
   type LinkableClient,
   type NeedsScheduleClient,
   type ScheduleAppointment,
 } from "@/lib/schedule.functions";
+
 import {
   backfillProductionCustomers,
   createClientFromSquareReview,

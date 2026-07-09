@@ -1953,6 +1953,8 @@ function NotNextWeekSection({
 
   const fetchContacted = useServerFn(getContactedClientIds);
   const markContacted = useServerFn(markClientContacted);
+  const fetchUnavailable = useServerFn(getUnavailableNextWeekClientIds);
+  const markUnavailable = useServerFn(markClientUnavailableNextWeek);
   const qc = useQueryClient();
 
   const contactedQuery = useQuery({
@@ -1962,9 +1964,20 @@ function NotNextWeekSection({
     staleTime: 60_000,
   });
 
+  const unavailableQuery = useQuery({
+    queryKey: ["unavailable-next-week", clientIds.slice().sort().join(",")],
+    queryFn: () => fetchUnavailable({ data: { clientIds } }),
+    enabled: clientIds.length > 0,
+    staleTime: 60_000,
+  });
+
   const contactedSet = useMemo(
     () => new Set<string>(contactedQuery.data?.client_ids ?? []),
     [contactedQuery.data],
+  );
+  const unavailableSet = useMemo(
+    () => new Set<string>(unavailableQuery.data?.client_ids ?? []),
+    [unavailableQuery.data],
   );
 
   const markMut = useMutation({
@@ -1983,19 +1996,50 @@ function NotNextWeekSection({
     onError: (e: Error) => toast.error(e.message),
   });
 
-  // Sort: contacted first, then by appointment time.
+  const [reasonFor, setReasonFor] = useState<string | null>(null);
+  const [reasonText, setReasonText] = useState("");
+
+  const unavailableMut = useMutation({
+    mutationFn: (vars: { clientId: string; reason: string }) =>
+      markUnavailable({ data: { clientId: vars.clientId, reason: vars.reason } }),
+    onSuccess: (_r, vars) => {
+      toast.success("Marked unavailable next week");
+      setReasonFor(null);
+      setReasonText("");
+      qc.setQueriesData<{ client_ids: string[] } | undefined>(
+        { queryKey: ["unavailable-next-week"] },
+        (prev) => {
+          const cur = new Set(prev?.client_ids ?? []);
+          cur.add(vars.clientId);
+          return { client_ids: Array.from(cur) };
+        },
+      );
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  // Sort: active first, then contacted, then unavailable at the bottom.
   const sorted = useMemo(() => {
+    const rank = (id: string) => {
+      if (unavailableSet.has(id)) return 2;
+      if (contactedSet.has(id)) return 1;
+      return 0;
+    };
     return [...perClient].sort((a, b) => {
-      const ac = contactedSet.has(a.client!.id) ? 0 : 1;
-      const bc = contactedSet.has(b.client!.id) ? 0 : 1;
-      if (ac !== bc) return ac - bc;
+      const ra = rank(a.client!.id);
+      const rb = rank(b.client!.id);
+      if (ra !== rb) return ra - rb;
       return a.start_at.localeCompare(b.start_at);
     });
-  }, [perClient, contactedSet]);
+  }, [perClient, contactedSet, unavailableSet]);
 
   const isOpen = q.length > 0 && sorted.length > 0;
   const contactedCount = sorted.reduce(
     (n, a) => (contactedSet.has(a.client!.id) ? n + 1 : n),
+    0,
+  );
+  const unavailableCount = sorted.reduce(
+    (n, a) => (unavailableSet.has(a.client!.id) ? n + 1 : n),
     0,
   );
 
@@ -2008,7 +2052,8 @@ function NotNextWeekSection({
               Scheduled This Week But Not Next Week{" "}
               <span className="text-sm font-normal text-slate-500">
                 ({sorted.length}
-                {contactedCount > 0 ? ` · ${contactedCount} contacted` : ""})
+                {contactedCount > 0 ? ` · ${contactedCount} contacted` : ""}
+                {unavailableCount > 0 ? ` · ${unavailableCount} unavailable` : ""})
               </span>
             </CardTitle>
             <CardDescription className="mt-1">
@@ -2029,24 +2074,41 @@ function NotNextWeekSection({
               {sorted.map((a) => {
                 const c = a.client!;
                 const isContacted = contactedSet.has(c.id);
+                const isUnavailable = unavailableSet.has(c.id);
                 const busy = markMut.isPending && markMut.variables === c.id;
+                const unavailBusy =
+                  unavailableMut.isPending && unavailableMut.variables?.clientId === c.id;
+                const showReasonInput = reasonFor === c.id;
                 return (
                   <div
                     key={c.id}
                     className={`flex flex-wrap items-center gap-3 rounded-lg border bg-white p-3 shadow-sm ${
-                      isContacted ? "border-emerald-300 bg-emerald-50/40" : ""
+                      isUnavailable
+                        ? "border-slate-200 bg-slate-100/70 opacity-70"
+                        : isContacted
+                          ? "border-emerald-300 bg-emerald-50/40"
+                          : ""
                     }`}
                   >
                     <div className="min-w-0 flex-1">
-                      <div className="truncate text-sm font-semibold text-slate-900">
+                      <div
+                        className={`truncate text-sm font-semibold ${
+                          isUnavailable ? "text-slate-500" : "text-slate-900"
+                        }`}
+                      >
                         {c.first_name} {c.last_name}
+                        {isUnavailable && (
+                          <span className="ml-2 inline-flex items-center rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-slate-600">
+                            Not available next week
+                          </span>
+                        )}
                       </div>
                       <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-slate-500">
                         <span>
                           {formatDayHeader(a.start_at.slice(0, 10))} · {formatTimeLocal(a.start_at)}
                           {a.team_member_name ? ` · ${a.team_member_name}` : ""}
                         </span>
-                        {c.phone && (
+                        {c.phone && !isUnavailable && (
                           <span className="inline-flex items-center gap-1">
                             <a
                               href={`tel:${formatPhoneLink(c.phone)}`}
@@ -2067,20 +2129,67 @@ function NotNextWeekSection({
                           </span>
                         )}
                       </div>
+                      {showReasonInput && !isUnavailable && (
+                        <form
+                          onSubmit={(e) => {
+                            e.preventDefault();
+                            unavailableMut.mutate({ clientId: c.id, reason: reasonText });
+                          }}
+                          className="mt-2 flex flex-wrap items-center gap-2"
+                        >
+                          <Input
+                            autoFocus
+                            placeholder="Reason (optional) — vacation, moving…"
+                            value={reasonText}
+                            onChange={(e) => setReasonText(e.target.value)}
+                            className="h-8 max-w-xs text-xs"
+                          />
+                          <Button type="submit" size="sm" disabled={unavailBusy}>
+                            {unavailBusy ? "…" : "Confirm"}
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => {
+                              setReasonFor(null);
+                              setReasonText("");
+                            }}
+                          >
+                            Cancel
+                          </Button>
+                        </form>
+                      )}
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2">
                       <Button asChild size="sm" variant="outline">
                         <Link to="/clients/$id" params={{ id: c.id }}>
                           View
                         </Link>
                       </Button>
-                      <Button
-                        size="sm"
-                        disabled={isContacted || busy}
-                        onClick={() => markMut.mutate(c.id)}
-                      >
-                        {isContacted ? "Contacted ✓" : busy ? "…" : "Mark as Contacted"}
-                      </Button>
+                      {!isUnavailable && (
+                        <>
+                          <Button
+                            size="sm"
+                            disabled={isContacted || busy}
+                            onClick={() => markMut.mutate(c.id)}
+                          >
+                            {isContacted ? "Contacted ✓" : busy ? "…" : "Mark as Contacted"}
+                          </Button>
+                          {!showReasonInput && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => {
+                                setReasonFor(c.id);
+                                setReasonText("");
+                              }}
+                            >
+                              Can't be scheduled next week
+                            </Button>
+                          )}
+                        </>
+                      )}
                     </div>
                   </div>
                 );
@@ -2092,4 +2201,5 @@ function NotNextWeekSection({
     </Card>
   );
 }
+
 

@@ -27,7 +27,12 @@ import {
   type Client,
   type LifecycleStatus,
 } from "@/lib/clients";
-import { getScheduledClientIds, getThisWeekScheduledClientIds } from "@/lib/schedule.functions";
+import {
+  getScheduledClientIds,
+  getThisWeekScheduledClientIds,
+  getNextWeekScheduledClientIds,
+} from "@/lib/schedule.functions";
+import type { ScheduleStatus } from "@/components/SmartClientCard";
 import { useRole } from "@/hooks/useRole";
 
 

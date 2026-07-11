@@ -22,16 +22,21 @@ import {
   type Client,
 } from "@/lib/clients";
 
+export type ScheduleStatus = "this_week" | "next_week" | "not_scheduled";
+
 export function SmartClientCard({
   client,
   isScheduled,
   hideAmount = false,
+  scheduleStatus,
 }: {
   client: Client;
   /** Derived from live Square bookings. */
   isScheduled: boolean;
   /** For staff role: hide the dollar balance chip on this card (multi-client grid). */
   hideAmount?: boolean;
+  /** Optional weekly-scheduling badge shown next to the status badge. */
+  scheduleStatus?: ScheduleStatus;
 }) {
   const qc = useQueryClient();
   const owed = amountOwed(client);
@@ -95,8 +100,12 @@ export function SmartClientCard({
             <div className="mt-0.5 text-sm text-slate-500">📞 {client.phone}</div>
           )}
         </div>
-        <StatusBadge client={client} isScheduled={isScheduled} />
+        <div className="flex flex-col items-end gap-1.5">
+          <StatusBadge client={client} isScheduled={isScheduled} />
+          {scheduleStatus && <ScheduleStatusBadge status={scheduleStatus} />}
+        </div>
       </div>
+
 
       <dl className="mb-4 space-y-1.5 text-sm">
         <div className="flex justify-between gap-3">
@@ -213,5 +222,30 @@ function PaymentDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function ScheduleStatusBadge({ status }: { status: ScheduleStatus }) {
+  const map: Record<ScheduleStatus, { label: string; cls: string }> = {
+    this_week: {
+      label: "Due this week",
+      cls: "bg-sky-100 text-sky-800 border-sky-200",
+    },
+    next_week: {
+      label: "Due next week",
+      cls: "bg-indigo-100 text-indigo-800 border-indigo-200",
+    },
+    not_scheduled: {
+      label: "Not currently scheduled",
+      cls: "bg-slate-100 text-slate-600 border-slate-200",
+    },
+  };
+  const { label, cls } = map[status];
+  return (
+    <span
+      className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${cls}`}
+    >
+      {label}
+    </span>
   );
 }

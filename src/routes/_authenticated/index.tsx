@@ -27,7 +27,12 @@ import {
   type Client,
   type LifecycleStatus,
 } from "@/lib/clients";
-import { getScheduledClientIds, getThisWeekScheduledClientIds } from "@/lib/schedule.functions";
+import {
+  getScheduledClientIds,
+  getThisWeekScheduledClientIds,
+  getNextWeekScheduledClientIds,
+} from "@/lib/schedule.functions";
+import type { ScheduleStatus } from "@/components/SmartClientCard";
 import { useRole } from "@/hooks/useRole";
 
 
@@ -74,6 +79,7 @@ type FilterKey =
   | "all"
   | "payment_due"
   | "payment_due_this_week"
+  | "payment_due_next_week"
   | "not_scheduled"
   | "almost_finished"
   | "critical"
@@ -83,6 +89,7 @@ const FILTER_LABEL: Record<FilterKey, string> = {
   all: "All Active",
   payment_due: "Payment Due",
   payment_due_this_week: "Payment Due — This Week",
+  payment_due_next_week: "Payment Due — Next Week",
   not_scheduled: "Not Scheduled",
   almost_finished: "Almost Finished",
   critical: "Critical",
@@ -119,6 +126,7 @@ function matchesFilter(
   f: FilterKey,
   isScheduled: boolean,
   isScheduledThisWeek: boolean,
+  isScheduledNextWeek: boolean,
 ): boolean {
   const owed = amountOwed(c);
   const r = visitsRemaining(c);
@@ -129,6 +137,8 @@ function matchesFilter(
       return owed > 0;
     case "payment_due_this_week":
       return owed > 0 && isScheduledThisWeek;
+    case "payment_due_next_week":
+      return owed > 0 && isScheduledNextWeek;
     case "not_scheduled":
       return !isScheduled;
     case "almost_finished":
@@ -169,6 +179,18 @@ function Dashboard() {
   );
   const isScheduledThisWeek = (id: string) => thisWeekSet.has(id);
 
+  const fetchNextWeekIds = useServerFn(getNextWeekScheduledClientIds);
+  const nextWeekQuery = useQuery({
+    queryKey: ["scheduled-next-week-client-ids"],
+    queryFn: () => fetchNextWeekIds(),
+    staleTime: 60_000,
+  });
+  const nextWeekSet = useMemo(
+    () => new Set<string>(nextWeekQuery.data?.client_ids ?? []),
+    [nextWeekQuery.data],
+  );
+  const isScheduledNextWeek = (id: string) => nextWeekSet.has(id);
+
   const [search, setSearch] = useState("");
   // Staff never see the payment-due (aggregate) list — default to "all" instead.
   const [filter, setFilter] = useState<FilterKey>(isStaff ? "all" : "payment_due");
@@ -176,7 +198,12 @@ function Dashboard() {
 
   // Role can resolve after first render; force off payment-due filters for staff.
   useEffect(() => {
-    if (isStaff && (filter === "payment_due" || filter === "payment_due_this_week")) {
+    if (
+      isStaff &&
+      (filter === "payment_due" ||
+        filter === "payment_due_this_week" ||
+        filter === "payment_due_next_week")
+    ) {
       setFilter("all");
     }
   }, [isStaff, filter]);
@@ -195,6 +222,8 @@ function Dashboard() {
       payment_due_total: 0,
       payment_due_this_week: 0,
       payment_due_this_week_total: 0,
+      payment_due_next_week: 0,
+      payment_due_next_week_total: 0,
       not_scheduled: 0,
       almost_finished: 0,
       critical: 0,
@@ -212,6 +241,10 @@ function Dashboard() {
           c.payment_due_this_week += 1;
           c.payment_due_this_week_total += owed;
         }
+        if (isScheduledNextWeek(cl.id)) {
+          c.payment_due_next_week += 1;
+          c.payment_due_next_week_total += owed;
+        }
       }
       if (!isScheduled(cl.id)) c.not_scheduled += 1;
       if (r !== null && r > 0 && r <= 2) c.almost_finished += 1;
@@ -223,12 +256,18 @@ function Dashboard() {
         c.package_complete += 1;
     }
     return c;
-  }, [visibleClients, scheduledSet, thisWeekSet]);
+  }, [visibleClients, scheduledSet, thisWeekSet, nextWeekSet]);
 
 
   const filtered = useMemo(() => {
     const list = visibleClients.filter((c) =>
-      matchesFilter(c, filter, isScheduled(c.id), isScheduledThisWeek(c.id)),
+      matchesFilter(
+        c,
+        filter,
+        isScheduled(c.id),
+        isScheduledThisWeek(c.id),
+        isScheduledNextWeek(c.id),
+      ),
     );
     const q = search.trim().toLowerCase();
 
@@ -243,6 +282,7 @@ function Dashboard() {
     if (
       filter === "payment_due" ||
       filter === "payment_due_this_week" ||
+      filter === "payment_due_next_week" ||
       filter === "critical"
     ) {
       return [...searched].sort((a, b) => amountOwed(b) - amountOwed(a));
@@ -253,7 +293,7 @@ function Dashboard() {
       );
     }
     return [...searched].sort((a, b) => fullName(a).localeCompare(fullName(b)));
-  }, [visibleClients, filter, search, scheduledSet, thisWeekSet]);
+  }, [visibleClients, filter, search, scheduledSet, thisWeekSet, nextWeekSet]);
 
   const reviewCountQuery = useQuery({
     queryKey: ["square_payments_needs_review_count"],
@@ -287,6 +327,16 @@ function Dashboard() {
       icon: <CircleDollarSign className="h-5 w-5" />,
       count: counts.payment_due_this_week,
       money: counts.payment_due_this_week_total,
+      moneyLabel: "outstanding",
+      tone: "red",
+      staffHidden: true,
+    },
+    {
+      key: "payment_due_next_week",
+      label: "Payment Due — Next Week",
+      icon: <CircleDollarSign className="h-5 w-5" />,
+      count: counts.payment_due_next_week,
+      money: counts.payment_due_next_week_total,
       moneyLabel: "outstanding",
       tone: "red",
       staffHidden: true,
@@ -396,7 +446,7 @@ function Dashboard() {
             Showing: {FILTER_LABEL[filter]}
           </h2>
           <div className="flex items-center gap-3">
-            {!isStaff && (filter === "payment_due" || filter === "payment_due_this_week") && filtered.length > 0 && (
+            {!isStaff && (filter === "payment_due" || filter === "payment_due_this_week" || filter === "payment_due_next_week") && filtered.length > 0 && (
               <button
                 type="button"
                 onClick={() => exportPaymentDueCsv(filtered)}
@@ -430,7 +480,7 @@ function Dashboard() {
         </div>
 
 
-        {!isStaff && (filter === "payment_due" || filter === "payment_due_this_week") && filtered.length > 0 && (
+        {!isStaff && (filter === "payment_due" || filter === "payment_due_this_week" || filter === "payment_due_next_week") && filtered.length > 0 && (
           <PaymentTotals clients={filtered} />
         )}
 
@@ -442,9 +492,25 @@ function Dashboard() {
           </p>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {filtered.map((c) => (
-              <SmartClientCard key={c.id} client={c} isScheduled={isScheduled(c.id)} hideAmount={isStaff} />
-            ))}
+            {filtered.map((c) => {
+              const scheduleStatus: ScheduleStatus | undefined =
+                filter === "payment_due"
+                  ? isScheduledThisWeek(c.id)
+                    ? "this_week"
+                    : isScheduledNextWeek(c.id)
+                      ? "next_week"
+                      : "not_scheduled"
+                  : undefined;
+              return (
+                <SmartClientCard
+                  key={c.id}
+                  client={c}
+                  isScheduled={isScheduled(c.id)}
+                  hideAmount={isStaff}
+                  scheduleStatus={scheduleStatus}
+                />
+              );
+            })}
           </div>
         )}
       </section>

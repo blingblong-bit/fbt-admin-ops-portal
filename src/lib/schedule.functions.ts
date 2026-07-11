@@ -855,6 +855,70 @@ export const getThisWeekScheduledClientIds = createServerFn({ method: "GET" })
     },
   );
 
+/**
+ * Client IDs scheduled for an ACTIVE Square booking in NEXT week
+ * (Sunday–Saturday, America/Chicago), mirroring getThisWeekScheduledClientIds.
+ */
+export const getNextWeekScheduledClientIds = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(
+    async ({
+      context,
+    }): Promise<{ client_ids: string[]; week_start: string; week_end: string; error: string | null }> => {
+      const token = process.env.SQUARE_PRODUCTION_ACCESS_TOKEN;
+      const todayYmd = ymdInTz(new Date());
+      const dow = ymdWeekday(todayYmd);
+      const thisWeekStart = addDaysYmd(todayYmd, -dow);
+      const weekStartYmd = addDaysYmd(thisWeekStart, 7);
+      const weekEndYmd = addDaysYmd(weekStartYmd, 6);
+      if (!token) {
+        return {
+          client_ids: [],
+          week_start: weekStartYmd,
+          week_end: weekEndYmd,
+          error: "SQUARE_PRODUCTION_ACCESS_TOKEN is not configured",
+        };
+      }
+      const fetchStart = ymdLocalToInstant(weekStartYmd);
+      const fetchEnd = new Date(
+        ymdLocalToInstant(addDaysYmd(weekEndYmd, 1)).getTime() - 1,
+      );
+      const { bookings, error } = await fetchSquareBookings(
+        token,
+        fetchStart.toISOString(),
+        fetchEnd.toISOString(),
+      );
+      if (error) {
+        return { client_ids: [], week_start: weekStartYmd, week_end: weekEndYmd, error };
+      }
+
+      const customerIds = new Set<string>();
+      for (const b of bookings) {
+        const status = (b.status ?? "").toString().toUpperCase();
+        if (/CANCEL|DECLINE|NO_SHOW/.test(status)) continue;
+        if (!b.start_at) continue;
+        const day = ymdInTz(new Date(b.start_at));
+        if (day < weekStartYmd || day > weekEndYmd) continue;
+        if (b.customer_id) customerIds.add(b.customer_id);
+      }
+      if (customerIds.size === 0) {
+        return { client_ids: [], week_start: weekStartYmd, week_end: weekEndYmd, error: null };
+      }
+
+      const { data: rows, error: cErr } = await context.supabase
+        .from("clients")
+        .select("id, square_customer_id")
+        .is("deleted_at", null)
+        .in("square_customer_id", Array.from(customerIds));
+      if (cErr) throw cErr;
+
+      const ids = (rows ?? [])
+        .map((r) => (r as { id: string }).id)
+        .filter(Boolean);
+      return { client_ids: ids, week_start: weekStartYmd, week_end: weekEndYmd, error: null };
+    },
+  );
+
 export type ClientAppointment = {
   booking_id: string;
   start_at: string;

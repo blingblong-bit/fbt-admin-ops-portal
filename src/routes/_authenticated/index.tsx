@@ -126,6 +126,7 @@ function matchesFilter(
   f: FilterKey,
   isScheduled: boolean,
   isScheduledThisWeek: boolean,
+  isScheduledNextWeek: boolean,
 ): boolean {
   const owed = amountOwed(c);
   const r = visitsRemaining(c);
@@ -136,6 +137,8 @@ function matchesFilter(
       return owed > 0;
     case "payment_due_this_week":
       return owed > 0 && isScheduledThisWeek;
+    case "payment_due_next_week":
+      return owed > 0 && isScheduledNextWeek;
     case "not_scheduled":
       return !isScheduled;
     case "almost_finished":

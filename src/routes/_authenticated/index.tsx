@@ -179,6 +179,18 @@ function Dashboard() {
   );
   const isScheduledThisWeek = (id: string) => thisWeekSet.has(id);
 
+  const fetchNextWeekIds = useServerFn(getNextWeekScheduledClientIds);
+  const nextWeekQuery = useQuery({
+    queryKey: ["scheduled-next-week-client-ids"],
+    queryFn: () => fetchNextWeekIds(),
+    staleTime: 60_000,
+  });
+  const nextWeekSet = useMemo(
+    () => new Set<string>(nextWeekQuery.data?.client_ids ?? []),
+    [nextWeekQuery.data],
+  );
+  const isScheduledNextWeek = (id: string) => nextWeekSet.has(id);
+
   const [search, setSearch] = useState("");
   // Staff never see the payment-due (aggregate) list — default to "all" instead.
   const [filter, setFilter] = useState<FilterKey>(isStaff ? "all" : "payment_due");
@@ -186,7 +198,12 @@ function Dashboard() {
 
   // Role can resolve after first render; force off payment-due filters for staff.
   useEffect(() => {
-    if (isStaff && (filter === "payment_due" || filter === "payment_due_this_week")) {
+    if (
+      isStaff &&
+      (filter === "payment_due" ||
+        filter === "payment_due_this_week" ||
+        filter === "payment_due_next_week")
+    ) {
       setFilter("all");
     }
   }, [isStaff, filter]);

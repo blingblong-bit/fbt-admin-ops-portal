@@ -79,6 +79,7 @@ type FilterKey =
   | "all"
   | "payment_due"
   | "payment_due_this_week"
+  | "payment_due_next_week"
   | "not_scheduled"
   | "almost_finished"
   | "critical"
@@ -88,6 +89,7 @@ const FILTER_LABEL: Record<FilterKey, string> = {
   all: "All Active",
   payment_due: "Payment Due",
   payment_due_this_week: "Payment Due — This Week",
+  payment_due_next_week: "Payment Due — Next Week",
   not_scheduled: "Not Scheduled",
   almost_finished: "Almost Finished",
   critical: "Critical",

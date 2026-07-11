@@ -480,7 +480,7 @@ function Dashboard() {
         </div>
 
 
-        {!isStaff && (filter === "payment_due" || filter === "payment_due_this_week") && filtered.length > 0 && (
+        {!isStaff && (filter === "payment_due" || filter === "payment_due_this_week" || filter === "payment_due_next_week") && filtered.length > 0 && (
           <PaymentTotals clients={filtered} />
         )}
 
@@ -492,9 +492,25 @@ function Dashboard() {
           </p>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {filtered.map((c) => (
-              <SmartClientCard key={c.id} client={c} isScheduled={isScheduled(c.id)} hideAmount={isStaff} />
-            ))}
+            {filtered.map((c) => {
+              const scheduleStatus: ScheduleStatus | undefined =
+                filter === "payment_due"
+                  ? isScheduledThisWeek(c.id)
+                    ? "this_week"
+                    : isScheduledNextWeek(c.id)
+                      ? "next_week"
+                      : "not_scheduled"
+                  : undefined;
+              return (
+                <SmartClientCard
+                  key={c.id}
+                  client={c}
+                  isScheduled={isScheduled(c.id)}
+                  hideAmount={isStaff}
+                  scheduleStatus={scheduleStatus}
+                />
+              );
+            })}
           </div>
         )}
       </section>

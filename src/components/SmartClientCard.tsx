@@ -22,16 +22,21 @@ import {
   type Client,
 } from "@/lib/clients";
 
+export type ScheduleStatus = "this_week" | "next_week" | "not_scheduled";
+
 export function SmartClientCard({
   client,
   isScheduled,
   hideAmount = false,
+  scheduleStatus,
 }: {
   client: Client;
   /** Derived from live Square bookings. */
   isScheduled: boolean;
   /** For staff role: hide the dollar balance chip on this card (multi-client grid). */
   hideAmount?: boolean;
+  /** Optional weekly-scheduling badge shown next to the status badge. */
+  scheduleStatus?: ScheduleStatus;
 }) {
   const qc = useQueryClient();
   const owed = amountOwed(client);

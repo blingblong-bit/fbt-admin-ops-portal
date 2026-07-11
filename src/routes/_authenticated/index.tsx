@@ -222,6 +222,8 @@ function Dashboard() {
       payment_due_total: 0,
       payment_due_this_week: 0,
       payment_due_this_week_total: 0,
+      payment_due_next_week: 0,
+      payment_due_next_week_total: 0,
       not_scheduled: 0,
       almost_finished: 0,
       critical: 0,
@@ -239,6 +241,10 @@ function Dashboard() {
           c.payment_due_this_week += 1;
           c.payment_due_this_week_total += owed;
         }
+        if (isScheduledNextWeek(cl.id)) {
+          c.payment_due_next_week += 1;
+          c.payment_due_next_week_total += owed;
+        }
       }
       if (!isScheduled(cl.id)) c.not_scheduled += 1;
       if (r !== null && r > 0 && r <= 2) c.almost_finished += 1;
@@ -250,12 +256,18 @@ function Dashboard() {
         c.package_complete += 1;
     }
     return c;
-  }, [visibleClients, scheduledSet, thisWeekSet]);
+  }, [visibleClients, scheduledSet, thisWeekSet, nextWeekSet]);
 
 
   const filtered = useMemo(() => {
     const list = visibleClients.filter((c) =>
-      matchesFilter(c, filter, isScheduled(c.id), isScheduledThisWeek(c.id)),
+      matchesFilter(
+        c,
+        filter,
+        isScheduled(c.id),
+        isScheduledThisWeek(c.id),
+        isScheduledNextWeek(c.id),
+      ),
     );
     const q = search.trim().toLowerCase();
 
@@ -270,6 +282,7 @@ function Dashboard() {
     if (
       filter === "payment_due" ||
       filter === "payment_due_this_week" ||
+      filter === "payment_due_next_week" ||
       filter === "critical"
     ) {
       return [...searched].sort((a, b) => amountOwed(b) - amountOwed(a));

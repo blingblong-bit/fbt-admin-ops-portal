@@ -104,6 +104,13 @@ export function SmartClientCard({
       </div>
 
       <dl className="mb-4 space-y-1.5 text-sm">
+        <div className="flex flex-col items-end gap-1.5">
+          <StatusBadge client={client} isScheduled={isScheduled} />
+          {scheduleStatus && <ScheduleStatusBadge status={scheduleStatus} />}
+        </div>
+      </div>
+
+      <dl className="mb-4 space-y-1.5 text-sm">
         <div className="flex justify-between gap-3">
           <dt className="text-slate-500">Package</dt>
           <dd className="text-right text-slate-800">{client.package_name ?? "—"}</dd>

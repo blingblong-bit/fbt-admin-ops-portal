@@ -332,6 +332,16 @@ function Dashboard() {
       staffHidden: true,
     },
     {
+      key: "payment_due_next_week",
+      label: "Payment Due — Next Week",
+      icon: <CircleDollarSign className="h-5 w-5" />,
+      count: counts.payment_due_next_week,
+      money: counts.payment_due_next_week_total,
+      moneyLabel: "outstanding",
+      tone: "red",
+      staffHidden: true,
+    },
+    {
       key: "not_scheduled",
       label: "Not Scheduled",
       icon: <CalendarClock className="h-5 w-5" />,

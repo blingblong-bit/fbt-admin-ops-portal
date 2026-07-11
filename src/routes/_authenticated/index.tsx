@@ -293,7 +293,7 @@ function Dashboard() {
       );
     }
     return [...searched].sort((a, b) => fullName(a).localeCompare(fullName(b)));
-  }, [visibleClients, filter, search, scheduledSet, thisWeekSet]);
+  }, [visibleClients, filter, search, scheduledSet, thisWeekSet, nextWeekSet]);
 
   const reviewCountQuery = useQuery({
     queryKey: ["square_payments_needs_review_count"],

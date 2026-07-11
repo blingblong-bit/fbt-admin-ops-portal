@@ -446,7 +446,7 @@ function Dashboard() {
             Showing: {FILTER_LABEL[filter]}
           </h2>
           <div className="flex items-center gap-3">
-            {!isStaff && (filter === "payment_due" || filter === "payment_due_this_week") && filtered.length > 0 && (
+            {!isStaff && (filter === "payment_due" || filter === "payment_due_this_week" || filter === "payment_due_next_week") && filtered.length > 0 && (
               <button
                 type="button"
                 onClick={() => exportPaymentDueCsv(filtered)}

@@ -224,3 +224,28 @@ function PaymentDialog({
     </Dialog>
   );
 }
+
+function ScheduleStatusBadge({ status }: { status: ScheduleStatus }) {
+  const map: Record<ScheduleStatus, { label: string; cls: string }> = {
+    this_week: {
+      label: "Due this week",
+      cls: "bg-sky-100 text-sky-800 border-sky-200",
+    },
+    next_week: {
+      label: "Due next week",
+      cls: "bg-indigo-100 text-indigo-800 border-indigo-200",
+    },
+    not_scheduled: {
+      label: "Not currently scheduled",
+      cls: "bg-slate-100 text-slate-600 border-slate-200",
+    },
+  };
+  const { label, cls } = map[status];
+  return (
+    <span
+      className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${cls}`}
+    >
+      {label}
+    </span>
+  );
+}

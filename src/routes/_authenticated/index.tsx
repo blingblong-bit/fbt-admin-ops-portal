@@ -570,12 +570,18 @@ function Tile({
         {tile.icon}
       </div>
       <div className="text-sm font-medium text-slate-600">{tile.label}</div>
-      <div className="text-2xl font-semibold tracking-tight text-slate-900">
-        {tile.count}
-        <span className="ml-1 text-sm font-normal text-slate-500">
-          {tile.count === 1 ? tile.countLabel ?? "client" : `${tile.countLabel ?? "client"}s`}
-        </span>
-      </div>
+      {tile.hideCount ? (
+        <div className="text-base font-medium text-slate-700">
+          {tile.ctaLabel ?? "View"}
+        </div>
+      ) : (
+        <div className="text-2xl font-semibold tracking-tight text-slate-900">
+          {tile.count}
+          <span className="ml-1 text-sm font-normal text-slate-500">
+            {tile.count === 1 ? tile.countLabel ?? "client" : `${tile.countLabel ?? "client"}s`}
+          </span>
+        </div>
+      )}
       {tile.money !== undefined && tile.money > 0 && (
         <div className="text-xs font-medium text-slate-600">
           {formatCurrency(tile.money)} {tile.moneyLabel}

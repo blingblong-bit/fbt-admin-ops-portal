@@ -6,6 +6,7 @@ import {
   CalendarClock,
   CircleDollarSign,
   CircleSlash,
+  History,
   Hourglass,
   Receipt,
   Users,
@@ -377,6 +378,17 @@ function Dashboard() {
       staffHidden: true,
     },
     {
+      key: "payment_history",
+      label: "Payment History",
+      icon: <History className="h-5 w-5" />,
+      count: 0,
+      tone: "slate",
+      href: "/payment-history",
+      hideCount: true,
+      ctaLabel: "View by week",
+      staffHidden: true,
+    },
+    {
       key: "package_complete",
       label: "Package Complete",
       icon: <CircleSlash className="h-5 w-5" />,
@@ -528,6 +540,8 @@ type TileDef = {
   tone: "red" | "amber" | "slate";
   href?: string;
   countLabel?: string;
+  hideCount?: boolean;
+  ctaLabel?: string;
 };
 
 function Tile({
@@ -557,12 +571,18 @@ function Tile({
         {tile.icon}
       </div>
       <div className="text-sm font-medium text-slate-600">{tile.label}</div>
-      <div className="text-2xl font-semibold tracking-tight text-slate-900">
-        {tile.count}
-        <span className="ml-1 text-sm font-normal text-slate-500">
-          {tile.count === 1 ? tile.countLabel ?? "client" : `${tile.countLabel ?? "client"}s`}
-        </span>
-      </div>
+      {tile.hideCount ? (
+        <div className="text-base font-medium text-slate-700">
+          {tile.ctaLabel ?? "View"}
+        </div>
+      ) : (
+        <div className="text-2xl font-semibold tracking-tight text-slate-900">
+          {tile.count}
+          <span className="ml-1 text-sm font-normal text-slate-500">
+            {tile.count === 1 ? tile.countLabel ?? "client" : `${tile.countLabel ?? "client"}s`}
+          </span>
+        </div>
+      )}
       {tile.money !== undefined && tile.money > 0 && (
         <div className="text-xs font-medium text-slate-600">
           {formatCurrency(tile.money)} {tile.moneyLabel}

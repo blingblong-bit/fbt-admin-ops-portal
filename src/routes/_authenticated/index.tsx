@@ -6,6 +6,7 @@ import {
   CalendarClock,
   CircleDollarSign,
   CircleSlash,
+  History,
   Hourglass,
   Receipt,
   Users,

@@ -539,6 +539,8 @@ type TileDef = {
   tone: "red" | "amber" | "slate";
   href?: string;
   countLabel?: string;
+  hideCount?: boolean;
+  ctaLabel?: string;
 };
 
 function Tile({

@@ -384,7 +384,8 @@ function Dashboard() {
       count: 0,
       tone: "slate",
       href: "/payment-history",
-      countLabel: "",
+      hideCount: true,
+      ctaLabel: "View by week",
       staffHidden: true,
     },
     {

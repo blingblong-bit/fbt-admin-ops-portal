@@ -378,6 +378,16 @@ function Dashboard() {
       staffHidden: true,
     },
     {
+      key: "payment_history",
+      label: "Payment History",
+      icon: <History className="h-5 w-5" />,
+      count: 0,
+      tone: "slate",
+      href: "/payment-history",
+      countLabel: "",
+      staffHidden: true,
+    },
+    {
       key: "package_complete",
       label: "Package Complete",
       icon: <CircleSlash className="h-5 w-5" />,

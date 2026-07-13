@@ -919,6 +919,104 @@ export const getNextWeekScheduledClientIds = createServerFn({ method: "GET" })
     },
   );
 
+/**
+ * Client IDs that had an ACTIVE Square booking in any week PRIOR to the
+ * current clinic-local week, within the last `weeks_back` weeks (default 8).
+ * Returns each client's most recent prior scheduled instant so the caller
+ * can render a "Carried over from <date range>" tag. Excludes any client
+ * scheduled in the current week.
+ */
+export const getPriorWeeksScheduledClientLastDates = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { weeks_back?: number } | undefined) => ({
+    weeks_back: Math.min(12, Math.max(1, Number(d?.weeks_back ?? 8))),
+  }))
+  .handler(
+    async ({
+      data,
+      context,
+    }): Promise<{
+      clients: Array<{ client_id: string; last_scheduled_at: string }>;
+      window_start: string;
+      window_end: string;
+      error: string | null;
+    }> => {
+      const token = process.env.SQUARE_PRODUCTION_ACCESS_TOKEN;
+      const todayYmd = ymdInTz(new Date());
+      const dow = ymdWeekday(todayYmd);
+      const thisWeekStartYmd = addDaysYmd(todayYmd, -dow);
+      const priorWindowStartYmd = addDaysYmd(thisWeekStartYmd, -7 * data.weeks_back);
+
+      const emptyResp = {
+        clients: [] as Array<{ client_id: string; last_scheduled_at: string }>,
+        window_start: priorWindowStartYmd,
+        window_end: addDaysYmd(thisWeekStartYmd, -1),
+        error: null as string | null,
+      };
+      if (!token) {
+        emptyResp.error = "SQUARE_PRODUCTION_ACCESS_TOKEN is not configured";
+        return emptyResp;
+      }
+
+      // Square caps a single bookings query at 31 days — page through in
+      // 31-day windows from priorWindowStartYmd up to (but not including)
+      // this week's start.
+      const windowStartInstant = ymdLocalToInstant(priorWindowStartYmd);
+      const windowEndInstant = new Date(ymdLocalToInstant(thisWeekStartYmd).getTime() - 1);
+      const CHUNK_MS = 30 * 24 * 60 * 60 * 1000; // 30 days to stay comfortably under 31
+      const latestByCustomer = new Map<string, string>();
+      for (
+        let chunkStart = windowStartInstant.getTime();
+        chunkStart <= windowEndInstant.getTime();
+        chunkStart += CHUNK_MS
+      ) {
+        const chunkEnd = Math.min(chunkStart + CHUNK_MS - 1, windowEndInstant.getTime());
+        const { bookings, error } = await fetchSquareBookings(
+          token,
+          new Date(chunkStart).toISOString(),
+          new Date(chunkEnd).toISOString(),
+        );
+        if (error) {
+          return { ...emptyResp, error };
+        }
+        for (const b of bookings) {
+          const status = (b.status ?? "").toString().toUpperCase();
+          if (/CANCEL|DECLINE|NO_SHOW/.test(status)) continue;
+          if (!b.start_at || !b.customer_id) continue;
+          // Must fall in a PRIOR week (before this week's start, in clinic tz).
+          const day = ymdInTz(new Date(b.start_at));
+          if (day >= thisWeekStartYmd) continue;
+          if (day < priorWindowStartYmd) continue;
+          const prev = latestByCustomer.get(b.customer_id);
+          if (!prev || b.start_at > prev) latestByCustomer.set(b.customer_id, b.start_at);
+        }
+      }
+
+      if (latestByCustomer.size === 0) return emptyResp;
+
+      const { data: rows, error: cErr } = await context.supabase
+        .from("clients")
+        .select("id, square_customer_id")
+        .is("deleted_at", null)
+        .in("square_customer_id", Array.from(latestByCustomer.keys()));
+      if (cErr) throw cErr;
+
+      const clients = (rows ?? [])
+        .map((r) => {
+          const row = r as { id: string; square_customer_id: string | null };
+          const last = row.square_customer_id
+            ? latestByCustomer.get(row.square_customer_id)
+            : undefined;
+          return last ? { client_id: row.id, last_scheduled_at: last } : null;
+        })
+        .filter((v): v is { client_id: string; last_scheduled_at: string } => v !== null);
+
+      return { ...emptyResp, clients };
+    },
+  );
+
+
+
 export type ClientAppointment = {
   booking_id: string;
   start_at: string;

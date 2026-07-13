@@ -32,6 +32,7 @@ import {
   getScheduledClientIds,
   getThisWeekScheduledClientIds,
   getNextWeekScheduledClientIds,
+  getPriorWeeksScheduledClientLastDates,
 } from "@/lib/schedule.functions";
 import type { ScheduleStatus } from "@/components/SmartClientCard";
 import { useRole } from "@/hooks/useRole";
@@ -128,6 +129,7 @@ function matchesFilter(
   isScheduled: boolean,
   isScheduledThisWeek: boolean,
   isScheduledNextWeek: boolean,
+  isCarriedOver: boolean,
 ): boolean {
   const owed = amountOwed(c);
   const r = visitsRemaining(c);
@@ -137,7 +139,9 @@ function matchesFilter(
     case "payment_due":
       return owed > 0;
     case "payment_due_this_week":
-      return owed > 0 && isScheduledThisWeek;
+      // Includes clients scheduled this week AND anyone previously scheduled
+      // who still hasn't paid (carried over until amount_owed hits $0).
+      return owed > 0 && (isScheduledThisWeek || isCarriedOver);
     case "payment_due_next_week":
       return owed > 0 && isScheduledNextWeek;
     case "not_scheduled":
@@ -192,6 +196,25 @@ function Dashboard() {
   );
   const isScheduledNextWeek = (id: string) => nextWeekSet.has(id);
 
+  const fetchPriorScheduled = useServerFn(getPriorWeeksScheduledClientLastDates);
+  const priorScheduledQuery = useQuery({
+    queryKey: ["scheduled-prior-weeks-last-dates"],
+    queryFn: () => fetchPriorScheduled({ data: { weeks_back: 8 } }),
+    staleTime: 60_000,
+  });
+  const priorScheduledMap = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const row of priorScheduledQuery.data?.clients ?? []) {
+      m.set(row.client_id, row.last_scheduled_at);
+    }
+    return m;
+  }, [priorScheduledQuery.data]);
+  // "Carried over" = had a prior-week booking AND is NOT scheduled this week
+  // (this-week bookings get the "Due this week" tag instead).
+  const isCarriedOver = (id: string) =>
+    priorScheduledMap.has(id) && !thisWeekSet.has(id);
+
+
   const [search, setSearch] = useState("");
   // Staff never see the payment-due (aggregate) list — default to "all" instead.
   const [filter, setFilter] = useState<FilterKey>(isStaff ? "all" : "payment_due");
@@ -238,7 +261,7 @@ function Dashboard() {
       if (owed > 0) {
         c.payment_due += 1;
         c.payment_due_total += owed;
-        if (isScheduledThisWeek(cl.id)) {
+        if (isScheduledThisWeek(cl.id) || isCarriedOver(cl.id)) {
           c.payment_due_this_week += 1;
           c.payment_due_this_week_total += owed;
         }
@@ -257,7 +280,7 @@ function Dashboard() {
         c.package_complete += 1;
     }
     return c;
-  }, [visibleClients, scheduledSet, thisWeekSet, nextWeekSet]);
+  }, [visibleClients, scheduledSet, thisWeekSet, nextWeekSet, priorScheduledMap]);
 
 
   const filtered = useMemo(() => {
@@ -268,6 +291,7 @@ function Dashboard() {
         isScheduled(c.id),
         isScheduledThisWeek(c.id),
         isScheduledNextWeek(c.id),
+        isCarriedOver(c.id),
       ),
     );
     const q = search.trim().toLowerCase();
@@ -294,7 +318,7 @@ function Dashboard() {
       );
     }
     return [...searched].sort((a, b) => fullName(a).localeCompare(fullName(b)));
-  }, [visibleClients, filter, search, scheduledSet, thisWeekSet, nextWeekSet]);
+  }, [visibleClients, filter, search, scheduledSet, thisWeekSet, nextWeekSet, priorScheduledMap]);
 
   const reviewCountQuery = useQuery({
     queryKey: ["square_payments_needs_review_count"],
@@ -505,14 +529,28 @@ function Dashboard() {
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {filtered.map((c) => {
-              const scheduleStatus: ScheduleStatus | undefined =
-                filter === "payment_due"
-                  ? isScheduledThisWeek(c.id)
-                    ? "this_week"
-                    : isScheduledNextWeek(c.id)
-                      ? "next_week"
-                      : "not_scheduled"
-                  : undefined;
+              const carriedOverIso = priorScheduledMap.get(c.id);
+              let scheduleStatus: ScheduleStatus | undefined;
+              let scheduleStatusDetail: string | undefined;
+              if (filter === "payment_due_this_week") {
+                if (isScheduledThisWeek(c.id)) {
+                  scheduleStatus = "this_week";
+                } else if (carriedOverIso) {
+                  scheduleStatus = "carried_over";
+                  scheduleStatusDetail = formatWeekRange(carriedOverIso);
+                }
+              } else if (filter === "payment_due") {
+                scheduleStatus = isScheduledThisWeek(c.id)
+                  ? "this_week"
+                  : isScheduledNextWeek(c.id)
+                    ? "next_week"
+                    : carriedOverIso
+                      ? "carried_over"
+                      : "not_scheduled";
+                if (scheduleStatus === "carried_over" && carriedOverIso) {
+                  scheduleStatusDetail = formatWeekRange(carriedOverIso);
+                }
+              }
               return (
                 <SmartClientCard
                   key={c.id}
@@ -520,6 +558,7 @@ function Dashboard() {
                   isScheduled={isScheduled(c.id)}
                   hideAmount={isStaff}
                   scheduleStatus={scheduleStatus}
+                  scheduleStatusDetail={scheduleStatusDetail}
                 />
               );
             })}
@@ -658,6 +697,29 @@ function exportPaymentDueCsv(clients: Client[]) {
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
 }
+
+// Format the clinic-local Sun–Sat week range that contains the given ISO
+// instant, e.g. "Nov 30 – Dec 6". Used by the "Carried over from …" tag.
+function formatWeekRange(iso: string): string {
+  const CLINIC_TZ = "America/Chicago";
+  const d = new Date(iso);
+  // Get the day-of-week in clinic tz.
+  const ymd = new Intl.DateTimeFormat("en-CA", {
+    timeZone: CLINIC_TZ,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(d);
+  const [y, m, day] = ymd.split("-").map(Number);
+  const dow = new Date(Date.UTC(y, m - 1, day)).getUTCDay();
+  const startUtc = new Date(Date.UTC(y, m - 1, day - dow));
+  const endUtc = new Date(Date.UTC(y, m - 1, day - dow + 6));
+  const fmt = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" });
+  return `${fmt.format(startUtc)} – ${fmt.format(endUtc)}`;
+}
+
+
+
 
 // Keep StatusBadge import used elsewhere referenced to avoid unused-import noise
 void StatusBadge;

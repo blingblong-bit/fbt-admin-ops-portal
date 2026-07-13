@@ -1975,6 +1975,10 @@ function NotNextWeekSection({
     () => new Set<string>(contactedQuery.data?.client_ids ?? []),
     [contactedQuery.data],
   );
+  const priorContactedSet = useMemo(
+    () => new Set<string>(contactedQuery.data?.prior_client_ids ?? []),
+    [contactedQuery.data],
+  );
   const unavailableSet = useMemo(
     () => new Set<string>(unavailableQuery.data?.client_ids ?? []),
     [unavailableQuery.data],
@@ -1984,14 +1988,19 @@ function NotNextWeekSection({
     mutationFn: (clientId: string) => markContacted({ data: { clientId } }),
     onSuccess: (_r, clientId) => {
       toast.success("Marked as contacted");
-      qc.setQueriesData<{ client_ids: string[] } | undefined>(
-        { queryKey: ["contacted-not-next-week"] },
-        (prev) => {
-          const cur = new Set(prev?.client_ids ?? []);
-          cur.add(clientId);
-          return { client_ids: Array.from(cur) };
-        },
-      );
+      qc.setQueriesData<
+        { client_ids: string[]; prior_client_ids?: string[]; week_start?: string } | undefined
+      >({ queryKey: ["contacted-not-next-week"] }, (prev) => {
+        const cur = new Set(prev?.client_ids ?? []);
+        cur.add(clientId);
+        const prior = new Set(prev?.prior_client_ids ?? []);
+        prior.delete(clientId);
+        return {
+          client_ids: Array.from(cur),
+          prior_client_ids: Array.from(prior),
+          week_start: prev?.week_start ?? "",
+        };
+      });
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -2074,6 +2083,7 @@ function NotNextWeekSection({
               {sorted.map((a) => {
                 const c = a.client!;
                 const isContacted = contactedSet.has(c.id);
+                const wasContactedPrior = priorContactedSet.has(c.id);
                 const isUnavailable = unavailableSet.has(c.id);
                 const busy = markMut.isPending && markMut.variables === c.id;
                 const unavailBusy =
@@ -2100,6 +2110,14 @@ function NotNextWeekSection({
                         {isUnavailable && (
                           <span className="ml-2 inline-flex items-center rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-slate-600">
                             Not available next week
+                          </span>
+                        )}
+                        {!isUnavailable && !isContacted && wasContactedPrior && (
+                          <span
+                            className="ml-2 inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-500"
+                            title="This client has a 'contacted' entry from a previous week."
+                          >
+                            Already contacted last week
                           </span>
                         )}
                       </div>

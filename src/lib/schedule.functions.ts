@@ -1139,18 +1139,42 @@ export const getContactedClientIds = createServerFn({ method: "GET" })
     if (!d || !Array.isArray(d.clientIds)) throw new Error("clientIds required");
     return d;
   })
-  .handler(async ({ data, context }): Promise<{ client_ids: string[] }> => {
-    if (data.clientIds.length === 0) return { client_ids: [] };
-    const { data: rows, error } = await context.supabase
-      .from("client_activities")
-      .select("client_id")
-      .eq("activity_type", "contacted")
-      .in("client_id", data.clientIds);
-    if (error) throw error;
-    const set = new Set<string>();
-    for (const r of rows ?? []) if (r.client_id) set.add(r.client_id as string);
-    return { client_ids: Array.from(set) };
-  });
+  .handler(
+    async ({
+      data,
+      context,
+    }): Promise<{ client_ids: string[]; prior_client_ids: string[]; week_start: string }> => {
+      const todayYmd = ymdInTz(new Date());
+      const dow = ymdWeekday(todayYmd);
+      const weekStartYmd = addDaysYmd(todayYmd, -dow);
+      const weekStartInstant = ymdLocalToInstant(weekStartYmd).toISOString();
+      if (data.clientIds.length === 0) {
+        return { client_ids: [], prior_client_ids: [], week_start: weekStartYmd };
+      }
+      const { data: rows, error } = await context.supabase
+        .from("client_activities")
+        .select("client_id, created_at")
+        .eq("activity_type", "contacted")
+        .in("client_id", data.clientIds);
+      if (error) throw error;
+      const current = new Set<string>();
+      const prior = new Set<string>();
+      for (const r of rows ?? []) {
+        if (!r.client_id) continue;
+        const id = r.client_id as string;
+        const ts = r.created_at as string | null;
+        if (ts && ts >= weekStartInstant) current.add(id);
+        else prior.add(id);
+      }
+      // A client that has been contacted this week is "active", not "prior".
+      for (const id of current) prior.delete(id);
+      return {
+        client_ids: Array.from(current),
+        prior_client_ids: Array.from(prior),
+        week_start: weekStartYmd,
+      };
+    },
+  );
 
 export const markClientContacted = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])

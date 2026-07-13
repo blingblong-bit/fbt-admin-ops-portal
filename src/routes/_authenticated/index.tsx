@@ -341,6 +341,7 @@ function Dashboard() {
       filter === "payment_due" ||
       filter === "payment_due_this_week" ||
       filter === "payment_due_next_week" ||
+      filter === "overdue_prior_weeks" ||
       filter === "critical"
     ) {
       return [...searched].sort((a, b) => amountOwed(b) - amountOwed(a));
@@ -351,7 +352,7 @@ function Dashboard() {
       );
     }
     return [...searched].sort((a, b) => fullName(a).localeCompare(fullName(b)));
-  }, [visibleClients, filter, search, scheduledSet, thisWeekSet, nextWeekSet, priorScheduledMap]);
+  }, [visibleClients, filter, search, scheduledSet, thisWeekSet, nextWeekSet, carriedOverRecentMap, overduePriorMap]);
 
   const reviewCountQuery = useQuery({
     queryKey: ["square_payments_needs_review_count"],

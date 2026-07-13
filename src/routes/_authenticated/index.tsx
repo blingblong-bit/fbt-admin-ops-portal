@@ -292,17 +292,16 @@ function Dashboard() {
       if (owed > 0) {
         c.payment_due += 1;
         c.payment_due_total += owed;
-        if (isScheduledThisWeek(cl.id) || isCarriedOver(cl.id)) {
+        if (isScheduledThisWeek(cl.id)) {
           c.payment_due_this_week += 1;
           c.payment_due_this_week_total += owed;
+        } else {
+          c.overdue_prior_weeks += 1;
+          c.overdue_prior_weeks_total += owed;
         }
         if (isScheduledNextWeek(cl.id)) {
           c.payment_due_next_week += 1;
           c.payment_due_next_week_total += owed;
-        }
-        if (isOverduePrior(cl.id)) {
-          c.overdue_prior_weeks += 1;
-          c.overdue_prior_weeks_total += owed;
         }
       }
       if (!isScheduled(cl.id)) c.not_scheduled += 1;

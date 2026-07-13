@@ -951,6 +951,18 @@ export const previewNotesLedger = createServerFn({ method: "POST" })
         changes.internal_notes.changed;
 
       if (!anyChange) {
+        const guardBlocked = computeGuardBlocked(row, chosen);
+        if (guardBlocked) {
+          auto.push({ parsed: row, client: chosen, changes, guard_blocked: guardBlocked });
+          diagnostics.push({
+            ...diagBase,
+            outcome: "auto_update",
+            rule: "matched client; monotonic guard suppressed a lower parsed amount_paid",
+            reason: `Matched ${chosen.first_name} ${chosen.last_name}; note wants amount_paid=$${guardBlocked.note_wants_paid.toFixed(2)} but current is $${guardBlocked.current_paid.toFixed(2)}.`,
+          });
+          summary.auto_updates++;
+          continue;
+        }
         skipped.push({ parsed: row, reason: "No changes vs current Admin data.", resolution: { state: "unresolved" } });
         diagnostics.push({
           ...diagBase,
@@ -961,7 +973,7 @@ export const previewNotesLedger = createServerFn({ method: "POST" })
         summary.no_changes_vs_current++;
         continue;
       }
-      auto.push({ parsed: row, client: chosen, changes });
+      auto.push({ parsed: row, client: chosen, changes, guard_blocked: null });
       diagnostics.push({
         ...diagBase,
         outcome: "auto_update",

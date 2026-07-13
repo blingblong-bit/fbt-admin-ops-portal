@@ -22,7 +22,7 @@ import {
   type Client,
 } from "@/lib/clients";
 
-export type ScheduleStatus = "this_week" | "next_week" | "not_scheduled" | "carried_over";
+export type ScheduleStatus = "this_week" | "next_week" | "not_scheduled" | "carried_over" | "overdue_prior";
 
 export function SmartClientCard({
   client,

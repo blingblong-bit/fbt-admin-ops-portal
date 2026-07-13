@@ -1954,6 +1954,7 @@ function NotNextWeekSection({
 
   const fetchContacted = useServerFn(getContactedClientIds);
   const markContacted = useServerFn(markClientContacted);
+  const unmarkContacted = useServerFn(unmarkClientContacted);
   const fetchUnavailable = useServerFn(getUnavailableNextWeekClientIds);
   const markUnavailable = useServerFn(markClientUnavailableNextWeek);
   const qc = useQueryClient();

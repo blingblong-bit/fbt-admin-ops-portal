@@ -261,7 +261,7 @@ function Dashboard() {
       if (owed > 0) {
         c.payment_due += 1;
         c.payment_due_total += owed;
-        if (isScheduledThisWeek(cl.id)) {
+        if (isScheduledThisWeek(cl.id) || isCarriedOver(cl.id)) {
           c.payment_due_this_week += 1;
           c.payment_due_this_week_total += owed;
         }
@@ -280,7 +280,7 @@ function Dashboard() {
         c.package_complete += 1;
     }
     return c;
-  }, [visibleClients, scheduledSet, thisWeekSet, nextWeekSet]);
+  }, [visibleClients, scheduledSet, thisWeekSet, nextWeekSet, priorScheduledMap]);
 
 
   const filtered = useMemo(() => {
@@ -291,6 +291,7 @@ function Dashboard() {
         isScheduled(c.id),
         isScheduledThisWeek(c.id),
         isScheduledNextWeek(c.id),
+        isCarriedOver(c.id),
       ),
     );
     const q = search.trim().toLowerCase();

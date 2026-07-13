@@ -716,6 +716,9 @@ function formatWeekRange(iso: string): string {
   const endUtc = new Date(Date.UTC(y, m - 1, day - dow + 6));
   const fmt = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" });
   return `${fmt.format(startUtc)} – ${fmt.format(endUtc)}`;
+}
+
+
 
 
 // Keep StatusBadge import used elsewhere referenced to avoid unused-import noise

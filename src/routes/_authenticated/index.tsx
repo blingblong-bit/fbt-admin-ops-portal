@@ -82,6 +82,7 @@ type FilterKey =
   | "payment_due"
   | "payment_due_this_week"
   | "payment_due_next_week"
+  | "overdue_prior_weeks"
   | "not_scheduled"
   | "almost_finished"
   | "critical"
@@ -92,6 +93,7 @@ const FILTER_LABEL: Record<FilterKey, string> = {
   payment_due: "Payment Due",
   payment_due_this_week: "Payment Due — This Week",
   payment_due_next_week: "Payment Due — Next Week",
+  overdue_prior_weeks: "Overdue — Prior Weeks",
   not_scheduled: "Not Scheduled",
   almost_finished: "Almost Finished",
   critical: "Critical",
@@ -130,6 +132,7 @@ function matchesFilter(
   isScheduledThisWeek: boolean,
   isScheduledNextWeek: boolean,
   isCarriedOver: boolean,
+  isOverduePrior: boolean,
 ): boolean {
   const owed = amountOwed(c);
   const r = visitsRemaining(c);
@@ -139,11 +142,13 @@ function matchesFilter(
     case "payment_due":
       return owed > 0;
     case "payment_due_this_week":
-      // Includes clients scheduled this week AND anyone previously scheduled
-      // who still hasn't paid (carried over until amount_owed hits $0).
+      // Includes clients scheduled this week AND anyone last scheduled in the
+      // immediately previous week who still hasn't paid.
       return owed > 0 && (isScheduledThisWeek || isCarriedOver);
     case "payment_due_next_week":
       return owed > 0 && isScheduledNextWeek;
+    case "overdue_prior_weeks":
+      return owed > 0 && isOverduePrior;
     case "not_scheduled":
       return !isScheduled;
     case "almost_finished":
@@ -209,10 +214,31 @@ function Dashboard() {
     }
     return m;
   }, [priorScheduledQuery.data]);
-  // "Carried over" = had a prior-week booking AND is NOT scheduled this week
-  // (this-week bookings get the "Due this week" tag instead).
+  // Classify each prior-week booking by whether it fell in the immediately
+  // previous week (carry-over to this week) or further back (overdue).
+  const { carriedOverRecentMap, overduePriorMap } = useMemo(() => {
+    const recent = new Map<string, string>();
+    const overdue = new Map<string, string>();
+    const thisWeekStart = currentWeekStartUtc();
+    const prevWeekStart = new Date(thisWeekStart.getTime() - 7 * 24 * 60 * 60 * 1000);
+    for (const [id, iso] of priorScheduledMap) {
+      const bookingWeekStart = weekStartUtcOfClinic(iso);
+      if (bookingWeekStart.getTime() === prevWeekStart.getTime()) {
+        recent.set(id, iso);
+      } else if (bookingWeekStart.getTime() < prevWeekStart.getTime()) {
+        overdue.set(id, iso);
+      }
+    }
+    return { carriedOverRecentMap: recent, overduePriorMap: overdue };
+  }, [priorScheduledMap]);
+  // "Carried over" = booked in the immediately previous week only, and NOT
+  // scheduled this week (this-week bookings get the "Due this week" tag).
   const isCarriedOver = (id: string) =>
-    priorScheduledMap.has(id) && !thisWeekSet.has(id);
+    carriedOverRecentMap.has(id) && !thisWeekSet.has(id);
+  // "Overdue — Prior Weeks" = last booking was older than the previous week,
+  // and not scheduled in this week or next week.
+  const isOverduePrior = (id: string) =>
+    overduePriorMap.has(id) && !thisWeekSet.has(id) && !nextWeekSet.has(id);
 
 
   const [search, setSearch] = useState("");
@@ -226,7 +252,8 @@ function Dashboard() {
       isStaff &&
       (filter === "payment_due" ||
         filter === "payment_due_this_week" ||
-        filter === "payment_due_next_week")
+        filter === "payment_due_next_week" ||
+        filter === "overdue_prior_weeks")
     ) {
       setFilter("all");
     }
@@ -248,6 +275,8 @@ function Dashboard() {
       payment_due_this_week_total: 0,
       payment_due_next_week: 0,
       payment_due_next_week_total: 0,
+      overdue_prior_weeks: 0,
+      overdue_prior_weeks_total: 0,
       not_scheduled: 0,
       almost_finished: 0,
       critical: 0,
@@ -269,6 +298,10 @@ function Dashboard() {
           c.payment_due_next_week += 1;
           c.payment_due_next_week_total += owed;
         }
+        if (isOverduePrior(cl.id)) {
+          c.overdue_prior_weeks += 1;
+          c.overdue_prior_weeks_total += owed;
+        }
       }
       if (!isScheduled(cl.id)) c.not_scheduled += 1;
       if (r !== null && r > 0 && r <= 2) c.almost_finished += 1;
@@ -280,7 +313,7 @@ function Dashboard() {
         c.package_complete += 1;
     }
     return c;
-  }, [visibleClients, scheduledSet, thisWeekSet, nextWeekSet, priorScheduledMap]);
+  }, [visibleClients, scheduledSet, thisWeekSet, nextWeekSet, carriedOverRecentMap, overduePriorMap]);
 
 
   const filtered = useMemo(() => {
@@ -292,6 +325,7 @@ function Dashboard() {
         isScheduledThisWeek(c.id),
         isScheduledNextWeek(c.id),
         isCarriedOver(c.id),
+        isOverduePrior(c.id),
       ),
     );
     const q = search.trim().toLowerCase();
@@ -308,6 +342,7 @@ function Dashboard() {
       filter === "payment_due" ||
       filter === "payment_due_this_week" ||
       filter === "payment_due_next_week" ||
+      filter === "overdue_prior_weeks" ||
       filter === "critical"
     ) {
       return [...searched].sort((a, b) => amountOwed(b) - amountOwed(a));
@@ -318,7 +353,7 @@ function Dashboard() {
       );
     }
     return [...searched].sort((a, b) => fullName(a).localeCompare(fullName(b)));
-  }, [visibleClients, filter, search, scheduledSet, thisWeekSet, nextWeekSet, priorScheduledMap]);
+  }, [visibleClients, filter, search, scheduledSet, thisWeekSet, nextWeekSet, carriedOverRecentMap, overduePriorMap]);
 
   const reviewCountQuery = useQuery({
     queryKey: ["square_payments_needs_review_count"],
@@ -362,6 +397,16 @@ function Dashboard() {
       icon: <CircleDollarSign className="h-5 w-5" />,
       count: counts.payment_due_next_week,
       money: counts.payment_due_next_week_total,
+      moneyLabel: "outstanding",
+      tone: "red",
+      staffHidden: true,
+    },
+    {
+      key: "overdue_prior_weeks",
+      label: "Overdue — Prior Weeks",
+      icon: <AlertTriangle className="h-5 w-5" />,
+      count: counts.overdue_prior_weeks,
+      money: counts.overdue_prior_weeks_total,
       moneyLabel: "outstanding",
       tone: "red",
       staffHidden: true,
@@ -482,7 +527,7 @@ function Dashboard() {
             Showing: {FILTER_LABEL[filter]}
           </h2>
           <div className="flex items-center gap-3">
-            {!isStaff && (filter === "payment_due" || filter === "payment_due_this_week" || filter === "payment_due_next_week") && filtered.length > 0 && (
+            {!isStaff && (filter === "payment_due" || filter === "payment_due_this_week" || filter === "payment_due_next_week" || filter === "overdue_prior_weeks") && filtered.length > 0 && (
               <button
                 type="button"
                 onClick={() => exportPaymentDueCsv(filtered)}
@@ -516,7 +561,7 @@ function Dashboard() {
         </div>
 
 
-        {!isStaff && (filter === "payment_due" || filter === "payment_due_this_week" || filter === "payment_due_next_week") && filtered.length > 0 && (
+        {!isStaff && (filter === "payment_due" || filter === "payment_due_this_week" || filter === "payment_due_next_week" || filter === "overdue_prior_weeks") && filtered.length > 0 && (
           <PaymentTotals clients={filtered} />
         )}
 
@@ -529,26 +574,35 @@ function Dashboard() {
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {filtered.map((c) => {
-              const carriedOverIso = priorScheduledMap.get(c.id);
+              const recentCarryIso = carriedOverRecentMap.get(c.id);
+              const overdueIso = overduePriorMap.get(c.id);
               let scheduleStatus: ScheduleStatus | undefined;
               let scheduleStatusDetail: string | undefined;
               if (filter === "payment_due_this_week") {
                 if (isScheduledThisWeek(c.id)) {
                   scheduleStatus = "this_week";
-                } else if (carriedOverIso) {
+                } else if (recentCarryIso) {
                   scheduleStatus = "carried_over";
-                  scheduleStatusDetail = formatWeekRange(carriedOverIso);
+                  scheduleStatusDetail = formatWeekRange(recentCarryIso);
+                }
+              } else if (filter === "overdue_prior_weeks") {
+                if (overdueIso) {
+                  scheduleStatus = "overdue_prior";
+                  scheduleStatusDetail = formatWeekRange(overdueIso);
                 }
               } else if (filter === "payment_due") {
-                scheduleStatus = isScheduledThisWeek(c.id)
-                  ? "this_week"
-                  : isScheduledNextWeek(c.id)
-                    ? "next_week"
-                    : carriedOverIso
-                      ? "carried_over"
-                      : "not_scheduled";
-                if (scheduleStatus === "carried_over" && carriedOverIso) {
-                  scheduleStatusDetail = formatWeekRange(carriedOverIso);
+                if (isScheduledThisWeek(c.id)) {
+                  scheduleStatus = "this_week";
+                } else if (isScheduledNextWeek(c.id)) {
+                  scheduleStatus = "next_week";
+                } else if (recentCarryIso) {
+                  scheduleStatus = "carried_over";
+                  scheduleStatusDetail = formatWeekRange(recentCarryIso);
+                } else if (overdueIso) {
+                  scheduleStatus = "overdue_prior";
+                  scheduleStatusDetail = formatWeekRange(overdueIso);
+                } else {
+                  scheduleStatus = "not_scheduled";
                 }
               }
               return (
@@ -698,22 +752,31 @@ function exportPaymentDueCsv(clients: Client[]) {
   URL.revokeObjectURL(url);
 }
 
-// Format the clinic-local Sun–Sat week range that contains the given ISO
-// instant, e.g. "Nov 30 – Dec 6". Used by the "Carried over from …" tag.
-function formatWeekRange(iso: string): string {
-  const CLINIC_TZ = "America/Chicago";
-  const d = new Date(iso);
-  // Get the day-of-week in clinic tz.
+const CLINIC_TZ = "America/Chicago";
+
+// Sunday start (UTC-anchored representation) of the clinic-local week that
+// contains the given ISO instant.
+function weekStartUtcOfClinic(iso: string): Date {
   const ymd = new Intl.DateTimeFormat("en-CA", {
     timeZone: CLINIC_TZ,
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
-  }).format(d);
+  }).format(new Date(iso));
   const [y, m, day] = ymd.split("-").map(Number);
   const dow = new Date(Date.UTC(y, m - 1, day)).getUTCDay();
-  const startUtc = new Date(Date.UTC(y, m - 1, day - dow));
-  const endUtc = new Date(Date.UTC(y, m - 1, day - dow + 6));
+  return new Date(Date.UTC(y, m - 1, day - dow));
+}
+
+function currentWeekStartUtc(): Date {
+  return weekStartUtcOfClinic(new Date().toISOString());
+}
+
+// Format the clinic-local Sun–Sat week range that contains the given ISO
+// instant, e.g. "Nov 30 – Dec 6". Used by the "Carried over from …" tag.
+function formatWeekRange(iso: string): string {
+  const startUtc = weekStartUtcOfClinic(iso);
+  const endUtc = new Date(startUtc.getTime() + 6 * 24 * 60 * 60 * 1000);
   const fmt = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" });
   return `${fmt.format(startUtc)} – ${fmt.format(endUtc)}`;
 }

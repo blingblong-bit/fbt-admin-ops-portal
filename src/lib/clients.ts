@@ -166,8 +166,7 @@ export function formatCurrency(n: number | string | null | undefined) {
   return v.toLocaleString("en-US", { style: "currency", currency: "USD" });
 }
 
-export function progress(c: Pick<Client, "package_total_visits" | "visits_used" | "square_visit_note">): string {
-  if (c.square_visit_note && c.square_visit_note.trim()) return c.square_visit_note.trim();
+export function progress(c: Pick<Client, "package_total_visits" | "visits_used">): string {
   if (c.visits_used === null || c.visits_used === undefined) return "—";
   return `${c.visits_used} / ${c.package_total_visits}`;
 }

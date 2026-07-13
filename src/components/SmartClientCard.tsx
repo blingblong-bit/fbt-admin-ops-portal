@@ -105,7 +105,7 @@ export function SmartClientCard({
         </div>
         <div className="flex flex-col items-end gap-1.5">
           <StatusBadge client={client} isScheduled={isScheduled} />
-          {scheduleStatus && <ScheduleStatusBadge status={scheduleStatus} />}
+          {scheduleStatus && <ScheduleStatusBadge status={scheduleStatus} detail={scheduleStatusDetail} />}
         </div>
       </div>
 

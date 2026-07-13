@@ -33,6 +33,7 @@ import {
   linkSquareCustomer,
   listLinkableClients,
   markClientContacted,
+  unmarkClientContacted,
   markClientUnavailableNextWeek,
   type LinkableClient,
   type NeedsScheduleClient,
@@ -1953,6 +1954,7 @@ function NotNextWeekSection({
 
   const fetchContacted = useServerFn(getContactedClientIds);
   const markContacted = useServerFn(markClientContacted);
+  const unmarkContacted = useServerFn(unmarkClientContacted);
   const fetchUnavailable = useServerFn(getUnavailableNextWeekClientIds);
   const markUnavailable = useServerFn(markClientUnavailableNextWeek);
   const qc = useQueryClient();
@@ -2001,6 +2003,28 @@ function NotNextWeekSection({
           week_start: prev?.week_start ?? "",
         };
       });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const [undoArmedFor, setUndoArmedFor] = useState<string | null>(null);
+  const unmarkMut = useMutation({
+    mutationFn: (clientId: string) => unmarkContacted({ data: { clientId } }),
+    onSuccess: (_r, clientId) => {
+      toast.success("Reverted — marked as not contacted");
+      setUndoArmedFor((cur) => (cur === clientId ? null : cur));
+      qc.setQueriesData<
+        { client_ids: string[]; prior_client_ids?: string[]; week_start?: string } | undefined
+      >({ queryKey: ["contacted-not-next-week"] }, (prev) => {
+        const cur = new Set(prev?.client_ids ?? []);
+        cur.delete(clientId);
+        return {
+          client_ids: Array.from(cur),
+          prior_client_ids: prev?.prior_client_ids ?? [],
+          week_start: prev?.week_start ?? "",
+        };
+      });
+      qc.invalidateQueries({ queryKey: ["contacted-not-next-week"] });
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -2194,6 +2218,43 @@ function NotNextWeekSection({
                           >
                             {isContacted ? "Contacted ✓" : busy ? "…" : "Mark as Contacted"}
                           </Button>
+                          {isContacted && (
+                            (() => {
+                              const undoBusy =
+                                unmarkMut.isPending && unmarkMut.variables === c.id;
+                              const armed = undoArmedFor === c.id;
+                              return (
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className={
+                                    armed
+                                      ? "text-red-700 hover:text-red-800 hover:bg-red-50"
+                                      : "text-slate-500 hover:text-slate-700"
+                                  }
+                                  disabled={undoBusy}
+                                  onClick={() => {
+                                    if (undoBusy) return;
+                                    if (armed) {
+                                      unmarkMut.mutate(c.id);
+                                    } else {
+                                      setUndoArmedFor(c.id);
+                                      window.setTimeout(() => {
+                                        setUndoArmedFor((cur) => (cur === c.id ? null : cur));
+                                      }, 4000);
+                                    }
+                                  }}
+                                  title="Delete this week's 'contacted' entry and revert to 'Mark as Contacted'"
+                                >
+                                  {undoBusy
+                                    ? "…"
+                                    : armed
+                                      ? "Tap again to confirm"
+                                      : "Undo"}
+                                </Button>
+                              );
+                            })()
+                          )}
                           {!showReasonInput && (
                             <Button
                               size="sm"

@@ -318,6 +318,7 @@ function Dashboard() {
         isScheduledThisWeek(c.id),
         isScheduledNextWeek(c.id),
         isCarriedOver(c.id),
+        isOverduePrior(c.id),
       ),
     );
     const q = search.trim().toLowerCase();

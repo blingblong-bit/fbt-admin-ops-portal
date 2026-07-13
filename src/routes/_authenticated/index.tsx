@@ -142,13 +142,15 @@ function matchesFilter(
     case "payment_due":
       return owed > 0;
     case "payment_due_this_week":
-      // Includes clients scheduled this week AND anyone last scheduled in the
-      // immediately previous week who still hasn't paid.
-      return owed > 0 && (isScheduledThisWeek || isCarriedOver);
+      // Owes money AND has a booking this week.
+      return owed > 0 && isScheduledThisWeek;
     case "payment_due_next_week":
       return owed > 0 && isScheduledNextWeek;
     case "overdue_prior_weeks":
-      return owed > 0 && isOverduePrior;
+      // Owes money AND does NOT have a booking this week — mutually
+      // exclusive with Payment Due — This Week, and together they cover
+      // every client with an outstanding balance.
+      return owed > 0 && !isScheduledThisWeek;
     case "not_scheduled":
       return !isScheduled;
     case "almost_finished":
@@ -290,17 +292,16 @@ function Dashboard() {
       if (owed > 0) {
         c.payment_due += 1;
         c.payment_due_total += owed;
-        if (isScheduledThisWeek(cl.id) || isCarriedOver(cl.id)) {
+        if (isScheduledThisWeek(cl.id)) {
           c.payment_due_this_week += 1;
           c.payment_due_this_week_total += owed;
+        } else {
+          c.overdue_prior_weeks += 1;
+          c.overdue_prior_weeks_total += owed;
         }
         if (isScheduledNextWeek(cl.id)) {
           c.payment_due_next_week += 1;
           c.payment_due_next_week_total += owed;
-        }
-        if (isOverduePrior(cl.id)) {
-          c.overdue_prior_weeks += 1;
-          c.overdue_prior_weeks_total += owed;
         }
       }
       if (!isScheduled(cl.id)) c.not_scheduled += 1;
@@ -576,31 +577,26 @@ function Dashboard() {
             {filtered.map((c) => {
               const recentCarryIso = carriedOverRecentMap.get(c.id);
               const overdueIso = overduePriorMap.get(c.id);
+              // Most recent prior booking of any age — used for the
+              // "Owes from week of …" tag on the Overdue tile.
+              const lastPriorIso = recentCarryIso ?? overdueIso;
               let scheduleStatus: ScheduleStatus | undefined;
               let scheduleStatusDetail: string | undefined;
               if (filter === "payment_due_this_week") {
-                if (isScheduledThisWeek(c.id)) {
-                  scheduleStatus = "this_week";
-                } else if (recentCarryIso) {
-                  scheduleStatus = "carried_over";
-                  scheduleStatusDetail = formatWeekRange(recentCarryIso);
-                }
+                scheduleStatus = "this_week";
               } else if (filter === "overdue_prior_weeks") {
-                if (overdueIso) {
-                  scheduleStatus = "overdue_prior";
-                  scheduleStatusDetail = formatWeekRange(overdueIso);
+                scheduleStatus = "overdue_prior";
+                if (lastPriorIso) {
+                  scheduleStatusDetail = formatWeekRange(lastPriorIso);
                 }
               } else if (filter === "payment_due") {
                 if (isScheduledThisWeek(c.id)) {
                   scheduleStatus = "this_week";
                 } else if (isScheduledNextWeek(c.id)) {
                   scheduleStatus = "next_week";
-                } else if (recentCarryIso) {
-                  scheduleStatus = "carried_over";
-                  scheduleStatusDetail = formatWeekRange(recentCarryIso);
-                } else if (overdueIso) {
+                } else if (lastPriorIso) {
                   scheduleStatus = "overdue_prior";
-                  scheduleStatusDetail = formatWeekRange(overdueIso);
+                  scheduleStatusDetail = formatWeekRange(lastPriorIso);
                 } else {
                   scheduleStatus = "not_scheduled";
                 }

@@ -1192,6 +1192,28 @@ export const markClientContacted = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+export const unmarkClientContacted = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { clientId: string }) => {
+    if (!d?.clientId || typeof d.clientId !== "string") throw new Error("clientId required");
+    return d;
+  })
+  .handler(async ({ data, context }): Promise<{ ok: true; deleted: number }> => {
+    const todayYmd = ymdInTz(new Date());
+    const dow = ymdWeekday(todayYmd);
+    const weekStartYmd = addDaysYmd(todayYmd, -dow);
+    const weekStartInstant = ymdLocalToInstant(weekStartYmd).toISOString();
+    const { data: rows, error } = await context.supabase
+      .from("client_activities")
+      .delete()
+      .eq("client_id", data.clientId)
+      .eq("activity_type", "contacted")
+      .gte("created_at", weekStartInstant)
+      .select("id");
+    if (error) throw error;
+    return { ok: true, deleted: rows?.length ?? 0 };
+  });
+
 
 export const getUnavailableNextWeekClientIds = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])

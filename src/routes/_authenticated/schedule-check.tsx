@@ -35,6 +35,7 @@ import {
   markClientContacted,
   unmarkClientContacted,
   markClientUnavailableNextWeek,
+  unmarkClientUnavailableNextWeek,
   type LinkableClient,
   type NeedsScheduleClient,
   type ScheduleAppointment,
@@ -1957,6 +1958,7 @@ function NotNextWeekSection({
   const unmarkContacted = useServerFn(unmarkClientContacted);
   const fetchUnavailable = useServerFn(getUnavailableNextWeekClientIds);
   const markUnavailable = useServerFn(markClientUnavailableNextWeek);
+  const unmarkUnavailable = useServerFn(unmarkClientUnavailableNextWeek);
   const qc = useQueryClient();
 
   const contactedQuery = useQuery({
@@ -2050,6 +2052,26 @@ function NotNextWeekSection({
     },
     onError: (e: Error) => toast.error(e.message),
   });
+
+  const [undoUnavailableArmedFor, setUndoUnavailableArmedFor] = useState<string | null>(null);
+  const unmarkUnavailableMut = useMutation({
+    mutationFn: (clientId: string) => unmarkUnavailable({ data: { clientId } }),
+    onSuccess: (_r, clientId) => {
+      toast.success("Reverted — no longer marked unavailable");
+      setUndoUnavailableArmedFor((cur) => (cur === clientId ? null : cur));
+      qc.setQueriesData<{ client_ids: string[] } | undefined>(
+        { queryKey: ["unavailable-next-week"] },
+        (prev) => {
+          const cur = new Set(prev?.client_ids ?? []);
+          cur.delete(clientId);
+          return { client_ids: Array.from(cur) };
+        },
+      );
+      qc.invalidateQueries({ queryKey: ["unavailable-next-week"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
 
   // Sort: active first, then contacted, then unavailable at the bottom.
   const sorted = useMemo(() => {
@@ -2209,6 +2231,41 @@ function NotNextWeekSection({
                           View
                         </Link>
                       </Button>
+                      {isUnavailable && (() => {
+                        const undoBusy =
+                          unmarkUnavailableMut.isPending &&
+                          unmarkUnavailableMut.variables === c.id;
+                        const armed = undoUnavailableArmedFor === c.id;
+                        return (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className={
+                              armed
+                                ? "text-red-700 hover:text-red-800 hover:bg-red-50"
+                                : "text-slate-500 hover:text-slate-700"
+                            }
+                            disabled={undoBusy}
+                            onClick={() => {
+                              if (undoBusy) return;
+                              if (armed) {
+                                unmarkUnavailableMut.mutate(c.id);
+                              } else {
+                                setUndoUnavailableArmedFor(c.id);
+                                window.setTimeout(() => {
+                                  setUndoUnavailableArmedFor((cur) =>
+                                    cur === c.id ? null : cur,
+                                  );
+                                }, 4000);
+                              }
+                            }}
+                            title="Delete the 'unavailable next week' entry and return this client to the actionable list"
+                          >
+                            {undoBusy ? "…" : armed ? "Tap again to confirm" : "Undo"}
+                          </Button>
+                        );
+                      })()}
+
                       {!isUnavailable && (
                         <>
                           <Button

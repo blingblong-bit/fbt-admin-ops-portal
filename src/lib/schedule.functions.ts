@@ -1255,3 +1255,21 @@ export const markClientUnavailableNextWeek = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+export const unmarkClientUnavailableNextWeek = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { clientId: string }) => {
+    if (!d?.clientId || typeof d.clientId !== "string") throw new Error("clientId required");
+    return { clientId: d.clientId };
+  })
+  .handler(async ({ data, context }): Promise<{ ok: true; deleted: number }> => {
+    const { data: rows, error } = await context.supabase
+      .from("client_activities")
+      .delete()
+      .eq("client_id", data.clientId)
+      .eq("activity_type", "unavailable_next_week")
+      .select("id");
+    if (error) throw error;
+    return { ok: true, deleted: rows?.length ?? 0 };
+  });
+
+

@@ -2218,6 +2218,43 @@ function NotNextWeekSection({
                           >
                             {isContacted ? "Contacted ✓" : busy ? "…" : "Mark as Contacted"}
                           </Button>
+                          {isContacted && (
+                            (() => {
+                              const undoBusy =
+                                unmarkMut.isPending && unmarkMut.variables === c.id;
+                              const armed = undoArmedFor === c.id;
+                              return (
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className={
+                                    armed
+                                      ? "text-red-700 hover:text-red-800 hover:bg-red-50"
+                                      : "text-slate-500 hover:text-slate-700"
+                                  }
+                                  disabled={undoBusy}
+                                  onClick={() => {
+                                    if (undoBusy) return;
+                                    if (armed) {
+                                      unmarkMut.mutate(c.id);
+                                    } else {
+                                      setUndoArmedFor(c.id);
+                                      window.setTimeout(() => {
+                                        setUndoArmedFor((cur) => (cur === c.id ? null : cur));
+                                      }, 4000);
+                                    }
+                                  }}
+                                  title="Delete this week's 'contacted' entry and revert to 'Mark as Contacted'"
+                                >
+                                  {undoBusy
+                                    ? "…"
+                                    : armed
+                                      ? "Tap again to confirm"
+                                      : "Undo"}
+                                </Button>
+                              );
+                            })()
+                          )}
                           {!showReasonInput && (
                             <Button
                               size="sm"

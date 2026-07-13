@@ -32,6 +32,7 @@ import {
   getScheduledClientIds,
   getThisWeekScheduledClientIds,
   getNextWeekScheduledClientIds,
+  getPriorWeeksScheduledClientLastDates,
 } from "@/lib/schedule.functions";
 import type { ScheduleStatus } from "@/components/SmartClientCard";
 import { useRole } from "@/hooks/useRole";

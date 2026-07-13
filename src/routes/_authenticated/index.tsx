@@ -725,22 +725,31 @@ function exportPaymentDueCsv(clients: Client[]) {
   URL.revokeObjectURL(url);
 }
 
-// Format the clinic-local Sun–Sat week range that contains the given ISO
-// instant, e.g. "Nov 30 – Dec 6". Used by the "Carried over from …" tag.
-function formatWeekRange(iso: string): string {
-  const CLINIC_TZ = "America/Chicago";
-  const d = new Date(iso);
-  // Get the day-of-week in clinic tz.
+const CLINIC_TZ = "America/Chicago";
+
+// Sunday start (UTC-anchored representation) of the clinic-local week that
+// contains the given ISO instant.
+function weekStartUtcOfClinic(iso: string): Date {
   const ymd = new Intl.DateTimeFormat("en-CA", {
     timeZone: CLINIC_TZ,
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
-  }).format(d);
+  }).format(new Date(iso));
   const [y, m, day] = ymd.split("-").map(Number);
   const dow = new Date(Date.UTC(y, m - 1, day)).getUTCDay();
-  const startUtc = new Date(Date.UTC(y, m - 1, day - dow));
-  const endUtc = new Date(Date.UTC(y, m - 1, day - dow + 6));
+  return new Date(Date.UTC(y, m - 1, day - dow));
+}
+
+function currentWeekStartUtc(): Date {
+  return weekStartUtcOfClinic(new Date().toISOString());
+}
+
+// Format the clinic-local Sun–Sat week range that contains the given ISO
+// instant, e.g. "Nov 30 – Dec 6". Used by the "Carried over from …" tag.
+function formatWeekRange(iso: string): string {
+  const startUtc = weekStartUtcOfClinic(iso);
+  const endUtc = new Date(startUtc.getTime() + 6 * 24 * 60 * 60 * 1000);
   const fmt = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" });
   return `${fmt.format(startUtc)} – ${fmt.format(endUtc)}`;
 }

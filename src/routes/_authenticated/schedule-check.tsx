@@ -2002,7 +2002,29 @@ function NotNextWeekSection({
           prior_client_ids: Array.from(prior),
           week_start: prev?.week_start ?? "",
         };
+  });
+
+  const [undoArmedFor, setUndoArmedFor] = useState<string | null>(null);
+  const unmarkMut = useMutation({
+    mutationFn: (clientId: string) => unmarkContacted({ data: { clientId } }),
+    onSuccess: (_r, clientId) => {
+      toast.success("Reverted — marked as not contacted");
+      setUndoArmedFor((cur) => (cur === clientId ? null : cur));
+      qc.setQueriesData<
+        { client_ids: string[]; prior_client_ids?: string[]; week_start?: string } | undefined
+      >({ queryKey: ["contacted-not-next-week"] }, (prev) => {
+        const cur = new Set(prev?.client_ids ?? []);
+        cur.delete(clientId);
+        return {
+          client_ids: Array.from(cur),
+          prior_client_ids: prev?.prior_client_ids ?? [],
+          week_start: prev?.week_start ?? "",
+        };
       });
+      qc.invalidateQueries({ queryKey: ["contacted-not-next-week"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
     },
     onError: (e: Error) => toast.error(e.message),
   });

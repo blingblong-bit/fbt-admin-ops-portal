@@ -2002,6 +2002,9 @@ function NotNextWeekSection({
           prior_client_ids: Array.from(prior),
           week_start: prev?.week_start ?? "",
         };
+      });
+    },
+    onError: (e: Error) => toast.error(e.message),
   });
 
   const [undoArmedFor, setUndoArmedFor] = useState<string | null>(null);
@@ -2022,9 +2025,6 @@ function NotNextWeekSection({
         };
       });
       qc.invalidateQueries({ queryKey: ["contacted-not-next-week"] });
-    },
-    onError: (e: Error) => toast.error(e.message),
-  });
     },
     onError: (e: Error) => toast.error(e.message),
   });

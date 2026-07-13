@@ -529,14 +529,28 @@ function Dashboard() {
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {filtered.map((c) => {
-              const scheduleStatus: ScheduleStatus | undefined =
-                filter === "payment_due"
-                  ? isScheduledThisWeek(c.id)
-                    ? "this_week"
-                    : isScheduledNextWeek(c.id)
-                      ? "next_week"
-                      : "not_scheduled"
-                  : undefined;
+              const carriedOverIso = priorScheduledMap.get(c.id);
+              let scheduleStatus: ScheduleStatus | undefined;
+              let scheduleStatusDetail: string | undefined;
+              if (filter === "payment_due_this_week") {
+                if (isScheduledThisWeek(c.id)) {
+                  scheduleStatus = "this_week";
+                } else if (carriedOverIso) {
+                  scheduleStatus = "carried_over";
+                  scheduleStatusDetail = formatWeekRange(carriedOverIso);
+                }
+              } else if (filter === "payment_due") {
+                scheduleStatus = isScheduledThisWeek(c.id)
+                  ? "this_week"
+                  : isScheduledNextWeek(c.id)
+                    ? "next_week"
+                    : carriedOverIso
+                      ? "carried_over"
+                      : "not_scheduled";
+                if (scheduleStatus === "carried_over" && carriedOverIso) {
+                  scheduleStatusDetail = formatWeekRange(carriedOverIso);
+                }
+              }
               return (
                 <SmartClientCard
                   key={c.id}
@@ -544,6 +558,7 @@ function Dashboard() {
                   isScheduled={isScheduled(c.id)}
                   hideAmount={isStaff}
                   scheduleStatus={scheduleStatus}
+                  scheduleStatusDetail={scheduleStatusDetail}
                 />
               );
             })}

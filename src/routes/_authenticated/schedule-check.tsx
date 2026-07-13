@@ -35,6 +35,7 @@ import {
   markClientContacted,
   unmarkClientContacted,
   markClientUnavailableNextWeek,
+  unmarkClientUnavailableNextWeek,
   type LinkableClient,
   type NeedsScheduleClient,
   type ScheduleAppointment,

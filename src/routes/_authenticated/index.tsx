@@ -577,31 +577,26 @@ function Dashboard() {
             {filtered.map((c) => {
               const recentCarryIso = carriedOverRecentMap.get(c.id);
               const overdueIso = overduePriorMap.get(c.id);
+              // Most recent prior booking of any age — used for the
+              // "Owes from week of …" tag on the Overdue tile.
+              const lastPriorIso = recentCarryIso ?? overdueIso;
               let scheduleStatus: ScheduleStatus | undefined;
               let scheduleStatusDetail: string | undefined;
               if (filter === "payment_due_this_week") {
-                if (isScheduledThisWeek(c.id)) {
-                  scheduleStatus = "this_week";
-                } else if (recentCarryIso) {
-                  scheduleStatus = "carried_over";
-                  scheduleStatusDetail = formatWeekRange(recentCarryIso);
-                }
+                scheduleStatus = "this_week";
               } else if (filter === "overdue_prior_weeks") {
-                if (overdueIso) {
-                  scheduleStatus = "overdue_prior";
-                  scheduleStatusDetail = formatWeekRange(overdueIso);
+                scheduleStatus = "overdue_prior";
+                if (lastPriorIso) {
+                  scheduleStatusDetail = formatWeekRange(lastPriorIso);
                 }
               } else if (filter === "payment_due") {
                 if (isScheduledThisWeek(c.id)) {
                   scheduleStatus = "this_week";
                 } else if (isScheduledNextWeek(c.id)) {
                   scheduleStatus = "next_week";
-                } else if (recentCarryIso) {
-                  scheduleStatus = "carried_over";
-                  scheduleStatusDetail = formatWeekRange(recentCarryIso);
-                } else if (overdueIso) {
+                } else if (lastPriorIso) {
                   scheduleStatus = "overdue_prior";
-                  scheduleStatusDetail = formatWeekRange(overdueIso);
+                  scheduleStatusDetail = formatWeekRange(lastPriorIso);
                 } else {
                   scheduleStatus = "not_scheduled";
                 }

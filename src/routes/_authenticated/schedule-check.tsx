@@ -33,6 +33,7 @@ import {
   linkSquareCustomer,
   listLinkableClients,
   markClientContacted,
+  unmarkClientContacted,
   markClientUnavailableNextWeek,
   type LinkableClient,
   type NeedsScheduleClient,

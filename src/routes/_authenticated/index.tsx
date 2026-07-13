@@ -274,6 +274,8 @@ function Dashboard() {
       payment_due_this_week_total: 0,
       payment_due_next_week: 0,
       payment_due_next_week_total: 0,
+      overdue_prior_weeks: 0,
+      overdue_prior_weeks_total: 0,
       not_scheduled: 0,
       almost_finished: 0,
       critical: 0,
@@ -295,6 +297,10 @@ function Dashboard() {
           c.payment_due_next_week += 1;
           c.payment_due_next_week_total += owed;
         }
+        if (isOverduePrior(cl.id)) {
+          c.overdue_prior_weeks += 1;
+          c.overdue_prior_weeks_total += owed;
+        }
       }
       if (!isScheduled(cl.id)) c.not_scheduled += 1;
       if (r !== null && r > 0 && r <= 2) c.almost_finished += 1;
@@ -306,7 +312,7 @@ function Dashboard() {
         c.package_complete += 1;
     }
     return c;
-  }, [visibleClients, scheduledSet, thisWeekSet, nextWeekSet, priorScheduledMap]);
+  }, [visibleClients, scheduledSet, thisWeekSet, nextWeekSet, carriedOverRecentMap, overduePriorMap]);
 
 
   const filtered = useMemo(() => {

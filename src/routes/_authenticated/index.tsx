@@ -142,13 +142,15 @@ function matchesFilter(
     case "payment_due":
       return owed > 0;
     case "payment_due_this_week":
-      // Includes clients scheduled this week AND anyone last scheduled in the
-      // immediately previous week who still hasn't paid.
-      return owed > 0 && (isScheduledThisWeek || isCarriedOver);
+      // Owes money AND has a booking this week.
+      return owed > 0 && isScheduledThisWeek;
     case "payment_due_next_week":
       return owed > 0 && isScheduledNextWeek;
     case "overdue_prior_weeks":
-      return owed > 0 && isOverduePrior;
+      // Owes money AND does NOT have a booking this week — mutually
+      // exclusive with Payment Due — This Week, and together they cover
+      // every client with an outstanding balance.
+      return owed > 0 && !isScheduledThisWeek;
     case "not_scheduled":
       return !isScheduled;
     case "almost_finished":

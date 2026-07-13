@@ -2053,6 +2053,26 @@ function NotNextWeekSection({
     onError: (e: Error) => toast.error(e.message),
   });
 
+  const [undoUnavailableArmedFor, setUndoUnavailableArmedFor] = useState<string | null>(null);
+  const unmarkUnavailableMut = useMutation({
+    mutationFn: (clientId: string) => unmarkUnavailable({ data: { clientId } }),
+    onSuccess: (_r, clientId) => {
+      toast.success("Reverted — no longer marked unavailable");
+      setUndoUnavailableArmedFor((cur) => (cur === clientId ? null : cur));
+      qc.setQueriesData<{ client_ids: string[] } | undefined>(
+        { queryKey: ["unavailable-next-week"] },
+        (prev) => {
+          const cur = new Set(prev?.client_ids ?? []);
+          cur.delete(clientId);
+          return { client_ids: Array.from(cur) };
+        },
+      );
+      qc.invalidateQueries({ queryKey: ["unavailable-next-week"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+
   // Sort: active first, then contacted, then unavailable at the bottom.
   const sorted = useMemo(() => {
     const rank = (id: string) => {

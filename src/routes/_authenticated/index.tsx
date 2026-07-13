@@ -698,5 +698,25 @@ function exportPaymentDueCsv(clients: Client[]) {
   URL.revokeObjectURL(url);
 }
 
+// Format the clinic-local Sun–Sat week range that contains the given ISO
+// instant, e.g. "Nov 30 – Dec 6". Used by the "Carried over from …" tag.
+function formatWeekRange(iso: string): string {
+  const CLINIC_TZ = "America/Chicago";
+  const d = new Date(iso);
+  // Get the day-of-week in clinic tz.
+  const ymd = new Intl.DateTimeFormat("en-CA", {
+    timeZone: CLINIC_TZ,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(d);
+  const [y, m, day] = ymd.split("-").map(Number);
+  const dow = new Date(Date.UTC(y, m - 1, day)).getUTCDay();
+  const startUtc = new Date(Date.UTC(y, m - 1, day - dow));
+  const endUtc = new Date(Date.UTC(y, m - 1, day - dow + 6));
+  const fmt = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" });
+  return `${fmt.format(startUtc)} – ${fmt.format(endUtc)}`;
+
+
 // Keep StatusBadge import used elsewhere referenced to avoid unused-import noise
 void StatusBadge;

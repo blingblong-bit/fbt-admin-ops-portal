@@ -1975,6 +1975,10 @@ function NotNextWeekSection({
     () => new Set<string>(contactedQuery.data?.client_ids ?? []),
     [contactedQuery.data],
   );
+  const priorContactedSet = useMemo(
+    () => new Set<string>(contactedQuery.data?.prior_client_ids ?? []),
+    [contactedQuery.data],
+  );
   const unavailableSet = useMemo(
     () => new Set<string>(unavailableQuery.data?.client_ids ?? []),
     [unavailableQuery.data],
@@ -1984,14 +1988,19 @@ function NotNextWeekSection({
     mutationFn: (clientId: string) => markContacted({ data: { clientId } }),
     onSuccess: (_r, clientId) => {
       toast.success("Marked as contacted");
-      qc.setQueriesData<{ client_ids: string[] } | undefined>(
-        { queryKey: ["contacted-not-next-week"] },
-        (prev) => {
-          const cur = new Set(prev?.client_ids ?? []);
-          cur.add(clientId);
-          return { client_ids: Array.from(cur) };
-        },
-      );
+      qc.setQueriesData<
+        { client_ids: string[]; prior_client_ids?: string[]; week_start?: string } | undefined
+      >({ queryKey: ["contacted-not-next-week"] }, (prev) => {
+        const cur = new Set(prev?.client_ids ?? []);
+        cur.add(clientId);
+        const prior = new Set(prev?.prior_client_ids ?? []);
+        prior.delete(clientId);
+        return {
+          client_ids: Array.from(cur),
+          prior_client_ids: Array.from(prior),
+          week_start: prev?.week_start ?? "",
+        };
+      });
     },
     onError: (e: Error) => toast.error(e.message),
   });

@@ -132,6 +132,7 @@ function matchesFilter(
   isScheduledThisWeek: boolean,
   isScheduledNextWeek: boolean,
   isCarriedOver: boolean,
+  isOverduePrior: boolean,
 ): boolean {
   const owed = amountOwed(c);
   const r = visitsRemaining(c);
@@ -141,11 +142,13 @@ function matchesFilter(
     case "payment_due":
       return owed > 0;
     case "payment_due_this_week":
-      // Includes clients scheduled this week AND anyone previously scheduled
-      // who still hasn't paid (carried over until amount_owed hits $0).
+      // Includes clients scheduled this week AND anyone last scheduled in the
+      // immediately previous week who still hasn't paid.
       return owed > 0 && (isScheduledThisWeek || isCarriedOver);
     case "payment_due_next_week":
       return owed > 0 && isScheduledNextWeek;
+    case "overdue_prior_weeks":
+      return owed > 0 && isOverduePrior;
     case "not_scheduled":
       return !isScheduled;
     case "almost_finished":

@@ -252,7 +252,8 @@ function Dashboard() {
       isStaff &&
       (filter === "payment_due" ||
         filter === "payment_due_this_week" ||
-        filter === "payment_due_next_week")
+        filter === "payment_due_next_week" ||
+        filter === "overdue_prior_weeks")
     ) {
       setFilter("all");
     }

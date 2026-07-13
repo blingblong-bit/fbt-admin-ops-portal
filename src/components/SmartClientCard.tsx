@@ -29,6 +29,7 @@ export function SmartClientCard({
   isScheduled,
   hideAmount = false,
   scheduleStatus,
+  scheduleStatusDetail,
 }: {
   client: Client;
   /** Derived from live Square bookings. */
@@ -37,6 +38,8 @@ export function SmartClientCard({
   hideAmount?: boolean;
   /** Optional weekly-scheduling badge shown next to the status badge. */
   scheduleStatus?: ScheduleStatus;
+  /** Extra text appended to the schedule tag (e.g. carried-over week range). */
+  scheduleStatusDetail?: string;
 }) {
   const qc = useQueryClient();
   const owed = amountOwed(client);

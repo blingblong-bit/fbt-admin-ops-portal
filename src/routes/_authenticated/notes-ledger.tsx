@@ -1004,6 +1004,28 @@ function AutoUpdateCard({
       </div>
       <SquarePaymentWarning client={row.client} />
 
+      {row.guard_blocked && (
+        <div
+          className={`mt-2 rounded border p-2 text-xs ${
+            row.guard_blocked.has_square_payment
+              ? "border-amber-300 bg-amber-50 text-amber-900"
+              : "border-blue-300 bg-blue-50 text-blue-900"
+          }`}
+        >
+          <div className="font-semibold">
+            Monotonic guard blocked a lower amount_paid — note says{" "}
+            {formatCurrency(row.guard_blocked.note_wants_paid)}, Hub currently shows{" "}
+            {formatCurrency(row.guard_blocked.current_paid)}.
+          </div>
+          <div className="mt-1">
+            {row.guard_blocked.has_square_payment
+              ? "A verified Square payment exists for this client — Hub is likely correct. Re-check Square before forcing."
+              : "No Square payment on record — the current value came from an unverified import. Force update is likely safe if the note is current."}
+          </div>
+        </div>
+      )}
+
+
       <label
         className={`mt-2 flex items-start gap-2 rounded border p-2 text-xs ${
           forced ? "border-rose-400 bg-rose-50 text-rose-900" : "border-slate-200 bg-white text-slate-700"

@@ -257,6 +257,12 @@ function classifyReview(
   return Array.from(cats);
 }
 
+export type GuardBlocked = {
+  note_wants_paid: number;
+  current_paid: number;
+  has_square_payment: boolean;
+};
+
 export type AutoUpdateRow = {
   parsed: ParsedRow;
   client: MatchClient;
@@ -268,6 +274,7 @@ export type AutoUpdateRow = {
     amount_owed: { before: number; after: number; changed: boolean };
     internal_notes: { before: string | null; after: string | null; changed: boolean; appended: string | null; appended_count: number; note_status: NoteStatus };
   };
+  guard_blocked: GuardBlocked | null;
 };
 
 export type SkippedRow = {
@@ -466,6 +473,28 @@ export function noteAlreadyExists(existing: string | null | undefined, incoming:
   return dedupeNoteLines(existing, incoming).count === 0;
 }
 
+// Mirror the paid-amount derivation in `buildChanges` so we can detect when
+// the monotonic guard is silently blocking a lower parsed amount.
+function computeGuardBlocked(parsed: ParsedRow, client: MatchClient): GuardBlocked | null {
+  const clientPrice = Number(client.package_price ?? 0);
+  const clientPaid = Number(client.amount_paid ?? 0);
+  const isMismatch = parsed.leading_amount_mismatch === true;
+  const newPrice = isMismatch ? clientPrice : (parsed.package_price ?? clientPrice);
+  const parsedPaid = isMismatch
+    ? Math.max(0, newPrice - Number(parsed.leading_amount ?? 0))
+    : parsed.amount_paid !== null
+      ? parsed.amount_paid
+      : clientPaid;
+  if (parsedPaid < clientPaid) {
+    return {
+      note_wants_paid: parsedPaid,
+      current_paid: clientPaid,
+      has_square_payment: client.latest_square_payment !== null,
+    };
+  }
+  return null;
+}
+
 function buildChanges(parsed: ParsedRow, client: MatchClient): AutoUpdateRow["changes"] {
   const clientPrice = Number(client.package_price ?? 0);
   const clientPaid = Number(client.amount_paid ?? 0);
@@ -482,6 +511,8 @@ function buildChanges(parsed: ParsedRow, client: MatchClient): AutoUpdateRow["ch
     : parsed.amount_paid !== null
       ? parsed.amount_paid
       : clientPaid;
+
+
   // Financial history is monotonic: never reduce amount_paid below what the
   // client has already been credited (Square payments, prior imports, etc.).
   const newPaid = Math.max(clientPaid, parsedPaid);
@@ -773,6 +804,18 @@ export const previewNotesLedger = createServerFn({ method: "POST" })
             changes.amount_paid.changed ||
             changes.internal_notes.changed;
           if (!anyChange) {
+            const guardBlocked = computeGuardBlocked(row, combined[0]);
+            if (guardBlocked) {
+              auto.push({ parsed: row, client: combined[0], changes, guard_blocked: guardBlocked });
+              diagnostics.push({
+                ...diagBase,
+                outcome: "auto_update",
+                rule: "review row has one active candidate; monotonic guard suppressed a lower parsed amount_paid",
+                reason: `Matched ${combined[0].first_name} ${combined[0].last_name}; note wants amount_paid=$${guardBlocked.note_wants_paid.toFixed(2)} but current is $${guardBlocked.current_paid.toFixed(2)}.`,
+              });
+              summary.auto_updates++;
+              continue;
+            }
             skipped.push({
               parsed: row,
               reason: "No changes vs current Admin data.",
@@ -908,6 +951,18 @@ export const previewNotesLedger = createServerFn({ method: "POST" })
         changes.internal_notes.changed;
 
       if (!anyChange) {
+        const guardBlocked = computeGuardBlocked(row, chosen);
+        if (guardBlocked) {
+          auto.push({ parsed: row, client: chosen, changes, guard_blocked: guardBlocked });
+          diagnostics.push({
+            ...diagBase,
+            outcome: "auto_update",
+            rule: "matched client; monotonic guard suppressed a lower parsed amount_paid",
+            reason: `Matched ${chosen.first_name} ${chosen.last_name}; note wants amount_paid=$${guardBlocked.note_wants_paid.toFixed(2)} but current is $${guardBlocked.current_paid.toFixed(2)}.`,
+          });
+          summary.auto_updates++;
+          continue;
+        }
         skipped.push({ parsed: row, reason: "No changes vs current Admin data.", resolution: { state: "unresolved" } });
         diagnostics.push({
           ...diagBase,
@@ -918,7 +973,7 @@ export const previewNotesLedger = createServerFn({ method: "POST" })
         summary.no_changes_vs_current++;
         continue;
       }
-      auto.push({ parsed: row, client: chosen, changes });
+      auto.push({ parsed: row, client: chosen, changes, guard_blocked: null });
       diagnostics.push({
         ...diagBase,
         outcome: "auto_update",

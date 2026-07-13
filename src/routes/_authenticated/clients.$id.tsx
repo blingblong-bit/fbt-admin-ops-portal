@@ -217,12 +217,10 @@ function ClientDetailPage() {
               </>
             ) : (
               <div className="space-y-2">
-                <div className="text-4xl font-semibold tracking-tight text-slate-700">
-                  {c.square_visit_note?.trim() || "—"}
-                </div>
+                <div className="text-4xl font-semibold tracking-tight text-slate-700">—</div>
                 <p className="text-sm text-slate-500">
-                  Visit count is tracked in Square. Use the Square Visit Note field on Edit
-                  Client to mirror the current count.
+                  Visit count is tracked in Square. Set Visits Used on Edit Client to mirror
+                  the current count.
                 </p>
               </div>
             )}
@@ -271,7 +269,7 @@ function ClientDetailPage() {
             <Row label="Start Date" value={formatDate(c.package_start_date)} />
             <Row label="Total Visits" value={c.package_total_visits} />
             <Row label="Visits Used" value={hasVisitData ? c.visits_used : "—"} />
-            <Row label="Square Visit Note" value={c.square_visit_note?.trim() || "—"} />
+            
           </CardContent>
         </Card>
 
@@ -614,7 +612,7 @@ function EditDialog({
           visits_used: visitsUsedVal,
           amount_paid: Number(form.amount_paid),
           internal_notes: form.internal_notes || null,
-          square_visit_note: form.square_visit_note?.trim() || null,
+          
           manual_active: Boolean(form.manual_active),
           status: form.manual_active ? "active" : form.status,
         } as never)

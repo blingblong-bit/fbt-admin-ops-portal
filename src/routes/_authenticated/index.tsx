@@ -196,6 +196,25 @@ function Dashboard() {
   );
   const isScheduledNextWeek = (id: string) => nextWeekSet.has(id);
 
+  const fetchPriorScheduled = useServerFn(getPriorWeeksScheduledClientLastDates);
+  const priorScheduledQuery = useQuery({
+    queryKey: ["scheduled-prior-weeks-last-dates"],
+    queryFn: () => fetchPriorScheduled({ data: { weeks_back: 8 } }),
+    staleTime: 60_000,
+  });
+  const priorScheduledMap = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const row of priorScheduledQuery.data?.clients ?? []) {
+      m.set(row.client_id, row.last_scheduled_at);
+    }
+    return m;
+  }, [priorScheduledQuery.data]);
+  // "Carried over" = had a prior-week booking AND is NOT scheduled this week
+  // (this-week bookings get the "Due this week" tag instead).
+  const isCarriedOver = (id: string) =>
+    priorScheduledMap.has(id) && !thisWeekSet.has(id);
+
+
   const [search, setSearch] = useState("");
   // Staff never see the payment-due (aggregate) list — default to "all" instead.
   const [filter, setFilter] = useState<FilterKey>(isStaff ? "all" : "payment_due");

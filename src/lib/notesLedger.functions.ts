@@ -473,6 +473,28 @@ export function noteAlreadyExists(existing: string | null | undefined, incoming:
   return dedupeNoteLines(existing, incoming).count === 0;
 }
 
+// Mirror the paid-amount derivation in `buildChanges` so we can detect when
+// the monotonic guard is silently blocking a lower parsed amount.
+function computeGuardBlocked(parsed: ParsedRow, client: MatchClient): GuardBlocked | null {
+  const clientPrice = Number(client.package_price ?? 0);
+  const clientPaid = Number(client.amount_paid ?? 0);
+  const isMismatch = parsed.leading_amount_mismatch === true;
+  const newPrice = isMismatch ? clientPrice : (parsed.package_price ?? clientPrice);
+  const parsedPaid = isMismatch
+    ? Math.max(0, newPrice - Number(parsed.leading_amount ?? 0))
+    : parsed.amount_paid !== null
+      ? parsed.amount_paid
+      : clientPaid;
+  if (parsedPaid < clientPaid) {
+    return {
+      note_wants_paid: parsedPaid,
+      current_paid: clientPaid,
+      has_square_payment: client.latest_square_payment !== null,
+    };
+  }
+  return null;
+}
+
 function buildChanges(parsed: ParsedRow, client: MatchClient): AutoUpdateRow["changes"] {
   const clientPrice = Number(client.package_price ?? 0);
   const clientPaid = Number(client.amount_paid ?? 0);

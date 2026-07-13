@@ -228,7 +228,7 @@ function PaymentDialog({
   );
 }
 
-function ScheduleStatusBadge({ status }: { status: ScheduleStatus }) {
+function ScheduleStatusBadge({ status, detail }: { status: ScheduleStatus; detail?: string }) {
   const map: Record<ScheduleStatus, { label: string; cls: string }> = {
     this_week: {
       label: "Due this week",
@@ -241,6 +241,10 @@ function ScheduleStatusBadge({ status }: { status: ScheduleStatus }) {
     not_scheduled: {
       label: "Not currently scheduled",
       cls: "bg-slate-100 text-slate-600 border-slate-200",
+    },
+    carried_over: {
+      label: detail ? `Carried over from ${detail}` : "Carried over",
+      cls: "bg-amber-100 text-amber-800 border-amber-200",
     },
   };
   const { label, cls } = map[status];

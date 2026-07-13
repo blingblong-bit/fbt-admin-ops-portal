@@ -2083,6 +2083,7 @@ function NotNextWeekSection({
               {sorted.map((a) => {
                 const c = a.client!;
                 const isContacted = contactedSet.has(c.id);
+                const wasContactedPrior = priorContactedSet.has(c.id);
                 const isUnavailable = unavailableSet.has(c.id);
                 const busy = markMut.isPending && markMut.variables === c.id;
                 const unavailBusy =
@@ -2109,6 +2110,14 @@ function NotNextWeekSection({
                         {isUnavailable && (
                           <span className="ml-2 inline-flex items-center rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-slate-600">
                             Not available next week
+                          </span>
+                        )}
+                        {!isUnavailable && !isContacted && wasContactedPrior && (
+                          <span
+                            className="ml-2 inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-500"
+                            title="This client has a 'contacted' entry from a previous week."
+                          >
+                            Already contacted last week
                           </span>
                         )}
                       </div>

@@ -574,26 +574,35 @@ function Dashboard() {
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {filtered.map((c) => {
-              const carriedOverIso = priorScheduledMap.get(c.id);
+              const recentCarryIso = carriedOverRecentMap.get(c.id);
+              const overdueIso = overduePriorMap.get(c.id);
               let scheduleStatus: ScheduleStatus | undefined;
               let scheduleStatusDetail: string | undefined;
               if (filter === "payment_due_this_week") {
                 if (isScheduledThisWeek(c.id)) {
                   scheduleStatus = "this_week";
-                } else if (carriedOverIso) {
+                } else if (recentCarryIso) {
                   scheduleStatus = "carried_over";
-                  scheduleStatusDetail = formatWeekRange(carriedOverIso);
+                  scheduleStatusDetail = formatWeekRange(recentCarryIso);
+                }
+              } else if (filter === "overdue_prior_weeks") {
+                if (overdueIso) {
+                  scheduleStatus = "overdue_prior";
+                  scheduleStatusDetail = formatWeekRange(overdueIso);
                 }
               } else if (filter === "payment_due") {
-                scheduleStatus = isScheduledThisWeek(c.id)
-                  ? "this_week"
-                  : isScheduledNextWeek(c.id)
-                    ? "next_week"
-                    : carriedOverIso
-                      ? "carried_over"
-                      : "not_scheduled";
-                if (scheduleStatus === "carried_over" && carriedOverIso) {
-                  scheduleStatusDetail = formatWeekRange(carriedOverIso);
+                if (isScheduledThisWeek(c.id)) {
+                  scheduleStatus = "this_week";
+                } else if (isScheduledNextWeek(c.id)) {
+                  scheduleStatus = "next_week";
+                } else if (recentCarryIso) {
+                  scheduleStatus = "carried_over";
+                  scheduleStatusDetail = formatWeekRange(recentCarryIso);
+                } else if (overdueIso) {
+                  scheduleStatus = "overdue_prior";
+                  scheduleStatusDetail = formatWeekRange(overdueIso);
+                } else {
+                  scheduleStatus = "not_scheduled";
                 }
               }
               return (

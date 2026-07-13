@@ -214,10 +214,31 @@ function Dashboard() {
     }
     return m;
   }, [priorScheduledQuery.data]);
-  // "Carried over" = had a prior-week booking AND is NOT scheduled this week
-  // (this-week bookings get the "Due this week" tag instead).
+  // Classify each prior-week booking by whether it fell in the immediately
+  // previous week (carry-over to this week) or further back (overdue).
+  const { carriedOverRecentMap, overduePriorMap } = useMemo(() => {
+    const recent = new Map<string, string>();
+    const overdue = new Map<string, string>();
+    const thisWeekStart = currentWeekStartUtc();
+    const prevWeekStart = new Date(thisWeekStart.getTime() - 7 * 24 * 60 * 60 * 1000);
+    for (const [id, iso] of priorScheduledMap) {
+      const bookingWeekStart = weekStartUtcOfClinic(iso);
+      if (bookingWeekStart.getTime() === prevWeekStart.getTime()) {
+        recent.set(id, iso);
+      } else if (bookingWeekStart.getTime() < prevWeekStart.getTime()) {
+        overdue.set(id, iso);
+      }
+    }
+    return { carriedOverRecentMap: recent, overduePriorMap: overdue };
+  }, [priorScheduledMap]);
+  // "Carried over" = booked in the immediately previous week only, and NOT
+  // scheduled this week (this-week bookings get the "Due this week" tag).
   const isCarriedOver = (id: string) =>
-    priorScheduledMap.has(id) && !thisWeekSet.has(id);
+    carriedOverRecentMap.has(id) && !thisWeekSet.has(id);
+  // "Overdue — Prior Weeks" = last booking was older than the previous week,
+  // and not scheduled in this week or next week.
+  const isOverduePrior = (id: string) =>
+    overduePriorMap.has(id) && !thisWeekSet.has(id) && !nextWeekSet.has(id);
 
 
   const [search, setSearch] = useState("");

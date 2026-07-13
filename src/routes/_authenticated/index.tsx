@@ -402,6 +402,16 @@ function Dashboard() {
       staffHidden: true,
     },
     {
+      key: "overdue_prior_weeks",
+      label: "Overdue — Prior Weeks",
+      icon: <AlertTriangle className="h-5 w-5" />,
+      count: counts.overdue_prior_weeks,
+      money: counts.overdue_prior_weeks_total,
+      moneyLabel: "outstanding",
+      tone: "red",
+      staffHidden: true,
+    },
+    {
       key: "not_scheduled",
       label: "Not Scheduled",
       icon: <CalendarClock className="h-5 w-5" />,

@@ -257,6 +257,12 @@ function classifyReview(
   return Array.from(cats);
 }
 
+export type GuardBlocked = {
+  note_wants_paid: number;
+  current_paid: number;
+  has_square_payment: boolean;
+};
+
 export type AutoUpdateRow = {
   parsed: ParsedRow;
   client: MatchClient;
@@ -268,6 +274,7 @@ export type AutoUpdateRow = {
     amount_owed: { before: number; after: number; changed: boolean };
     internal_notes: { before: string | null; after: string | null; changed: boolean; appended: string | null; appended_count: number; note_status: NoteStatus };
   };
+  guard_blocked: GuardBlocked | null;
 };
 
 export type SkippedRow = {

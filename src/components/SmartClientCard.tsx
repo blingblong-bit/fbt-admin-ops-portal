@@ -246,6 +246,10 @@ function ScheduleStatusBadge({ status, detail }: { status: ScheduleStatus; detai
       label: detail ? `Carried over from ${detail}` : "Carried over",
       cls: "bg-amber-100 text-amber-800 border-amber-200",
     },
+    overdue_prior: {
+      label: detail ? `Owes from week of ${detail}` : "Overdue from prior weeks",
+      cls: "bg-red-100 text-red-800 border-red-200",
+    },
   };
   const { label, cls } = map[status];
   return (

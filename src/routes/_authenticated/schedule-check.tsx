@@ -2231,6 +2231,41 @@ function NotNextWeekSection({
                           View
                         </Link>
                       </Button>
+                      {isUnavailable && (() => {
+                        const undoBusy =
+                          unmarkUnavailableMut.isPending &&
+                          unmarkUnavailableMut.variables === c.id;
+                        const armed = undoUnavailableArmedFor === c.id;
+                        return (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className={
+                              armed
+                                ? "text-red-700 hover:text-red-800 hover:bg-red-50"
+                                : "text-slate-500 hover:text-slate-700"
+                            }
+                            disabled={undoBusy}
+                            onClick={() => {
+                              if (undoBusy) return;
+                              if (armed) {
+                                unmarkUnavailableMut.mutate(c.id);
+                              } else {
+                                setUndoUnavailableArmedFor(c.id);
+                                window.setTimeout(() => {
+                                  setUndoUnavailableArmedFor((cur) =>
+                                    cur === c.id ? null : cur,
+                                  );
+                                }, 4000);
+                              }
+                            }}
+                            title="Delete the 'unavailable next week' entry and return this client to the actionable list"
+                          >
+                            {undoBusy ? "…" : armed ? "Tap again to confirm" : "Undo"}
+                          </Button>
+                        );
+                      })()}
+
                       {!isUnavailable && (
                         <>
                           <Button

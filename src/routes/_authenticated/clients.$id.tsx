@@ -595,7 +595,7 @@ function EditDialog({
       if (visitsUsedVal !== null && visitsUsedVal > Number(form.package_total_visits)) {
         throw new Error("Visits used cannot exceed total visits");
       }
-      if (Number(form.amount_paid) > Number(form.package_price)) {
+      if (form.payment_model !== "pay_per_visit" && Number(form.amount_paid) > Number(form.package_price)) {
         throw new Error("Amount paid cannot exceed package price");
       }
       const { error } = await supabase
@@ -612,11 +612,12 @@ function EditDialog({
           visits_used: visitsUsedVal,
           amount_paid: Number(form.amount_paid),
           internal_notes: form.internal_notes || null,
-          
+          payment_model: form.payment_model === "pay_per_visit" ? "pay_per_visit" : "package",
           manual_active: Boolean(form.manual_active),
           status: form.manual_active ? "active" : form.status,
         } as never)
         .eq("id", client.id);
+
 
       if (error) throw error;
       await supabase.from("client_activities").insert({

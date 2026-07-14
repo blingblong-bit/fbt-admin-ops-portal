@@ -1,7 +1,6 @@
 export type ClientStatus = "Completed" | "Payment Due" | "Ending Soon" | "Active";
 export type SimpleStatus = "Payment Due" | "Not Scheduled" | "Active" | "Package Complete";
-export type PrimaryActionKind = "record_payment" | "mark_scheduled" | "renew_package" | "view_client";
-export type LifecycleStatus = "active" | "assessment" | "archived";
+export type PaymentModel = "package" | "pay_per_visit";
 
 export interface Client {
   id: string;
@@ -20,10 +19,12 @@ export interface Client {
   status: LifecycleStatus | string;
   manual_active: boolean;
   square_customer_id: string | null;
+  payment_model: PaymentModel | string;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
 }
+
 
 
 export interface ClientActivity {

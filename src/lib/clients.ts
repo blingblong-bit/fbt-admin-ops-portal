@@ -48,9 +48,15 @@ export function visitsRemaining(c: Pick<Client, "package_total_visits" | "visits
   return Math.max(0, (c.package_total_visits ?? 0) - c.visits_used);
 }
 
-export function amountOwed(c: Pick<Client, "package_price" | "amount_paid">) {
+export function isPayPerVisit(c: Partial<Pick<Client, "payment_model">>): boolean {
+  return c.payment_model === "pay_per_visit";
+}
+
+export function amountOwed(c: Pick<Client, "package_price" | "amount_paid"> & Partial<Pick<Client, "payment_model">>) {
+  if (isPayPerVisit(c)) return 0;
   return Math.max(0, Number(c.package_price ?? 0) - Number(c.amount_paid ?? 0));
 }
+
 
 export function computeStatus(
   c: Pick<Client, "package_total_visits" | "visits_used" | "package_price" | "amount_paid">,

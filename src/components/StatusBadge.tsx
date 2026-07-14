@@ -1,7 +1,7 @@
 import { simpleStatus, simpleStatusClasses, simpleStatusDot, type Client } from "@/lib/clients";
 
 type Props = {
-  client: Pick<Client, "package_total_visits" | "visits_used" | "package_price" | "amount_paid">;
+  client: Pick<Client, "package_total_visits" | "visits_used" | "package_price" | "amount_paid"> & Partial<Pick<Client, "payment_model">>;
   /** Derived from live Square bookings — pass false if unknown/not scheduled. */
   isScheduled: boolean;
 };

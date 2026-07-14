@@ -681,11 +681,24 @@ function EditDialog({
           <Field label="Amount Paid">
             <Input type="number" min={0} step="0.01" value={form.amount_paid} onChange={(e) => up("amount_paid", Number(e.target.value))} />
           </Field>
+          {Number(form.package_total_visits) === 0 && (
+            <Field label="Payment Model">
+              <select
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                value={form.payment_model === "pay_per_visit" ? "pay_per_visit" : "package"}
+                onChange={(e) => up("payment_model", e.target.value)}
+              >
+                <option value="package">Package (default)</option>
+                <option value="pay_per_visit">Pay-per-visit (hides Amount Owed, uncapped ledger)</option>
+              </select>
+            </Field>
+          )}
           <div className="sm:col-span-2">
             <Field label="Internal Notes">
               <Textarea rows={3} value={form.internal_notes ?? ""} onChange={(e) => up("internal_notes", e.target.value)} />
             </Field>
           </div>
+
           <div className="sm:col-span-2 flex items-start gap-3 rounded-md border border-slate-200 bg-slate-50 p-3">
             <input
               id="manual-active"

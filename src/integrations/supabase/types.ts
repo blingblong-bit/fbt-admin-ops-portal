@@ -65,6 +65,7 @@ export type Database = {
           package_price: number
           package_start_date: string | null
           package_total_visits: number
+          payment_model: string
           phone: string | null
           square_customer_id: string | null
           square_visit_note: string | null
@@ -87,6 +88,7 @@ export type Database = {
           package_price?: number
           package_start_date?: string | null
           package_total_visits?: number
+          payment_model?: string
           phone?: string | null
           square_customer_id?: string | null
           square_visit_note?: string | null
@@ -109,6 +111,7 @@ export type Database = {
           package_price?: number
           package_start_date?: string | null
           package_total_visits?: number
+          payment_model?: string
           phone?: string | null
           square_customer_id?: string | null
           square_visit_note?: string | null

@@ -2,6 +2,8 @@ export type ClientStatus = "Completed" | "Payment Due" | "Ending Soon" | "Active
 export type SimpleStatus = "Payment Due" | "Not Scheduled" | "Active" | "Package Complete";
 export type PrimaryActionKind = "record_payment" | "mark_scheduled" | "renew_package" | "view_client";
 export type LifecycleStatus = "active" | "assessment" | "archived";
+export type PaymentModel = "package" | "pay_per_visit";
+
 
 export interface Client {
   id: string;
@@ -20,10 +22,12 @@ export interface Client {
   status: LifecycleStatus | string;
   manual_active: boolean;
   square_customer_id: string | null;
+  payment_model: PaymentModel | string;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
 }
+
 
 
 export interface ClientActivity {
@@ -44,9 +48,15 @@ export function visitsRemaining(c: Pick<Client, "package_total_visits" | "visits
   return Math.max(0, (c.package_total_visits ?? 0) - c.visits_used);
 }
 
-export function amountOwed(c: Pick<Client, "package_price" | "amount_paid">) {
+export function isPayPerVisit(c: Partial<Pick<Client, "payment_model">>): boolean {
+  return c.payment_model === "pay_per_visit";
+}
+
+export function amountOwed(c: Pick<Client, "package_price" | "amount_paid"> & Partial<Pick<Client, "payment_model">>) {
+  if (isPayPerVisit(c)) return 0;
   return Math.max(0, Number(c.package_price ?? 0) - Number(c.amount_paid ?? 0));
 }
+
 
 export function computeStatus(
   c: Pick<Client, "package_total_visits" | "visits_used" | "package_price" | "amount_paid">,
@@ -75,7 +85,8 @@ export function statusClasses(s: ClientStatus): string {
 type SimpleClient = Pick<
   Client,
   "package_total_visits" | "visits_used" | "package_price" | "amount_paid"
->;
+> & Partial<Pick<Client, "payment_model">>;
+
 
 /**
  * Schedule status is derived entirely from live Square bookings. Callers must

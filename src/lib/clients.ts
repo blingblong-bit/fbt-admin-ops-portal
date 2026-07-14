@@ -85,7 +85,8 @@ export function statusClasses(s: ClientStatus): string {
 type SimpleClient = Pick<
   Client,
   "package_total_visits" | "visits_used" | "package_price" | "amount_paid"
->;
+> & Partial<Pick<Client, "payment_model">>;
+
 
 /**
  * Schedule status is derived entirely from live Square bookings. Callers must

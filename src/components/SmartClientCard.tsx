@@ -124,9 +124,14 @@ export function SmartClientCard({
               owed > 0 ? "text-red-600" : "text-slate-700"
             }`}
           >
-            {hideAmount ? (owed > 0 ? "Owes" : "Paid") : owed > 0 ? formatCurrency(owed) : "Paid"}
+            {isPayPerVisit(client)
+              ? <span className="text-slate-500 font-normal">Pay-per-visit</span>
+              : hideAmount
+                ? (owed > 0 ? "Owes" : "Paid")
+                : owed > 0 ? formatCurrency(owed) : "Paid"}
           </dd>
         </div>
+
       </dl>
 
       {client.internal_notes && (

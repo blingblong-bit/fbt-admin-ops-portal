@@ -39,11 +39,46 @@ function formatWeekLabel(week: PaymentHistoryWeek): string {
 function formatTime(iso: string): string {
   return new Date(iso).toLocaleString("en-US", {
     timeZone: "America/Chicago",
-    month: "short",
-    day: "numeric",
     hour: "numeric",
     minute: "2-digit",
   });
+}
+
+function formatDayLabel(iso: string): string {
+  return new Date(iso).toLocaleDateString("en-US", {
+    timeZone: "America/Chicago",
+    month: "short",
+    day: "numeric",
+  });
+}
+
+type DayGroup = {
+  date: string;
+  label: string;
+  entries: PaymentHistoryEntry[];
+  total: number;
+};
+
+function groupEntriesByDay(entries: PaymentHistoryEntry[]): DayGroup[] {
+  const map = new Map<string, PaymentHistoryEntry[]>();
+  for (const e of entries) {
+    const date = e.created_at.slice(0, 10);
+    const list = map.get(date) ?? [];
+    list.push(e);
+    map.set(date, list);
+  }
+  const groups = Array.from(map.entries()).map(([date, items]) => {
+    const total = items.reduce((sum, e) => sum + (e.applied_amount ?? e.amount ?? 0), 0);
+    return {
+      date,
+      label: formatDayLabel(date),
+      entries: items.sort(
+        (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+      ),
+      total,
+    };
+  });
+  return groups.sort((a, b) => b.date.localeCompare(a.date));
 }
 
 function PaymentHistoryPage() {

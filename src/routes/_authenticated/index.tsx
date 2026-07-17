@@ -6,11 +6,14 @@ import {
   CalendarClock,
   CircleDollarSign,
   CircleSlash,
+  Eye,
+  EyeOff,
   History,
   Hourglass,
   Receipt,
   Users,
 } from "lucide-react";
+
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { AppShell } from "@/components/AppShell";

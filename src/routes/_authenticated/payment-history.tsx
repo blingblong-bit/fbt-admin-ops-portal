@@ -163,35 +163,54 @@ function PaymentHistoryPage() {
                           <th className="py-2 pr-3 font-medium">Match</th>
                         </tr>
                       </thead>
-                      <tbody>
-                        {w.entries.map((e) => (
-                          <tr key={e.id} className="border-b last:border-0">
-                            <td className="py-2 pr-3 text-slate-600">
-                              {formatTime(e.created_at)}
-                            </td>
-                            <td className="py-2 pr-3">
-                              <Link
-                                to="/clients/$id"
-                                params={{ id: e.client_id }}
-                                className="text-slate-900 hover:underline"
-                              >
-                                {e.client_name}
-                              </Link>
-                            </td>
-                            <td className="py-2 pr-3 font-medium text-slate-900">
-                              {e.amount != null ? formatCurrency(e.amount) : "—"}
-                            </td>
-                            <td className="py-2 pr-3 text-slate-700">
-                              {e.applied_amount != null
-                                ? formatCurrency(e.applied_amount)
-                                : "—"}
-                            </td>
-                            <td className="py-2 pr-3 text-xs text-slate-500">
-                              {e.match_method ?? "—"}
+                      {groupEntriesByDay(w.entries).map((day) => (
+                        <tbody key={day.date}>
+                          <tr className="border-b bg-slate-50">
+                            <td
+                              colSpan={5}
+                              className="py-2 pl-3 pr-3 text-sm font-medium text-slate-900"
+                            >
+                              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                                <span>{day.label}</span>
+                                <span className="text-xs font-normal text-slate-600">
+                                  <span className="font-medium text-slate-900">
+                                    {formatCurrency(day.total)}
+                                  </span>{" "}
+                                  · {day.entries.length}{" "}
+                                  {day.entries.length === 1 ? "payment" : "payments"}
+                                </span>
+                              </div>
                             </td>
                           </tr>
-                        ))}
-                      </tbody>
+                          {day.entries.map((e) => (
+                            <tr key={e.id} className="border-b last:border-0">
+                              <td className="py-2 pr-3 pl-3 text-slate-600">
+                                {formatTime(e.created_at)}
+                              </td>
+                              <td className="py-2 pr-3">
+                                <Link
+                                  to="/clients/$id"
+                                  params={{ id: e.client_id }}
+                                  className="text-slate-900 hover:underline"
+                                >
+                                  {e.client_name}
+                                </Link>
+                              </td>
+                              <td className="py-2 pr-3 font-medium text-slate-900">
+                                {e.amount != null ? formatCurrency(e.amount) : "—"}
+                              </td>
+                              <td className="py-2 pr-3 text-slate-700">
+                                {e.applied_amount != null
+                                  ? formatCurrency(e.applied_amount)
+                                  : "—"}
+                              </td>
+                              <td className="py-2 pr-3 text-xs text-slate-500">
+                                {e.match_method ?? "—"}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      ))}
                     </table>
                   </div>
                 )}

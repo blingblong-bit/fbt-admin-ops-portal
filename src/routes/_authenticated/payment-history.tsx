@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatCurrency } from "@/lib/clients";
 import {
   getPaymentHistoryWeek,
+  type PaymentHistoryEntry,
   type PaymentHistoryWeek,
 } from "@/lib/payment-history.functions";
 

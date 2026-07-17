@@ -45,12 +45,24 @@ function formatTime(iso: string): string {
   });
 }
 
-function formatDayLabel(iso: string): string {
-  return new Date(iso).toLocaleDateString("en-US", {
-    timeZone: "America/Chicago",
+function formatDayLabel(ymd: string): string {
+  const [y, m, d] = ymd.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString("en-US", {
+    timeZone: "UTC",
     month: "short",
     day: "numeric",
   });
+}
+
+function clinicYmd(iso: string): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Chicago",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date(iso));
+  const get = (t: string) => parts.find((p) => p.type === t)!.value;
+  return `${get("year")}-${get("month")}-${get("day")}`;
 }
 
 type DayGroup = {

@@ -707,10 +707,16 @@ function Tile({
   tile,
   active,
   onClick,
+  editing = false,
+  hidden = false,
+  onToggleHidden,
 }: {
   tile: TileDef;
   active: boolean;
   onClick: () => void;
+  editing?: boolean;
+  hidden?: boolean;
+  onToggleHidden?: () => void;
 }) {
   const activeRing =
     tile.tone === "red"
@@ -750,14 +756,31 @@ function Tile({
     </>
   );
 
-  const baseClass = `flex flex-col items-start gap-2 rounded-xl border bg-white p-4 text-left shadow-sm transition-all hover:border-slate-300 hover:shadow ${
+  const baseClass = `relative flex flex-col items-start gap-2 rounded-xl border bg-white p-4 text-left shadow-sm transition-all hover:border-slate-300 hover:shadow ${
     active ? `ring-2 ${activeRing}` : ""
-  }`;
+  } ${editing && hidden ? "opacity-60" : ""}`;
+
+  const toggleBtn = editing && onToggleHidden ? (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        onToggleHidden();
+      }}
+      className="absolute right-2 top-2 rounded-md border border-slate-200 bg-white/90 p-1 text-slate-500 shadow-sm hover:text-slate-900"
+      aria-label={hidden ? "Show tile" : "Hide tile"}
+      title={hidden ? "Show tile" : "Hide tile"}
+    >
+      {hidden ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
+    </button>
+  ) : null;
 
   if (tile.href) {
     return (
       <Link to={tile.href} className={baseClass}>
         {inner}
+        {toggleBtn}
       </Link>
     );
   }
@@ -765,9 +788,11 @@ function Tile({
   return (
     <button type="button" onClick={onClick} className={baseClass}>
       {inner}
+      {toggleBtn}
     </button>
   );
 }
+
 
 function PaymentTotals({ clients }: { clients: Client[] }) {
   const owed = clients.map((c) => amountOwed(c));

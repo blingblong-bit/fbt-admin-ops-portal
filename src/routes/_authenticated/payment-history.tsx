@@ -75,7 +75,7 @@ type DayGroup = {
 function groupEntriesByDay(entries: PaymentHistoryEntry[]): DayGroup[] {
   const map = new Map<string, PaymentHistoryEntry[]>();
   for (const e of entries) {
-    const date = e.created_at.slice(0, 10);
+    const date = clinicYmd(e.created_at);
     const list = map.get(date) ?? [];
     list.push(e);
     map.set(date, list);

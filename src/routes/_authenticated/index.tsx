@@ -478,6 +478,56 @@ function Dashboard() {
   ];
   const tiles = allTiles.filter((t) => !(isStaff && t.staffHidden));
 
+  // Per-user tile visibility. Persisted in localStorage; defaults to the
+  // curated "essential" set below. Tiles not in the essentials list are
+  // hidden until the user clicks "Show more tiles" (which also reveals
+  // per-tile hide/show toggles for customization).
+  const DEFAULT_VISIBLE_TILES = useMemo(
+    () =>
+      new Set<string>([
+        "payment_due",
+        "payment_due_this_week",
+        "overdue_prior_weeks",
+        "critical",
+        "payment_history",
+      ]),
+    [],
+  );
+  const [hiddenTiles, setHiddenTiles] = useState<Set<string>>(() => {
+    if (typeof window === "undefined") return new Set();
+    try {
+      const raw = window.localStorage.getItem("dashboard.hiddenTiles");
+      if (raw) return new Set<string>(JSON.parse(raw));
+    } catch { /* ignore */ }
+    // First run: hide every tile not in the default-visible set.
+    const hide = new Set<string>();
+    for (const t of allTiles) if (!DEFAULT_VISIBLE_TILES.has(t.key)) hide.add(t.key);
+    return hide;
+  });
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(
+        "dashboard.hiddenTiles",
+        JSON.stringify([...hiddenTiles]),
+      );
+    } catch { /* ignore */ }
+  }, [hiddenTiles]);
+  const [showAllTiles, setShowAllTiles] = useState(false);
+
+  const toggleTileHidden = (key: string) => {
+    setHiddenTiles((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const visibleTiles = showAllTiles
+    ? tiles
+    : tiles.filter((t) => !hiddenTiles.has(t.key));
+  const hiddenCount = tiles.filter((t) => hiddenTiles.has(t.key)).length;
+
   return (
     <AppShell>
       <div className="mb-4 flex flex-wrap items-end justify-between gap-3 md:mb-8">
@@ -512,16 +562,33 @@ function Dashboard() {
 
 
       {/* Tiles */}
-      <div className="mb-6 grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 lg:grid-cols-4 xl:grid-cols-7 md:mb-8">
-        {tiles.map((t) => (
+      <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 lg:grid-cols-4 xl:grid-cols-7">
+        {visibleTiles.map((t) => (
           <Tile
             key={t.key}
             tile={t}
             active={!t.href && filter === t.key}
             onClick={() => { if (!t.href) setFilter(t.key as FilterKey); }}
+            editing={showAllTiles}
+            hidden={hiddenTiles.has(t.key)}
+            onToggleHidden={() => toggleTileHidden(t.key)}
           />
         ))}
       </div>
+      <div className="mb-6 flex justify-end md:mb-8">
+        <button
+          type="button"
+          onClick={() => setShowAllTiles((v) => !v)}
+          className="text-xs font-medium text-slate-500 underline-offset-2 hover:text-slate-800 hover:underline"
+        >
+          {showAllTiles
+            ? "Done customizing"
+            : hiddenCount > 0
+              ? `Show more tiles (${hiddenCount} hidden)`
+              : "Customize tiles"}
+        </button>
+      </div>
+
 
 
       {/* Filtered list */}

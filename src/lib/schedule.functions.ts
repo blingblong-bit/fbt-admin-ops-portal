@@ -806,7 +806,8 @@ export const getThisWeekScheduledClientIds = createServerFn({ method: "GET" })
       const token = process.env.SQUARE_PRODUCTION_ACCESS_TOKEN;
       const todayYmd = ymdInTz(new Date());
       const dow = ymdWeekday(todayYmd);
-      const weekStartYmd = addDaysYmd(todayYmd, -dow);
+      const mondayOffset = (dow + 6) % 7;
+      const weekStartYmd = addDaysYmd(todayYmd, -mondayOffset);
       const weekEndYmd = addDaysYmd(weekStartYmd, 6);
       if (!token) {
         return {

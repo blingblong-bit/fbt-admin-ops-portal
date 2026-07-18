@@ -865,8 +865,9 @@ export const getThisWeekScheduledClientIds = createServerFn({ method: "GET" })
   );
 
 /**
- * Client IDs scheduled for an ACTIVE Square booking in NEXT week
- * (Sunday–Saturday, America/Chicago), mirroring getThisWeekScheduledClientIds.
+ * Client IDs scheduled for an ACTIVE Square booking in NEXT WORK week
+ * (Monday–Friday, America/Chicago). Sat/Sun bookings roll INTO the upcoming
+ * work week's bucket per business rule.
  */
 export const getNextWeekScheduledClientIds = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
@@ -876,11 +877,9 @@ export const getNextWeekScheduledClientIds = createServerFn({ method: "GET" })
     }): Promise<{ client_ids: string[]; week_start: string; week_end: string; error: string | null }> => {
       const token = process.env.SQUARE_PRODUCTION_ACCESS_TOKEN;
       const todayYmd = ymdInTz(new Date());
-      const dow = ymdWeekday(todayYmd);
-      const mondayOffset = (dow + 6) % 7;
-      const thisWeekStart = addDaysYmd(todayYmd, -mondayOffset);
+      const thisWeekStart = workWeekStartFromYmd(todayYmd);
       const weekStartYmd = addDaysYmd(thisWeekStart, 7);
-      const weekEndYmd = addDaysYmd(weekStartYmd, 6);
+      const weekEndYmd = addDaysYmd(weekStartYmd, WORK_WEEK_DAYS);
       if (!token) {
         return {
           client_ids: [],
@@ -889,9 +888,10 @@ export const getNextWeekScheduledClientIds = createServerFn({ method: "GET" })
           error: "SQUARE_PRODUCTION_ACCESS_TOKEN is not configured",
         };
       }
-      const fetchStart = ymdLocalToInstant(weekStartYmd);
+      // Widen fetch by ±2 days to catch weekend bookings that roll into this bucket.
+      const fetchStart = ymdLocalToInstant(addDaysYmd(weekStartYmd, -2));
       const fetchEnd = new Date(
-        ymdLocalToInstant(addDaysYmd(weekEndYmd, 1)).getTime() - 1,
+        ymdLocalToInstant(addDaysYmd(weekEndYmd, 3)).getTime() - 1,
       );
       const { bookings, error } = await fetchSquareBookings(
         token,
@@ -908,7 +908,7 @@ export const getNextWeekScheduledClientIds = createServerFn({ method: "GET" })
         if (/CANCEL|DECLINE|NO_SHOW/.test(status)) continue;
         if (!b.start_at) continue;
         const day = ymdInTz(new Date(b.start_at));
-        if (day < weekStartYmd || day > weekEndYmd) continue;
+        if (workWeekStartFromYmd(day) !== weekStartYmd) continue;
         if (b.customer_id) customerIds.add(b.customer_id);
       }
       if (customerIds.size === 0) {

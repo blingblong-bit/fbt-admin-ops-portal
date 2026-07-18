@@ -372,7 +372,9 @@ export const getScheduleCheck = createServerFn({ method: "GET" })
     const token = process.env.SQUARE_PRODUCTION_ACCESS_TOKEN;
     const selectedYmd = data.date;
     const dow = ymdWeekday(selectedYmd); // 0=Sun in clinic-local calendar
-    const weekStartYmd = addDaysYmd(selectedYmd, -dow);
+    // Business week runs Monday–Sunday. Shift so Monday=0.
+    const mondayOffset = (dow + 6) % 7;
+    const weekStartYmd = addDaysYmd(selectedYmd, -mondayOffset);
     const weekEndYmd = addDaysYmd(weekStartYmd, 6);
     const nextWeekStartYmd = addDaysYmd(weekEndYmd, 1);
     const nextWeekEndYmd = addDaysYmd(nextWeekStartYmd, 6);

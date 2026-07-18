@@ -68,29 +68,40 @@ export const Route = createFileRoute("/api/public/visit-diff-sweep")({
           const cid = c.square_customer_id as string;
           // Get most recent booking (past or upcoming). Use search with customer filter.
           let latest: { start_at?: string; seller_note?: string | null; id?: string } | null = null;
+          let pages = 0;
+          let totalBookings = 0;
           try {
             let cursor: string | undefined;
             for (let i = 0; i < 20; i++) {
               const url = new URL(`${SQUARE_BASE}/v2/bookings`);
               url.searchParams.set("customer_id", cid);
               url.searchParams.set("limit", "200");
+              url.searchParams.set("start_at_min", new Date(Date.now() - 1000 * 60 * 60 * 24 * 400).toISOString());
+              url.searchParams.set("start_at_max", new Date(Date.now() + 1000 * 60 * 60 * 24 * 180).toISOString());
               if (cursor) url.searchParams.set("cursor", cursor);
               const res = await fetch(url.toString(), {
                 headers: { Authorization: `Bearer ${token}`, "Square-Version": SQUARE_VERSION },
               });
-              if (!res.ok) break;
+              if (!res.ok) {
+                const body = (await res.text()).slice(0, 500);
+                errors.push({ client_id: c.id, name: `${c.first_name} ${c.last_name}`, square_customer_id: cid, status: res.status, body });
+                break;
+              }
               const j = (await res.json()) as { bookings?: Array<{ id?: string; start_at?: string; seller_note?: string | null }>; cursor?: string };
+              pages++;
+              totalBookings += (j.bookings ?? []).length;
               for (const bk of j.bookings ?? []) {
                 if (!latest || (bk.start_at ?? "") > (latest.start_at ?? "")) latest = bk;
               }
               cursor = j.cursor;
               if (!cursor) break;
             }
-            
           } catch (e) {
             errors.push({ client_id: c.id, name: `${c.first_name} ${c.last_name}`, error: String(e) });
             continue;
           }
+          void totalBookings;
+          void pages;
 
           if (!latest) {
             noBooking++;

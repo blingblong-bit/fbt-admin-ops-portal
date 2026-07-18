@@ -21,6 +21,7 @@ import { Route as AuthenticatedMergeCenterRouteImport } from './routes/_authenti
 import { Route as AuthenticatedImportRouteImport } from './routes/_authenticated/import'
 import { Route as AuthenticatedBackupRouteImport } from './routes/_authenticated/backup'
 import { Route as AuthenticatedClientsIndexRouteImport } from './routes/_authenticated/clients.index'
+import { Route as ApiPublicVisitDiffSweepRouteImport } from './routes/api/public/visit-diff-sweep'
 import { Route as ApiPublicSquareDiagRouteImport } from './routes/api/public/square-diag'
 import { Route as AuthenticatedClientsNewRouteImport } from './routes/_authenticated/clients.new'
 import { Route as AuthenticatedClientsDeletedRouteImport } from './routes/_authenticated/clients.deleted'
@@ -92,6 +93,11 @@ const AuthenticatedClientsIndexRoute =
     path: '/clients/',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const ApiPublicVisitDiffSweepRoute = ApiPublicVisitDiffSweepRouteImport.update({
+  id: '/api/public/visit-diff-sweep',
+  path: '/api/public/visit-diff-sweep',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicSquareDiagRoute = ApiPublicSquareDiagRouteImport.update({
   id: '/api/public/square-diag',
   path: '/api/public/square-diag',
@@ -134,6 +140,7 @@ export interface FileRoutesByFullPath {
   '/clients/deleted': typeof AuthenticatedClientsDeletedRoute
   '/clients/new': typeof AuthenticatedClientsNewRoute
   '/api/public/square-diag': typeof ApiPublicSquareDiagRoute
+  '/api/public/visit-diff-sweep': typeof ApiPublicVisitDiffSweepRoute
   '/clients/': typeof AuthenticatedClientsIndexRoute
   '/api/public/square/webhook': typeof ApiPublicSquareWebhookRoute
 }
@@ -152,6 +159,7 @@ export interface FileRoutesByTo {
   '/clients/deleted': typeof AuthenticatedClientsDeletedRoute
   '/clients/new': typeof AuthenticatedClientsNewRoute
   '/api/public/square-diag': typeof ApiPublicSquareDiagRoute
+  '/api/public/visit-diff-sweep': typeof ApiPublicVisitDiffSweepRoute
   '/clients': typeof AuthenticatedClientsIndexRoute
   '/api/public/square/webhook': typeof ApiPublicSquareWebhookRoute
 }
@@ -172,6 +180,7 @@ export interface FileRoutesById {
   '/_authenticated/clients/deleted': typeof AuthenticatedClientsDeletedRoute
   '/_authenticated/clients/new': typeof AuthenticatedClientsNewRoute
   '/api/public/square-diag': typeof ApiPublicSquareDiagRoute
+  '/api/public/visit-diff-sweep': typeof ApiPublicVisitDiffSweepRoute
   '/_authenticated/clients/': typeof AuthenticatedClientsIndexRoute
   '/api/public/square/webhook': typeof ApiPublicSquareWebhookRoute
 }
@@ -192,6 +201,7 @@ export interface FileRouteTypes {
     | '/clients/deleted'
     | '/clients/new'
     | '/api/public/square-diag'
+    | '/api/public/visit-diff-sweep'
     | '/clients/'
     | '/api/public/square/webhook'
   fileRoutesByTo: FileRoutesByTo
@@ -210,6 +220,7 @@ export interface FileRouteTypes {
     | '/clients/deleted'
     | '/clients/new'
     | '/api/public/square-diag'
+    | '/api/public/visit-diff-sweep'
     | '/clients'
     | '/api/public/square/webhook'
   id:
@@ -229,6 +240,7 @@ export interface FileRouteTypes {
     | '/_authenticated/clients/deleted'
     | '/_authenticated/clients/new'
     | '/api/public/square-diag'
+    | '/api/public/visit-diff-sweep'
     | '/_authenticated/clients/'
     | '/api/public/square/webhook'
   fileRoutesById: FileRoutesById
@@ -237,6 +249,7 @@ export interface RootRouteChildren {
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRoute
   ApiPublicSquareDiagRoute: typeof ApiPublicSquareDiagRoute
+  ApiPublicVisitDiffSweepRoute: typeof ApiPublicVisitDiffSweepRoute
   ApiPublicSquareWebhookRoute: typeof ApiPublicSquareWebhookRoute
 }
 
@@ -326,6 +339,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedClientsIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/api/public/visit-diff-sweep': {
+      id: '/api/public/visit-diff-sweep'
+      path: '/api/public/visit-diff-sweep'
+      fullPath: '/api/public/visit-diff-sweep'
+      preLoaderRoute: typeof ApiPublicVisitDiffSweepRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/square-diag': {
       id: '/api/public/square-diag'
       path: '/api/public/square-diag'
@@ -403,18 +423,9 @@ const rootRouteChildren: RootRouteChildren = {
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRoute,
   ApiPublicSquareDiagRoute: ApiPublicSquareDiagRoute,
+  ApiPublicVisitDiffSweepRoute: ApiPublicVisitDiffSweepRoute,
   ApiPublicSquareWebhookRoute: ApiPublicSquareWebhookRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}

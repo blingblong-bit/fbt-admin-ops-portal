@@ -284,6 +284,109 @@ export type Database = {
           },
         ]
       }
+      renewal_campaigns: {
+        Row: {
+          client_id: string
+          created_at: string
+          id: string
+          last_sent_at: string | null
+          last_visit_date: string | null
+          notified_owner_at: string | null
+          package_start_date_snapshot: string | null
+          package_total_visits_snapshot: number
+          reply_at: string | null
+          reply_text: string | null
+          sends_count: number
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          id?: string
+          last_sent_at?: string | null
+          last_visit_date?: string | null
+          notified_owner_at?: string | null
+          package_start_date_snapshot?: string | null
+          package_total_visits_snapshot: number
+          reply_at?: string | null
+          reply_text?: string | null
+          sends_count?: number
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          id?: string
+          last_sent_at?: string | null
+          last_visit_date?: string | null
+          notified_owner_at?: string | null
+          package_start_date_snapshot?: string | null
+          package_total_visits_snapshot?: number
+          reply_at?: string | null
+          reply_text?: string | null
+          sends_count?: number
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "renewal_campaigns_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      renewal_messages: {
+        Row: {
+          body: string
+          campaign_id: string
+          created_at: string
+          direction: string
+          error: string | null
+          from_number: string | null
+          id: string
+          sequence_index: number | null
+          to_number: string | null
+          twilio_sid: string | null
+        }
+        Insert: {
+          body: string
+          campaign_id: string
+          created_at?: string
+          direction: string
+          error?: string | null
+          from_number?: string | null
+          id?: string
+          sequence_index?: number | null
+          to_number?: string | null
+          twilio_sid?: string | null
+        }
+        Update: {
+          body?: string
+          campaign_id?: string
+          created_at?: string
+          direction?: string
+          error?: string | null
+          from_number?: string | null
+          id?: string
+          sequence_index?: number | null
+          to_number?: string | null
+          twilio_sid?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "renewal_messages_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "renewal_campaigns"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       square_customer_reviews: {
         Row: {
           created_at: string

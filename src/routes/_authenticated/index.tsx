@@ -498,6 +498,22 @@ function Dashboard() {
       tone: "slate",
     },
     {
+      key: "renewal_review",
+      label: "Needs Renewal Review",
+      icon: <RefreshCw className="h-5 w-5" />,
+      count: renewalYesCount,
+      tone: renewalYesCount > 0 ? "amber" : "slate",
+      href: "/renewal-review",
+    },
+    {
+      key: "renewal_manual",
+      label: "Needs Manual Follow-up",
+      icon: <HelpCircle className="h-5 w-5" />,
+      count: renewalManualCount,
+      tone: renewalManualCount > 0 ? "amber" : "slate",
+      href: "/renewal-review",
+    },
+    {
       key: "all",
       label: "All Active",
       icon: <Users className="h-5 w-5" />,

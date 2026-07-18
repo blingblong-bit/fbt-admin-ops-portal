@@ -1207,7 +1207,8 @@ export const unmarkClientContacted = createServerFn({ method: "POST" })
   .handler(async ({ data, context }): Promise<{ ok: true; deleted: number }> => {
     const todayYmd = ymdInTz(new Date());
     const dow = ymdWeekday(todayYmd);
-    const weekStartYmd = addDaysYmd(todayYmd, -dow);
+    const mondayOffset = (dow + 6) % 7;
+    const weekStartYmd = addDaysYmd(todayYmd, -mondayOffset);
     const weekStartInstant = ymdLocalToInstant(weekStartYmd).toISOString();
     const { data: rows, error } = await context.supabase
       .from("client_activities")

@@ -799,8 +799,9 @@ export const getScheduledClientIds = createServerFn({ method: "GET" })
 
 /**
  * Client IDs scheduled for an ACTIVE Square booking in the current
- * clinic-local week (Sunday–Saturday, America/Chicago). Reuses the same
- * week-boundary logic as the Schedule Check page.
+ * clinic-local WORK week (Monday–Friday, America/Chicago). Sat/Sun bookings
+ * roll into the upcoming work week. Reuses the same week-boundary logic as
+ * the Schedule Check page.
  */
 export const getThisWeekScheduledClientIds = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
@@ -810,10 +811,8 @@ export const getThisWeekScheduledClientIds = createServerFn({ method: "GET" })
     }): Promise<{ client_ids: string[]; week_start: string; week_end: string; error: string | null }> => {
       const token = process.env.SQUARE_PRODUCTION_ACCESS_TOKEN;
       const todayYmd = ymdInTz(new Date());
-      const dow = ymdWeekday(todayYmd);
-      const mondayOffset = (dow + 6) % 7;
-      const weekStartYmd = addDaysYmd(todayYmd, -mondayOffset);
-      const weekEndYmd = addDaysYmd(weekStartYmd, 6);
+      const weekStartYmd = workWeekStartFromYmd(todayYmd);
+      const weekEndYmd = addDaysYmd(weekStartYmd, WORK_WEEK_DAYS);
       if (!token) {
         return {
           client_ids: [],
@@ -822,9 +821,11 @@ export const getThisWeekScheduledClientIds = createServerFn({ method: "GET" })
           error: "SQUARE_PRODUCTION_ACCESS_TOKEN is not configured",
         };
       }
-      const fetchStart = ymdLocalToInstant(weekStartYmd);
+      // Widen fetch by ±2 days so weekend bookings that roll INTO this
+      // work-week bucket are still returned by Square.
+      const fetchStart = ymdLocalToInstant(addDaysYmd(weekStartYmd, -2));
       const fetchEnd = new Date(
-        ymdLocalToInstant(addDaysYmd(weekEndYmd, 1)).getTime() - 1,
+        ymdLocalToInstant(addDaysYmd(weekEndYmd, 3)).getTime() - 1,
       );
       const { bookings, error } = await fetchSquareBookings(
         token,
@@ -840,9 +841,9 @@ export const getThisWeekScheduledClientIds = createServerFn({ method: "GET" })
         const status = (b.status ?? "").toString().toUpperCase();
         if (/CANCEL|DECLINE|NO_SHOW/.test(status)) continue;
         if (!b.start_at) continue;
-        // Confirm the booking falls in this week in clinic-local time.
+        // Only count bookings whose work-week bucket == this week.
         const day = ymdInTz(new Date(b.start_at));
-        if (day < weekStartYmd || day > weekEndYmd) continue;
+        if (workWeekStartFromYmd(day) !== weekStartYmd) continue;
         if (b.customer_id) customerIds.add(b.customer_id);
       }
       if (customerIds.size === 0) {

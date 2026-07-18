@@ -76,6 +76,8 @@ export const Route = createFileRoute("/api/public/visit-diff-sweep")({
               const url = new URL(`${SQUARE_BASE}/v2/bookings`);
               url.searchParams.set("customer_id", cid);
               url.searchParams.set("limit", "200");
+              url.searchParams.set("start_at_min", new Date(Date.now() - 1000 * 60 * 60 * 24 * 400).toISOString());
+              url.searchParams.set("start_at_max", new Date(Date.now() + 1000 * 60 * 60 * 24 * 180).toISOString());
               if (cursor) url.searchParams.set("cursor", cursor);
               const res = await fetch(url.toString(), {
                 headers: { Authorization: `Bearer ${token}`, "Square-Version": SQUARE_VERSION },

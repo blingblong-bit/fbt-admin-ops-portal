@@ -27,6 +27,7 @@ import { Route as AuthenticatedClientsNewRouteImport } from './routes/_authentic
 import { Route as AuthenticatedClientsDeletedRouteImport } from './routes/_authenticated/clients.deleted'
 import { Route as AuthenticatedClientsIdRouteImport } from './routes/_authenticated/clients.$id'
 import { Route as ApiPublicSquareWebhookRouteImport } from './routes/api/public/square.webhook'
+import { Route as ApiPublicRenewalTickRouteImport } from './routes/api/public/renewal.tick'
 
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
@@ -124,6 +125,11 @@ const ApiPublicSquareWebhookRoute = ApiPublicSquareWebhookRouteImport.update({
   path: '/api/public/square/webhook',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicRenewalTickRoute = ApiPublicRenewalTickRouteImport.update({
+  id: '/api/public/renewal/tick',
+  path: '/api/public/renewal/tick',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AuthenticatedIndexRoute
@@ -142,6 +148,7 @@ export interface FileRoutesByFullPath {
   '/api/public/square-diag': typeof ApiPublicSquareDiagRoute
   '/api/public/visit-diff-sweep': typeof ApiPublicVisitDiffSweepRoute
   '/clients/': typeof AuthenticatedClientsIndexRoute
+  '/api/public/renewal/tick': typeof ApiPublicRenewalTickRoute
   '/api/public/square/webhook': typeof ApiPublicSquareWebhookRoute
 }
 export interface FileRoutesByTo {
@@ -161,6 +168,7 @@ export interface FileRoutesByTo {
   '/api/public/square-diag': typeof ApiPublicSquareDiagRoute
   '/api/public/visit-diff-sweep': typeof ApiPublicVisitDiffSweepRoute
   '/clients': typeof AuthenticatedClientsIndexRoute
+  '/api/public/renewal/tick': typeof ApiPublicRenewalTickRoute
   '/api/public/square/webhook': typeof ApiPublicSquareWebhookRoute
 }
 export interface FileRoutesById {
@@ -182,6 +190,7 @@ export interface FileRoutesById {
   '/api/public/square-diag': typeof ApiPublicSquareDiagRoute
   '/api/public/visit-diff-sweep': typeof ApiPublicVisitDiffSweepRoute
   '/_authenticated/clients/': typeof AuthenticatedClientsIndexRoute
+  '/api/public/renewal/tick': typeof ApiPublicRenewalTickRoute
   '/api/public/square/webhook': typeof ApiPublicSquareWebhookRoute
 }
 export interface FileRouteTypes {
@@ -203,6 +212,7 @@ export interface FileRouteTypes {
     | '/api/public/square-diag'
     | '/api/public/visit-diff-sweep'
     | '/clients/'
+    | '/api/public/renewal/tick'
     | '/api/public/square/webhook'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -222,6 +232,7 @@ export interface FileRouteTypes {
     | '/api/public/square-diag'
     | '/api/public/visit-diff-sweep'
     | '/clients'
+    | '/api/public/renewal/tick'
     | '/api/public/square/webhook'
   id:
     | '__root__'
@@ -242,6 +253,7 @@ export interface FileRouteTypes {
     | '/api/public/square-diag'
     | '/api/public/visit-diff-sweep'
     | '/_authenticated/clients/'
+    | '/api/public/renewal/tick'
     | '/api/public/square/webhook'
   fileRoutesById: FileRoutesById
 }
@@ -250,6 +262,7 @@ export interface RootRouteChildren {
   AuthRoute: typeof AuthRoute
   ApiPublicSquareDiagRoute: typeof ApiPublicSquareDiagRoute
   ApiPublicVisitDiffSweepRoute: typeof ApiPublicVisitDiffSweepRoute
+  ApiPublicRenewalTickRoute: typeof ApiPublicRenewalTickRoute
   ApiPublicSquareWebhookRoute: typeof ApiPublicSquareWebhookRoute
 }
 
@@ -381,6 +394,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicSquareWebhookRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/renewal/tick': {
+      id: '/api/public/renewal/tick'
+      path: '/api/public/renewal/tick'
+      fullPath: '/api/public/renewal/tick'
+      preLoaderRoute: typeof ApiPublicRenewalTickRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -424,6 +444,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthRoute: AuthRoute,
   ApiPublicSquareDiagRoute: ApiPublicSquareDiagRoute,
   ApiPublicVisitDiffSweepRoute: ApiPublicVisitDiffSweepRoute,
+  ApiPublicRenewalTickRoute: ApiPublicRenewalTickRoute,
   ApiPublicSquareWebhookRoute: ApiPublicSquareWebhookRoute,
 }
 export const routeTree = rootRouteImport

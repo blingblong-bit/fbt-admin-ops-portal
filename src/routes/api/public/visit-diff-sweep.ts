@@ -52,14 +52,8 @@ export const Route = createFileRoute("/api/public/visit-diff-sweep")({
           .not("square_customer_id", "is", null);
         if (error) return new Response(error.message, { status: 500 });
 
-        const H = {
-          Authorization: `Bearer ${token}`,
-          "Square-Version": SQUARE_VERSION,
-          "Content-Type": "application/json",
-        } as const;
+        void SQUARE_VERSION;
 
-        const nowIso = new Date().toISOString();
-        const startIso = new Date(Date.now() - 1000 * 60 * 60 * 24 * 400).toISOString();
 
         const disagreements: unknown[] = [];
         const errors: unknown[] = [];
@@ -75,47 +69,24 @@ export const Route = createFileRoute("/api/public/visit-diff-sweep")({
           // Get most recent booking (past or upcoming). Use search with customer filter.
           let latest: { start_at?: string; seller_note?: string | null; id?: string } | null = null;
           try {
-            // Search bookings (past)
-            const rPast = await fetch(`${SQUARE_BASE}/v2/bookings/search`, {
-              method: "POST",
-              headers: H,
-              body: JSON.stringify({
-                limit: 50,
-                query: {
-                  filter: {
-                    customer_filter: { customer_ids: [cid] },
-                    start_at_range: { start_at: startIso, end_at: nowIso },
-                  },
-                },
-              }),
-            });
-            if (rPast.ok) {
-              const j = (await rPast.json()) as { bookings?: Array<{ id?: string; start_at?: string; seller_note?: string | null }> };
+            let cursor: string | undefined;
+            for (let i = 0; i < 20; i++) {
+              const url = new URL(`${SQUARE_BASE}/v2/bookings`);
+              url.searchParams.set("customer_id", cid);
+              url.searchParams.set("limit", "200");
+              if (cursor) url.searchParams.set("cursor", cursor);
+              const res = await fetch(url.toString(), {
+                headers: { Authorization: `Bearer ${token}`, "Square-Version": SQUARE_VERSION },
+              });
+              if (!res.ok) break;
+              const j = (await res.json()) as { bookings?: Array<{ id?: string; start_at?: string; seller_note?: string | null }>; cursor?: string };
               for (const bk of j.bookings ?? []) {
                 if (!latest || (bk.start_at ?? "") > (latest.start_at ?? "")) latest = bk;
               }
+              cursor = j.cursor;
+              if (!cursor) break;
             }
-            // Upcoming
-            const endFuture = new Date(Date.now() + 1000 * 60 * 60 * 24 * 180).toISOString();
-            const rUp = await fetch(`${SQUARE_BASE}/v2/bookings/search`, {
-              method: "POST",
-              headers: H,
-              body: JSON.stringify({
-                limit: 50,
-                query: {
-                  filter: {
-                    customer_filter: { customer_ids: [cid] },
-                    start_at_range: { start_at: nowIso, end_at: endFuture },
-                  },
-                },
-              }),
-            });
-            if (rUp.ok) {
-              const j = (await rUp.json()) as { bookings?: Array<{ id?: string; start_at?: string; seller_note?: string | null }> };
-              for (const bk of j.bookings ?? []) {
-                if (!latest || (bk.start_at ?? "") > (latest.start_at ?? "")) latest = bk;
-              }
-            }
+            
           } catch (e) {
             errors.push({ client_id: c.id, name: `${c.first_name} ${c.last_name}`, error: String(e) });
             continue;

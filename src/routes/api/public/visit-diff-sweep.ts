@@ -29,6 +29,7 @@ function parseNote(note: string | null | undefined): { used: number; total: numb
 export const Route = createFileRoute("/api/public/visit-diff-sweep")({
   server: {
     handlers: {
+      GET: async () => Response.json({ version: "with-date-window-v2", has_start_at_min: true }),
       POST: async ({ request }) => {
         const key = process.env.SQUARE_WEBHOOK_SIGNATURE_KEY;
         if (!key) return new Response("no key", { status: 500 });

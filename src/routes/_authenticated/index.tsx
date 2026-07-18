@@ -12,6 +12,8 @@ import {
   Hourglass,
   Receipt,
   Users,
+  RefreshCw,
+  HelpCircle,
 } from "lucide-react";
 
 import { useServerFn } from "@tanstack/react-start";
@@ -374,6 +376,33 @@ function Dashboard() {
 
   const reviewCount = reviewCountQuery.data ?? 0;
 
+  const renewalYesCountQ = useQuery({
+    queryKey: ["renewal_campaigns_yes_count"],
+    queryFn: async () => {
+      const { count, error } = await supabase
+        .from("renewal_campaigns")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "yes");
+      if (error) throw error;
+      return count ?? 0;
+    },
+    refetchInterval: 30_000,
+  });
+  const renewalManualCountQ = useQuery({
+    queryKey: ["renewal_campaigns_manual_count"],
+    queryFn: async () => {
+      const { count, error } = await supabase
+        .from("renewal_campaigns")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "manual_review");
+      if (error) throw error;
+      return count ?? 0;
+    },
+    refetchInterval: 30_000,
+  });
+  const renewalYesCount = renewalYesCountQ.data ?? 0;
+  const renewalManualCount = renewalManualCountQ.data ?? 0;
+
   const allTiles: (TileDef & { staffHidden?: boolean })[] = [
     {
       key: "payment_due",
@@ -469,6 +498,22 @@ function Dashboard() {
       tone: "slate",
     },
     {
+      key: "renewal_review",
+      label: "Needs Renewal Review",
+      icon: <RefreshCw className="h-5 w-5" />,
+      count: renewalYesCount,
+      tone: renewalYesCount > 0 ? "amber" : "slate",
+      href: "/renewal-review",
+    },
+    {
+      key: "renewal_manual",
+      label: "Needs Manual Follow-up",
+      icon: <HelpCircle className="h-5 w-5" />,
+      count: renewalManualCount,
+      tone: renewalManualCount > 0 ? "amber" : "slate",
+      href: "/renewal-review",
+    },
+    {
       key: "all",
       label: "All Active",
       icon: <Users className="h-5 w-5" />,
@@ -490,6 +535,8 @@ function Dashboard() {
         "overdue_prior_weeks",
         "critical",
         "payment_history",
+        "renewal_review",
+        "renewal_manual",
       ]),
     [],
   );

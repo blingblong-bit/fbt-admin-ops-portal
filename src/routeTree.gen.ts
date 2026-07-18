@@ -15,6 +15,7 @@ import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/
 import { Route as AuthenticatedSyncLogRouteImport } from './routes/_authenticated/sync-log'
 import { Route as AuthenticatedSquareDiagnosticRouteImport } from './routes/_authenticated/square-diagnostic'
 import { Route as AuthenticatedScheduleCheckRouteImport } from './routes/_authenticated/schedule-check'
+import { Route as AuthenticatedRenewalReviewRouteImport } from './routes/_authenticated/renewal-review'
 import { Route as AuthenticatedPaymentHistoryRouteImport } from './routes/_authenticated/payment-history'
 import { Route as AuthenticatedNotesLedgerRouteImport } from './routes/_authenticated/notes-ledger'
 import { Route as AuthenticatedMergeCenterRouteImport } from './routes/_authenticated/merge-center'
@@ -27,6 +28,8 @@ import { Route as AuthenticatedClientsNewRouteImport } from './routes/_authentic
 import { Route as AuthenticatedClientsDeletedRouteImport } from './routes/_authenticated/clients.deleted'
 import { Route as AuthenticatedClientsIdRouteImport } from './routes/_authenticated/clients.$id'
 import { Route as ApiPublicSquareWebhookRouteImport } from './routes/api/public/square.webhook'
+import { Route as ApiPublicRenewalWebhookRouteImport } from './routes/api/public/renewal.webhook'
+import { Route as ApiPublicRenewalTickRouteImport } from './routes/api/public/renewal.tick'
 
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
@@ -57,6 +60,12 @@ const AuthenticatedScheduleCheckRoute =
   AuthenticatedScheduleCheckRouteImport.update({
     id: '/schedule-check',
     path: '/schedule-check',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedRenewalReviewRoute =
+  AuthenticatedRenewalReviewRouteImport.update({
+    id: '/renewal-review',
+    path: '/renewal-review',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
 const AuthenticatedPaymentHistoryRoute =
@@ -124,6 +133,16 @@ const ApiPublicSquareWebhookRoute = ApiPublicSquareWebhookRouteImport.update({
   path: '/api/public/square/webhook',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicRenewalWebhookRoute = ApiPublicRenewalWebhookRouteImport.update({
+  id: '/api/public/renewal/webhook',
+  path: '/api/public/renewal/webhook',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiPublicRenewalTickRoute = ApiPublicRenewalTickRouteImport.update({
+  id: '/api/public/renewal/tick',
+  path: '/api/public/renewal/tick',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AuthenticatedIndexRoute
@@ -133,6 +152,7 @@ export interface FileRoutesByFullPath {
   '/merge-center': typeof AuthenticatedMergeCenterRoute
   '/notes-ledger': typeof AuthenticatedNotesLedgerRoute
   '/payment-history': typeof AuthenticatedPaymentHistoryRoute
+  '/renewal-review': typeof AuthenticatedRenewalReviewRoute
   '/schedule-check': typeof AuthenticatedScheduleCheckRoute
   '/square-diagnostic': typeof AuthenticatedSquareDiagnosticRoute
   '/sync-log': typeof AuthenticatedSyncLogRoute
@@ -142,6 +162,8 @@ export interface FileRoutesByFullPath {
   '/api/public/square-diag': typeof ApiPublicSquareDiagRoute
   '/api/public/visit-diff-sweep': typeof ApiPublicVisitDiffSweepRoute
   '/clients/': typeof AuthenticatedClientsIndexRoute
+  '/api/public/renewal/tick': typeof ApiPublicRenewalTickRoute
+  '/api/public/renewal/webhook': typeof ApiPublicRenewalWebhookRoute
   '/api/public/square/webhook': typeof ApiPublicSquareWebhookRoute
 }
 export interface FileRoutesByTo {
@@ -151,6 +173,7 @@ export interface FileRoutesByTo {
   '/merge-center': typeof AuthenticatedMergeCenterRoute
   '/notes-ledger': typeof AuthenticatedNotesLedgerRoute
   '/payment-history': typeof AuthenticatedPaymentHistoryRoute
+  '/renewal-review': typeof AuthenticatedRenewalReviewRoute
   '/schedule-check': typeof AuthenticatedScheduleCheckRoute
   '/square-diagnostic': typeof AuthenticatedSquareDiagnosticRoute
   '/sync-log': typeof AuthenticatedSyncLogRoute
@@ -161,6 +184,8 @@ export interface FileRoutesByTo {
   '/api/public/square-diag': typeof ApiPublicSquareDiagRoute
   '/api/public/visit-diff-sweep': typeof ApiPublicVisitDiffSweepRoute
   '/clients': typeof AuthenticatedClientsIndexRoute
+  '/api/public/renewal/tick': typeof ApiPublicRenewalTickRoute
+  '/api/public/renewal/webhook': typeof ApiPublicRenewalWebhookRoute
   '/api/public/square/webhook': typeof ApiPublicSquareWebhookRoute
 }
 export interface FileRoutesById {
@@ -172,6 +197,7 @@ export interface FileRoutesById {
   '/_authenticated/merge-center': typeof AuthenticatedMergeCenterRoute
   '/_authenticated/notes-ledger': typeof AuthenticatedNotesLedgerRoute
   '/_authenticated/payment-history': typeof AuthenticatedPaymentHistoryRoute
+  '/_authenticated/renewal-review': typeof AuthenticatedRenewalReviewRoute
   '/_authenticated/schedule-check': typeof AuthenticatedScheduleCheckRoute
   '/_authenticated/square-diagnostic': typeof AuthenticatedSquareDiagnosticRoute
   '/_authenticated/sync-log': typeof AuthenticatedSyncLogRoute
@@ -182,6 +208,8 @@ export interface FileRoutesById {
   '/api/public/square-diag': typeof ApiPublicSquareDiagRoute
   '/api/public/visit-diff-sweep': typeof ApiPublicVisitDiffSweepRoute
   '/_authenticated/clients/': typeof AuthenticatedClientsIndexRoute
+  '/api/public/renewal/tick': typeof ApiPublicRenewalTickRoute
+  '/api/public/renewal/webhook': typeof ApiPublicRenewalWebhookRoute
   '/api/public/square/webhook': typeof ApiPublicSquareWebhookRoute
 }
 export interface FileRouteTypes {
@@ -194,6 +222,7 @@ export interface FileRouteTypes {
     | '/merge-center'
     | '/notes-ledger'
     | '/payment-history'
+    | '/renewal-review'
     | '/schedule-check'
     | '/square-diagnostic'
     | '/sync-log'
@@ -203,6 +232,8 @@ export interface FileRouteTypes {
     | '/api/public/square-diag'
     | '/api/public/visit-diff-sweep'
     | '/clients/'
+    | '/api/public/renewal/tick'
+    | '/api/public/renewal/webhook'
     | '/api/public/square/webhook'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -212,6 +243,7 @@ export interface FileRouteTypes {
     | '/merge-center'
     | '/notes-ledger'
     | '/payment-history'
+    | '/renewal-review'
     | '/schedule-check'
     | '/square-diagnostic'
     | '/sync-log'
@@ -222,6 +254,8 @@ export interface FileRouteTypes {
     | '/api/public/square-diag'
     | '/api/public/visit-diff-sweep'
     | '/clients'
+    | '/api/public/renewal/tick'
+    | '/api/public/renewal/webhook'
     | '/api/public/square/webhook'
   id:
     | '__root__'
@@ -232,6 +266,7 @@ export interface FileRouteTypes {
     | '/_authenticated/merge-center'
     | '/_authenticated/notes-ledger'
     | '/_authenticated/payment-history'
+    | '/_authenticated/renewal-review'
     | '/_authenticated/schedule-check'
     | '/_authenticated/square-diagnostic'
     | '/_authenticated/sync-log'
@@ -242,6 +277,8 @@ export interface FileRouteTypes {
     | '/api/public/square-diag'
     | '/api/public/visit-diff-sweep'
     | '/_authenticated/clients/'
+    | '/api/public/renewal/tick'
+    | '/api/public/renewal/webhook'
     | '/api/public/square/webhook'
   fileRoutesById: FileRoutesById
 }
@@ -250,6 +287,8 @@ export interface RootRouteChildren {
   AuthRoute: typeof AuthRoute
   ApiPublicSquareDiagRoute: typeof ApiPublicSquareDiagRoute
   ApiPublicVisitDiffSweepRoute: typeof ApiPublicVisitDiffSweepRoute
+  ApiPublicRenewalTickRoute: typeof ApiPublicRenewalTickRoute
+  ApiPublicRenewalWebhookRoute: typeof ApiPublicRenewalWebhookRoute
   ApiPublicSquareWebhookRoute: typeof ApiPublicSquareWebhookRoute
 }
 
@@ -295,6 +334,13 @@ declare module '@tanstack/react-router' {
       path: '/schedule-check'
       fullPath: '/schedule-check'
       preLoaderRoute: typeof AuthenticatedScheduleCheckRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/renewal-review': {
+      id: '/_authenticated/renewal-review'
+      path: '/renewal-review'
+      fullPath: '/renewal-review'
+      preLoaderRoute: typeof AuthenticatedRenewalReviewRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/payment-history': {
@@ -381,6 +427,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicSquareWebhookRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/renewal/webhook': {
+      id: '/api/public/renewal/webhook'
+      path: '/api/public/renewal/webhook'
+      fullPath: '/api/public/renewal/webhook'
+      preLoaderRoute: typeof ApiPublicRenewalWebhookRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/renewal/tick': {
+      id: '/api/public/renewal/tick'
+      path: '/api/public/renewal/tick'
+      fullPath: '/api/public/renewal/tick'
+      preLoaderRoute: typeof ApiPublicRenewalTickRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -390,6 +450,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedMergeCenterRoute: typeof AuthenticatedMergeCenterRoute
   AuthenticatedNotesLedgerRoute: typeof AuthenticatedNotesLedgerRoute
   AuthenticatedPaymentHistoryRoute: typeof AuthenticatedPaymentHistoryRoute
+  AuthenticatedRenewalReviewRoute: typeof AuthenticatedRenewalReviewRoute
   AuthenticatedScheduleCheckRoute: typeof AuthenticatedScheduleCheckRoute
   AuthenticatedSquareDiagnosticRoute: typeof AuthenticatedSquareDiagnosticRoute
   AuthenticatedSyncLogRoute: typeof AuthenticatedSyncLogRoute
@@ -406,6 +467,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedMergeCenterRoute: AuthenticatedMergeCenterRoute,
   AuthenticatedNotesLedgerRoute: AuthenticatedNotesLedgerRoute,
   AuthenticatedPaymentHistoryRoute: AuthenticatedPaymentHistoryRoute,
+  AuthenticatedRenewalReviewRoute: AuthenticatedRenewalReviewRoute,
   AuthenticatedScheduleCheckRoute: AuthenticatedScheduleCheckRoute,
   AuthenticatedSquareDiagnosticRoute: AuthenticatedSquareDiagnosticRoute,
   AuthenticatedSyncLogRoute: AuthenticatedSyncLogRoute,
@@ -424,18 +486,10 @@ const rootRouteChildren: RootRouteChildren = {
   AuthRoute: AuthRoute,
   ApiPublicSquareDiagRoute: ApiPublicSquareDiagRoute,
   ApiPublicVisitDiffSweepRoute: ApiPublicVisitDiffSweepRoute,
+  ApiPublicRenewalTickRoute: ApiPublicRenewalTickRoute,
+  ApiPublicRenewalWebhookRoute: ApiPublicRenewalWebhookRoute,
   ApiPublicSquareWebhookRoute: ApiPublicSquareWebhookRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}

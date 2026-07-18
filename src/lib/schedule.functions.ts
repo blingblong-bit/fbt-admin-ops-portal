@@ -372,7 +372,9 @@ export const getScheduleCheck = createServerFn({ method: "GET" })
     const token = process.env.SQUARE_PRODUCTION_ACCESS_TOKEN;
     const selectedYmd = data.date;
     const dow = ymdWeekday(selectedYmd); // 0=Sun in clinic-local calendar
-    const weekStartYmd = addDaysYmd(selectedYmd, -dow);
+    // Business week runs Monday–Sunday. Shift so Monday=0.
+    const mondayOffset = (dow + 6) % 7;
+    const weekStartYmd = addDaysYmd(selectedYmd, -mondayOffset);
     const weekEndYmd = addDaysYmd(weekStartYmd, 6);
     const nextWeekStartYmd = addDaysYmd(weekEndYmd, 1);
     const nextWeekEndYmd = addDaysYmd(nextWeekStartYmd, 6);
@@ -804,7 +806,8 @@ export const getThisWeekScheduledClientIds = createServerFn({ method: "GET" })
       const token = process.env.SQUARE_PRODUCTION_ACCESS_TOKEN;
       const todayYmd = ymdInTz(new Date());
       const dow = ymdWeekday(todayYmd);
-      const weekStartYmd = addDaysYmd(todayYmd, -dow);
+      const mondayOffset = (dow + 6) % 7;
+      const weekStartYmd = addDaysYmd(todayYmd, -mondayOffset);
       const weekEndYmd = addDaysYmd(weekStartYmd, 6);
       if (!token) {
         return {
@@ -868,7 +871,8 @@ export const getNextWeekScheduledClientIds = createServerFn({ method: "GET" })
       const token = process.env.SQUARE_PRODUCTION_ACCESS_TOKEN;
       const todayYmd = ymdInTz(new Date());
       const dow = ymdWeekday(todayYmd);
-      const thisWeekStart = addDaysYmd(todayYmd, -dow);
+      const mondayOffset = (dow + 6) % 7;
+      const thisWeekStart = addDaysYmd(todayYmd, -mondayOffset);
       const weekStartYmd = addDaysYmd(thisWeekStart, 7);
       const weekEndYmd = addDaysYmd(weekStartYmd, 6);
       if (!token) {
@@ -944,7 +948,8 @@ export const getPriorWeeksScheduledClientLastDates = createServerFn({ method: "G
       const token = process.env.SQUARE_PRODUCTION_ACCESS_TOKEN;
       const todayYmd = ymdInTz(new Date());
       const dow = ymdWeekday(todayYmd);
-      const thisWeekStartYmd = addDaysYmd(todayYmd, -dow);
+      const mondayOffset = (dow + 6) % 7;
+      const thisWeekStartYmd = addDaysYmd(todayYmd, -mondayOffset);
       const priorWindowStartYmd = addDaysYmd(thisWeekStartYmd, -7 * data.weeks_back);
 
       const emptyResp = {
@@ -1146,7 +1151,8 @@ export const getContactedClientIds = createServerFn({ method: "GET" })
     }): Promise<{ client_ids: string[]; prior_client_ids: string[]; week_start: string }> => {
       const todayYmd = ymdInTz(new Date());
       const dow = ymdWeekday(todayYmd);
-      const weekStartYmd = addDaysYmd(todayYmd, -dow);
+      const mondayOffset = (dow + 6) % 7;
+      const weekStartYmd = addDaysYmd(todayYmd, -mondayOffset);
       const weekStartInstant = ymdLocalToInstant(weekStartYmd).toISOString();
       if (data.clientIds.length === 0) {
         return { client_ids: [], prior_client_ids: [], week_start: weekStartYmd };
@@ -1201,7 +1207,8 @@ export const unmarkClientContacted = createServerFn({ method: "POST" })
   .handler(async ({ data, context }): Promise<{ ok: true; deleted: number }> => {
     const todayYmd = ymdInTz(new Date());
     const dow = ymdWeekday(todayYmd);
-    const weekStartYmd = addDaysYmd(todayYmd, -dow);
+    const mondayOffset = (dow + 6) % 7;
+    const weekStartYmd = addDaysYmd(todayYmd, -mondayOffset);
     const weekStartInstant = ymdLocalToInstant(weekStartYmd).toISOString();
     const { data: rows, error } = await context.supabase
       .from("client_activities")

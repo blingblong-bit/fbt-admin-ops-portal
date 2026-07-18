@@ -86,7 +86,7 @@ export type PaymentHistoryWeek = {
 
 /**
  * Read-only list of Square payments recorded in client_activities for a
- * single clinic-local week (Sunday–Saturday, America/Chicago). `weeks_ago`
+ * single clinic-local week (Monday–Sunday, America/Chicago). `weeks_ago`
  * is 0 for the current week, 1 for last week, etc. Admin-only.
  */
 export const getPaymentHistoryWeek = createServerFn({ method: "GET" })
@@ -101,7 +101,8 @@ export const getPaymentHistoryWeek = createServerFn({ method: "GET" })
   .handler(async ({ data, context }): Promise<PaymentHistoryWeek> => {
     const todayYmd = ymdInTz(new Date());
     const dow = ymdWeekday(todayYmd);
-    const thisWeekStart = addDaysYmd(todayYmd, -dow);
+    const mondayOffset = (dow + 6) % 7;
+    const thisWeekStart = addDaysYmd(todayYmd, -mondayOffset);
     const weekStartYmd = addDaysYmd(thisWeekStart, -7 * data.weeks_ago);
     const weekEndYmd = addDaysYmd(weekStartYmd, 6);
 

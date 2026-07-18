@@ -739,6 +739,7 @@ function Dashboard() {
 type TileDef = {
   key: string;
   label: string;
+  sublabel?: string;
   icon: React.ReactNode;
   count: number;
   money?: number;

@@ -382,20 +382,19 @@ export const getScheduleCheck = createServerFn({ method: "GET" })
   .handler(async ({ data, context }): Promise<ScheduleCheckResult> => {
     const token = process.env.SQUARE_PRODUCTION_ACCESS_TOKEN;
     const selectedYmd = data.date;
-    const dow = ymdWeekday(selectedYmd); // 0=Sun in clinic-local calendar
-    // Business week runs Monday–Sunday. Shift so Monday=0.
-    const mondayOffset = (dow + 6) % 7;
-    const weekStartYmd = addDaysYmd(selectedYmd, -mondayOffset);
-    const weekEndYmd = addDaysYmd(weekStartYmd, 6);
-    const nextWeekStartYmd = addDaysYmd(weekEndYmd, 1);
-    const nextWeekEndYmd = addDaysYmd(nextWeekStartYmd, 6);
+    // Business week runs Monday–Friday. Weekends roll into the upcoming
+    // work week, so bucketing uses `workWeekStartFromYmd` on each date.
+    const weekStartYmd = workWeekStartFromYmd(selectedYmd);
+    const weekEndYmd = addDaysYmd(weekStartYmd, WORK_WEEK_DAYS);
+    const nextWeekStartYmd = addDaysYmd(weekStartYmd, 7);
+    const nextWeekEndYmd = addDaysYmd(nextWeekStartYmd, WORK_WEEK_DAYS);
 
-    // Fetch window: local midnight at week start through the last instant of
-    // next week's Saturday in clinic-local time (America/Chicago). Converted
-    // to UTC ISO for the Square API. Max ~14 local days, well under Square's
-    // 31-day limit.
-    const fetchStart = ymdLocalToInstant(weekStartYmd);
-    const fetchEnd = new Date(ymdLocalToInstant(addDaysYmd(nextWeekEndYmd, 1)).getTime() - 1);
+    // Fetch window: extend 2 days before this week's Monday (to include the
+    // preceding Sat/Sun that roll INTO this week) through the last instant
+    // of the Sun after next week's Friday (to include Sat/Sun that roll
+    // into a following week we don't bucket — harmless, just extra data).
+    const fetchStart = ymdLocalToInstant(addDaysYmd(weekStartYmd, -2));
+    const fetchEnd = new Date(ymdLocalToInstant(addDaysYmd(nextWeekEndYmd, 3)).getTime() - 1);
     const startIso = fetchStart.toISOString();
     const endIso = fetchEnd.toISOString();
 

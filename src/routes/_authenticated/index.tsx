@@ -925,6 +925,17 @@ function formatWeekRange(iso: string): string {
   return `${fmt.format(startUtc)} – ${fmt.format(endUtc)}`;
 }
 
+// Format a "YYYY-MM-DD" .. "YYYY-MM-DD" pair as "Mon D – Mon D".
+function formatYmdRange(startYmd?: string, endYmd?: string): string | undefined {
+  if (!startYmd || !endYmd) return undefined;
+  const fmt = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+  const parse = (s: string) => {
+    const [y, m, d] = s.split("-").map(Number);
+    return new Date(Date.UTC(y, m - 1, d));
+  };
+  return `${fmt.format(parse(startYmd))} – ${fmt.format(parse(endYmd))}`;
+}
+
 
 
 

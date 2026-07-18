@@ -15,6 +15,7 @@ import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/
 import { Route as AuthenticatedSyncLogRouteImport } from './routes/_authenticated/sync-log'
 import { Route as AuthenticatedSquareDiagnosticRouteImport } from './routes/_authenticated/square-diagnostic'
 import { Route as AuthenticatedScheduleCheckRouteImport } from './routes/_authenticated/schedule-check'
+import { Route as AuthenticatedRenewalReviewRouteImport } from './routes/_authenticated/renewal-review'
 import { Route as AuthenticatedPaymentHistoryRouteImport } from './routes/_authenticated/payment-history'
 import { Route as AuthenticatedNotesLedgerRouteImport } from './routes/_authenticated/notes-ledger'
 import { Route as AuthenticatedMergeCenterRouteImport } from './routes/_authenticated/merge-center'
@@ -59,6 +60,12 @@ const AuthenticatedScheduleCheckRoute =
   AuthenticatedScheduleCheckRouteImport.update({
     id: '/schedule-check',
     path: '/schedule-check',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedRenewalReviewRoute =
+  AuthenticatedRenewalReviewRouteImport.update({
+    id: '/renewal-review',
+    path: '/renewal-review',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
 const AuthenticatedPaymentHistoryRoute =
@@ -145,6 +152,7 @@ export interface FileRoutesByFullPath {
   '/merge-center': typeof AuthenticatedMergeCenterRoute
   '/notes-ledger': typeof AuthenticatedNotesLedgerRoute
   '/payment-history': typeof AuthenticatedPaymentHistoryRoute
+  '/renewal-review': typeof AuthenticatedRenewalReviewRoute
   '/schedule-check': typeof AuthenticatedScheduleCheckRoute
   '/square-diagnostic': typeof AuthenticatedSquareDiagnosticRoute
   '/sync-log': typeof AuthenticatedSyncLogRoute
@@ -165,6 +173,7 @@ export interface FileRoutesByTo {
   '/merge-center': typeof AuthenticatedMergeCenterRoute
   '/notes-ledger': typeof AuthenticatedNotesLedgerRoute
   '/payment-history': typeof AuthenticatedPaymentHistoryRoute
+  '/renewal-review': typeof AuthenticatedRenewalReviewRoute
   '/schedule-check': typeof AuthenticatedScheduleCheckRoute
   '/square-diagnostic': typeof AuthenticatedSquareDiagnosticRoute
   '/sync-log': typeof AuthenticatedSyncLogRoute
@@ -188,6 +197,7 @@ export interface FileRoutesById {
   '/_authenticated/merge-center': typeof AuthenticatedMergeCenterRoute
   '/_authenticated/notes-ledger': typeof AuthenticatedNotesLedgerRoute
   '/_authenticated/payment-history': typeof AuthenticatedPaymentHistoryRoute
+  '/_authenticated/renewal-review': typeof AuthenticatedRenewalReviewRoute
   '/_authenticated/schedule-check': typeof AuthenticatedScheduleCheckRoute
   '/_authenticated/square-diagnostic': typeof AuthenticatedSquareDiagnosticRoute
   '/_authenticated/sync-log': typeof AuthenticatedSyncLogRoute
@@ -212,6 +222,7 @@ export interface FileRouteTypes {
     | '/merge-center'
     | '/notes-ledger'
     | '/payment-history'
+    | '/renewal-review'
     | '/schedule-check'
     | '/square-diagnostic'
     | '/sync-log'
@@ -232,6 +243,7 @@ export interface FileRouteTypes {
     | '/merge-center'
     | '/notes-ledger'
     | '/payment-history'
+    | '/renewal-review'
     | '/schedule-check'
     | '/square-diagnostic'
     | '/sync-log'
@@ -254,6 +266,7 @@ export interface FileRouteTypes {
     | '/_authenticated/merge-center'
     | '/_authenticated/notes-ledger'
     | '/_authenticated/payment-history'
+    | '/_authenticated/renewal-review'
     | '/_authenticated/schedule-check'
     | '/_authenticated/square-diagnostic'
     | '/_authenticated/sync-log'
@@ -321,6 +334,13 @@ declare module '@tanstack/react-router' {
       path: '/schedule-check'
       fullPath: '/schedule-check'
       preLoaderRoute: typeof AuthenticatedScheduleCheckRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/renewal-review': {
+      id: '/_authenticated/renewal-review'
+      path: '/renewal-review'
+      fullPath: '/renewal-review'
+      preLoaderRoute: typeof AuthenticatedRenewalReviewRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/payment-history': {
@@ -430,6 +450,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedMergeCenterRoute: typeof AuthenticatedMergeCenterRoute
   AuthenticatedNotesLedgerRoute: typeof AuthenticatedNotesLedgerRoute
   AuthenticatedPaymentHistoryRoute: typeof AuthenticatedPaymentHistoryRoute
+  AuthenticatedRenewalReviewRoute: typeof AuthenticatedRenewalReviewRoute
   AuthenticatedScheduleCheckRoute: typeof AuthenticatedScheduleCheckRoute
   AuthenticatedSquareDiagnosticRoute: typeof AuthenticatedSquareDiagnosticRoute
   AuthenticatedSyncLogRoute: typeof AuthenticatedSyncLogRoute
@@ -446,6 +467,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedMergeCenterRoute: AuthenticatedMergeCenterRoute,
   AuthenticatedNotesLedgerRoute: AuthenticatedNotesLedgerRoute,
   AuthenticatedPaymentHistoryRoute: AuthenticatedPaymentHistoryRoute,
+  AuthenticatedRenewalReviewRoute: AuthenticatedRenewalReviewRoute,
   AuthenticatedScheduleCheckRoute: AuthenticatedScheduleCheckRoute,
   AuthenticatedSquareDiagnosticRoute: AuthenticatedSquareDiagnosticRoute,
   AuthenticatedSyncLogRoute: AuthenticatedSyncLogRoute,

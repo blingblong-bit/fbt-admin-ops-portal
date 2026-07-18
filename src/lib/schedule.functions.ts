@@ -515,19 +515,14 @@ export const getScheduleCheck = createServerFn({ method: "GET" })
     // Only show appointments that aren't cancelled/no-show by default? Keep all but mark via status.
     const active = all.filter((a) => !/(CANCELLED|DECLINED|NO_SHOW)/i.test(a.status));
 
-    // Bucket by clinic-local calendar day (America/Chicago), so a 7pm
-    // appointment doesn't leak into the next UTC day.
+    // Bucket by the work-week (Mon–Fri) each appointment BELONGS to. Sat/Sun
+    // appointments roll forward into the upcoming work week per business rule.
     const dayOf = (iso: string) => ymdInTz(new Date(iso));
-    const inRange = (iso: string, a: string, b: string) => {
-      const d = dayOf(iso);
-      return d >= a && d <= b;
-    };
+    const bucketOf = (iso: string) => workWeekStartFromYmd(dayOf(iso));
 
     const selected_day = active.filter((a) => dayOf(a.start_at) === selectedYmd);
-    const this_week = active.filter((a) => inRange(a.start_at, weekStartYmd, weekEndYmd));
-    const next_week = active.filter((a) =>
-      inRange(a.start_at, nextWeekStartYmd, nextWeekEndYmd),
-    );
+    const this_week = active.filter((a) => bucketOf(a.start_at) === weekStartYmd);
+    const next_week = active.filter((a) => bucketOf(a.start_at) === nextWeekStartYmd);
     const unmatched = active.filter((a) => !a.client);
 
     // Clients with appointments this week (matched) and not next week

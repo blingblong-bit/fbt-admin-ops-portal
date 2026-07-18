@@ -784,6 +784,9 @@ function Tile({
         {tile.icon}
       </div>
       <div className="text-sm font-medium text-slate-600">{tile.label}</div>
+      {tile.sublabel && (
+        <div className="-mt-1 text-xs text-slate-500">{tile.sublabel}</div>
+      )}
       {tile.hideCount ? (
         <div className="text-base font-medium text-slate-700">
           {tile.ctaLabel ?? "View"}

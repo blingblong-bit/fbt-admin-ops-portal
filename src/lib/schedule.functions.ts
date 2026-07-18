@@ -145,6 +145,17 @@ function addDaysYmd(s: string, n: number): string {
   return `${yy}-${mm}-${dd}`;
 }
 
+// Business week is Monday–Friday (5 days). Saturday and Sunday roll FORWARD
+// into the upcoming work week: on Sat/Sun, `workWeekStartFromYmd` returns
+// the next Monday, so weekend appointments/payments count toward next week.
+// On Mon–Fri, it returns the Monday of the current work week.
+function workWeekStartFromYmd(ymd: string): string {
+  const dow = ymdWeekday(ymd); // 0=Sun..6=Sat
+  const offset = dow === 0 ? 1 : dow === 6 ? 2 : -(dow - 1);
+  return addDaysYmd(ymd, offset);
+}
+const WORK_WEEK_DAYS = 4; // Mon + 4 = Fri
+
 
 async function fetchSquareBookings(
   token: string,

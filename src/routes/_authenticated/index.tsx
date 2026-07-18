@@ -417,6 +417,7 @@ function Dashboard() {
     {
       key: "payment_due_this_week",
       label: "Payment Due — This Week",
+      sublabel: formatYmdRange(thisWeekQuery.data?.week_start, thisWeekQuery.data?.week_end),
       icon: <CircleDollarSign className="h-5 w-5" />,
       count: counts.payment_due_this_week,
       money: counts.payment_due_this_week_total,
@@ -427,6 +428,7 @@ function Dashboard() {
     {
       key: "payment_due_next_week",
       label: "Payment Due — Next Week",
+      sublabel: formatYmdRange(nextWeekQuery.data?.week_start, nextWeekQuery.data?.week_end),
       icon: <CircleDollarSign className="h-5 w-5" />,
       count: counts.payment_due_next_week,
       money: counts.payment_due_next_week_total,
@@ -437,6 +439,9 @@ function Dashboard() {
     {
       key: "overdue_prior_weeks",
       label: "Overdue — Prior Weeks",
+      sublabel: thisWeekQuery.data?.week_start
+        ? `before ${formatYmdRange(thisWeekQuery.data.week_start, thisWeekQuery.data.week_start)?.split(" – ")[0]}`
+        : undefined,
       icon: <AlertTriangle className="h-5 w-5" />,
       count: counts.overdue_prior_weeks,
       money: counts.overdue_prior_weeks_total,

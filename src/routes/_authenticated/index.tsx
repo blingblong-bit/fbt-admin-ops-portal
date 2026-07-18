@@ -535,6 +535,8 @@ function Dashboard() {
         "overdue_prior_weeks",
         "critical",
         "payment_history",
+        "renewal_review",
+        "renewal_manual",
       ]),
     [],
   );

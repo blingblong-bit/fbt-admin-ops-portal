@@ -892,8 +892,8 @@ function exportPaymentDueCsv(clients: Client[]) {
 
 const CLINIC_TZ = "America/Chicago";
 
-// Sunday start (UTC-anchored representation) of the clinic-local week that
-// contains the given ISO instant.
+// Monday start (UTC-anchored representation) of the clinic-local business
+// week (Monday–Sunday) that contains the given ISO instant.
 function weekStartUtcOfClinic(iso: string): Date {
   const ymd = new Intl.DateTimeFormat("en-CA", {
     timeZone: CLINIC_TZ,
@@ -903,19 +903,21 @@ function weekStartUtcOfClinic(iso: string): Date {
   }).format(new Date(iso));
   const [y, m, day] = ymd.split("-").map(Number);
   const dow = new Date(Date.UTC(y, m - 1, day)).getUTCDay();
-  return new Date(Date.UTC(y, m - 1, day - dow));
+  const mondayOffset = (dow + 6) % 7;
+  return new Date(Date.UTC(y, m - 1, day - mondayOffset));
 }
 
 function currentWeekStartUtc(): Date {
   return weekStartUtcOfClinic(new Date().toISOString());
 }
 
-// Format the clinic-local Sun–Sat week range that contains the given ISO
-// instant, e.g. "Nov 30 – Dec 6". Used by the "Carried over from …" tag.
+// Format the clinic-local Mon–Sun week range that contains the given ISO
+// instant, e.g. "Dec 1 – Dec 7". Used by the "Carried over from …" tag
+// and by dashboard tile date sublabels.
 function formatWeekRange(iso: string): string {
   const startUtc = weekStartUtcOfClinic(iso);
   const endUtc = new Date(startUtc.getTime() + 6 * 24 * 60 * 60 * 1000);
-  const fmt = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" });
+  const fmt = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
   return `${fmt.format(startUtc)} – ${fmt.format(endUtc)}`;
 }
 

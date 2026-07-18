@@ -1151,7 +1151,8 @@ export const getContactedClientIds = createServerFn({ method: "GET" })
     }): Promise<{ client_ids: string[]; prior_client_ids: string[]; week_start: string }> => {
       const todayYmd = ymdInTz(new Date());
       const dow = ymdWeekday(todayYmd);
-      const weekStartYmd = addDaysYmd(todayYmd, -dow);
+      const mondayOffset = (dow + 6) % 7;
+      const weekStartYmd = addDaysYmd(todayYmd, -mondayOffset);
       const weekStartInstant = ymdLocalToInstant(weekStartYmd).toISOString();
       if (data.clientIds.length === 0) {
         return { client_ids: [], prior_client_ids: [], week_start: weekStartYmd };

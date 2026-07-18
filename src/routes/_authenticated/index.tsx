@@ -376,6 +376,33 @@ function Dashboard() {
 
   const reviewCount = reviewCountQuery.data ?? 0;
 
+  const renewalYesCountQ = useQuery({
+    queryKey: ["renewal_campaigns_yes_count"],
+    queryFn: async () => {
+      const { count, error } = await supabase
+        .from("renewal_campaigns")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "yes");
+      if (error) throw error;
+      return count ?? 0;
+    },
+    refetchInterval: 30_000,
+  });
+  const renewalManualCountQ = useQuery({
+    queryKey: ["renewal_campaigns_manual_count"],
+    queryFn: async () => {
+      const { count, error } = await supabase
+        .from("renewal_campaigns")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "manual_review");
+      if (error) throw error;
+      return count ?? 0;
+    },
+    refetchInterval: 30_000,
+  });
+  const renewalYesCount = renewalYesCountQ.data ?? 0;
+  const renewalManualCount = renewalManualCountQ.data ?? 0;
+
   const allTiles: (TileDef & { staffHidden?: boolean })[] = [
     {
       key: "payment_due",

@@ -1,0 +1,176 @@
+import { createFileRoute } from "@tanstack/react-router";
+import { createHmac, timingSafeEqual } from "crypto";
+
+const SQUARE_BASE = "https://connect.squareup.com";
+const SQUARE_VERSION = "2024-10-17";
+
+function cleanToken(raw: string | undefined): string {
+  return (raw ?? "")
+    .replace(/^[\s"'\u201C\u201D\u2018\u2019`]+|[\s"'\u201C\u201D\u2018\u2019`]+$/g, "")
+    .trim()
+    // eslint-disable-next-line no-control-regex
+    .replace(/[^\x20-\x7E]/g, "");
+}
+
+function parseNote(note: string | null | undefined): { used: number; total: number } | null {
+  if (!note) return null;
+  const rx1 = /^\s*(\d+)\s+of\s+(\d+)\s*$/i;
+  const rx2 = /^\s*(\d+)\s*\/\s*(\d+)\s*$/;
+  let m = note.match(rx1);
+  if (!m) {
+    const first = note.split("\n")[0].trim();
+    m = first.match(rx1);
+  }
+  if (!m) m = note.match(rx2);
+  if (!m) return null;
+  return { used: Number(m[1]), total: Number(m[2]) };
+}
+
+export const Route = createFileRoute("/api/public/visit-diff-sweep")({
+  server: {
+    handlers: {
+      POST: async ({ request }) => {
+        const key = process.env.SQUARE_WEBHOOK_SIGNATURE_KEY;
+        if (!key) return new Response("no key", { status: 500 });
+        const body = await request.text();
+        const sig = request.headers.get("x-diag-sig") ?? "";
+        const expected = createHmac("sha256", key).update(body).digest("hex");
+        const a = Buffer.from(sig);
+        const b = Buffer.from(expected);
+        if (a.length !== b.length || !timingSafeEqual(a, b)) {
+          return new Response("bad sig", { status: 401 });
+        }
+
+        const token = cleanToken(process.env.SQUARE_PRODUCTION_ACCESS_TOKEN);
+        if (!token) return new Response("no square token", { status: 500 });
+
+        const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+        const { data: clients, error } = await supabaseAdmin
+          .from("clients")
+          .select("id, first_name, last_name, square_customer_id, visits_used, package_total_visits")
+          .is("deleted_at", null)
+          .not("square_customer_id", "is", null);
+        if (error) return new Response(error.message, { status: 500 });
+
+        const H = {
+          Authorization: `Bearer ${token}`,
+          "Square-Version": SQUARE_VERSION,
+          "Content-Type": "application/json",
+        } as const;
+
+        const nowIso = new Date().toISOString();
+        const startIso = new Date(Date.now() - 1000 * 60 * 60 * 24 * 400).toISOString();
+
+        const disagreements: unknown[] = [];
+        const errors: unknown[] = [];
+        let scanned = 0;
+        let parsed = 0;
+        let unparsed = 0;
+        let blankNotes = 0;
+        let noBooking = 0;
+
+        for (const c of clients ?? []) {
+          scanned++;
+          const cid = c.square_customer_id as string;
+          // Get most recent booking (past or upcoming). Use search with customer filter.
+          let latest: { start_at?: string; seller_note?: string | null; id?: string } | null = null;
+          try {
+            // Search bookings (past)
+            const rPast = await fetch(`${SQUARE_BASE}/v2/bookings/search`, {
+              method: "POST",
+              headers: H,
+              body: JSON.stringify({
+                limit: 50,
+                query: {
+                  filter: {
+                    customer_filter: { customer_ids: [cid] },
+                    start_at_range: { start_at: startIso, end_at: nowIso },
+                  },
+                },
+              }),
+            });
+            if (rPast.ok) {
+              const j = (await rPast.json()) as { bookings?: Array<{ id?: string; start_at?: string; seller_note?: string | null }> };
+              for (const bk of j.bookings ?? []) {
+                if (!latest || (bk.start_at ?? "") > (latest.start_at ?? "")) latest = bk;
+              }
+            }
+            // Upcoming
+            const endFuture = new Date(Date.now() + 1000 * 60 * 60 * 24 * 180).toISOString();
+            const rUp = await fetch(`${SQUARE_BASE}/v2/bookings/search`, {
+              method: "POST",
+              headers: H,
+              body: JSON.stringify({
+                limit: 50,
+                query: {
+                  filter: {
+                    customer_filter: { customer_ids: [cid] },
+                    start_at_range: { start_at: nowIso, end_at: endFuture },
+                  },
+                },
+              }),
+            });
+            if (rUp.ok) {
+              const j = (await rUp.json()) as { bookings?: Array<{ id?: string; start_at?: string; seller_note?: string | null }> };
+              for (const bk of j.bookings ?? []) {
+                if (!latest || (bk.start_at ?? "") > (latest.start_at ?? "")) latest = bk;
+              }
+            }
+          } catch (e) {
+            errors.push({ client_id: c.id, name: `${c.first_name} ${c.last_name}`, error: String(e) });
+            continue;
+          }
+
+          if (!latest) {
+            noBooking++;
+            continue;
+          }
+          const note = latest.seller_note ?? null;
+          if (!note || !note.trim()) {
+            blankNotes++;
+            continue;
+          }
+          const p = parseNote(note);
+          if (!p) {
+            unparsed++;
+            continue;
+          }
+          parsed++;
+          const hubUsed = c.visits_used ?? null;
+          const hubTotal = c.package_total_visits ?? 0;
+          if (p.used !== hubUsed || p.total !== hubTotal) {
+            disagreements.push({
+              client_id: c.id,
+              name: `${c.first_name} ${c.last_name}`,
+              square_customer_id: cid,
+              hub_visits_used: hubUsed,
+              hub_total: hubTotal,
+              square_note: note,
+              square_parsed_used: p.used,
+              square_parsed_total: p.total,
+              latest_booking_at: latest.start_at ?? null,
+            });
+          }
+        }
+
+        return new Response(
+          JSON.stringify(
+            {
+              scanned,
+              parsed,
+              unparsed,
+              blank_notes: blankNotes,
+              no_booking: noBooking,
+              disagreement_count: disagreements.length,
+              disagreements,
+              errors,
+            },
+            null,
+            2,
+          ),
+          { headers: { "content-type": "application/json" } },
+        );
+      },
+    },
+  },
+});

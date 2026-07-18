@@ -145,6 +145,17 @@ function addDaysYmd(s: string, n: number): string {
   return `${yy}-${mm}-${dd}`;
 }
 
+// Business week is Monday–Friday (5 days). Saturday and Sunday roll FORWARD
+// into the upcoming work week: on Sat/Sun, `workWeekStartFromYmd` returns
+// the next Monday, so weekend appointments/payments count toward next week.
+// On Mon–Fri, it returns the Monday of the current work week.
+function workWeekStartFromYmd(ymd: string): string {
+  const dow = ymdWeekday(ymd); // 0=Sun..6=Sat
+  const offset = dow === 0 ? 1 : dow === 6 ? 2 : -(dow - 1);
+  return addDaysYmd(ymd, offset);
+}
+const WORK_WEEK_DAYS = 4; // Mon + 4 = Fri
+
 
 async function fetchSquareBookings(
   token: string,
@@ -371,20 +382,19 @@ export const getScheduleCheck = createServerFn({ method: "GET" })
   .handler(async ({ data, context }): Promise<ScheduleCheckResult> => {
     const token = process.env.SQUARE_PRODUCTION_ACCESS_TOKEN;
     const selectedYmd = data.date;
-    const dow = ymdWeekday(selectedYmd); // 0=Sun in clinic-local calendar
-    // Business week runs Monday–Sunday. Shift so Monday=0.
-    const mondayOffset = (dow + 6) % 7;
-    const weekStartYmd = addDaysYmd(selectedYmd, -mondayOffset);
-    const weekEndYmd = addDaysYmd(weekStartYmd, 6);
-    const nextWeekStartYmd = addDaysYmd(weekEndYmd, 1);
-    const nextWeekEndYmd = addDaysYmd(nextWeekStartYmd, 6);
+    // Business week runs Monday–Friday. Weekends roll into the upcoming
+    // work week, so bucketing uses `workWeekStartFromYmd` on each date.
+    const weekStartYmd = workWeekStartFromYmd(selectedYmd);
+    const weekEndYmd = addDaysYmd(weekStartYmd, WORK_WEEK_DAYS);
+    const nextWeekStartYmd = addDaysYmd(weekStartYmd, 7);
+    const nextWeekEndYmd = addDaysYmd(nextWeekStartYmd, WORK_WEEK_DAYS);
 
-    // Fetch window: local midnight at week start through the last instant of
-    // next week's Saturday in clinic-local time (America/Chicago). Converted
-    // to UTC ISO for the Square API. Max ~14 local days, well under Square's
-    // 31-day limit.
-    const fetchStart = ymdLocalToInstant(weekStartYmd);
-    const fetchEnd = new Date(ymdLocalToInstant(addDaysYmd(nextWeekEndYmd, 1)).getTime() - 1);
+    // Fetch window: extend 2 days before this week's Monday (to include the
+    // preceding Sat/Sun that roll INTO this week) through the last instant
+    // of the Sun after next week's Friday (to include Sat/Sun that roll
+    // into a following week we don't bucket — harmless, just extra data).
+    const fetchStart = ymdLocalToInstant(addDaysYmd(weekStartYmd, -2));
+    const fetchEnd = new Date(ymdLocalToInstant(addDaysYmd(nextWeekEndYmd, 3)).getTime() - 1);
     const startIso = fetchStart.toISOString();
     const endIso = fetchEnd.toISOString();
 
@@ -505,19 +515,14 @@ export const getScheduleCheck = createServerFn({ method: "GET" })
     // Only show appointments that aren't cancelled/no-show by default? Keep all but mark via status.
     const active = all.filter((a) => !/(CANCELLED|DECLINED|NO_SHOW)/i.test(a.status));
 
-    // Bucket by clinic-local calendar day (America/Chicago), so a 7pm
-    // appointment doesn't leak into the next UTC day.
+    // Bucket by the work-week (Mon–Fri) each appointment BELONGS to. Sat/Sun
+    // appointments roll forward into the upcoming work week per business rule.
     const dayOf = (iso: string) => ymdInTz(new Date(iso));
-    const inRange = (iso: string, a: string, b: string) => {
-      const d = dayOf(iso);
-      return d >= a && d <= b;
-    };
+    const bucketOf = (iso: string) => workWeekStartFromYmd(dayOf(iso));
 
     const selected_day = active.filter((a) => dayOf(a.start_at) === selectedYmd);
-    const this_week = active.filter((a) => inRange(a.start_at, weekStartYmd, weekEndYmd));
-    const next_week = active.filter((a) =>
-      inRange(a.start_at, nextWeekStartYmd, nextWeekEndYmd),
-    );
+    const this_week = active.filter((a) => bucketOf(a.start_at) === weekStartYmd);
+    const next_week = active.filter((a) => bucketOf(a.start_at) === nextWeekStartYmd);
     const unmatched = active.filter((a) => !a.client);
 
     // Clients with appointments this week (matched) and not next week
@@ -794,8 +799,9 @@ export const getScheduledClientIds = createServerFn({ method: "GET" })
 
 /**
  * Client IDs scheduled for an ACTIVE Square booking in the current
- * clinic-local week (Sunday–Saturday, America/Chicago). Reuses the same
- * week-boundary logic as the Schedule Check page.
+ * clinic-local WORK week (Monday–Friday, America/Chicago). Sat/Sun bookings
+ * roll into the upcoming work week. Reuses the same week-boundary logic as
+ * the Schedule Check page.
  */
 export const getThisWeekScheduledClientIds = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
@@ -805,10 +811,8 @@ export const getThisWeekScheduledClientIds = createServerFn({ method: "GET" })
     }): Promise<{ client_ids: string[]; week_start: string; week_end: string; error: string | null }> => {
       const token = process.env.SQUARE_PRODUCTION_ACCESS_TOKEN;
       const todayYmd = ymdInTz(new Date());
-      const dow = ymdWeekday(todayYmd);
-      const mondayOffset = (dow + 6) % 7;
-      const weekStartYmd = addDaysYmd(todayYmd, -mondayOffset);
-      const weekEndYmd = addDaysYmd(weekStartYmd, 6);
+      const weekStartYmd = workWeekStartFromYmd(todayYmd);
+      const weekEndYmd = addDaysYmd(weekStartYmd, WORK_WEEK_DAYS);
       if (!token) {
         return {
           client_ids: [],
@@ -817,9 +821,11 @@ export const getThisWeekScheduledClientIds = createServerFn({ method: "GET" })
           error: "SQUARE_PRODUCTION_ACCESS_TOKEN is not configured",
         };
       }
-      const fetchStart = ymdLocalToInstant(weekStartYmd);
+      // Widen fetch by ±2 days so weekend bookings that roll INTO this
+      // work-week bucket are still returned by Square.
+      const fetchStart = ymdLocalToInstant(addDaysYmd(weekStartYmd, -2));
       const fetchEnd = new Date(
-        ymdLocalToInstant(addDaysYmd(weekEndYmd, 1)).getTime() - 1,
+        ymdLocalToInstant(addDaysYmd(weekEndYmd, 3)).getTime() - 1,
       );
       const { bookings, error } = await fetchSquareBookings(
         token,
@@ -835,9 +841,9 @@ export const getThisWeekScheduledClientIds = createServerFn({ method: "GET" })
         const status = (b.status ?? "").toString().toUpperCase();
         if (/CANCEL|DECLINE|NO_SHOW/.test(status)) continue;
         if (!b.start_at) continue;
-        // Confirm the booking falls in this week in clinic-local time.
+        // Only count bookings whose work-week bucket == this week.
         const day = ymdInTz(new Date(b.start_at));
-        if (day < weekStartYmd || day > weekEndYmd) continue;
+        if (workWeekStartFromYmd(day) !== weekStartYmd) continue;
         if (b.customer_id) customerIds.add(b.customer_id);
       }
       if (customerIds.size === 0) {
@@ -859,8 +865,9 @@ export const getThisWeekScheduledClientIds = createServerFn({ method: "GET" })
   );
 
 /**
- * Client IDs scheduled for an ACTIVE Square booking in NEXT week
- * (Sunday–Saturday, America/Chicago), mirroring getThisWeekScheduledClientIds.
+ * Client IDs scheduled for an ACTIVE Square booking in NEXT WORK week
+ * (Monday–Friday, America/Chicago). Sat/Sun bookings roll INTO the upcoming
+ * work week's bucket per business rule.
  */
 export const getNextWeekScheduledClientIds = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
@@ -870,11 +877,9 @@ export const getNextWeekScheduledClientIds = createServerFn({ method: "GET" })
     }): Promise<{ client_ids: string[]; week_start: string; week_end: string; error: string | null }> => {
       const token = process.env.SQUARE_PRODUCTION_ACCESS_TOKEN;
       const todayYmd = ymdInTz(new Date());
-      const dow = ymdWeekday(todayYmd);
-      const mondayOffset = (dow + 6) % 7;
-      const thisWeekStart = addDaysYmd(todayYmd, -mondayOffset);
+      const thisWeekStart = workWeekStartFromYmd(todayYmd);
       const weekStartYmd = addDaysYmd(thisWeekStart, 7);
-      const weekEndYmd = addDaysYmd(weekStartYmd, 6);
+      const weekEndYmd = addDaysYmd(weekStartYmd, WORK_WEEK_DAYS);
       if (!token) {
         return {
           client_ids: [],
@@ -883,9 +888,10 @@ export const getNextWeekScheduledClientIds = createServerFn({ method: "GET" })
           error: "SQUARE_PRODUCTION_ACCESS_TOKEN is not configured",
         };
       }
-      const fetchStart = ymdLocalToInstant(weekStartYmd);
+      // Widen fetch by ±2 days to catch weekend bookings that roll into this bucket.
+      const fetchStart = ymdLocalToInstant(addDaysYmd(weekStartYmd, -2));
       const fetchEnd = new Date(
-        ymdLocalToInstant(addDaysYmd(weekEndYmd, 1)).getTime() - 1,
+        ymdLocalToInstant(addDaysYmd(weekEndYmd, 3)).getTime() - 1,
       );
       const { bookings, error } = await fetchSquareBookings(
         token,
@@ -902,7 +908,7 @@ export const getNextWeekScheduledClientIds = createServerFn({ method: "GET" })
         if (/CANCEL|DECLINE|NO_SHOW/.test(status)) continue;
         if (!b.start_at) continue;
         const day = ymdInTz(new Date(b.start_at));
-        if (day < weekStartYmd || day > weekEndYmd) continue;
+        if (workWeekStartFromYmd(day) !== weekStartYmd) continue;
         if (b.customer_id) customerIds.add(b.customer_id);
       }
       if (customerIds.size === 0) {
@@ -947,9 +953,7 @@ export const getPriorWeeksScheduledClientLastDates = createServerFn({ method: "G
     }> => {
       const token = process.env.SQUARE_PRODUCTION_ACCESS_TOKEN;
       const todayYmd = ymdInTz(new Date());
-      const dow = ymdWeekday(todayYmd);
-      const mondayOffset = (dow + 6) % 7;
-      const thisWeekStartYmd = addDaysYmd(todayYmd, -mondayOffset);
+      const thisWeekStartYmd = workWeekStartFromYmd(todayYmd);
       const priorWindowStartYmd = addDaysYmd(thisWeekStartYmd, -7 * data.weeks_back);
 
       const emptyResp = {
@@ -1150,9 +1154,7 @@ export const getContactedClientIds = createServerFn({ method: "GET" })
       context,
     }): Promise<{ client_ids: string[]; prior_client_ids: string[]; week_start: string }> => {
       const todayYmd = ymdInTz(new Date());
-      const dow = ymdWeekday(todayYmd);
-      const mondayOffset = (dow + 6) % 7;
-      const weekStartYmd = addDaysYmd(todayYmd, -mondayOffset);
+      const weekStartYmd = workWeekStartFromYmd(todayYmd);
       const weekStartInstant = ymdLocalToInstant(weekStartYmd).toISOString();
       if (data.clientIds.length === 0) {
         return { client_ids: [], prior_client_ids: [], week_start: weekStartYmd };
@@ -1206,9 +1208,7 @@ export const unmarkClientContacted = createServerFn({ method: "POST" })
   })
   .handler(async ({ data, context }): Promise<{ ok: true; deleted: number }> => {
     const todayYmd = ymdInTz(new Date());
-    const dow = ymdWeekday(todayYmd);
-    const mondayOffset = (dow + 6) % 7;
-    const weekStartYmd = addDaysYmd(todayYmd, -mondayOffset);
+    const weekStartYmd = workWeekStartFromYmd(todayYmd);
     const weekStartInstant = ymdLocalToInstant(weekStartYmd).toISOString();
     const { data: rows, error } = await context.supabase
       .from("client_activities")

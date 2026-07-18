@@ -1,16 +1,56 @@
-import { Toaster as Sonner } from "sonner";
 import { useEffect, useState } from "react";
 
-type ToasterProps = React.ComponentProps<typeof Sonner>;
+type ToastOptions = Record<string, unknown>;
+type ToastId = string | number;
+type SonnerModule = typeof import("sonner");
+
+let sonnerPromise: Promise<SonnerModule> | null = null;
+
+function loadSonner() {
+  if (!sonnerPromise) sonnerPromise = import("sonner");
+  return sonnerPromise;
+}
+
+function makeToastId() {
+  return `toast-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+export const toast = {
+  success(message: string, options?: ToastOptions) {
+    void loadSonner().then(({ toast }) => toast.success(message, options));
+  },
+  error(message: string, options?: ToastOptions) {
+    void loadSonner().then(({ toast }) => toast.error(message, options));
+  },
+  loading(message: string, options?: ToastOptions): ToastId {
+    const id = (options?.id as ToastId | undefined) ?? makeToastId();
+    void loadSonner().then(({ toast }) => toast.loading(message, { ...options, id }));
+    return id;
+  },
+  dismiss(id?: ToastId) {
+    void loadSonner().then(({ toast }) => toast.dismiss(id));
+  },
+};
+
+type ToasterProps = Record<string, unknown>;
 
 const Toaster = ({ ...props }: ToasterProps) => {
   const [mounted, setMounted] = useState(false);
+  const [Sonner, setSonner] = useState<SonnerModule["Toaster"] | null>(null);
 
   useEffect(() => {
-    setMounted(true);
+    let active = true;
+    loadSonner().then((mod) => {
+      if (!active) return;
+      setSonner(() => mod.Toaster);
+      setMounted(true);
+    });
+    return () => {
+      active = false;
+    };
   }, []);
 
-  if (!mounted) return null;
+  if (!mounted || !Sonner) return null;
 
   return (
     <Sonner
@@ -24,7 +64,7 @@ const Toaster = ({ ...props }: ToasterProps) => {
           cancelButton: "group-[.toast]:bg-muted group-[.toast]:text-muted-foreground",
         },
       }}
-      {...props}
+      {...(props as React.ComponentProps<SonnerModule["Toaster"]>)}
     />
   );
 };

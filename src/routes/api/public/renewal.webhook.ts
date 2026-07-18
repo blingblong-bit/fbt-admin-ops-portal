@@ -13,10 +13,13 @@ import { createFileRoute } from "@tanstack/react-router";
 
 const TWILIO_GATEWAY = "https://connector-gateway.lovable.dev/twilio/Messages.json";
 
-const EMPTY_TWIML = new Response(
-  '<?xml version="1.0" encoding="UTF-8"?><Response/>',
-  { headers: { "Content-Type": "text/xml; charset=utf-8" } },
-);
+const EMPTY_TWIML_BODY = '<?xml version="1.0" encoding="UTF-8"?><Response/>';
+
+function emptyTwimlResponse() {
+  return new Response(EMPTY_TWIML_BODY, {
+    headers: { "Content-Type": "text/xml; charset=utf-8" },
+  });
+}
 
 function digitsOnly(s: string | null | undefined): string {
   return (s ?? "").replace(/\D+/g, "");

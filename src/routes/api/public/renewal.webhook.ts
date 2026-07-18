@@ -92,12 +92,12 @@ export const Route = createFileRoute("/api/public/renewal/webhook")({
         const sid = String(form.get("MessageSid") ?? "");
         const toNum = String(form.get("To") ?? "");
 
-        if (!from || !body) return EMPTY_TWIML;
+        if (!from || !body) return emptyTwimlResponse();
 
         // Match From → most recent active/manual_review campaign whose client's
         // phone shares the last-10 digits.
         const fromLast10 = last10(from);
-        if (!fromLast10) return EMPTY_TWIML;
+        if (!fromLast10) return emptyTwimlResponse();
 
         // Find candidate clients by phone match
         const { data: clientMatches } = await supabaseAdmin
@@ -109,7 +109,7 @@ export const Route = createFileRoute("/api/public/renewal/webhook")({
         );
         if (!matchedClient) {
           console.log(`[renewal.webhook] no client match for ${from}`);
-          return EMPTY_TWIML;
+          return emptyTwimlResponse();
         }
 
         // Find their most recent non-terminal campaign
@@ -124,11 +124,11 @@ export const Route = createFileRoute("/api/public/renewal/webhook")({
         if (!campaign) {
           console.log(`[renewal.webhook] no active campaign for client ${matchedClient.id}`);
           // Still log the inbound so we have an audit trail via renewal_messages? Skip — no campaign to attach.
-          return EMPTY_TWIML;
+          return emptyTwimlResponse();
         }
         if (campaign.reply_at) {
           console.log(`[renewal.webhook] campaign ${campaign.id} already has a reply`);
-          return EMPTY_TWIML;
+          return emptyTwimlResponse();
         }
 
         // Log inbound
@@ -172,7 +172,7 @@ export const Route = createFileRoute("/api/public/renewal/webhook")({
           }).eq("id", campaign.id);
         }
 
-        return EMPTY_TWIML;
+        return emptyTwimlResponse();
       },
     },
   },

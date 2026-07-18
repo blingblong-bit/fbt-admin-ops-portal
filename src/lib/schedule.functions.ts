@@ -953,9 +953,7 @@ export const getPriorWeeksScheduledClientLastDates = createServerFn({ method: "G
     }> => {
       const token = process.env.SQUARE_PRODUCTION_ACCESS_TOKEN;
       const todayYmd = ymdInTz(new Date());
-      const dow = ymdWeekday(todayYmd);
-      const mondayOffset = (dow + 6) % 7;
-      const thisWeekStartYmd = addDaysYmd(todayYmd, -mondayOffset);
+      const thisWeekStartYmd = workWeekStartFromYmd(todayYmd);
       const priorWindowStartYmd = addDaysYmd(thisWeekStartYmd, -7 * data.weeks_back);
 
       const emptyResp = {

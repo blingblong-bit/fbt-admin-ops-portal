@@ -1,26 +1,47 @@
-## What I found
 
-The Lovable Cloud backend is healthy — this is a **frontend/publish issue**, not the database. Two separate things are broken:
+## Side-by-side: Zach Wolberg's two records
 
-1. **Published site (`fbt-admin-ops-portal.lovable.app`)** is returning HTTP 500 on every request, including `/`, `/favicon.ico`, and the `/api/public/renewal/tick` cron. Every worker log line is the same opaque `h3 swallowed SSR error: {"unhandled":true,"message":"HTTPError"}` with the same `content_hash` — meaning the last published build is broken and every request is hitting the same crash.
-2. **Static preview builds** (the `id-preview-<sha>--...` URLs Lovable generates per snapshot) are also 500ing for recent shas.
+| Field | Record A (hyphenated — "Due this week") | Record B (no-hyphen — "Not scheduled") |
+|---|---|---|
+| id | `de974856-e7c7-4c06-b36d-b51f5c4db86e` | `0d27d25b-1eb3-4e97-8b09-d6a8766ff9a6` |
+| phone | `931-581-4435` | `+19315814435` |
+| email | — | zachwolberg11@gmail.com |
+| square_customer_id | **`BC6Y9B5X3T5TJG7E80VVX8VY8C`** | **null** |
+| status | active | active |
+| deleted_at | null (unarchived) | null (unarchived) |
+| manual_active | true | true |
+| package | 8-Visit Package, $375, start 2026-05-18 | same |
+| visits_used | null | 1 |
+| amount_paid | $0.00 | $0.00 |
+| amount_owed | $375 | $375 |
+| internal_notes | — | "Imported from Square Production" |
+| square_payments rows | 0 | 0 |
 
-The **sandbox dev preview (`localhost:8080`)** returns HTTP 200 and renders the dashboard correctly, so the current code in the editor is fine — only the previously published bundle is broken.
+Neither record is currently archived (`deleted_at` is null on both). "Due this week" vs "Not scheduled" is derived entirely from `square_customer_id`: only Record A has one, so only A pulls live Square bookings.
 
-Root cause of the SSR error isn't visible: the SSR error handler is logging only the h3-wrapped message and not surfacing the underlying `Error`, so we can't see the actual stack from server logs. This usually means an in-render or module-init throw somewhere in the published bundle (e.g. a route module that references a missing env var at import time, or serialization of a non-serializable loader value).
+### Answer to your question
 
-## Recommended fix (fastest path back to working)
+**Yes.** The hyphenated record (A) holds the only real Square link (`BC6Y9B5X3T5TJG7E80VVX8VY8C`). The no-hyphen record (B) has no `square_customer_id` at all, so it can never show bookings or receive Square payments until that ID moves. A pure status swap would leave the "newly-active" B record disconnected from Square.
 
-1. **Republish.** Because the current sandbox build is healthy, clicking **Publish → Update** in the top-right will build the current code and replace the broken bundle. This almost always clears both the published 500s and the newer static-preview 500s.
-2. If republishing still 500s, the underlying error needs to be surfaced. Options:
-   - Instrument the SSR error wrapper (`src/server.ts` + `src/lib/error-capture.ts`) to log the raw captured error before returning the fallback so we can see the real stack in worker logs.
-   - Bisect recent changes to the dashboard route (`src/routes/_authenticated/index.tsx`) and to `src/routes/api/public/renewal.tick.ts`, which are the most recent additions and are both hit on every SSR pass.
+Record B does hold two things A lacks: the email `zachwolberg11@gmail.com` and `visits_used = 1`. Those should be preserved on B.
 
-## What I'm not doing yet
+Relevant history: on 2026-07-01 B was originally the Square-linked record; a bulk merge archived A into B. On 2026-07-13 B was deleted; on 2026-07-17 the Square link was swapped from B to A ("swapped from soft-deleted duplicate"). On 2026-07-20 B was restored. That's how the Square ID ended up on the "wrong" record.
 
-- No code changes. I want your go-ahead before adding instrumentation or reverting anything.
-- I'm not touching the database, RLS, or any published data.
+## Proposed plan (nothing runs until you approve)
 
-## Next step
+1. **Transfer Square link A → B** (single migration/data update):
+   - Set `clients.square_customer_id = 'BC6Y9B5X3T5TJG7E80VVX8VY8C'` on record B.
+   - Clear `clients.square_customer_id` on record A (unique constraint — must clear A first, then set B, in one transaction).
+2. **Flip active/archived**:
+   - Record A: set `deleted_at = now()`, `manual_active = false`, `status = 'archived'`.
+   - Record B: leave `deleted_at = null`, `manual_active = true`, `status = 'active'` (already is).
+3. **Log activities** on both records:
+   - On B: `square_link` — "Square customer BC6Y…8VY8C swapped back from de974856 (status flip)".
+   - On A: `archived` — "Archived; Square link + active status transferred to 0d27d25b".
+4. **No changes** to `package_price`, `amount_paid`, `visits_used`, `package_start_date`, email, or phone on either record. B keeps `visits_used = 1` and its email; A keeps its hyphenated phone as an archived historical record.
 
-Try **Publish → Update** first. If the site comes back, we're done. If it still 500s after that, tell me and I'll add SSR error instrumentation so we can see the real underlying error and fix it at the source.
+### Verification after
+
+Re-query both rows and confirm: B has the Square ID and is unarchived; A is archived with no Square ID; Schedule Check "Due this week" now shows B (no-hyphen) with live bookings.
+
+Approve and I'll run it as one migration + one activity insert.

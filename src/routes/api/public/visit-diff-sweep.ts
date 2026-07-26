@@ -45,6 +45,14 @@ export const Route = createFileRoute("/api/public/visit-diff-sweep")({
         const token = cleanToken(process.env.SQUARE_PRODUCTION_ACCESS_TOKEN);
         if (!token) return new Response("no square token", { status: 500 });
 
+        let applyMode = false;
+        try {
+          const parsed = JSON.parse(body || "{}");
+          applyMode = parsed?.apply === true;
+        } catch {
+          // body may be empty or non-JSON; treat as preview
+        }
+
         const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
         const { data: clients, error } = await supabaseAdmin
           .from("clients")
@@ -52,6 +60,7 @@ export const Route = createFileRoute("/api/public/visit-diff-sweep")({
           .is("deleted_at", null)
           .not("square_customer_id", "is", null);
         if (error) return new Response(error.message, { status: 500 });
+
 
         void SQUARE_VERSION;
 

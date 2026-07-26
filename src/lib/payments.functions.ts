@@ -101,15 +101,22 @@ export const resolvePaymentLink = createServerFn({ method: "POST" })
       })
       .eq("id", payment.id);
 
+    const appliedZero = !result.alreadyApplied && !(result.appliedAmount > 0);
     await supabaseAdmin.from("square_sync_log").insert({
       event_type: "manual.payment_resolution",
       square_customer_id: payment.square_customer_id,
       client_id: client.id,
-      status: "success",
-      action: result.alreadyApplied ? "manual_link_already_credited" : "manual_link_applied",
+      status: appliedZero ? "applied_zero" : "success",
+      action: result.alreadyApplied
+        ? "manual_link_already_credited"
+        : appliedZero
+          ? "manual_link_applied_zero"
+          : "manual_link_applied",
       message: result.alreadyApplied
         ? `Manually linked payment ${payment.square_payment_id} to ${client.first_name} ${client.last_name} — activity already existed, flags reconciled`
-        : `Manually linked payment ${payment.square_payment_id} ($${(payment.amount_cents / 100).toFixed(2)}) to ${client.first_name} ${client.last_name} (buyer_email=${payment.buyer_email ?? "none"})`,
+        : appliedZero
+          ? `Manually linked payment ${payment.square_payment_id} ($${(payment.amount_cents / 100).toFixed(2)}) to ${client.first_name} ${client.last_name} but $0 credited — package_price cap already reached`
+          : `Manually linked payment ${payment.square_payment_id} ($${(payment.amount_cents / 100).toFixed(2)}) to ${client.first_name} ${client.last_name} (buyer_email=${payment.buyer_email ?? "none"})`,
     });
 
     return {
@@ -186,13 +193,16 @@ export const resolvePaymentCreateClient = createServerFn({ method: "POST" })
       })
       .eq("id", payment.id);
 
+    const createAppliedZero = !alreadyApplied && !(appliedAmount > 0);
     await supabaseAdmin.from("square_sync_log").insert({
       event_type: "manual.payment_resolution",
       square_customer_id: payment.square_customer_id,
       client_id: created.id,
-      status: "success",
-      action: "manual_create_client_applied",
-      message: `Created new client ${first} ${last} from payment ${payment.square_payment_id} ($${(payment.amount_cents / 100).toFixed(2)}, buyer_email=${payment.buyer_email ?? "none"})`,
+      status: createAppliedZero ? "applied_zero" : "success",
+      action: createAppliedZero ? "manual_create_client_applied_zero" : "manual_create_client_applied",
+      message: createAppliedZero
+        ? `Created new client ${first} ${last} from payment ${payment.square_payment_id} ($${(payment.amount_cents / 100).toFixed(2)}) but $0 credited — package_price cap already reached`
+        : `Created new client ${first} ${last} from payment ${payment.square_payment_id} ($${(payment.amount_cents / 100).toFixed(2)}, buyer_email=${payment.buyer_email ?? "none"})`,
     });
 
     return {
@@ -674,14 +684,21 @@ async function retryOnePayment(
       .from("square_payments")
       .update({ applied: true, needs_review: false })
       .eq("id", payment.id);
+    const retryAppliedZero = !result.alreadyApplied && !(result.appliedAmount > 0);
     await supabaseAdmin.from("square_sync_log").insert({
       event_type: "manual.payment_retry",
       client_id: payment.client_id,
-      status: "success",
-      action: result.alreadyApplied ? "retry_already_credited" : "retry_applied",
+      status: retryAppliedZero ? "applied_zero" : "success",
+      action: result.alreadyApplied
+        ? "retry_already_credited"
+        : retryAppliedZero
+          ? "retry_applied_zero"
+          : "retry_applied",
       message: result.alreadyApplied
         ? `Retry: payment ${payment.square_payment_id} already credited — flags reconciled`
-        : `Retry: applied $${(payment.amount_cents / 100).toFixed(2)} for payment ${payment.square_payment_id}`,
+        : retryAppliedZero
+          ? `Retry: payment ${payment.square_payment_id} ($${(payment.amount_cents / 100).toFixed(2)}) ran without error but $0 was credited — package_price cap already reached`
+          : `Retry: applied $${(payment.amount_cents / 100).toFixed(2)} for payment ${payment.square_payment_id}`,
     });
     return {
       payment_row_id: payment.id,

@@ -442,17 +442,22 @@ async function handlePaymentEvent(supabaseAdmin: SupabaseClient<Database>, event
       })
       .eq("id", existingPayment.id);
 
+    const promotedAppliedZero = !result.alreadyApplied && !(result.appliedAmount > 0);
     await supabaseAdmin.from("square_sync_log").insert({
       event_type: eventType,
       square_customer_id: squareCustomerId,
       client_id: clientId,
-      status: "success",
+      status: promotedAppliedZero ? "applied_zero" : "success",
       action: result.alreadyApplied
         ? "reconciled_already_credited"
-        : `applied_payment_${method ?? "unknown"}`,
+        : promotedAppliedZero
+          ? `applied_zero_${method ?? "unknown"}`
+          : `applied_payment_${method ?? "unknown"}`,
       message: result.alreadyApplied
         ? `Payment ${squarePaymentId} activity already existed on client — reconciled flags (applied=true, needs_review=false)`
-        : `Applied ${amountDisplay} to client via ${method} (promoted from APPROVED→COMPLETED)`,
+        : promotedAppliedZero
+          ? `Promoted payment ${squarePaymentId} (${amountDisplay}) to COMPLETED for client via ${method} but $0 credited — package_price cap already reached`
+          : `Applied ${amountDisplay} to client via ${method} (promoted from APPROVED→COMPLETED)`,
       raw_event: event as unknown as never,
     });
     return;
@@ -467,6 +472,7 @@ async function handlePaymentEvent(supabaseAdmin: SupabaseClient<Database>, event
 
   let applied = false;
   let alreadyApplied = false;
+  let appliedAmount = 0;
   let applyErr: unknown = null;
   if (clientId && isCompleted && amountCents > 0) {
     try {
@@ -478,15 +484,18 @@ async function handlePaymentEvent(supabaseAdmin: SupabaseClient<Database>, event
       });
       applied = true;
       alreadyApplied = result.alreadyApplied;
+      appliedAmount = result.appliedAmount;
     } catch (e) {
       applyErr = e;
     }
   }
 
+  const newAppliedZero = applied && !alreadyApplied && !(appliedAmount > 0);
+
   // Needs review only when we can't identify the customer OR when a COMPLETED
-  // matched payment failed to apply (trigger blocked). Matched-but-not-completed
-  // rows are "pending", not review.
-  const needsReview = !clientId || (isCompleted && !applied);
+  // matched payment failed to apply (trigger blocked) OR when it ran but
+  // credited $0 (silent cap — staff needs to reset package_price / amount_paid).
+  const needsReview = !clientId || (isCompleted && !applied) || newAppliedZero;
 
   await supabaseAdmin.from("square_payments").insert({
     square_payment_id: squarePaymentId,
@@ -506,11 +515,19 @@ async function handlePaymentEvent(supabaseAdmin: SupabaseClient<Database>, event
     event_type: eventType,
     square_customer_id: squareCustomerId,
     client_id: clientId,
-    status: applied ? "success" : applyErr ? "error" : "skipped",
+    status: applied
+      ? newAppliedZero
+        ? "applied_zero"
+        : "success"
+      : applyErr
+        ? "error"
+        : "skipped",
     action: applied
       ? alreadyApplied
         ? "reconciled_already_credited"
-        : `applied_payment_${method ?? "unknown"}`
+        : newAppliedZero
+          ? `applied_zero_${method ?? "unknown"}`
+          : `applied_payment_${method ?? "unknown"}`
       : applyErr
         ? "apply_blocked"
         : clientId
@@ -519,7 +536,9 @@ async function handlePaymentEvent(supabaseAdmin: SupabaseClient<Database>, event
     message: applied
       ? alreadyApplied
         ? `Payment ${squarePaymentId} (${amountDisplay}) already credited — flags set applied=true`
-        : `Applied ${amountDisplay} to client via ${method}`
+        : newAppliedZero
+          ? `Payment ${squarePaymentId} (${amountDisplay}) matched to client via ${method} but $0 credited — package_price cap already reached, flagged for review`
+          : `Applied ${amountDisplay} to client via ${method}`
       : applyErr
         ? `COMPLETED payment ${squarePaymentId} (${amountDisplay}) matched to client but credit was blocked: ${formatErr(applyErr)}`
         : clientId

@@ -193,13 +193,16 @@ export const resolvePaymentCreateClient = createServerFn({ method: "POST" })
       })
       .eq("id", payment.id);
 
+    const createAppliedZero = !alreadyApplied && !(appliedAmount > 0);
     await supabaseAdmin.from("square_sync_log").insert({
       event_type: "manual.payment_resolution",
       square_customer_id: payment.square_customer_id,
       client_id: created.id,
-      status: "success",
-      action: "manual_create_client_applied",
-      message: `Created new client ${first} ${last} from payment ${payment.square_payment_id} ($${(payment.amount_cents / 100).toFixed(2)}, buyer_email=${payment.buyer_email ?? "none"})`,
+      status: createAppliedZero ? "applied_zero" : "success",
+      action: createAppliedZero ? "manual_create_client_applied_zero" : "manual_create_client_applied",
+      message: createAppliedZero
+        ? `Created new client ${first} ${last} from payment ${payment.square_payment_id} ($${(payment.amount_cents / 100).toFixed(2)}) but $0 credited — package_price cap already reached`
+        : `Created new client ${first} ${last} from payment ${payment.square_payment_id} ($${(payment.amount_cents / 100).toFixed(2)}, buyer_email=${payment.buyer_email ?? "none"})`,
     });
 
     return {

@@ -58,11 +58,13 @@ export const Route = createFileRoute("/api/public/visit-diff-sweep")({
 
         const disagreements: unknown[] = [];
         const errors: unknown[] = [];
+        const allNotes: unknown[] = [];
         let scanned = 0;
         let parsed = 0;
         let unparsed = 0;
         let blankNotes = 0;
         let noBooking = 0;
+
 
         for (const c of clients ?? []) {
           scanned++;

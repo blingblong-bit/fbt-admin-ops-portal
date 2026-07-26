@@ -22,6 +22,7 @@ import { Route as AuthenticatedMergeCenterRouteImport } from './routes/_authenti
 import { Route as AuthenticatedImportRouteImport } from './routes/_authenticated/import'
 import { Route as AuthenticatedBackupRouteImport } from './routes/_authenticated/backup'
 import { Route as AuthenticatedClientsIndexRouteImport } from './routes/_authenticated/clients.index'
+import { Route as ApiPublicVisitDiffSweepTriggerRouteImport } from './routes/api/public/visit-diff-sweep-trigger'
 import { Route as ApiPublicVisitDiffSweepRouteImport } from './routes/api/public/visit-diff-sweep'
 import { Route as ApiPublicSquareDiagRouteImport } from './routes/api/public/square-diag'
 import { Route as AuthenticatedClientsNewRouteImport } from './routes/_authenticated/clients.new'
@@ -102,6 +103,12 @@ const AuthenticatedClientsIndexRoute =
     path: '/clients/',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const ApiPublicVisitDiffSweepTriggerRoute =
+  ApiPublicVisitDiffSweepTriggerRouteImport.update({
+    id: '/api/public/visit-diff-sweep-trigger',
+    path: '/api/public/visit-diff-sweep-trigger',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicVisitDiffSweepRoute = ApiPublicVisitDiffSweepRouteImport.update({
   id: '/api/public/visit-diff-sweep',
   path: '/api/public/visit-diff-sweep',
@@ -161,6 +168,7 @@ export interface FileRoutesByFullPath {
   '/clients/new': typeof AuthenticatedClientsNewRoute
   '/api/public/square-diag': typeof ApiPublicSquareDiagRoute
   '/api/public/visit-diff-sweep': typeof ApiPublicVisitDiffSweepRoute
+  '/api/public/visit-diff-sweep-trigger': typeof ApiPublicVisitDiffSweepTriggerRoute
   '/clients/': typeof AuthenticatedClientsIndexRoute
   '/api/public/renewal/tick': typeof ApiPublicRenewalTickRoute
   '/api/public/renewal/webhook': typeof ApiPublicRenewalWebhookRoute
@@ -183,6 +191,7 @@ export interface FileRoutesByTo {
   '/clients/new': typeof AuthenticatedClientsNewRoute
   '/api/public/square-diag': typeof ApiPublicSquareDiagRoute
   '/api/public/visit-diff-sweep': typeof ApiPublicVisitDiffSweepRoute
+  '/api/public/visit-diff-sweep-trigger': typeof ApiPublicVisitDiffSweepTriggerRoute
   '/clients': typeof AuthenticatedClientsIndexRoute
   '/api/public/renewal/tick': typeof ApiPublicRenewalTickRoute
   '/api/public/renewal/webhook': typeof ApiPublicRenewalWebhookRoute
@@ -207,6 +216,7 @@ export interface FileRoutesById {
   '/_authenticated/clients/new': typeof AuthenticatedClientsNewRoute
   '/api/public/square-diag': typeof ApiPublicSquareDiagRoute
   '/api/public/visit-diff-sweep': typeof ApiPublicVisitDiffSweepRoute
+  '/api/public/visit-diff-sweep-trigger': typeof ApiPublicVisitDiffSweepTriggerRoute
   '/_authenticated/clients/': typeof AuthenticatedClientsIndexRoute
   '/api/public/renewal/tick': typeof ApiPublicRenewalTickRoute
   '/api/public/renewal/webhook': typeof ApiPublicRenewalWebhookRoute
@@ -231,6 +241,7 @@ export interface FileRouteTypes {
     | '/clients/new'
     | '/api/public/square-diag'
     | '/api/public/visit-diff-sweep'
+    | '/api/public/visit-diff-sweep-trigger'
     | '/clients/'
     | '/api/public/renewal/tick'
     | '/api/public/renewal/webhook'
@@ -253,6 +264,7 @@ export interface FileRouteTypes {
     | '/clients/new'
     | '/api/public/square-diag'
     | '/api/public/visit-diff-sweep'
+    | '/api/public/visit-diff-sweep-trigger'
     | '/clients'
     | '/api/public/renewal/tick'
     | '/api/public/renewal/webhook'
@@ -276,6 +288,7 @@ export interface FileRouteTypes {
     | '/_authenticated/clients/new'
     | '/api/public/square-diag'
     | '/api/public/visit-diff-sweep'
+    | '/api/public/visit-diff-sweep-trigger'
     | '/_authenticated/clients/'
     | '/api/public/renewal/tick'
     | '/api/public/renewal/webhook'
@@ -287,6 +300,7 @@ export interface RootRouteChildren {
   AuthRoute: typeof AuthRoute
   ApiPublicSquareDiagRoute: typeof ApiPublicSquareDiagRoute
   ApiPublicVisitDiffSweepRoute: typeof ApiPublicVisitDiffSweepRoute
+  ApiPublicVisitDiffSweepTriggerRoute: typeof ApiPublicVisitDiffSweepTriggerRoute
   ApiPublicRenewalTickRoute: typeof ApiPublicRenewalTickRoute
   ApiPublicRenewalWebhookRoute: typeof ApiPublicRenewalWebhookRoute
   ApiPublicSquareWebhookRoute: typeof ApiPublicSquareWebhookRoute
@@ -384,6 +398,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/clients/'
       preLoaderRoute: typeof AuthenticatedClientsIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/api/public/visit-diff-sweep-trigger': {
+      id: '/api/public/visit-diff-sweep-trigger'
+      path: '/api/public/visit-diff-sweep-trigger'
+      fullPath: '/api/public/visit-diff-sweep-trigger'
+      preLoaderRoute: typeof ApiPublicVisitDiffSweepTriggerRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/api/public/visit-diff-sweep': {
       id: '/api/public/visit-diff-sweep'
@@ -486,6 +507,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthRoute: AuthRoute,
   ApiPublicSquareDiagRoute: ApiPublicSquareDiagRoute,
   ApiPublicVisitDiffSweepRoute: ApiPublicVisitDiffSweepRoute,
+  ApiPublicVisitDiffSweepTriggerRoute: ApiPublicVisitDiffSweepTriggerRoute,
   ApiPublicRenewalTickRoute: ApiPublicRenewalTickRoute,
   ApiPublicRenewalWebhookRoute: ApiPublicRenewalWebhookRoute,
   ApiPublicSquareWebhookRoute: ApiPublicSquareWebhookRoute,

@@ -58,11 +58,13 @@ export const Route = createFileRoute("/api/public/visit-diff-sweep")({
 
         const disagreements: unknown[] = [];
         const errors: unknown[] = [];
+        const allNotes: unknown[] = [];
         let scanned = 0;
         let parsed = 0;
         let unparsed = 0;
         let blankNotes = 0;
         let noBooking = 0;
+
 
         for (const c of clients ?? []) {
           scanned++;
@@ -106,35 +108,50 @@ export const Route = createFileRoute("/api/public/visit-diff-sweep")({
 
           if (!latest) {
             noBooking++;
+            allNotes.push({
+              name: `${c.first_name} ${c.last_name}`,
+              square_customer_id: cid,
+              latest_booking_at: null,
+              raw_note: null,
+              parsed: null,
+              status: "no_booking",
+            });
             continue;
           }
           const note = latest.seller_note ?? null;
-          if (!note || !note.trim()) {
-            blankNotes++;
-            continue;
-          }
-          const p = parseNote(note);
-          if (!p) {
-            unparsed++;
-            continue;
-          }
-          parsed++;
-          const hubUsed = c.visits_used ?? null;
-          const hubTotal = c.package_total_visits ?? 0;
-          if (p.used !== hubUsed || p.total !== hubTotal) {
-            disagreements.push({
-              client_id: c.id,
-              name: `${c.first_name} ${c.last_name}`,
-              square_customer_id: cid,
-              hub_visits_used: hubUsed,
-              hub_total: hubTotal,
-              square_note: note,
-              square_parsed_used: p.used,
-              square_parsed_total: p.total,
-              latest_booking_at: latest.start_at ?? null,
-            });
+          const p = note && note.trim() ? parseNote(note) : null;
+          if (!note || !note.trim()) blankNotes++;
+          else if (!p) unparsed++;
+          else parsed++;
+
+          allNotes.push({
+            name: `${c.first_name} ${c.last_name}`,
+            square_customer_id: cid,
+            latest_booking_at: latest.start_at ?? null,
+            raw_note: note,
+            parsed: p,
+            status: !note || !note.trim() ? "blank" : p ? "parsed" : "unparseable",
+          });
+
+          if (p) {
+            const hubUsed = c.visits_used ?? null;
+            const hubTotal = c.package_total_visits ?? 0;
+            if (p.used !== hubUsed || p.total !== hubTotal) {
+              disagreements.push({
+                client_id: c.id,
+                name: `${c.first_name} ${c.last_name}`,
+                square_customer_id: cid,
+                hub_visits_used: hubUsed,
+                hub_total: hubTotal,
+                square_note: note,
+                square_parsed_used: p.used,
+                square_parsed_total: p.total,
+                latest_booking_at: latest.start_at ?? null,
+              });
+            }
           }
         }
+
 
         return new Response(
           JSON.stringify(
@@ -146,6 +163,7 @@ export const Route = createFileRoute("/api/public/visit-diff-sweep")({
               no_booking: noBooking,
               disagreement_count: disagreements.length,
               disagreements,
+              all_notes: allNotes,
               errors,
             },
             null,
@@ -153,6 +171,7 @@ export const Route = createFileRoute("/api/public/visit-diff-sweep")({
           ),
           { headers: { "content-type": "application/json" } },
         );
+
       },
     },
   },

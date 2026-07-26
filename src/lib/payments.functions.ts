@@ -684,14 +684,21 @@ async function retryOnePayment(
       .from("square_payments")
       .update({ applied: true, needs_review: false })
       .eq("id", payment.id);
+    const retryAppliedZero = !result.alreadyApplied && !(result.appliedAmount > 0);
     await supabaseAdmin.from("square_sync_log").insert({
       event_type: "manual.payment_retry",
       client_id: payment.client_id,
-      status: "success",
-      action: result.alreadyApplied ? "retry_already_credited" : "retry_applied",
+      status: retryAppliedZero ? "applied_zero" : "success",
+      action: result.alreadyApplied
+        ? "retry_already_credited"
+        : retryAppliedZero
+          ? "retry_applied_zero"
+          : "retry_applied",
       message: result.alreadyApplied
         ? `Retry: payment ${payment.square_payment_id} already credited — flags reconciled`
-        : `Retry: applied $${(payment.amount_cents / 100).toFixed(2)} for payment ${payment.square_payment_id}`,
+        : retryAppliedZero
+          ? `Retry: payment ${payment.square_payment_id} ($${(payment.amount_cents / 100).toFixed(2)}) ran without error but $0 was credited — package_price cap already reached`
+          : `Retry: applied $${(payment.amount_cents / 100).toFixed(2)} for payment ${payment.square_payment_id}`,
     });
     return {
       payment_row_id: payment.id,

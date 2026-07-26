@@ -163,6 +163,7 @@ export const Route = createFileRoute("/api/public/visit-diff-sweep")({
               no_booking: noBooking,
               disagreement_count: disagreements.length,
               disagreements,
+              all_notes: allNotes,
               errors,
             },
             null,
@@ -170,6 +171,7 @@ export const Route = createFileRoute("/api/public/visit-diff-sweep")({
           ),
           { headers: { "content-type": "application/json" } },
         );
+
       },
     },
   },

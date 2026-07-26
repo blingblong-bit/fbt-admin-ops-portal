@@ -442,17 +442,22 @@ async function handlePaymentEvent(supabaseAdmin: SupabaseClient<Database>, event
       })
       .eq("id", existingPayment.id);
 
+    const promotedAppliedZero = !result.alreadyApplied && !(result.appliedAmount > 0);
     await supabaseAdmin.from("square_sync_log").insert({
       event_type: eventType,
       square_customer_id: squareCustomerId,
       client_id: clientId,
-      status: "success",
+      status: promotedAppliedZero ? "applied_zero" : "success",
       action: result.alreadyApplied
         ? "reconciled_already_credited"
-        : `applied_payment_${method ?? "unknown"}`,
+        : promotedAppliedZero
+          ? `applied_zero_${method ?? "unknown"}`
+          : `applied_payment_${method ?? "unknown"}`,
       message: result.alreadyApplied
         ? `Payment ${squarePaymentId} activity already existed on client — reconciled flags (applied=true, needs_review=false)`
-        : `Applied ${amountDisplay} to client via ${method} (promoted from APPROVED→COMPLETED)`,
+        : promotedAppliedZero
+          ? `Promoted payment ${squarePaymentId} (${amountDisplay}) to COMPLETED for client via ${method} but $0 credited — package_price cap already reached`
+          : `Applied ${amountDisplay} to client via ${method} (promoted from APPROVED→COMPLETED)`,
       raw_event: event as unknown as never,
     });
     return;

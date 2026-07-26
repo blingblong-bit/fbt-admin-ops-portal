@@ -45,6 +45,14 @@ export const Route = createFileRoute("/api/public/visit-diff-sweep")({
         const token = cleanToken(process.env.SQUARE_PRODUCTION_ACCESS_TOKEN);
         if (!token) return new Response("no square token", { status: 500 });
 
+        let applyMode = false;
+        try {
+          const parsed = JSON.parse(body || "{}");
+          applyMode = parsed?.apply === true;
+        } catch {
+          // body may be empty or non-JSON; treat as preview
+        }
+
         const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
         const { data: clients, error } = await supabaseAdmin
           .from("clients")
@@ -52,6 +60,7 @@ export const Route = createFileRoute("/api/public/visit-diff-sweep")({
           .is("deleted_at", null)
           .not("square_customer_id", "is", null);
         if (error) return new Response(error.message, { status: 500 });
+
 
         void SQUARE_VERSION;
 
@@ -153,9 +162,50 @@ export const Route = createFileRoute("/api/public/visit-diff-sweep")({
         }
 
 
+        const applied: unknown[] = [];
+        const applyErrors: unknown[] = [];
+        if (applyMode) {
+          for (const d of disagreements as Array<{
+            client_id: string;
+            name: string;
+            hub_visits_used: number | null;
+            hub_total: number;
+            square_parsed_used: number;
+            square_parsed_total: number;
+            square_note: string | null;
+          }>) {
+            const { error: upErr } = await supabaseAdmin
+              .from("clients")
+              .update({
+                visits_used: d.square_parsed_used,
+                package_total_visits: d.square_parsed_total,
+              })
+              .eq("id", d.client_id);
+            if (upErr) {
+              applyErrors.push({ client_id: d.client_id, name: d.name, error: upErr.message });
+              continue;
+            }
+            await supabaseAdmin.from("client_activities").insert({
+              client_id: d.client_id,
+              activity_type: "visit_count_sync",
+              description: `Visit counts synced from Square note: ${d.hub_visits_used}/${d.hub_total} → ${d.square_parsed_used}/${d.square_parsed_total}`,
+              metadata: {
+                source: "square_note_sweep",
+                square_note: d.square_note,
+                prev_visits_used: d.hub_visits_used,
+                prev_total: d.hub_total,
+                new_visits_used: d.square_parsed_used,
+                new_total: d.square_parsed_total,
+              },
+            });
+            applied.push({ client_id: d.client_id, name: d.name });
+          }
+        }
+
         return new Response(
           JSON.stringify(
             {
+              mode: applyMode ? "apply" : "preview",
               scanned,
               parsed,
               unparsed,
@@ -163,7 +213,10 @@ export const Route = createFileRoute("/api/public/visit-diff-sweep")({
               no_booking: noBooking,
               disagreement_count: disagreements.length,
               disagreements,
-              all_notes: allNotes,
+              applied_count: applied.length,
+              applied,
+              apply_errors: applyErrors,
+              all_notes: applyMode ? undefined : allNotes,
               errors,
             },
             null,

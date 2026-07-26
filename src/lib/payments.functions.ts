@@ -101,15 +101,22 @@ export const resolvePaymentLink = createServerFn({ method: "POST" })
       })
       .eq("id", payment.id);
 
+    const appliedZero = !result.alreadyApplied && !(result.appliedAmount > 0);
     await supabaseAdmin.from("square_sync_log").insert({
       event_type: "manual.payment_resolution",
       square_customer_id: payment.square_customer_id,
       client_id: client.id,
-      status: "success",
-      action: result.alreadyApplied ? "manual_link_already_credited" : "manual_link_applied",
+      status: appliedZero ? "applied_zero" : "success",
+      action: result.alreadyApplied
+        ? "manual_link_already_credited"
+        : appliedZero
+          ? "manual_link_applied_zero"
+          : "manual_link_applied",
       message: result.alreadyApplied
         ? `Manually linked payment ${payment.square_payment_id} to ${client.first_name} ${client.last_name} — activity already existed, flags reconciled`
-        : `Manually linked payment ${payment.square_payment_id} ($${(payment.amount_cents / 100).toFixed(2)}) to ${client.first_name} ${client.last_name} (buyer_email=${payment.buyer_email ?? "none"})`,
+        : appliedZero
+          ? `Manually linked payment ${payment.square_payment_id} ($${(payment.amount_cents / 100).toFixed(2)}) to ${client.first_name} ${client.last_name} but $0 credited — package_price cap already reached`
+          : `Manually linked payment ${payment.square_payment_id} ($${(payment.amount_cents / 100).toFixed(2)}) to ${client.first_name} ${client.last_name} (buyer_email=${payment.buyer_email ?? "none"})`,
     });
 
     return {

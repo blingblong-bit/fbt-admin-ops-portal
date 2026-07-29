@@ -82,9 +82,10 @@ function makeSupabaseMock(state: MockState) {
       const amountDollars = args.p_amount_cents / 100;
       const currentPaid = Number(state.client.amount_paid ?? 0);
       const price = Number(state.client.package_price ?? 0);
-      const newPaid =
-        price > 0 ? Math.min(price, currentPaid + amountDollars) : currentPaid + amountDollars;
-      const applied = Math.max(0, newPaid - currentPaid);
+      // No cap: amount_paid always reflects the full amount Square processed.
+      void price;
+      const newPaid = currentPaid + amountDollars;
+      const applied = amountDollars;
 
       state.client.amount_paid = newPaid;
 
@@ -167,7 +168,7 @@ describe("applyPaymentOnce (via apply_square_payment RPC)", () => {
     expect(state.activities).toHaveLength(1);
   });
 
-  it("caps amount_paid at package_price when the payment would overpay", async () => {
+  it("does NOT cap amount_paid at package_price — overpayment is recorded in full", async () => {
     state.client = { amount_paid: 250, package_price: 300 };
     const supabase = makeSupabaseMock(state);
 
@@ -176,9 +177,9 @@ describe("applyPaymentOnce (via apply_square_payment RPC)", () => {
       amountCents: 20000, // $200
     });
 
-    expect(result).toEqual({ credited: true, appliedAmount: 50, alreadyApplied: false });
-    expect(state.client.amount_paid).toBe(300);
-    expect(state.activities[0].metadata).toMatchObject({ amount: 200, applied_amount: 50 });
+    expect(result).toEqual({ credited: true, appliedAmount: 200, alreadyApplied: false });
+    expect(state.client.amount_paid).toBe(450);
+    expect(state.activities[0].metadata).toMatchObject({ amount: 200, applied_amount: 200 });
   });
 
   it("applies correctly to a client with no existing amount_paid (null)", async () => {

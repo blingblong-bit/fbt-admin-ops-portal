@@ -27,6 +27,7 @@ import { formatCurrency, formatDate, formatDateTimeLocal } from "@/lib/clients";
 import { useRole } from "@/hooks/useRole";
 import {
   completeVisitForClient,
+  getCompletedVisitBookingIds,
   getContactedClientIds,
   getScheduleCheck,
   getUnavailableNextWeekClientIds,
@@ -76,6 +77,7 @@ function ScheduleCheckPage() {
   const [search, setSearch] = useState<string>("");
   const fetchSchedule = useServerFn(getScheduleCheck);
   const completeVisit = useServerFn(completeVisitForClient);
+  const fetchCompletedVisitBookingIds = useServerFn(getCompletedVisitBookingIds);
   const qc = useQueryClient();
 
   const query = useQuery({
@@ -89,7 +91,7 @@ function ScheduleCheckPage() {
 
   const completeMut = useMutation({
     mutationFn: (vars: { clientId: string; bookingId: string }) =>
-      completeVisit({ data: { clientId: vars.clientId } }),
+      completeVisit({ data: { clientId: vars.clientId, bookingId: vars.bookingId } }),
     onSuccess: (_r, vars) => {
       setCheckedIn((prev) => {
         const next = new Set(prev);
@@ -99,6 +101,7 @@ function ScheduleCheckPage() {
       toast.success("Visit recorded");
       qc.invalidateQueries({ queryKey: ["schedule-check"] });
       qc.invalidateQueries({ queryKey: ["clients"] });
+      qc.invalidateQueries({ queryKey: ["completed-visit-bookings"] });
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -224,6 +227,38 @@ function ScheduleCheckPage() {
       unmatched: rawData.unmatched.filter((a) => !resolvedIds.has(a.booking_id)),
     };
   }, [rawData, linkable]);
+
+  // Every booking currently visible across all three views — used to ask the
+  // server which ones already have a completed visit on record, so "Checked
+  // In" reflects real, persisted state instead of resetting to blank every
+  // time this page is left and re-opened.
+  const allBookingIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const a of data?.selected_day ?? []) ids.add(a.booking_id);
+    for (const a of data?.this_week ?? []) ids.add(a.booking_id);
+    for (const a of data?.next_week ?? []) ids.add(a.booking_id);
+    return Array.from(ids).sort();
+  }, [data]);
+
+  const completedVisitsQuery = useQuery({
+    queryKey: ["completed-visit-bookings", allBookingIds],
+    queryFn: () => fetchCompletedVisitBookingIds({ data: { bookingIds: allBookingIds } }),
+    enabled: allBookingIds.length > 0,
+    staleTime: 30_000,
+  });
+
+  // Persisted truth (from the DB) unioned with anything just checked in this
+  // session but not yet reflected in a refetch — avoids a flash back to
+  // "not checked in" immediately after a successful click.
+  const persistedCheckedIn = useMemo(
+    () => new Set(completedVisitsQuery.data ?? []),
+    [completedVisitsQuery.data],
+  );
+  const effectiveCheckedIn = useMemo(() => {
+    const merged = new Set(persistedCheckedIn);
+    for (const id of checkedIn) merged.add(id);
+    return merged;
+  }, [persistedCheckedIn, checkedIn]);
 
   useEffect(() => {
     if (!rawData || !linkable) return;
@@ -409,7 +444,7 @@ function ScheduleCheckPage() {
           appointments={data?.selected_day ?? []}
           defaultOpen
           showCheckIn
-          checkedInIds={checkedIn}
+          checkedInIds={effectiveCheckedIn}
           onCheckIn={(clientId, bookingId) => completeMut.mutate({ clientId, bookingId })}
           completingBookingId={
             completeMut.isPending ? completeMut.variables?.bookingId ?? null : null

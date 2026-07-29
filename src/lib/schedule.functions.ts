@@ -609,11 +609,30 @@ export const getScheduleCheck = createServerFn({ method: "GET" })
 
 export const completeVisitForClient = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { clientId: string }) => {
+  .inputValidator((d: { clientId: string; bookingId?: string }) => {
     if (!d?.clientId || typeof d.clientId !== "string") throw new Error("clientId required");
     return d;
   })
   .handler(async ({ data, context }) => {
+    // Idempotency guard: if this specific booking was already marked
+    // complete, reject instead of incrementing visits_used a second time.
+    // Without this, a UI refresh that loses local "checked in" state (it
+    // used to be plain useState, resetting on navigation) let staff
+    // re-click "Check In" and silently double-count a visit.
+    if (data.bookingId) {
+      const { data: existing, error: existingErr } = await context.supabase
+        .from("client_activities")
+        .select("id")
+        .eq("client_id", data.clientId)
+        .eq("activity_type", "visit")
+        .contains("metadata", { booking_id: data.bookingId })
+        .limit(1);
+      if (existingErr) throw existingErr;
+      if (existing && existing.length > 0) {
+        throw new Error("Visit already recorded for this booking.");
+      }
+    }
+
     const { data: c, error } = await context.supabase
       .from("clients")
       .select("visits_used, package_total_visits")
@@ -634,8 +653,38 @@ export const completeVisitForClient = createServerFn({ method: "POST" })
       client_id: data.clientId,
       activity_type: "visit",
       description: `Visit completed (${next}/${c?.package_total_visits ?? "?"}) — from Schedule Check`,
+      metadata: data.bookingId ? { booking_id: data.bookingId } : null,
     });
     return { ok: true, visits_used: next };
+  });
+
+/**
+ * Given a list of booking IDs currently shown on Schedule Check, return the
+ * subset that already have a completed "visit" activity recorded — used to
+ * derive the "Checked In" state from real data on every page load, instead
+ * of local component state that reset on navigation/refresh.
+ */
+export const getCompletedVisitBookingIds = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { bookingIds: string[] }) => {
+    if (!d?.bookingIds || !Array.isArray(d.bookingIds)) throw new Error("bookingIds required");
+    return d;
+  })
+  .handler(async ({ data, context }): Promise<string[]> => {
+    if (data.bookingIds.length === 0) return [];
+    const { data: rows, error } = await context.supabase
+      .from("client_activities")
+      .select("metadata")
+      .eq("activity_type", "visit")
+      .not("metadata", "is", null);
+    if (error) throw error;
+    const idSet = new Set(data.bookingIds);
+    const found = new Set<string>();
+    for (const row of rows ?? []) {
+      const bid = (row.metadata as { booking_id?: string } | null)?.booking_id;
+      if (bid && idSet.has(bid)) found.add(bid);
+    }
+    return Array.from(found);
   });
 
 export type LinkableClient = {

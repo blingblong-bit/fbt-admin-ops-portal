@@ -366,32 +366,26 @@ function PaymentDialog({
   const owed = amountOwed(client);
   const [amount, setAmount] = useState(owed);
   useEffect(() => setAmount(owed), [owed, open]);
+  const recordPayment = useServerFn(recordManualPayment);
 
   const mutation = useMutation({
     mutationFn: async () => {
       const amt = Number(amount);
       if (!(amt > 0)) throw new Error("Enter an amount greater than 0");
       if (amt > owed) throw new Error(`Cannot exceed balance of ${formatCurrency(owed)}`);
-      // Route manual entries through the same apply_square_payment RPC that
-      // webhook payments use. The RPC locks the client row, checks
-      // idempotency by payment id, caps at package_price, updates
-      // amount_paid, and inserts the client_activities row — all in one
-      // transaction. Using a synthetic manual:<uuid> id guarantees a
-      // simultaneous webhook and manual entry can't overwrite each other:
-      // the two calls serialize on the row lock, and each is idempotent
-      // on its own unique payment id.
+      // Routed through a server function: apply_square_payment is EXECUTE-
+      // granted to service_role only, so the browser client can't call it.
+      // The RPC locks the client row, checks idempotency by payment id,
+      // updates amount_paid, and inserts the activity row in one transaction.
       const amountCents = Math.round(amt * 100);
-      const result = await applyPaymentOnce(supabase, {
-        clientId: client.id,
-        squarePaymentId: `manual:${crypto.randomUUID()}`,
-        amountCents,
-        matchMethod: "manual",
-        manualResolution: true,
+      const result = await recordPayment({
+        data: { client_id: client.id, amount_cents: amountCents },
       });
       if (!result.credited) {
         throw new Error("Payment was not applied (duplicate id — try again).");
       }
     },
+
     onSuccess: () => {
       toast.success("Payment recorded");
       onDone();

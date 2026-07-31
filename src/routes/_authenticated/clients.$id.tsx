@@ -6,7 +6,7 @@ import { toast } from "@/components/ui/sonner";
 import { fallback, zodValidator } from "@tanstack/zod-adapter";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
-import { applyPaymentOnce } from "@/lib/payment-apply";
+import { recordManualPayment } from "@/lib/payments.functions";
 import { AppShell } from "@/components/AppShell";
 import { StatusBadge } from "@/components/StatusBadge";
 import { getScheduledClientIds, getClientAppointments, type ClientAppointment } from "@/lib/schedule.functions";

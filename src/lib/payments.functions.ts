@@ -824,3 +824,34 @@ export const retryAllMatchedBlockedPayments = createServerFn({ method: "POST" })
       batch_size: batchSize,
     };
   });
+
+/**
+ * Record a manual payment for a client. Runs server-side with the admin
+ * client because `apply_square_payment` is intentionally EXECUTE-granted to
+ * service_role only — calling it from the browser (role `authenticated`)
+ * fails with "permission denied for function apply_square_payment".
+ */
+export const recordManualPayment = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { client_id: string; amount_cents: number }) => d)
+  .handler(async ({ data, context }) => {
+    if (!Number.isInteger(data.amount_cents) || data.amount_cents <= 0) {
+      throw new Error("Enter an amount greater than 0");
+    }
+    // Caller must be staff/admin.
+    const { data: isStaff, error: roleErr } = await context.supabase.rpc("is_staff", {
+      _user_id: context.userId,
+    } as never);
+    if (roleErr) throw roleErr;
+    if (!isStaff) throw new Error("Not authorized to record payments");
+
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const result = await applyPaymentOnce(supabaseAdmin as unknown as SupabaseClient<Database>, {
+      clientId: data.client_id,
+      squarePaymentId: `manual:${crypto.randomUUID()}`,
+      amountCents: data.amount_cents,
+      matchMethod: "manual",
+      manualResolution: true,
+    });
+    return result;
+  });

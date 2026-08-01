@@ -9,6 +9,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { recordManualPayment } from "@/lib/payments.functions";
 import { AppShell } from "@/components/AppShell";
 import { StatusBadge } from "@/components/StatusBadge";
+import { RenewalFlagBadge, useIsRenewalFlagged } from "@/components/RenewalFlagBadge";
+
 import { getScheduledClientIds, getClientAppointments, type ClientAppointment } from "@/lib/schedule.functions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -128,6 +130,8 @@ function ClientDetailPage() {
   });
 
   // Scheduling is derived from live Square bookings — no manual toggle.
+  const renewalFlagged = useIsRenewalFlagged(id);
+
 
 
   if (isLoading || !c) {
@@ -155,10 +159,12 @@ function ClientDetailPage() {
 
       <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
         <div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <h1 className="text-3xl font-semibold tracking-tight">{fullName(c)}</h1>
             <StatusBadge client={c} isScheduled={isScheduled} />
+            {renewalFlagged && <RenewalFlagBadge />}
           </div>
+
           <p className="mt-1 text-sm text-slate-500">
             {c.phone ?? "no phone"} · {c.email ?? "no email"}
           </p>

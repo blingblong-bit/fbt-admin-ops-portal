@@ -25,6 +25,8 @@ import {
 } from "@/components/ui/select";
 import { formatCurrency, formatDate, formatDateTimeLocal } from "@/lib/clients";
 import { useRole } from "@/hooks/useRole";
+import { RenewalFlagBadge, useRenewalFlaggedClientIds } from "@/components/RenewalFlagBadge";
+
 import {
   completeVisitForClient,
   getCompletedVisitBookingIds,
@@ -1431,7 +1433,9 @@ function AppointmentsCard({
   onCompleteVisit?: (clientId: string) => void;
   completing?: string | null;
 }) {
+  const renewalFlags = useRenewalFlaggedClientIds().data;
   return (
+
     <Card>
       <CardHeader>
         <CardTitle>{title}</CardTitle>
@@ -1494,8 +1498,10 @@ function AppointmentsCard({
                         </div>
                       </div>
                       {a.client && (
-                        <div className="mt-2 flex flex-wrap gap-1.5 text-[11px] font-medium">
+                        <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px] font-medium">
+                          {renewalFlags?.has(a.client.id) && <RenewalFlagBadge />}
                           <span className="rounded-full bg-slate-100 px-2 py-0.5 text-slate-700">
+
                             {remaining === null
                               ? "Visits unknown"
                               : `${remaining}/${a.client.package_total_visits ?? 0} visits`}
@@ -1594,10 +1600,16 @@ function AppointmentsCard({
                             <div className="font-medium whitespace-nowrap">
                               {a.client.first_name} {a.client.last_name}
                             </div>
+                            {renewalFlags?.has(a.client.id) && (
+                              <div className="mt-0.5">
+                                <RenewalFlagBadge />
+                              </div>
+                            )}
                             <div className="text-xs text-slate-500">
                               {remaining === null ? "Visits unknown" : `${remaining} visits left`}
                             </div>
                           </div>
+
                         ) : (
                           <button
                             type="button"

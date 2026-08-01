@@ -1600,10 +1600,16 @@ function AppointmentsCard({
                             <div className="font-medium whitespace-nowrap">
                               {a.client.first_name} {a.client.last_name}
                             </div>
+                            {renewalFlags?.has(a.client.id) && (
+                              <div className="mt-0.5">
+                                <RenewalFlagBadge />
+                              </div>
+                            )}
                             <div className="text-xs text-slate-500">
                               {remaining === null ? "Visits unknown" : `${remaining} visits left`}
                             </div>
                           </div>
+
                         ) : (
                           <button
                             type="button"

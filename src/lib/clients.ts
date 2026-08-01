@@ -53,7 +53,6 @@ export function isPayPerVisit(c: Partial<Pick<Client, "payment_model">>): boolea
 }
 
 export function amountOwed(c: Pick<Client, "package_price" | "amount_paid"> & Partial<Pick<Client, "payment_model">>) {
-  if (isPayPerVisit(c)) return 0;
   return Math.max(0, Number(c.package_price ?? 0) - Number(c.amount_paid ?? 0));
 }
 

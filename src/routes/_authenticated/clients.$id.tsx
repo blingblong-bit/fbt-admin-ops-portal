@@ -9,6 +9,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { recordManualPayment } from "@/lib/payments.functions";
 import { AppShell } from "@/components/AppShell";
 import { StatusBadge } from "@/components/StatusBadge";
+import { RenewalFlagBadge, useIsRenewalFlagged } from "@/components/RenewalFlagBadge";
+
 import { getScheduledClientIds, getClientAppointments, type ClientAppointment } from "@/lib/schedule.functions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 

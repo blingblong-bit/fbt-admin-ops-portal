@@ -1433,7 +1433,9 @@ function AppointmentsCard({
   onCompleteVisit?: (clientId: string) => void;
   completing?: string | null;
 }) {
+  const renewalFlags = useRenewalFlaggedClientIds().data;
   return (
+
     <Card>
       <CardHeader>
         <CardTitle>{title}</CardTitle>

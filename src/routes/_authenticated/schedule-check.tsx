@@ -1498,8 +1498,10 @@ function AppointmentsCard({
                         </div>
                       </div>
                       {a.client && (
-                        <div className="mt-2 flex flex-wrap gap-1.5 text-[11px] font-medium">
+                        <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px] font-medium">
+                          {renewalFlags?.has(a.client.id) && <RenewalFlagBadge />}
                           <span className="rounded-full bg-slate-100 px-2 py-0.5 text-slate-700">
+
                             {remaining === null
                               ? "Visits unknown"
                               : `${remaining}/${a.client.package_total_visits ?? 0} visits`}

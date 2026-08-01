@@ -130,6 +130,8 @@ function ClientDetailPage() {
   });
 
   // Scheduling is derived from live Square bookings — no manual toggle.
+  const renewalFlagged = useIsRenewalFlagged(id);
+
 
 
   if (isLoading || !c) {

@@ -91,7 +91,8 @@ type FilterKey =
   | "not_scheduled"
   | "almost_finished"
   | "critical"
-  | "package_complete";
+  | "package_complete"
+  | "needs_renewal";
 
 const FILTER_LABEL: Record<FilterKey, string> = {
   all: "All Active",
@@ -103,6 +104,7 @@ const FILTER_LABEL: Record<FilterKey, string> = {
   almost_finished: "Almost Finished",
   critical: "Critical",
   package_complete: "Package Complete",
+  needs_renewal: "Needs Renewal",
 };
 
 type StatusFilter = "active_assessment" | "active" | "assessment" | "archived" | "all";
@@ -164,6 +166,11 @@ function matchesFilter(
       return owed > 0 && r !== null && r <= 2;
     case "package_complete":
       return r !== null && c.package_total_visits > 0 && r === 0;
+    case "needs_renewal":
+      // Package fully used up AND a future booking exists — the "already
+      // finished" subset of the Renewal Pending badge. Clears itself as soon
+      // as staff runs Renew Package (visits_used resets).
+      return r !== null && c.package_total_visits > 0 && r === 0 && isScheduled;
   }
 }
 
@@ -289,6 +296,7 @@ function Dashboard() {
       critical: 0,
       critical_total: 0,
       package_complete: 0,
+      needs_renewal: 0,
     };
     for (const cl of visibleClients) {
       const owed = amountOwed(cl);
@@ -315,8 +323,10 @@ function Dashboard() {
         c.critical += 1;
         c.critical_total += owed;
       }
-      if (r !== null && cl.package_total_visits > 0 && r === 0)
+      if (r !== null && cl.package_total_visits > 0 && r === 0) {
         c.package_complete += 1;
+        if (isScheduled(cl.id)) c.needs_renewal += 1;
+      }
     }
     return c;
   }, [visibleClients, scheduledSet, thisWeekSet, nextWeekSet, carriedOverRecentMap, overduePriorMap]);
@@ -503,6 +513,13 @@ function Dashboard() {
       tone: "slate",
     },
     {
+      key: "needs_renewal",
+      label: "Needs Renewal",
+      icon: <RefreshCw className="h-5 w-5" />,
+      count: counts.needs_renewal,
+      tone: counts.needs_renewal > 0 ? "amber" : "slate",
+    },
+    {
       key: "renewal_review",
       label: "Needs Renewal Review",
       icon: <RefreshCw className="h-5 w-5" />,
@@ -540,6 +557,7 @@ function Dashboard() {
         "overdue_prior_weeks",
         "critical",
         "payment_history",
+        "needs_renewal",
         "renewal_review",
         "renewal_manual",
       ]),

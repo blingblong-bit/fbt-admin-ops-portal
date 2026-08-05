@@ -997,7 +997,7 @@ function AppointmentDesktopRow({
                   disabled={busy || isCheckedIn}
                   onClick={() => onCheckIn(a.client!.id, a.booking_id)}
                 >
-                  {isCheckedIn ? "✓ Checked In" : busy ? "Recording…" : "Check In"}
+                  {isCheckedIn ? checkedInLabel : busy ? "Recording…" : "Check In"}
                 </Button>
               )}
             </div>

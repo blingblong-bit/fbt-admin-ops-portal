@@ -906,7 +906,14 @@ function AppointmentDesktopRow({
   const total = a.client?.package_total_visits ?? 0;
   const used = a.client?.visits_used ?? 0;
   const hasPackage = !!a.client && total > 0;
-  const packageComplete = hasPackage && used >= total;
+  const payPerVisit = a.client?.payment_model === "pay_per_visit";
+  const noPackage = !!a.client && total === 0;
+  const checkedInLabel = payPerVisit
+    ? "✓ Checked In — Pay Per Visit"
+    : noPackage
+      ? "✓ Checked In — No Package Info"
+      : "✓ Checked In";
+  const packageComplete = hasPackage && !payPerVisit && used >= total;
   const owed = a.client
     ? Math.max(0, Number(a.client.package_price ?? 0) - Number(a.client.amount_paid ?? 0))
     : 0;

@@ -860,7 +860,7 @@ function AppointmentMobileCard({
                 disabled={busy || isCheckedIn}
                 onClick={() => onCheckIn(a.client!.id, a.booking_id)}
               >
-                {isCheckedIn ? "✓ Checked In" : busy ? "…" : "✓ Check in"}
+                {isCheckedIn ? checkedInLabel : busy ? "…" : "✓ Check in"}
               </Button>
             ) : (
               <div />

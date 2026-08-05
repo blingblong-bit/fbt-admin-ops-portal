@@ -636,10 +636,33 @@ export const completeVisitForClient = createServerFn({ method: "POST" })
 
     const { data: c, error } = await context.supabase
       .from("clients")
-      .select("visits_used, package_total_visits")
+      .select("visits_used, package_total_visits, payment_model")
       .eq("id", data.clientId)
       .single();
     if (error) throw error;
+
+    const payPerVisit = c?.payment_model === "pay_per_visit";
+    const noPackage = (c?.package_total_visits ?? 0) === 0;
+
+    // Clients with no package info or on pay-per-visit have no visit ledger to
+    // increment — just record attendance, never touch visits_used/total.
+    if (payPerVisit || noPackage) {
+      const mode = payPerVisit ? "pay_per_visit" : "no_package";
+      await context.supabase.from("client_activities").insert({
+        client_id: data.clientId,
+        activity_type: "visit",
+        description:
+          payPerVisit
+            ? "Checked in (pay-per-visit) — from Schedule Check"
+            : "Checked in (no package info) — from Schedule Check",
+        metadata: {
+          check_in_mode: mode,
+          ...(data.bookingId ? { booking_id: data.bookingId } : {}),
+        },
+      });
+      return { ok: true, visits_used: null, mode } as const;
+    }
+
     const current = c?.visits_used ?? 0;
     if (c && current >= c.package_total_visits) {
       throw new Error("All visits already used");
@@ -656,7 +679,7 @@ export const completeVisitForClient = createServerFn({ method: "POST" })
       description: `Visit completed (${next}/${c?.package_total_visits ?? "?"}) — from Schedule Check`,
       metadata: data.bookingId ? { booking_id: data.bookingId } : null,
     });
-    return { ok: true, visits_used: next };
+    return { ok: true, visits_used: next, mode: "package" } as const;
   });
 
 /**

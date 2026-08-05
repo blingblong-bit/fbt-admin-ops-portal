@@ -779,7 +779,14 @@ function AppointmentMobileCard({
   const total = a.client?.package_total_visits ?? 0;
   const used = a.client?.visits_used ?? 0;
   const hasPackage = !!a.client && total > 0;
-  const packageComplete = hasPackage && used >= total;
+  const payPerVisit = a.client?.payment_model === "pay_per_visit";
+  const noPackage = !!a.client && total === 0;
+  const checkedInLabel = payPerVisit
+    ? "✓ Checked In — Pay Per Visit"
+    : noPackage
+      ? "✓ Checked In — No Package Info"
+      : "✓ Checked In";
+  const packageComplete = hasPackage && !payPerVisit && used >= total;
   const owed = a.client
     ? Math.max(0, Number(a.client.package_price ?? 0) - Number(a.client.amount_paid ?? 0))
     : 0;
@@ -806,7 +813,7 @@ function AppointmentMobileCard({
           </div>
           {isCheckedIn && (
             <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-800">
-              ✓ Checked In
+              {checkedInLabel}
             </span>
           )}
         </div>
@@ -853,7 +860,7 @@ function AppointmentMobileCard({
                 disabled={busy || isCheckedIn}
                 onClick={() => onCheckIn(a.client!.id, a.booking_id)}
               >
-                {isCheckedIn ? "✓ Checked In" : busy ? "…" : "✓ Check in"}
+                {isCheckedIn ? checkedInLabel : busy ? "…" : "✓ Check in"}
               </Button>
             ) : (
               <div />
@@ -899,7 +906,14 @@ function AppointmentDesktopRow({
   const total = a.client?.package_total_visits ?? 0;
   const used = a.client?.visits_used ?? 0;
   const hasPackage = !!a.client && total > 0;
-  const packageComplete = hasPackage && used >= total;
+  const payPerVisit = a.client?.payment_model === "pay_per_visit";
+  const noPackage = !!a.client && total === 0;
+  const checkedInLabel = payPerVisit
+    ? "✓ Checked In — Pay Per Visit"
+    : noPackage
+      ? "✓ Checked In — No Package Info"
+      : "✓ Checked In";
+  const packageComplete = hasPackage && !payPerVisit && used >= total;
   const owed = a.client
     ? Math.max(0, Number(a.client.package_price ?? 0) - Number(a.client.amount_paid ?? 0))
     : 0;
@@ -917,7 +931,7 @@ function AppointmentDesktopRow({
             <div className="font-medium whitespace-nowrap">
               {isCheckedIn ? (
                 <span className="mr-2 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold uppercase text-emerald-800">
-                  ✓ Checked In
+                  {checkedInLabel}
                 </span>
               ) : (
                 isNext && (
@@ -983,7 +997,7 @@ function AppointmentDesktopRow({
                   disabled={busy || isCheckedIn}
                   onClick={() => onCheckIn(a.client!.id, a.booking_id)}
                 >
-                  {isCheckedIn ? "✓ Checked In" : busy ? "Recording…" : "Check In"}
+                  {isCheckedIn ? checkedInLabel : busy ? "Recording…" : "Check In"}
                 </Button>
               )}
             </div>

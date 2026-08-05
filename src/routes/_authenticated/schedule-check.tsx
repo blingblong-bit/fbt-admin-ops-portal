@@ -931,7 +931,7 @@ function AppointmentDesktopRow({
             <div className="font-medium whitespace-nowrap">
               {isCheckedIn ? (
                 <span className="mr-2 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold uppercase text-emerald-800">
-                  ✓ Checked In
+                  {checkedInLabel}
                 </span>
               ) : (
                 isNext && (

@@ -610,10 +610,11 @@ export const getScheduleCheck = createServerFn({ method: "GET" })
 
 export const completeVisitForClient = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { clientId: string; bookingId?: string }) => {
+  .inputValidator((d: { clientId: string; bookingId?: string; appointmentStartAt?: string }) => {
     if (!d?.clientId || typeof d.clientId !== "string") throw new Error("clientId required");
     return d;
   })
+
   .handler(async ({ data, context }) => {
     // Idempotency guard: if this specific booking was already marked
     // complete, reject instead of incrementing visits_used a second time.

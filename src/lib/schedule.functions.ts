@@ -705,34 +705,65 @@ export const completeVisitForClient = createServerFn({ method: "POST" })
     return { ok: true, visits_used: next, mode: "package" } as const;
   });
 
+export type CheckedInProbe = {
+  booking_id: string;
+  client_id?: string | null;
+  start_at?: string | null;
+};
+
 /**
- * Given a list of booking IDs currently shown on Schedule Check, return the
- * subset that already have a completed "visit" activity recorded — used to
- * derive the "Checked In" state from real data on every page load, instead
- * of local component state that reset on navigation/refresh.
+ * Given the appointments currently shown on Schedule Check, return the booking
+ * IDs that already have a completed "visit" activity recorded — used to derive
+ * the "Checked In" state from real data on every page load, instead of local
+ * component state that reset on navigation/refresh.
+ *
+ * Matching is booking-reference first, with a client + same-day fallback so a
+ * visit row saved without a booking reference (older builds, manual check-ins
+ * from the client detail page) still shows as Checked In.
  */
 export const getCompletedVisitBookingIds = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { bookingIds: string[] }) => {
-    if (!d?.bookingIds || !Array.isArray(d.bookingIds)) throw new Error("bookingIds required");
+  .inputValidator((d: { appointments?: CheckedInProbe[]; bookingIds?: string[] }) => {
+    if (!d || (!Array.isArray(d.appointments) && !Array.isArray(d.bookingIds))) {
+      throw new Error("appointments required");
+    }
     return d;
   })
   .handler(async ({ data, context }): Promise<string[]> => {
-    if (data.bookingIds.length === 0) return [];
+    const appts: CheckedInProbe[] =
+      data.appointments ?? (data.bookingIds ?? []).map((id) => ({ booking_id: id }));
+    if (appts.length === 0) return [];
+
     const { data: rows, error } = await context.supabase
       .from("client_activities")
-      .select("metadata")
-      .eq("activity_type", "visit")
-      .not("metadata", "is", null);
+      .select("client_id, metadata, created_at")
+      .eq("activity_type", "visit");
     if (error) throw error;
-    const idSet = new Set(data.bookingIds);
-    const found = new Set<string>();
+
+    const byBooking = new Set<string>();
+    const byClientDay = new Set<string>();
     for (const row of rows ?? []) {
       const bid = (row.metadata as { booking_id?: string } | null)?.booking_id;
-      if (bid && idSet.has(bid)) found.add(bid);
+      if (bid) byBooking.add(bid);
+      if (row.client_id && row.created_at) {
+        byClientDay.add(`${row.client_id}|${ymdInTz(new Date(row.created_at as string))}`);
+      }
+    }
+
+    const found = new Set<string>();
+    for (const a of appts) {
+      if (byBooking.has(a.booking_id)) {
+        found.add(a.booking_id);
+        continue;
+      }
+      if (a.client_id && a.start_at) {
+        const key = `${a.client_id}|${ymdInTz(new Date(a.start_at))}`;
+        if (byClientDay.has(key)) found.add(a.booking_id);
+      }
     }
     return Array.from(found);
   });
+
 
 export type LinkableClient = {
   id: string;

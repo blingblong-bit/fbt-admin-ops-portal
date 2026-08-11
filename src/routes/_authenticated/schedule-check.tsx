@@ -92,8 +92,15 @@ function ScheduleCheckPage() {
   });
 
   const completeMut = useMutation({
-    mutationFn: (vars: { clientId: string; bookingId: string }) =>
-      completeVisit({ data: { clientId: vars.clientId, bookingId: vars.bookingId } }),
+    mutationFn: (vars: { clientId: string; bookingId: string; startAt?: string }) =>
+      completeVisit({
+        data: {
+          clientId: vars.clientId,
+          bookingId: vars.bookingId,
+          ...(vars.startAt ? { appointmentStartAt: vars.startAt } : {}),
+        },
+      }),
+
     onSuccess: (_r, vars) => {
       setCheckedIn((prev) => {
         const next = new Set(prev);

@@ -464,7 +464,7 @@ function ScheduleCheckPage() {
           defaultOpen
           showCheckIn
           checkedInIds={effectiveCheckedIn}
-          onCheckIn={(clientId, bookingId) => completeMut.mutate({ clientId, bookingId })}
+          onCheckIn={(clientId, bookingId, startAt) => completeMut.mutate({ clientId, bookingId, startAt })}
           completingBookingId={
             completeMut.isPending ? completeMut.variables?.bookingId ?? null : null
           }
@@ -595,7 +595,7 @@ function ScheduleSection({
   defaultOpen: boolean;
   showCheckIn?: boolean;
   checkedInIds?: Set<string>;
-  onCheckIn?: (clientId: string, bookingId: string) => void;
+  onCheckIn?: (clientId: string, bookingId: string, startAt?: string) => void;
   completingBookingId?: string | null;
   groupBy?: "time" | "dayTime";
   filter?: string;
@@ -709,7 +709,7 @@ function TimeGroupBlock({
   appointments: ScheduleAppointment[];
   isNext: boolean;
   showCheckIn: boolean;
-  onCheckIn?: (clientId: string, bookingId: string) => void;
+  onCheckIn?: (clientId: string, bookingId: string, startAt?: string) => void;
   completingBookingId: string | null;
   checkedInIds?: Set<string>;
   hideOwed?: boolean;
@@ -788,7 +788,7 @@ function AppointmentMobileCard({
   appointment: ScheduleAppointment;
   isNext: boolean;
   showCheckIn: boolean;
-  onCheckIn?: (clientId: string, bookingId: string) => void;
+  onCheckIn?: (clientId: string, bookingId: string, startAt?: string) => void;
   completingBookingId: string | null;
   isCheckedIn: boolean;
   hideOwed?: boolean;
@@ -875,7 +875,7 @@ function AppointmentMobileCard({
                 size="lg"
                 className="h-11"
                 disabled={busy || isCheckedIn}
-                onClick={() => onCheckIn(a.client!.id, a.booking_id)}
+                onClick={() => onCheckIn(a.client!.id, a.booking_id, a.start_at)}
               >
                 {isCheckedIn ? checkedInLabel : busy ? "…" : "✓ Check in"}
               </Button>
@@ -916,7 +916,7 @@ function AppointmentDesktopRow({
   appointment: ScheduleAppointment;
   isNext: boolean;
   showCheckIn: boolean;
-  onCheckIn?: (clientId: string, bookingId: string) => void;
+  onCheckIn?: (clientId: string, bookingId: string, startAt?: string) => void;
   completingBookingId: string | null;
   isCheckedIn: boolean;
 }) {
@@ -1012,7 +1012,7 @@ function AppointmentDesktopRow({
                 <Button
                   size="sm"
                   disabled={busy || isCheckedIn}
-                  onClick={() => onCheckIn(a.client!.id, a.booking_id)}
+                  onClick={() => onCheckIn(a.client!.id, a.booking_id, a.start_at)}
                 >
                   {isCheckedIn ? checkedInLabel : busy ? "Recording…" : "Check In"}
                 </Button>

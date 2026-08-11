@@ -234,20 +234,30 @@ function ScheduleCheckPage() {
   // server which ones already have a completed visit on record, so "Checked
   // In" reflects real, persisted state instead of resetting to blank every
   // time this page is left and re-opened.
-  const allBookingIds = useMemo(() => {
-    const ids = new Set<string>();
-    for (const a of data?.selected_day ?? []) ids.add(a.booking_id);
-    for (const a of data?.this_week ?? []) ids.add(a.booking_id);
-    for (const a of data?.next_week ?? []) ids.add(a.booking_id);
-    return Array.from(ids).sort();
+  const visitProbes = useMemo(() => {
+    const map = new Map<string, { booking_id: string; client_id: string | null; start_at: string | null }>();
+    for (const a of [
+      ...(data?.selected_day ?? []),
+      ...(data?.this_week ?? []),
+      ...(data?.next_week ?? []),
+    ]) {
+      map.set(a.booking_id, {
+        booking_id: a.booking_id,
+        client_id: a.client?.id ?? null,
+        start_at: a.start_at ?? null,
+      });
+    }
+    return Array.from(map.values()).sort((x, y) => x.booking_id.localeCompare(y.booking_id));
   }, [data]);
+  const allBookingIds = useMemo(() => visitProbes.map((p) => p.booking_id), [visitProbes]);
 
   const completedVisitsQuery = useQuery({
     queryKey: ["completed-visit-bookings", allBookingIds],
-    queryFn: () => fetchCompletedVisitBookingIds({ data: { bookingIds: allBookingIds } }),
+    queryFn: () => fetchCompletedVisitBookingIds({ data: { appointments: visitProbes } }),
     enabled: allBookingIds.length > 0,
     staleTime: 30_000,
   });
+
 
   // Persisted truth (from the DB) unioned with anything just checked in this
   // session but not yet reflected in a refetch — avoids a flash back to

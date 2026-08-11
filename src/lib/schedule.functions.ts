@@ -610,10 +610,11 @@ export const getScheduleCheck = createServerFn({ method: "GET" })
 
 export const completeVisitForClient = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { clientId: string; bookingId?: string }) => {
+  .inputValidator((d: { clientId: string; bookingId?: string; appointmentStartAt?: string }) => {
     if (!d?.clientId || typeof d.clientId !== "string") throw new Error("clientId required");
     return d;
   })
+
   .handler(async ({ data, context }) => {
     // Idempotency guard: if this specific booking was already marked
     // complete, reject instead of incrementing visits_used a second time.
@@ -633,6 +634,28 @@ export const completeVisitForClient = createServerFn({ method: "POST" })
         throw new Error("Visit already recorded for this booking.");
       }
     }
+
+    // Day-scoped fallback guard: a visit row can exist without a booking
+    // reference (older builds, manual check-ins from the client page). Treat
+    // "already has a visit logged for this appointment's day" as a duplicate
+    // so a missing booking_id can never allow a double count.
+    {
+      const dayYmd = ymdInTz(data.appointmentStartAt ? new Date(data.appointmentStartAt) : new Date());
+      const { data: sameDay, error: sameDayErr } = await context.supabase
+        .from("client_activities")
+        .select("id, created_at")
+        .eq("client_id", data.clientId)
+        .eq("activity_type", "visit")
+        .gte("created_at", new Date(`${dayYmd}T00:00:00Z`).getTime() - 86_400_000 > 0
+          ? new Date(new Date(`${dayYmd}T00:00:00Z`).getTime() - 86_400_000).toISOString()
+          : new Date(`${dayYmd}T00:00:00Z`).toISOString())
+        .lte("created_at", new Date(new Date(`${dayYmd}T00:00:00Z`).getTime() + 2 * 86_400_000).toISOString());
+
+      if (sameDayErr) throw sameDayErr;
+      const hit = (sameDay ?? []).some((r) => ymdInTz(new Date(r.created_at as string)) === dayYmd);
+      if (hit) throw new Error("Visit already recorded for this client today.");
+    }
+
 
     const { data: c, error } = await context.supabase
       .from("clients")
@@ -682,34 +705,65 @@ export const completeVisitForClient = createServerFn({ method: "POST" })
     return { ok: true, visits_used: next, mode: "package" } as const;
   });
 
+export type CheckedInProbe = {
+  booking_id: string;
+  client_id?: string | null;
+  start_at?: string | null;
+};
+
 /**
- * Given a list of booking IDs currently shown on Schedule Check, return the
- * subset that already have a completed "visit" activity recorded — used to
- * derive the "Checked In" state from real data on every page load, instead
- * of local component state that reset on navigation/refresh.
+ * Given the appointments currently shown on Schedule Check, return the booking
+ * IDs that already have a completed "visit" activity recorded — used to derive
+ * the "Checked In" state from real data on every page load, instead of local
+ * component state that reset on navigation/refresh.
+ *
+ * Matching is booking-reference first, with a client + same-day fallback so a
+ * visit row saved without a booking reference (older builds, manual check-ins
+ * from the client detail page) still shows as Checked In.
  */
 export const getCompletedVisitBookingIds = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { bookingIds: string[] }) => {
-    if (!d?.bookingIds || !Array.isArray(d.bookingIds)) throw new Error("bookingIds required");
+  .inputValidator((d: { appointments?: CheckedInProbe[]; bookingIds?: string[] }) => {
+    if (!d || (!Array.isArray(d.appointments) && !Array.isArray(d.bookingIds))) {
+      throw new Error("appointments required");
+    }
     return d;
   })
   .handler(async ({ data, context }): Promise<string[]> => {
-    if (data.bookingIds.length === 0) return [];
+    const appts: CheckedInProbe[] =
+      data.appointments ?? (data.bookingIds ?? []).map((id) => ({ booking_id: id }));
+    if (appts.length === 0) return [];
+
     const { data: rows, error } = await context.supabase
       .from("client_activities")
-      .select("metadata")
-      .eq("activity_type", "visit")
-      .not("metadata", "is", null);
+      .select("client_id, metadata, created_at")
+      .eq("activity_type", "visit");
     if (error) throw error;
-    const idSet = new Set(data.bookingIds);
-    const found = new Set<string>();
+
+    const byBooking = new Set<string>();
+    const byClientDay = new Set<string>();
     for (const row of rows ?? []) {
       const bid = (row.metadata as { booking_id?: string } | null)?.booking_id;
-      if (bid && idSet.has(bid)) found.add(bid);
+      if (bid) byBooking.add(bid);
+      if (row.client_id && row.created_at) {
+        byClientDay.add(`${row.client_id}|${ymdInTz(new Date(row.created_at as string))}`);
+      }
+    }
+
+    const found = new Set<string>();
+    for (const a of appts) {
+      if (byBooking.has(a.booking_id)) {
+        found.add(a.booking_id);
+        continue;
+      }
+      if (a.client_id && a.start_at) {
+        const key = `${a.client_id}|${ymdInTz(new Date(a.start_at))}`;
+        if (byClientDay.has(key)) found.add(a.booking_id);
+      }
     }
     return Array.from(found);
   });
+
 
 export type LinkableClient = {
   id: string;

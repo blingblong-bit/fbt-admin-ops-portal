@@ -92,8 +92,15 @@ function ScheduleCheckPage() {
   });
 
   const completeMut = useMutation({
-    mutationFn: (vars: { clientId: string; bookingId: string }) =>
-      completeVisit({ data: { clientId: vars.clientId, bookingId: vars.bookingId } }),
+    mutationFn: (vars: { clientId: string; bookingId: string; startAt?: string }) =>
+      completeVisit({
+        data: {
+          clientId: vars.clientId,
+          bookingId: vars.bookingId,
+          ...(vars.startAt ? { appointmentStartAt: vars.startAt } : {}),
+        },
+      }),
+
     onSuccess: (_r, vars) => {
       setCheckedIn((prev) => {
         const next = new Set(prev);
@@ -234,20 +241,30 @@ function ScheduleCheckPage() {
   // server which ones already have a completed visit on record, so "Checked
   // In" reflects real, persisted state instead of resetting to blank every
   // time this page is left and re-opened.
-  const allBookingIds = useMemo(() => {
-    const ids = new Set<string>();
-    for (const a of data?.selected_day ?? []) ids.add(a.booking_id);
-    for (const a of data?.this_week ?? []) ids.add(a.booking_id);
-    for (const a of data?.next_week ?? []) ids.add(a.booking_id);
-    return Array.from(ids).sort();
+  const visitProbes = useMemo(() => {
+    const map = new Map<string, { booking_id: string; client_id: string | null; start_at: string | null }>();
+    for (const a of [
+      ...(data?.selected_day ?? []),
+      ...(data?.this_week ?? []),
+      ...(data?.next_week ?? []),
+    ]) {
+      map.set(a.booking_id, {
+        booking_id: a.booking_id,
+        client_id: a.client?.id ?? null,
+        start_at: a.start_at ?? null,
+      });
+    }
+    return Array.from(map.values()).sort((x, y) => x.booking_id.localeCompare(y.booking_id));
   }, [data]);
+  const allBookingIds = useMemo(() => visitProbes.map((p) => p.booking_id), [visitProbes]);
 
   const completedVisitsQuery = useQuery({
     queryKey: ["completed-visit-bookings", allBookingIds],
-    queryFn: () => fetchCompletedVisitBookingIds({ data: { bookingIds: allBookingIds } }),
+    queryFn: () => fetchCompletedVisitBookingIds({ data: { appointments: visitProbes } }),
     enabled: allBookingIds.length > 0,
     staleTime: 30_000,
   });
+
 
   // Persisted truth (from the DB) unioned with anything just checked in this
   // session but not yet reflected in a refetch — avoids a flash back to
@@ -447,7 +464,7 @@ function ScheduleCheckPage() {
           defaultOpen
           showCheckIn
           checkedInIds={effectiveCheckedIn}
-          onCheckIn={(clientId, bookingId) => completeMut.mutate({ clientId, bookingId })}
+          onCheckIn={(clientId, bookingId, startAt) => completeMut.mutate({ clientId, bookingId, startAt })}
           completingBookingId={
             completeMut.isPending ? completeMut.variables?.bookingId ?? null : null
           }
@@ -578,7 +595,7 @@ function ScheduleSection({
   defaultOpen: boolean;
   showCheckIn?: boolean;
   checkedInIds?: Set<string>;
-  onCheckIn?: (clientId: string, bookingId: string) => void;
+  onCheckIn?: (clientId: string, bookingId: string, startAt?: string) => void;
   completingBookingId?: string | null;
   groupBy?: "time" | "dayTime";
   filter?: string;
@@ -692,7 +709,7 @@ function TimeGroupBlock({
   appointments: ScheduleAppointment[];
   isNext: boolean;
   showCheckIn: boolean;
-  onCheckIn?: (clientId: string, bookingId: string) => void;
+  onCheckIn?: (clientId: string, bookingId: string, startAt?: string) => void;
   completingBookingId: string | null;
   checkedInIds?: Set<string>;
   hideOwed?: boolean;
@@ -771,7 +788,7 @@ function AppointmentMobileCard({
   appointment: ScheduleAppointment;
   isNext: boolean;
   showCheckIn: boolean;
-  onCheckIn?: (clientId: string, bookingId: string) => void;
+  onCheckIn?: (clientId: string, bookingId: string, startAt?: string) => void;
   completingBookingId: string | null;
   isCheckedIn: boolean;
   hideOwed?: boolean;
@@ -858,7 +875,7 @@ function AppointmentMobileCard({
                 size="lg"
                 className="h-11"
                 disabled={busy || isCheckedIn}
-                onClick={() => onCheckIn(a.client!.id, a.booking_id)}
+                onClick={() => onCheckIn(a.client!.id, a.booking_id, a.start_at)}
               >
                 {isCheckedIn ? checkedInLabel : busy ? "…" : "✓ Check in"}
               </Button>
@@ -899,7 +916,7 @@ function AppointmentDesktopRow({
   appointment: ScheduleAppointment;
   isNext: boolean;
   showCheckIn: boolean;
-  onCheckIn?: (clientId: string, bookingId: string) => void;
+  onCheckIn?: (clientId: string, bookingId: string, startAt?: string) => void;
   completingBookingId: string | null;
   isCheckedIn: boolean;
 }) {
@@ -995,7 +1012,7 @@ function AppointmentDesktopRow({
                 <Button
                   size="sm"
                   disabled={busy || isCheckedIn}
-                  onClick={() => onCheckIn(a.client!.id, a.booking_id)}
+                  onClick={() => onCheckIn(a.client!.id, a.booking_id, a.start_at)}
                 >
                   {isCheckedIn ? checkedInLabel : busy ? "Recording…" : "Check In"}
                 </Button>

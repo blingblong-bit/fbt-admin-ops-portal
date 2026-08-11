@@ -646,8 +646,11 @@ export const completeVisitForClient = createServerFn({ method: "POST" })
         .select("id, created_at")
         .eq("client_id", data.clientId)
         .eq("activity_type", "visit")
-        .gte("created_at", new Date(`${dayYmd}T00:00:00Z`).toISOString())
-        .lte("created_at", new Date(`${dayYmd}T23:59:59Z`).toISOString());
+        .gte("created_at", new Date(`${dayYmd}T00:00:00Z`).getTime() - 86_400_000 > 0
+          ? new Date(new Date(`${dayYmd}T00:00:00Z`).getTime() - 86_400_000).toISOString()
+          : new Date(`${dayYmd}T00:00:00Z`).toISOString())
+        .lte("created_at", new Date(new Date(`${dayYmd}T00:00:00Z`).getTime() + 2 * 86_400_000).toISOString());
+
       if (sameDayErr) throw sameDayErr;
       const hit = (sameDay ?? []).some((r) => ymdInTz(new Date(r.created_at as string)) === dayYmd);
       if (hit) throw new Error("Visit already recorded for this client today.");

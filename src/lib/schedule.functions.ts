@@ -634,6 +634,25 @@ export const completeVisitForClient = createServerFn({ method: "POST" })
       }
     }
 
+    // Day-scoped fallback guard: a visit row can exist without a booking
+    // reference (older builds, manual check-ins from the client page). Treat
+    // "already has a visit logged for this appointment's day" as a duplicate
+    // so a missing booking_id can never allow a double count.
+    {
+      const dayYmd = ymdInTz(data.appointmentStartAt ? new Date(data.appointmentStartAt) : new Date());
+      const { data: sameDay, error: sameDayErr } = await context.supabase
+        .from("client_activities")
+        .select("id, created_at")
+        .eq("client_id", data.clientId)
+        .eq("activity_type", "visit")
+        .gte("created_at", new Date(`${dayYmd}T00:00:00Z`).toISOString())
+        .lte("created_at", new Date(`${dayYmd}T23:59:59Z`).toISOString());
+      if (sameDayErr) throw sameDayErr;
+      const hit = (sameDay ?? []).some((r) => ymdInTz(new Date(r.created_at as string)) === dayYmd);
+      if (hit) throw new Error("Visit already recorded for this client today.");
+    }
+
+
     const { data: c, error } = await context.supabase
       .from("clients")
       .select("visits_used, package_total_visits, payment_model")

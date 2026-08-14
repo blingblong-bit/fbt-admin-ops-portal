@@ -565,8 +565,25 @@ function RenewDialog({
             </div>
             <div>
               <Label>Start Date</Label>
-              <Input type="date" value={form.package_start_date} onChange={(e) => up("package_start_date", e.target.value)} />
+              <Input
+                type="date"
+                value={form.package_start_date}
+                onChange={(e) => {
+                  setStartDateTouched(true);
+                  up("package_start_date", e.target.value);
+                }}
+              />
+              <p className="mt-1 text-xs text-slate-500">
+                {nextApptYmd && form.package_start_date === nextApptYmd
+                  ? "From next Square appointment — editable"
+                  : upcomingQuery.isLoading
+                    ? "Checking next appointment…"
+                    : nextApptYmd
+                      ? "Manually set"
+                      : "No upcoming appointment found — defaulted to today"}
+              </p>
             </div>
+
             <div>
               <Label>Price ($)</Label>
               <Input type="number" min={0} step="0.01" value={form.package_price} onChange={(e) => up("package_price", Number(e.target.value))} />

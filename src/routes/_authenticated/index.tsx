@@ -185,7 +185,19 @@ function matchesFilter(
   }
 }
 
+const CLINIC_TZ = "America/Chicago";
 
+/** Clinic-local YYYY-MM-DD for an instant. */
+function clinicYmd(d: Date): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: CLINIC_TZ,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(d);
+  const get = (t: string) => parts.find((p) => p.type === t)!.value;
+  return `${get("year")}-${get("month")}-${get("day")}`;
+}
 
 
 function Dashboard() {

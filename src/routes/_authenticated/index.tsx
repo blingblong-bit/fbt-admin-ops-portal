@@ -371,7 +371,7 @@ function Dashboard() {
       }
     }
     return c;
-  }, [visibleClients, scheduledSet, thisWeekSet, nextWeekSet, carriedOverRecentMap, overduePriorMap]);
+  }, [visibleClients, scheduledSet, thisWeekSet, nextWeekSet, carriedOverRecentMap, overduePriorMap, thisWeekEndYmd, nextWeekEndYmd]);
 
 
   const filtered = useMemo(() => {
@@ -384,8 +384,10 @@ function Dashboard() {
         isScheduledNextWeek(c.id),
         isCarriedOver(c.id),
         isOverduePrior(c.id),
+        startBucketOf(c),
       ),
     );
+
     const q = search.trim().toLowerCase();
 
     const searched = q

@@ -132,6 +132,14 @@ function matchesStatus(eff: LifecycleStatus, f: StatusFilter): boolean {
   }
 }
 
+/**
+ * When a client's package starts in the FUTURE (typical right after a
+ * renewal), the new balance is due when that package starts — not because a
+ * now-finished appointment still sits in the current week. This bucket
+ * overrides the booking-derived weekly bucketing for those clients.
+ */
+type StartBucket = "this" | "next" | "later" | null;
+
 function matchesFilter(
   c: Client,
   f: FilterKey,
@@ -140,6 +148,7 @@ function matchesFilter(
   isScheduledNextWeek: boolean,
   isCarriedOver: boolean,
   isOverduePrior: boolean,
+  startBucket: StartBucket = null,
 ): boolean {
   const owed = amountOwed(c);
   const r = visitsRemaining(c);
@@ -149,15 +158,17 @@ function matchesFilter(
     case "payment_due":
       return owed > 0;
     case "payment_due_this_week":
-      // Owes money AND has a booking this week.
-      return owed > 0 && isScheduledThisWeek;
+      // Owes money AND has a booking this week (or a future package start
+      // that lands in this week).
+      return owed > 0 && (startBucket ? startBucket === "this" : isScheduledThisWeek);
     case "payment_due_next_week":
-      return owed > 0 && isScheduledNextWeek;
+      return owed > 0 && (startBucket ? startBucket === "next" : isScheduledNextWeek);
     case "overdue_prior_weeks":
       // Owes money AND does NOT have a booking this week — mutually
       // exclusive with Payment Due — This Week, and together they cover
-      // every client with an outstanding balance.
-      return owed > 0 && !isScheduledThisWeek;
+      // every client with an outstanding balance. A package that hasn't
+      // started yet is never overdue.
+      return owed > 0 && !startBucket && !isScheduledThisWeek;
     case "not_scheduled":
       return !isScheduled;
     case "almost_finished":
@@ -173,6 +184,7 @@ function matchesFilter(
       return r !== null && c.package_total_visits > 0 && r === 0 && isScheduled;
   }
 }
+
 
 
 

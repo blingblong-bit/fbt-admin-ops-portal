@@ -132,6 +132,14 @@ function matchesStatus(eff: LifecycleStatus, f: StatusFilter): boolean {
   }
 }
 
+/**
+ * When a client's package starts in the FUTURE (typical right after a
+ * renewal), the new balance is due when that package starts — not because a
+ * now-finished appointment still sits in the current week. This bucket
+ * overrides the booking-derived weekly bucketing for those clients.
+ */
+type StartBucket = "this" | "next" | "later" | null;
+
 function matchesFilter(
   c: Client,
   f: FilterKey,
@@ -140,6 +148,7 @@ function matchesFilter(
   isScheduledNextWeek: boolean,
   isCarriedOver: boolean,
   isOverduePrior: boolean,
+  startBucket: StartBucket = null,
 ): boolean {
   const owed = amountOwed(c);
   const r = visitsRemaining(c);
@@ -149,15 +158,17 @@ function matchesFilter(
     case "payment_due":
       return owed > 0;
     case "payment_due_this_week":
-      // Owes money AND has a booking this week.
-      return owed > 0 && isScheduledThisWeek;
+      // Owes money AND has a booking this week (or a future package start
+      // that lands in this week).
+      return owed > 0 && (startBucket ? startBucket === "this" : isScheduledThisWeek);
     case "payment_due_next_week":
-      return owed > 0 && isScheduledNextWeek;
+      return owed > 0 && (startBucket ? startBucket === "next" : isScheduledNextWeek);
     case "overdue_prior_weeks":
       // Owes money AND does NOT have a booking this week — mutually
       // exclusive with Payment Due — This Week, and together they cover
-      // every client with an outstanding balance.
-      return owed > 0 && !isScheduledThisWeek;
+      // every client with an outstanding balance. A package that hasn't
+      // started yet is never overdue.
+      return owed > 0 && !startBucket && !isScheduledThisWeek;
     case "not_scheduled":
       return !isScheduled;
     case "almost_finished":
@@ -174,6 +185,19 @@ function matchesFilter(
   }
 }
 
+const CLINIC_TZ = "America/Chicago";
+
+/** Clinic-local YYYY-MM-DD for an instant. */
+function clinicYmd(d: Date): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: CLINIC_TZ,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(d);
+  const get = (t: string) => parts.find((p) => p.type === t)!.value;
+  return `${get("year")}-${get("month")}-${get("day")}`;
+}
 
 
 function Dashboard() {
@@ -254,6 +278,22 @@ function Dashboard() {
   const isOverduePrior = (id: string) =>
     overduePriorMap.has(id) && !thisWeekSet.has(id) && !nextWeekSet.has(id);
 
+  // A package whose start date is still in the future (typical right after a
+  // renewal) is due when it starts, not because of leftover bookings from the
+  // week the renewal was entered.
+  const thisWeekEndYmd = thisWeekQuery.data?.week_end;
+  const nextWeekEndYmd = nextWeekQuery.data?.week_end;
+  const startBucketOf = (c: Client): StartBucket => {
+    const start = c.package_start_date;
+    if (!start || !thisWeekEndYmd || !nextWeekEndYmd) return null;
+    if (start <= clinicYmd(new Date())) return null; // already started
+    if (start <= thisWeekEndYmd) return "this";
+    if (start <= nextWeekEndYmd) return "next";
+    return "later";
+  };
+
+
+
 
   const [search, setSearch] = useState("");
   // Staff never see the payment-due (aggregate) list — default to "all" instead.
@@ -303,20 +343,22 @@ function Dashboard() {
       const r = visitsRemaining(cl);
       c.all += 1;
       if (owed > 0) {
+        const bucket = startBucketOf(cl);
         c.payment_due += 1;
         c.payment_due_total += owed;
-        if (isScheduledThisWeek(cl.id)) {
+        if (bucket ? bucket === "this" : isScheduledThisWeek(cl.id)) {
           c.payment_due_this_week += 1;
           c.payment_due_this_week_total += owed;
-        } else {
+        } else if (!bucket) {
           c.overdue_prior_weeks += 1;
           c.overdue_prior_weeks_total += owed;
         }
-        if (isScheduledNextWeek(cl.id)) {
+        if (bucket ? bucket === "next" : isScheduledNextWeek(cl.id)) {
           c.payment_due_next_week += 1;
           c.payment_due_next_week_total += owed;
         }
       }
+
       if (!isScheduled(cl.id)) c.not_scheduled += 1;
       if (r !== null && r > 0 && r <= 2) c.almost_finished += 1;
       if (owed > 0 && r !== null && r <= 2) {
@@ -329,7 +371,7 @@ function Dashboard() {
       }
     }
     return c;
-  }, [visibleClients, scheduledSet, thisWeekSet, nextWeekSet, carriedOverRecentMap, overduePriorMap]);
+  }, [visibleClients, scheduledSet, thisWeekSet, nextWeekSet, carriedOverRecentMap, overduePriorMap, thisWeekEndYmd, nextWeekEndYmd]);
 
 
   const filtered = useMemo(() => {
@@ -342,8 +384,10 @@ function Dashboard() {
         isScheduledNextWeek(c.id),
         isCarriedOver(c.id),
         isOverduePrior(c.id),
+        startBucketOf(c),
       ),
     );
+
     const q = search.trim().toLowerCase();
 
     const searched = q
@@ -369,7 +413,7 @@ function Dashboard() {
       );
     }
     return [...searched].sort((a, b) => fullName(a).localeCompare(fullName(b)));
-  }, [visibleClients, filter, search, scheduledSet, thisWeekSet, nextWeekSet, carriedOverRecentMap, overduePriorMap]);
+  }, [visibleClients, filter, search, scheduledSet, thisWeekSet, nextWeekSet, carriedOverRecentMap, overduePriorMap, thisWeekEndYmd, nextWeekEndYmd]);
 
   const reviewCountQuery = useQuery({
     queryKey: ["square_payments_needs_review_count"],
@@ -917,7 +961,6 @@ function exportPaymentDueCsv(clients: Client[]) {
   URL.revokeObjectURL(url);
 }
 
-const CLINIC_TZ = "America/Chicago";
 
 // Monday of the WORK-WEEK (Mon–Fri) the given ISO instant belongs to, in
 // clinic-local time. Sat/Sun roll forward into the upcoming work week to

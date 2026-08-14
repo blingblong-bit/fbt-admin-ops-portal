@@ -433,6 +433,20 @@ function PaymentDialog({
   );
 }
 
+const CLINIC_TZ = "America/Chicago";
+
+/** Clinic-local YYYY-MM-DD for an instant. */
+function clinicYmd(d: Date): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: CLINIC_TZ,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(d);
+  const get = (t: string) => parts.find((p) => p.type === t)!.value;
+  return `${get("year")}-${get("month")}-${get("day")}`;
+}
+
 function RenewDialog({
   open,
   onClose,
@@ -444,25 +458,54 @@ function RenewDialog({
   client: Client;
   onDone: () => void;
 }) {
+  // The new package starts when the client next comes in — not the day staff
+  // happened to click Renew. Prefill from the earliest upcoming Square
+  // appointment; today's date is only a fallback.
+  const fetchAppts = useServerFn(getClientAppointments);
+  const upcomingQuery = useQuery({
+    queryKey: ["client-appointments", client.id, "upcoming"],
+    queryFn: () => fetchAppts({ data: { clientId: client.id, ...windowIso(0, WINDOW_DAYS) } }),
+    staleTime: 60_000,
+    enabled: open,
+  });
+  const nextApptYmd = (() => {
+    const appts = upcomingQuery.data?.appointments ?? [];
+    const next = appts
+      .filter((a) => !/CANCEL|DECLINE|NO_SHOW/i.test(a.status))
+      .sort((a, b) => a.start_at.localeCompare(b.start_at))[0];
+    return next ? clinicYmd(new Date(next.start_at)) : null;
+  })();
+
   const [form, setForm] = useState({
     package_name: client.package_name ?? "",
     package_total_visits: client.package_total_visits || 8,
     package_price: client.package_price || 0,
     amount_paid: 0,
-    package_start_date: new Date().toISOString().slice(0, 10),
+    package_start_date: clinicYmd(new Date()),
   });
+  const [startDateTouched, setStartDateTouched] = useState(false);
 
   useEffect(() => {
     if (open) {
+      setStartDateTouched(false);
       setForm({
         package_name: client.package_name ?? "",
         package_total_visits: client.package_total_visits || 8,
         package_price: client.package_price || 0,
         amount_paid: 0,
-        package_start_date: new Date().toISOString().slice(0, 10),
+        package_start_date: nextApptYmd ?? clinicYmd(new Date()),
       });
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, client]);
+
+  // Appointments may resolve after the dialog opens — apply the prefill then,
+  // unless staff already edited the field.
+  useEffect(() => {
+    if (!open || startDateTouched || !nextApptYmd) return;
+    setForm((f) => (f.package_start_date === nextApptYmd ? f : { ...f, package_start_date: nextApptYmd }));
+  }, [open, startDateTouched, nextApptYmd]);
+
 
   const mutation = useMutation({
     mutationFn: async () => {

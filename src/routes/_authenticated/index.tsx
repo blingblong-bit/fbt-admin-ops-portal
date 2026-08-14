@@ -343,20 +343,22 @@ function Dashboard() {
       const r = visitsRemaining(cl);
       c.all += 1;
       if (owed > 0) {
+        const bucket = startBucketOf(cl);
         c.payment_due += 1;
         c.payment_due_total += owed;
-        if (isScheduledThisWeek(cl.id)) {
+        if (bucket ? bucket === "this" : isScheduledThisWeek(cl.id)) {
           c.payment_due_this_week += 1;
           c.payment_due_this_week_total += owed;
-        } else {
+        } else if (!bucket) {
           c.overdue_prior_weeks += 1;
           c.overdue_prior_weeks_total += owed;
         }
-        if (isScheduledNextWeek(cl.id)) {
+        if (bucket ? bucket === "next" : isScheduledNextWeek(cl.id)) {
           c.payment_due_next_week += 1;
           c.payment_due_next_week_total += owed;
         }
       }
+
       if (!isScheduled(cl.id)) c.not_scheduled += 1;
       if (r !== null && r > 0 && r <= 2) c.almost_finished += 1;
       if (owed > 0 && r !== null && r <= 2) {

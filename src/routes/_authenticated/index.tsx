@@ -278,6 +278,22 @@ function Dashboard() {
   const isOverduePrior = (id: string) =>
     overduePriorMap.has(id) && !thisWeekSet.has(id) && !nextWeekSet.has(id);
 
+  // A package whose start date is still in the future (typical right after a
+  // renewal) is due when it starts, not because of leftover bookings from the
+  // week the renewal was entered.
+  const thisWeekEndYmd = thisWeekQuery.data?.week_end;
+  const nextWeekEndYmd = nextWeekQuery.data?.week_end;
+  const startBucketOf = (c: Client): StartBucket => {
+    const start = c.package_start_date;
+    if (!start || !thisWeekEndYmd || !nextWeekEndYmd) return null;
+    if (start <= clinicYmd(new Date())) return null; // already started
+    if (start <= thisWeekEndYmd) return "this";
+    if (start <= nextWeekEndYmd) return "next";
+    return "later";
+  };
+
+
+
 
   const [search, setSearch] = useState("");
   // Staff never see the payment-due (aggregate) list — default to "all" instead.

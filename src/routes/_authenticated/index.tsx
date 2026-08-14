@@ -941,7 +941,6 @@ function exportPaymentDueCsv(clients: Client[]) {
   URL.revokeObjectURL(url);
 }
 
-const CLINIC_TZ = "America/Chicago";
 
 // Monday of the WORK-WEEK (Mon–Fri) the given ISO instant belongs to, in
 // clinic-local time. Sat/Sun roll forward into the upcoming work week to

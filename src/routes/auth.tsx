@@ -10,9 +10,13 @@ const searchSchema = z.object({
 
 export const Route = createFileRoute("/auth")({
   ssr: false,
+  // Client-only route: render nothing on the server so the initial HTML matches
+  // the browser's first render (avoids React hydration mismatch #418).
+  pendingComponent: () => null,
   validateSearch: searchSchema,
   component: AuthPage,
 });
+
 
 function AuthPage() {
   const navigate = useNavigate();

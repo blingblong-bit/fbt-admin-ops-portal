@@ -114,6 +114,43 @@ function RootShell({ children }: { children: ReactNode }) {
       </head>
       <body>
         {children}
+        <div
+          id={BOOT_FALLBACK_ID}
+          style={{
+            display: "none",
+            position: "fixed",
+            inset: 0,
+            placeItems: "center",
+            background: "#fafafa",
+            color: "#111",
+            font: "15px/1.5 system-ui, -apple-system, sans-serif",
+            zIndex: 2147483647,
+            padding: "1.5rem",
+          }}
+        >
+          <div style={{ maxWidth: "24rem", textAlign: "center" }}>
+            <div style={{ fontSize: "1.125rem", fontWeight: 600, marginBottom: "0.5rem" }}>
+              Couldn&apos;t load the app
+            </div>
+            <p style={{ color: "#4b5563", margin: "0 0 1.25rem" }}>
+              Your browser may be holding an outdated copy. Reloading usually fixes it.
+            </p>
+            <a
+              href="/"
+              style={{
+                display: "inline-block",
+                background: "#111",
+                color: "#fff",
+                padding: "0.5rem 1rem",
+                borderRadius: "0.375rem",
+                textDecoration: "none",
+              }}
+            >
+              Reload
+            </a>
+          </div>
+        </div>
+        <script dangerouslySetInnerHTML={{ __html: bootGuardScript }} />
         <Scripts />
       </body>
     </html>
@@ -125,6 +162,12 @@ function RootComponent() {
   const router = useRouter();
 
   useEffect(() => {
+    (window as unknown as { __APP_BOOTED__?: boolean }).__APP_BOOTED__ = true;
+    const el = document.getElementById(BOOT_FALLBACK_ID);
+    if (el) el.style.display = "none";
+  }, []);
+
+  useEffect(() => {
     const { data: sub } = supabase.auth.onAuthStateChange((event) => {
       if (event !== "SIGNED_IN" && event !== "SIGNED_OUT" && event !== "USER_UPDATED") return;
       router.invalidate();
@@ -132,6 +175,7 @@ function RootComponent() {
     });
     return () => sub.subscription.unsubscribe();
   }, [router, queryClient]);
+
 
   return (
     <QueryClientProvider client={queryClient}>

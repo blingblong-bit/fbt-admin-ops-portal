@@ -9,10 +9,16 @@ const searchSchema = z.object({
 });
 
 export const Route = createFileRoute("/auth")({
-  ssr: false,
-  // Client-only route: render nothing on the server so the initial HTML matches
-  // the browser's first render (avoids React hydration mismatch #418).
-  pendingComponent: () => null,
+  head: () => ({
+    meta: [
+      { title: "Staff Sign In | FIT Beyond Therapy" },
+      { name: "description", content: "Sign in to the FIT Beyond Therapy staff portal." },
+      { property: "og:title", content: "Staff Sign In | FIT Beyond Therapy" },
+      { property: "og:description", content: "Sign in to the FIT Beyond Therapy staff portal." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
+    ],
+  }),
   validateSearch: searchSchema,
   component: AuthPage,
 });

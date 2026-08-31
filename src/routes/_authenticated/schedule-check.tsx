@@ -1524,6 +1524,8 @@ function AppointmentsCard({
   completing?: string | null;
 }) {
   const renewalFlags = useRenewalFlaggedClientIds().data;
+  const packageReviewDismissed = usePackageReviewDismissedIds().data ?? null;
+
   return (
 
     <Card>

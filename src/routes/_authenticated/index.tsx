@@ -92,7 +92,8 @@ type FilterKey =
   | "almost_finished"
   | "critical"
   | "package_complete"
-  | "needs_renewal";
+  | "needs_renewal"
+  | "needs_package_review";
 
 const FILTER_LABEL: Record<FilterKey, string> = {
   all: "All Active",
@@ -105,7 +106,9 @@ const FILTER_LABEL: Record<FilterKey, string> = {
   critical: "Critical",
   package_complete: "Package Complete",
   needs_renewal: "Needs Renewal",
+  needs_package_review: "First Visit — No Package Info, Needs Review",
 };
+
 
 type StatusFilter = "active_assessment" | "active" | "assessment" | "archived" | "all";
 

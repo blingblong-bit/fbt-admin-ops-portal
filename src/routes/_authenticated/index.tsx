@@ -187,7 +187,10 @@ function matchesFilter(
       // finished" subset of the Renewal Pending badge. Clears itself as soon
       // as staff runs Renew Package (visits_used resets).
       return r !== null && c.package_total_visits > 0 && r === 0 && isScheduled;
+    case "needs_package_review":
+      return needsPkgReview;
   }
+
 }
 
 const CLINIC_TZ = "America/Chicago";

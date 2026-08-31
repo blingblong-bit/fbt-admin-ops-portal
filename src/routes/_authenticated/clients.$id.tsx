@@ -196,7 +196,9 @@ function ClientDetailPage() {
             <h1 className="text-3xl font-semibold tracking-tight">{fullName(c)}</h1>
             <StatusBadge client={c} isScheduled={isScheduled} />
             {renewalFlagged && <RenewalFlagBadge />}
+            {packageReviewNeeded && <PackageReviewBadge />}
           </div>
+
 
           <p className="mt-1 text-sm text-slate-500">
             {c.phone ?? "no phone"} · {c.email ?? "no email"}

@@ -345,7 +345,9 @@ function Dashboard() {
       critical_total: 0,
       package_complete: 0,
       needs_renewal: 0,
+      needs_package_review: 0,
     };
+
     for (const cl of visibleClients) {
       const owed = amountOwed(cl);
       const r = visitsRemaining(cl);

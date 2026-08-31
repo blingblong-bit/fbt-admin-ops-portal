@@ -583,6 +583,15 @@ function Dashboard() {
       tone: counts.needs_renewal > 0 ? "amber" : "slate",
     },
     {
+      key: "needs_package_review",
+      label: "First Visit — No Package Info",
+      sublabel: "assessment only — needs package review",
+      icon: <ClipboardList className="h-5 w-5" />,
+      count: counts.needs_package_review,
+      tone: counts.needs_package_review > 0 ? "amber" : "slate",
+    },
+
+    {
       key: "renewal_review",
       label: "Needs Renewal Review",
       icon: <RefreshCw className="h-5 w-5" />,

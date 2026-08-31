@@ -34,6 +34,7 @@ import {
   getScheduleCheck,
   getUnavailableNextWeekClientIds,
   linkSquareCustomer,
+  createClientFromSquareCustomer,
   listLinkableClients,
   markClientContacted,
   unmarkClientContacted,
@@ -1065,6 +1066,7 @@ function UnmatchedAppointmentsCard({ appointments }: { appointments: ScheduleApp
   const { isStaff } = useRole();
   const listFn = useServerFn(listLinkableClients);
   const linkFn = useServerFn(linkSquareCustomer);
+  const createFn = useServerFn(createClientFromSquareCustomer);
   const qc = useQueryClient();
   const [ignored, setIgnored] = useState<Set<string>>(new Set());
 
@@ -1084,6 +1086,24 @@ function UnmatchedAppointmentsCard({ appointments }: { appointments: ScheduleApp
     },
     onError: (e: Error) => toast.error(e.message),
   });
+
+  const createMut = useMutation({
+    mutationFn: (vars: {
+      squareCustomerId: string;
+      firstName: string;
+      lastName: string;
+      phone: string | null;
+      email: string | null;
+    }) => createFn({ data: vars }),
+    onSuccess: () => {
+      toast.success("Client created and linked to Square");
+      qc.invalidateQueries({ queryKey: ["schedule-check"] });
+      qc.invalidateQueries({ queryKey: ["linkable-clients"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+
 
   // Build normalized-name and normalized-phone lookup maps from Admin clients
   const { byName, byPhone } = useMemo(() => {
@@ -1197,17 +1217,54 @@ function UnmatchedAppointmentsCard({ appointments }: { appointments: ScheduleApp
                       </div>
                     </div>
                     {first.square_customer_id && !linkedElsewhere && (
-                      <LinkClientControl
-                        clients={clientsQuery.data ?? []}
-                        loading={clientsQuery.isLoading}
-                        disabled={linkMut.isPending}
-                        onLink={(clientId) =>
-                          linkMut.mutate({
-                            clientId,
-                            squareCustomerId: first.square_customer_id!,
-                          })
-                        }
-                      />
+                      <div className="flex flex-col items-end gap-2">
+                        <LinkClientControl
+                          clients={clientsQuery.data ?? []}
+                          loading={clientsQuery.isLoading}
+                          disabled={linkMut.isPending || createMut.isPending}
+                          onLink={(clientId) =>
+                            linkMut.mutate({
+                              clientId,
+                              squareCustomerId: first.square_customer_id!,
+                            })
+                          }
+                        />
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={createMut.isPending || !fullName}
+                          title={
+                            fullName
+                              ? "Creates a new client with this Square customer's name, phone and email, already linked"
+                              : "Square has no name for this customer — create the client manually"
+                          }
+                          onClick={() => {
+                            const parts = fullName.split(/\s+/);
+                            const firstName = info?.given_name ?? parts[0] ?? "";
+                            const lastName =
+                              info?.family_name ?? parts.slice(1).join(" ") ?? "";
+                            if (
+                              duplicates.length > 0 &&
+                              !window.confirm(
+                                `A possible duplicate already exists (${duplicates
+                                  .map((c) => `${c.first_name} ${c.last_name}`)
+                                  .join(", ")}). Create a new client anyway?`,
+                              )
+                            ) {
+                              return;
+                            }
+                            createMut.mutate({
+                              squareCustomerId: first.square_customer_id!,
+                              firstName,
+                              lastName,
+                              phone: info?.phone ?? null,
+                              email: info?.email ?? null,
+                            });
+                          }}
+                        >
+                          {createMut.isPending ? "Creating…" : "Create client from Square"}
+                        </Button>
+                      </div>
                     )}
                   </div>
 

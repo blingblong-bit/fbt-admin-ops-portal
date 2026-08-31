@@ -844,6 +844,77 @@ export const linkSquareCustomer = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+/**
+ * Create a brand-new Admin client straight from an unmatched Square customer,
+ * already linked to that Square customer ID. Package fields are intentionally
+ * left blank ("No package info") for staff to fill in later.
+ */
+export const createClientFromSquareCustomer = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    (d: {
+      squareCustomerId: string;
+      firstName: string;
+      lastName: string;
+      phone?: string | null;
+      email?: string | null;
+    }) => {
+      if (!d?.squareCustomerId) throw new Error("squareCustomerId required");
+      const firstName = (d.firstName ?? "").trim();
+      const lastName = (d.lastName ?? "").trim();
+      if (!firstName && !lastName) throw new Error("A first or last name is required");
+      return {
+        squareCustomerId: d.squareCustomerId,
+        firstName: firstName || "(unknown)",
+        lastName: lastName || "(unknown)",
+        phone: (d.phone ?? "").trim() || null,
+        email: (d.email ?? "").trim() || null,
+      };
+    },
+  )
+  .handler(async ({ data, context }) => {
+    // Never create a second record for a Square customer that's already linked.
+    const { data: existing, error: eErr } = await context.supabase
+      .from("clients")
+      .select("id, first_name, last_name")
+      .eq("square_customer_id", data.squareCustomerId)
+      .is("deleted_at", null)
+      .maybeSingle();
+    if (eErr) throw eErr;
+    if (existing) {
+      throw new Error(
+        `Square customer is already linked to ${existing.first_name} ${existing.last_name}.`,
+      );
+    }
+
+    const { data: created, error } = await context.supabase
+      .from("clients")
+      .insert({
+        first_name: data.firstName,
+        last_name: data.lastName,
+        phone: data.phone,
+        email: data.email,
+        square_customer_id: data.squareCustomerId,
+        status: "active",
+      })
+      .select("id")
+      .single();
+    if (error) throw error;
+
+    await context.supabase.from("client_activities").insert({
+      client_id: created.id,
+      activity_type: "square_link",
+      description: `Client created from unmatched Square booking and linked to Square customer ${data.squareCustomerId}`,
+      metadata: {
+        square_customer_id: data.squareCustomerId,
+        created_from: "unmatched_appointment",
+      },
+    });
+
+    return { ok: true, clientId: created.id as string };
+  });
+
+
 export const unlinkSquareCustomer = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { clientId: string }) => {

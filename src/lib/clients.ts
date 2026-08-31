@@ -71,7 +71,7 @@ export function needsPackageReview(
 
   if (c.deleted_at) return false;
   if (c.status === "archived") return false;
-  if (isPayPerVisit(c)) return false;
+  if (c.payment_model === "pay_per_visit") return false;
   if ((c.package_total_visits ?? 0) > 0) return false;
   if ((c.package_name ?? "").trim().length > 0) return false;
   if (clientId && dismissed?.has(clientId)) return false;

@@ -432,7 +432,7 @@ export const getScheduleCheck = createServerFn({ method: "GET" })
         const { data: page, error: cErr } = await context.supabase
           .from("clients")
           .select(
-            "id, first_name, last_name, phone, package_total_visits, visits_used, package_price, amount_paid, internal_notes, square_customer_id, status, manual_active, payment_model",
+            "id, first_name, last_name, phone, package_total_visits, package_name, visits_used, package_price, amount_paid, internal_notes, square_customer_id, status, manual_active, payment_model",
           )
           .is("deleted_at", null)
           .range(from, from + pageSize - 1);

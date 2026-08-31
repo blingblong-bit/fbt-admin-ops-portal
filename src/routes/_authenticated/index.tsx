@@ -379,9 +379,10 @@ function Dashboard() {
         c.package_complete += 1;
         if (isScheduled(cl.id)) c.needs_renewal += 1;
       }
+      if (needsPackageReview(cl, dismissedIds, cl.id)) c.needs_package_review += 1;
     }
     return c;
-  }, [visibleClients, scheduledSet, thisWeekSet, nextWeekSet, carriedOverRecentMap, overduePriorMap, thisWeekEndYmd, nextWeekEndYmd]);
+  }, [visibleClients, scheduledSet, thisWeekSet, nextWeekSet, carriedOverRecentMap, overduePriorMap, thisWeekEndYmd, nextWeekEndYmd, dismissedIds]);
 
 
   const filtered = useMemo(() => {
@@ -395,8 +396,10 @@ function Dashboard() {
         isCarriedOver(c.id),
         isOverduePrior(c.id),
         startBucketOf(c),
+        needsPackageReview(c, dismissedIds, c.id),
       ),
     );
+
 
     const q = search.trim().toLowerCase();
 

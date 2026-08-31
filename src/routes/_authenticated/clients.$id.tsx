@@ -10,6 +10,13 @@ import { recordManualPayment } from "@/lib/payments.functions";
 import { AppShell } from "@/components/AppShell";
 import { StatusBadge } from "@/components/StatusBadge";
 import { RenewalFlagBadge, useIsRenewalFlagged } from "@/components/RenewalFlagBadge";
+import {
+  PackageReviewBadge,
+  usePackageReviewDismissedIds,
+  DISMISS_ACTIVITY,
+  UNDISMISS_ACTIVITY,
+} from "@/components/PackageReviewBadge";
+
 
 import { getScheduledClientIds, getClientAppointments, type ClientAppointment } from "@/lib/schedule.functions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";

@@ -29,10 +29,13 @@ import {
   effectiveStatus,
   formatCurrency,
   fullName,
+  needsPackageReview,
   visitsRemaining,
   type Client,
   type LifecycleStatus,
 } from "@/lib/clients";
+import { usePackageReviewDismissedIds } from "@/components/PackageReviewBadge";
+
 import {
   getScheduledClientIds,
   getThisWeekScheduledClientIds,

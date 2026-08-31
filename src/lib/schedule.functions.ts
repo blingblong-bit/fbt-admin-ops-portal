@@ -26,6 +26,8 @@ export type ScheduleClientLite = {
   last_name: string;
   phone: string | null;
   package_total_visits: number;
+  package_name?: string | null;
+
   visits_used: number | null;
   package_price: number;
   amount_paid: number;

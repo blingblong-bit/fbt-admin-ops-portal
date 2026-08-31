@@ -1065,6 +1065,7 @@ function UnmatchedAppointmentsCard({ appointments }: { appointments: ScheduleApp
   const { isStaff } = useRole();
   const listFn = useServerFn(listLinkableClients);
   const linkFn = useServerFn(linkSquareCustomer);
+  const createFn = useServerFn(createClientFromSquareCustomer);
   const qc = useQueryClient();
   const [ignored, setIgnored] = useState<Set<string>>(new Set());
 

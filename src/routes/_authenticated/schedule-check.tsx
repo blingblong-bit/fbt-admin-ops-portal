@@ -34,6 +34,7 @@ import {
   getScheduleCheck,
   getUnavailableNextWeekClientIds,
   linkSquareCustomer,
+  createClientFromSquareCustomer,
   listLinkableClients,
   markClientContacted,
   unmarkClientContacted,

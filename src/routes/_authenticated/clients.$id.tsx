@@ -132,6 +132,30 @@ function ClientDetailPage() {
   // Scheduling is derived from live Square bookings — no manual toggle.
   const renewalFlagged = useIsRenewalFlagged(id);
 
+  // "First Visit — No Package Info, Needs Review"
+  const dismissedIds = usePackageReviewDismissedIds().data ?? null;
+  const isDismissedFromReview = !!dismissedIds?.has(id);
+  const packageReviewNeeded = !!c && needsPackageReview(c, dismissedIds, id);
+  const packageReviewMut = useMutation({
+    mutationFn: async (dismiss: boolean) => {
+      const { error } = await supabase.from("client_activities").insert({
+        client_id: id,
+        activity_type: dismiss ? DISMISS_ACTIVITY : UNDISMISS_ACTIVITY,
+        description: dismiss
+          ? "Marked as not needing a package (assessment only)"
+          : "Re-flagged for package review",
+      });
+      if (error) throw error;
+    },
+    onSuccess: (_d, dismiss) => {
+      toast.success(dismiss ? "Marked as not needing a package" : "Re-flagged for package review");
+      qc.invalidateQueries({ queryKey: ["package_review_dismissals"] });
+      refresh();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+
 
 
   if (isLoading || !c) {

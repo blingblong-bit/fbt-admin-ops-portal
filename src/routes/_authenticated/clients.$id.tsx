@@ -227,7 +227,26 @@ function ClientDetailPage() {
             <Button variant="outline" onClick={() => setRenewOpen(true)}>
               Renew Package
             </Button>
+            {packageReviewNeeded && (
+              <Button
+                variant="outline"
+                disabled={packageReviewMut.isPending}
+                onClick={() => packageReviewMut.mutate(true)}
+              >
+                No package needed
+              </Button>
+            )}
+            {isDismissedFromReview && (c.package_total_visits ?? 0) === 0 && (
+              <Button
+                variant="ghost"
+                disabled={packageReviewMut.isPending}
+                onClick={() => packageReviewMut.mutate(false)}
+              >
+                Undo “no package needed”
+              </Button>
+            )}
           </div>
+
           {(c.package_total_visits ?? 0) > 0 && !hasVisitData && (
             <span className="text-xs text-amber-700">
               ⚠ Visits unknown — verify before completing.

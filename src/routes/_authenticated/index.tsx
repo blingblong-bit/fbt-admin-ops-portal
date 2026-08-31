@@ -152,7 +152,9 @@ function matchesFilter(
   isCarriedOver: boolean,
   isOverduePrior: boolean,
   startBucket: StartBucket = null,
+  needsPkgReview: boolean = false,
 ): boolean {
+
   const owed = amountOwed(c);
   const r = visitsRemaining(c);
   switch (f) {

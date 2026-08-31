@@ -59,11 +59,16 @@ export function isPayPerVisit(c: Partial<Pick<Client, "payment_model">>): boolea
  * anyone staff has dismissed with "No package needed".
  */
 export function needsPackageReview(
-  c: Pick<Client, "package_total_visits" | "package_name" | "status" | "deleted_at"> &
-    Partial<Pick<Client, "payment_model">>,
+  c: Pick<Client, "package_total_visits"> & {
+    package_name?: string | null;
+    status?: string | null;
+    deleted_at?: string | null;
+    payment_model?: string | null;
+  },
   dismissed?: Set<string> | null,
   clientId?: string,
 ): boolean {
+
   if (c.deleted_at) return false;
   if (c.status === "archived") return false;
   if (isPayPerVisit(c)) return false;

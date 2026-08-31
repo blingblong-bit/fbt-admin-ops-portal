@@ -3,6 +3,8 @@ import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
+  ClipboardList,
+
   CalendarClock,
   CircleDollarSign,
   CircleSlash,
@@ -29,10 +31,13 @@ import {
   effectiveStatus,
   formatCurrency,
   fullName,
+  needsPackageReview,
   visitsRemaining,
   type Client,
   type LifecycleStatus,
 } from "@/lib/clients";
+import { usePackageReviewDismissedIds } from "@/components/PackageReviewBadge";
+
 import {
   getScheduledClientIds,
   getThisWeekScheduledClientIds,
@@ -92,7 +97,8 @@ type FilterKey =
   | "almost_finished"
   | "critical"
   | "package_complete"
-  | "needs_renewal";
+  | "needs_renewal"
+  | "needs_package_review";
 
 const FILTER_LABEL: Record<FilterKey, string> = {
   all: "All Active",
@@ -105,7 +111,9 @@ const FILTER_LABEL: Record<FilterKey, string> = {
   critical: "Critical",
   package_complete: "Package Complete",
   needs_renewal: "Needs Renewal",
+  needs_package_review: "First Visit — No Package Info, Needs Review",
 };
+
 
 type StatusFilter = "active_assessment" | "active" | "assessment" | "archived" | "all";
 
@@ -149,7 +157,9 @@ function matchesFilter(
   isCarriedOver: boolean,
   isOverduePrior: boolean,
   startBucket: StartBucket = null,
+  needsPkgReview: boolean = false,
 ): boolean {
+
   const owed = amountOwed(c);
   const r = visitsRemaining(c);
   switch (f) {
@@ -182,7 +192,10 @@ function matchesFilter(
       // finished" subset of the Renewal Pending badge. Clears itself as soon
       // as staff runs Renew Package (visits_used resets).
       return r !== null && c.package_total_visits > 0 && r === 0 && isScheduled;
+    case "needs_package_review":
+      return needsPkgReview;
   }
+
 }
 
 const CLINIC_TZ = "America/Chicago";
@@ -292,6 +305,9 @@ function Dashboard() {
     return "later";
   };
 
+  const dismissedIds = usePackageReviewDismissedIds().data ?? null;
+
+
 
 
 
@@ -337,7 +353,9 @@ function Dashboard() {
       critical_total: 0,
       package_complete: 0,
       needs_renewal: 0,
+      needs_package_review: 0,
     };
+
     for (const cl of visibleClients) {
       const owed = amountOwed(cl);
       const r = visitsRemaining(cl);
@@ -369,9 +387,10 @@ function Dashboard() {
         c.package_complete += 1;
         if (isScheduled(cl.id)) c.needs_renewal += 1;
       }
+      if (needsPackageReview(cl, dismissedIds, cl.id)) c.needs_package_review += 1;
     }
     return c;
-  }, [visibleClients, scheduledSet, thisWeekSet, nextWeekSet, carriedOverRecentMap, overduePriorMap, thisWeekEndYmd, nextWeekEndYmd]);
+  }, [visibleClients, scheduledSet, thisWeekSet, nextWeekSet, carriedOverRecentMap, overduePriorMap, thisWeekEndYmd, nextWeekEndYmd, dismissedIds]);
 
 
   const filtered = useMemo(() => {
@@ -385,8 +404,10 @@ function Dashboard() {
         isCarriedOver(c.id),
         isOverduePrior(c.id),
         startBucketOf(c),
+        needsPackageReview(c, dismissedIds, c.id),
       ),
     );
+
 
     const q = search.trim().toLowerCase();
 
@@ -564,6 +585,15 @@ function Dashboard() {
       tone: counts.needs_renewal > 0 ? "amber" : "slate",
     },
     {
+      key: "needs_package_review",
+      label: "First Visit — No Package Info",
+      sublabel: "assessment only — needs package review",
+      icon: <ClipboardList className="h-5 w-5" />,
+      count: counts.needs_package_review,
+      tone: counts.needs_package_review > 0 ? "amber" : "slate",
+    },
+
+    {
       key: "renewal_review",
       label: "Needs Renewal Review",
       icon: <RefreshCw className="h-5 w-5" />,
@@ -602,8 +632,10 @@ function Dashboard() {
         "critical",
         "payment_history",
         "needs_renewal",
+        "needs_package_review",
         "renewal_review",
         "renewal_manual",
+
       ]),
     [],
   );

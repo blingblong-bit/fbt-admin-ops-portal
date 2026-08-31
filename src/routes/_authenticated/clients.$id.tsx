@@ -10,6 +10,13 @@ import { recordManualPayment } from "@/lib/payments.functions";
 import { AppShell } from "@/components/AppShell";
 import { StatusBadge } from "@/components/StatusBadge";
 import { RenewalFlagBadge, useIsRenewalFlagged } from "@/components/RenewalFlagBadge";
+import {
+  PackageReviewBadge,
+  usePackageReviewDismissedIds,
+  DISMISS_ACTIVITY,
+  UNDISMISS_ACTIVITY,
+} from "@/components/PackageReviewBadge";
+
 
 import { getScheduledClientIds, getClientAppointments, type ClientAppointment } from "@/lib/schedule.functions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -32,6 +39,8 @@ import {
   formatCurrency,
   formatDate,
   fullName,
+  needsPackageReview,
+
   progress,
   visitsRemaining,
   type Client,
@@ -132,6 +141,30 @@ function ClientDetailPage() {
   // Scheduling is derived from live Square bookings — no manual toggle.
   const renewalFlagged = useIsRenewalFlagged(id);
 
+  // "First Visit — No Package Info, Needs Review"
+  const dismissedIds = usePackageReviewDismissedIds().data ?? null;
+  const isDismissedFromReview = !!dismissedIds?.has(id);
+  const packageReviewNeeded = !!c && needsPackageReview(c, dismissedIds, id);
+  const packageReviewMut = useMutation({
+    mutationFn: async (dismiss: boolean) => {
+      const { error } = await supabase.from("client_activities").insert({
+        client_id: id,
+        activity_type: dismiss ? DISMISS_ACTIVITY : UNDISMISS_ACTIVITY,
+        description: dismiss
+          ? "Marked as not needing a package (assessment only)"
+          : "Re-flagged for package review",
+      });
+      if (error) throw error;
+    },
+    onSuccess: (_d, dismiss) => {
+      toast.success(dismiss ? "Marked as not needing a package" : "Re-flagged for package review");
+      qc.invalidateQueries({ queryKey: ["package_review_dismissals"] });
+      refresh();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+
 
 
   if (isLoading || !c) {
@@ -163,7 +196,9 @@ function ClientDetailPage() {
             <h1 className="text-3xl font-semibold tracking-tight">{fullName(c)}</h1>
             <StatusBadge client={c} isScheduled={isScheduled} />
             {renewalFlagged && <RenewalFlagBadge />}
+            {packageReviewNeeded && <PackageReviewBadge />}
           </div>
+
 
           <p className="mt-1 text-sm text-slate-500">
             {c.phone ?? "no phone"} · {c.email ?? "no email"}
@@ -192,7 +227,26 @@ function ClientDetailPage() {
             <Button variant="outline" onClick={() => setRenewOpen(true)}>
               Renew Package
             </Button>
+            {packageReviewNeeded && (
+              <Button
+                variant="outline"
+                disabled={packageReviewMut.isPending}
+                onClick={() => packageReviewMut.mutate(true)}
+              >
+                No package needed
+              </Button>
+            )}
+            {isDismissedFromReview && (c.package_total_visits ?? 0) === 0 && (
+              <Button
+                variant="ghost"
+                disabled={packageReviewMut.isPending}
+                onClick={() => packageReviewMut.mutate(false)}
+              >
+                Undo “no package needed”
+              </Button>
+            )}
           </div>
+
           {(c.package_total_visits ?? 0) > 0 && !hasVisitData && (
             <span className="text-xs text-amber-700">
               ⚠ Visits unknown — verify before completing.

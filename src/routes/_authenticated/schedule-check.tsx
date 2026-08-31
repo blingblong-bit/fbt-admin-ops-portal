@@ -23,9 +23,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { formatCurrency, formatDate, formatDateTimeLocal } from "@/lib/clients";
+import { formatCurrency, formatDate, formatDateTimeLocal, needsPackageReview } from "@/lib/clients";
 import { useRole } from "@/hooks/useRole";
 import { RenewalFlagBadge, useRenewalFlaggedClientIds } from "@/components/RenewalFlagBadge";
+import { PackageReviewBadge, usePackageReviewDismissedIds } from "@/components/PackageReviewBadge";
+
 
 import {
   completeVisitForClient,
@@ -1522,6 +1524,8 @@ function AppointmentsCard({
   completing?: string | null;
 }) {
   const renewalFlags = useRenewalFlaggedClientIds().data;
+  const packageReviewDismissed = usePackageReviewDismissedIds().data ?? null;
+
   return (
 
     <Card>
@@ -1588,6 +1592,10 @@ function AppointmentsCard({
                       {a.client && (
                         <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px] font-medium">
                           {renewalFlags?.has(a.client.id) && <RenewalFlagBadge />}
+                          {needsPackageReview(a.client, packageReviewDismissed, a.client.id) && (
+                            <PackageReviewBadge />
+                          )}
+
                           <span className="rounded-full bg-slate-100 px-2 py-0.5 text-slate-700">
 
                             {remaining === null

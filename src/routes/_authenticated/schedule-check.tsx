@@ -1087,6 +1087,24 @@ function UnmatchedAppointmentsCard({ appointments }: { appointments: ScheduleApp
     onError: (e: Error) => toast.error(e.message),
   });
 
+  const createMut = useMutation({
+    mutationFn: (vars: {
+      squareCustomerId: string;
+      firstName: string;
+      lastName: string;
+      phone: string | null;
+      email: string | null;
+    }) => createFn({ data: vars }),
+    onSuccess: () => {
+      toast.success("Client created and linked to Square");
+      qc.invalidateQueries({ queryKey: ["schedule-check"] });
+      qc.invalidateQueries({ queryKey: ["linkable-clients"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+
+
   // Build normalized-name and normalized-phone lookup maps from Admin clients
   const { byName, byPhone } = useMemo(() => {
     const byName = new Map<string, LinkableClient[]>();

@@ -637,11 +637,10 @@ export const completeVisitForClient = createServerFn({ method: "POST" })
       }
     }
 
-    // Day-scoped fallback guard: a visit row can exist without a booking
-    // reference (older builds, manual check-ins from the client page). Treat
-    // "already has a visit logged for this appointment's day" as a duplicate
-    // so a missing booking_id can never allow a double count.
-    {
+    // Day-scoped fallback guard: only when this check-in carries no booking
+    // reference. With a booking reference the exact guard above is enough, and
+    // a client legitimately booked twice in one day must be checkable twice.
+    if (!data.bookingId) {
       const dayYmd = ymdInTz(data.appointmentStartAt ? new Date(data.appointmentStartAt) : new Date());
       const { data: sameDay, error: sameDayErr } = await context.supabase
         .from("client_activities")
@@ -657,6 +656,7 @@ export const completeVisitForClient = createServerFn({ method: "POST" })
       const hit = (sameDay ?? []).some((r) => ymdInTz(new Date(r.created_at as string)) === dayYmd);
       if (hit) throw new Error("Visit already recorded for this client today.");
     }
+
 
 
     const { data: c, error } = await context.supabase

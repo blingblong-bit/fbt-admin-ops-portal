@@ -637,11 +637,10 @@ export const completeVisitForClient = createServerFn({ method: "POST" })
       }
     }
 
-    // Day-scoped fallback guard: a visit row can exist without a booking
-    // reference (older builds, manual check-ins from the client page). Treat
-    // "already has a visit logged for this appointment's day" as a duplicate
-    // so a missing booking_id can never allow a double count.
-    {
+    // Day-scoped fallback guard: only when this check-in carries no booking
+    // reference. With a booking reference the exact guard above is enough, and
+    // a client legitimately booked twice in one day must be checkable twice.
+    if (!data.bookingId) {
       const dayYmd = ymdInTz(data.appointmentStartAt ? new Date(data.appointmentStartAt) : new Date());
       const { data: sameDay, error: sameDayErr } = await context.supabase
         .from("client_activities")
@@ -657,6 +656,7 @@ export const completeVisitForClient = createServerFn({ method: "POST" })
       const hit = (sameDay ?? []).some((r) => ymdInTz(new Date(r.created_at as string)) === dayYmd);
       if (hit) throw new Error("Visit already recorded for this client today.");
     }
+
 
 
     const { data: c, error } = await context.supabase
@@ -743,26 +743,43 @@ export const getCompletedVisitBookingIds = createServerFn({ method: "POST" })
     if (error) throw error;
 
     const byBooking = new Set<string>();
-    const byClientDay = new Set<string>();
+    // Visit rows with no booking reference, counted per client+day. These get
+    // handed out to that day's unmatched appointments in time order, one each,
+    // so a client booked twice in a day doesn't show both slots checked in
+    // after a single check-in.
+    const looseByClientDay = new Map<string, number>();
     for (const row of rows ?? []) {
       const bid = (row.metadata as { booking_id?: string } | null)?.booking_id;
-      if (bid) byBooking.add(bid);
+      if (bid) {
+        byBooking.add(bid);
+        continue;
+      }
       if (row.client_id && row.created_at) {
-        byClientDay.add(`${row.client_id}|${ymdInTz(new Date(row.created_at as string))}`);
+        const key = `${row.client_id}|${ymdInTz(new Date(row.created_at as string))}`;
+        looseByClientDay.set(key, (looseByClientDay.get(key) ?? 0) + 1);
       }
     }
 
     const found = new Set<string>();
+    const leftovers: CheckedInProbe[] = [];
     for (const a of appts) {
       if (byBooking.has(a.booking_id)) {
         found.add(a.booking_id);
         continue;
       }
-      if (a.client_id && a.start_at) {
-        const key = `${a.client_id}|${ymdInTz(new Date(a.start_at))}`;
-        if (byClientDay.has(key)) found.add(a.booking_id);
+      if (a.client_id && a.start_at) leftovers.push(a);
+    }
+
+    leftovers.sort((x, y) => new Date(x.start_at!).getTime() - new Date(y.start_at!).getTime());
+    for (const a of leftovers) {
+      const key = `${a.client_id}|${ymdInTz(new Date(a.start_at!))}`;
+      const budget = looseByClientDay.get(key) ?? 0;
+      if (budget > 0) {
+        found.add(a.booking_id);
+        looseByClientDay.set(key, budget - 1);
       }
     }
+
     return Array.from(found);
   });
 

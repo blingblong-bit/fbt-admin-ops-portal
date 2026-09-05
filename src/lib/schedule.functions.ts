@@ -736,11 +736,48 @@ export const getCompletedVisitBookingIds = createServerFn({ method: "POST" })
       data.appointments ?? (data.bookingIds ?? []).map((id) => ({ booking_id: id }));
     if (appts.length === 0) return [];
 
-    const { data: rows, error } = await context.supabase
-      .from("client_activities")
-      .select("client_id, metadata, created_at")
-      .eq("activity_type", "visit");
-    if (error) throw error;
+    // Scope the read to the clients on screen and a date window around the
+    // appointments shown, then page through results. An unscoped read hits
+    // PostgREST's 1000-row default cap and silently drops the NEWEST visit
+    // rows, which made same-day check-ins lose their "Checked In" badge.
+    const clientIds = Array.from(
+      new Set(appts.map((a) => a.client_id).filter((v): v is string => Boolean(v))),
+    );
+    const times = appts
+      .map((a) => (a.start_at ? new Date(a.start_at).getTime() : NaN))
+      .filter((t) => Number.isFinite(t));
+    const DAY = 86_400_000;
+    const fromIso = times.length
+      ? new Date(Math.min(...times) - 7 * DAY).toISOString()
+      : new Date(Date.now() - 30 * DAY).toISOString();
+    const toIso = times.length
+      ? new Date(Math.max(...times) + 2 * DAY).toISOString()
+      : new Date(Date.now() + 2 * DAY).toISOString();
+
+    type VisitRow = { client_id: string | null; metadata: unknown; created_at: string };
+    const rows: VisitRow[] = [];
+    {
+      const pageSize = 1000;
+      let from = 0;
+      for (let i = 0; i < 50; i++) {
+        let q = context.supabase
+          .from("client_activities")
+          .select("client_id, metadata, created_at")
+          .eq("activity_type", "visit")
+          .gte("created_at", fromIso)
+          .lte("created_at", toIso);
+        if (clientIds.length > 0) q = q.in("client_id", clientIds);
+        const { data: page, error } = await q
+          .order("created_at", { ascending: true })
+          .range(from, from + pageSize - 1);
+        if (error) throw error;
+        const list = (page ?? []) as VisitRow[];
+        rows.push(...list);
+        if (list.length < pageSize) break;
+        from += pageSize;
+      }
+    }
+
 
     const byBooking = new Set<string>();
     // Visit rows with no booking reference, counted per client+day. These get

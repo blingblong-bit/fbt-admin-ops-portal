@@ -748,7 +748,7 @@ export const getCompletedVisitBookingIds = createServerFn({ method: "POST" })
       .filter((t) => Number.isFinite(t));
     const DAY = 86_400_000;
     const fromIso = times.length
-      ? new Date(Math.min(...times) - 2 * DAY).toISOString()
+      ? new Date(Math.min(...times) - 7 * DAY).toISOString()
       : new Date(Date.now() - 30 * DAY).toISOString();
     const toIso = times.length
       ? new Date(Math.max(...times) + 2 * DAY).toISOString()

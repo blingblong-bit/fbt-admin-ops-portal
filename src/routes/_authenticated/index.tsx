@@ -756,7 +756,7 @@ function Dashboard() {
         "needs_package_review",
         "renewal_review",
         "renewal_manual",
-
+        "new_clients",
       ]),
     [],
   );

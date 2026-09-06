@@ -984,6 +984,101 @@ function Dashboard() {
   );
 }
 
+function NewClientsByMonthView({
+  months,
+  selectedMonth,
+  onSelectMonth,
+  selectedClients,
+  isScheduled,
+  hideAmount,
+  onClose,
+}: {
+  months: NewClientsMonth[];
+  selectedMonth: string;
+  onSelectMonth: (m: string) => void;
+  selectedClients: Client[];
+  isScheduled: (id: string) => boolean;
+  hideAmount: boolean;
+  onClose: () => void;
+}) {
+  return (
+    <section>
+      <div className="mb-3 flex items-center justify-between md:mb-4">
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={onClose}
+            className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
+          >
+            <ArrowLeft className="h-4 w-4" /> Back
+          </button>
+          <h2 className="text-lg font-semibold tracking-tight md:text-xl">
+            New Clients by Month
+          </h2>
+        </div>
+        <span className="text-sm text-slate-500">
+          {selectedClients.length} in {longMonthLabel(selectedMonth)}
+        </span>
+      </div>
+
+      {/* Month picker */}
+      <div className="mb-4 flex flex-wrap gap-2">
+        {months.map((mc) => {
+          const active = mc.month === selectedMonth;
+          return (
+            <button
+              key={mc.month}
+              type="button"
+              onClick={() => onSelectMonth(mc.month)}
+              className={
+                "inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-medium shadow-sm transition-colors " +
+                (active
+                  ? "border-slate-900 bg-slate-900 text-white"
+                  : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50")
+              }
+            >
+              <CalendarDays className="h-4 w-4" />
+              {shortMonthLabel(mc.month)}
+              <span
+                className={
+                  "ml-1 rounded-full px-1.5 py-0.5 text-xs " +
+                  (active
+                    ? "bg-white/20 text-white"
+                    : "bg-slate-100 text-slate-600")
+                }
+              >
+                {mc.clients.length}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      {selectedClients.length === 0 ? (
+        <p className="rounded-lg border border-dashed bg-white p-6 text-sm text-slate-500">
+          No new clients in {longMonthLabel(selectedMonth)}.
+        </p>
+      ) : (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {selectedClients.map((c) => (
+            <div key={c.id} className="flex flex-col gap-2">
+              <SmartClientCard
+                client={c}
+                isScheduled={isScheduled(c.id)}
+                hideAmount={hideAmount}
+              />
+              <div className="-mt-1 flex items-center gap-1.5 text-xs text-slate-500">
+                <CalendarDays className="h-3.5 w-3.5" />
+                Added {formatDate(c.created_at)}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
 type TileDef = {
   key: string;
   label: string;

@@ -979,6 +979,7 @@ function Dashboard() {
           </div>
         )}
       </section>
+      )}
     </AppShell>
   );
 }

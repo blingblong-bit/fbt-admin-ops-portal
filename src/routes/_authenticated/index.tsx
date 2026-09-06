@@ -407,6 +407,10 @@ function Dashboard() {
   const [filter, setFilter] = useState<FilterKey>(isStaff ? "all" : "payment_due");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("active_assessment");
 
+  // New-clients-per-month view state. Activated by the "New Clients" tile.
+  const [newClientsActive, setNewClientsActive] = useState(false);
+  const [newClientsMonth, setNewClientsMonth] = useState<string>(currentClinicMonth());
+
   // Role can resolve after first render; force off payment-due filters for staff.
   useEffect(() => {
     if (

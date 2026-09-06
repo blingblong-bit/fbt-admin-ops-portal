@@ -3,6 +3,8 @@ import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
+  ArrowLeft,
+  CalendarDays,
   ClipboardList,
 
   CalendarClock,
@@ -14,6 +16,7 @@ import {
   Hourglass,
   Receipt,
   Users,
+  UserPlus,
   RefreshCw,
   HelpCircle,
 } from "lucide-react";
@@ -29,6 +32,7 @@ import { Button } from "@/components/ui/button";
 import {
   amountOwed,
   effectiveStatus,
+  formatDate,
   formatCurrency,
   fullName,
   needsPackageReview,
@@ -212,6 +216,94 @@ function clinicYmd(d: Date): string {
   return `${get("year")}-${get("month")}-${get("day")}`;
 }
 
+// New-clients-per-month counter starts at August 2026. The ~1,700 June-2026
+// records are a bulk import, not genuine new additions, so they are excluded.
+const NEW_CLIENTS_START_MONTH = "2026-08";
+
+/** Clinic-local "YYYY-MM" for an ISO instant. */
+function clinicMonth(iso: string): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: CLINIC_TZ,
+    year: "numeric",
+    month: "2-digit",
+  }).format(new Date(iso));
+}
+
+/** "YYYY-MM" of the current clinic-local month. */
+function currentClinicMonth(): string {
+  return clinicMonth(new Date().toISOString());
+}
+
+/** Build the list of months (YYYY-MM) from the start month through today. */
+function buildMonthRange(startMonth: string): string[] {
+  const [sy, sm] = startMonth.split("-").map(Number);
+  const end = currentClinicMonth();
+  const [ey, em] = end.split("-").map(Number);
+  const months: string[] = [];
+  let y = sy;
+  let m = sm;
+  while (y < ey || (y === ey && m <= em)) {
+    months.push(`${y}-${String(m).padStart(2, "0")}`);
+    m += 1;
+    if (m > 12) {
+      m = 1;
+      y += 1;
+    }
+  }
+  return months;
+}
+
+/** Short month name for a "YYYY-MM" key, e.g. "2026-09" -> "Sep". */
+function shortMonthLabel(monthKey: string): string {
+  const [y, m] = monthKey.split("-").map(Number);
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    timeZone: "UTC",
+  }).format(new Date(Date.UTC(y, m - 1, 1)));
+}
+
+/** Long month + year for a "YYYY-MM" key, e.g. "2026-09" -> "September 2026". */
+function longMonthLabel(monthKey: string): string {
+  const [y, m] = monthKey.split("-").map(Number);
+  return new Intl.DateTimeFormat("en-US", {
+    month: "long",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(new Date(Date.UTC(y, m - 1, 1)));
+}
+
+interface NewClientsMonth {
+  month: string;
+  clients: Client[];
+}
+
+/**
+ * Group non-soft-deleted clients created on/after NEW_CLIENTS_START_MONTH by
+ * their clinic-local created_at month, sorted newest month first and within
+ * each month by created_at descending (newest additions first).
+ */
+function groupNewClientsByMonth(clients: Client[]): NewClientsMonth[] {
+  const buckets = new Map<string, Client[]>();
+  for (const c of clients) {
+    if (c.deleted_at) continue;
+    const month = clinicMonth(c.created_at);
+    if (month < NEW_CLIENTS_START_MONTH) continue;
+    const arr = buckets.get(month) ?? [];
+    arr.push(c);
+    buckets.set(month, arr);
+  }
+  const months = buildMonthRange(NEW_CLIENTS_START_MONTH);
+  return months
+    .slice()
+    .reverse()
+    .map((month) => ({
+      month,
+      clients: (buckets.get(month) ?? [])
+        .slice()
+        .sort((a, b) => b.created_at.localeCompare(a.created_at)),
+    }));
+}
+
 
 function Dashboard() {
   const { isStaff } = useRole();
@@ -316,6 +408,10 @@ function Dashboard() {
   const [filter, setFilter] = useState<FilterKey>(isStaff ? "all" : "payment_due");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("active_assessment");
 
+  // New-clients-per-month view state. Activated by the "New Clients" tile.
+  const [newClientsActive, setNewClientsActive] = useState(false);
+  const [newClientsMonth, setNewClientsMonth] = useState<string>(currentClinicMonth());
+
   // Role can resolve after first render; force off payment-due filters for staff.
   useEffect(() => {
     if (
@@ -335,6 +431,23 @@ function Dashboard() {
       matchesStatus(effectiveStatus(c, isScheduled(c.id)), statusFilter),
     );
   }, [clients, statusFilter, scheduledSet]);
+
+  // New-clients-per-month grouping. Includes archived clients (they were
+  // genuinely added that month); excludes soft-deleted records. Derived from
+  // the full `clients` list, independent of the status filter.
+  const newClientsByMonth = useMemo(
+    () => groupNewClientsByMonth(clients),
+    [clients],
+  );
+  const newClientsMonthMap = useMemo(() => {
+    const m = new Map<string, NewClientsMonth>();
+    for (const mc of newClientsByMonth) m.set(mc.month, mc);
+    return m;
+  }, [newClientsByMonth]);
+  const currentMonthNewCount =
+    newClientsMonthMap.get(currentClinicMonth())?.clients.length ?? 0;
+  const selectedNewClients =
+    newClientsMonthMap.get(newClientsMonth)?.clients ?? [];
 
   const counts = useMemo(() => {
     const c = {
@@ -610,6 +723,15 @@ function Dashboard() {
       href: "/renewal-review",
     },
     {
+      key: "new_clients",
+      label: "New Clients",
+      sublabel: longMonthLabel(currentClinicMonth()),
+      icon: <UserPlus className="h-5 w-5" />,
+      count: currentMonthNewCount,
+      tone: currentMonthNewCount > 0 ? "amber" : "slate",
+      staffHidden: true,
+    },
+    {
       key: "all",
       label: "All Active",
       icon: <Users className="h-5 w-5" />,
@@ -635,7 +757,7 @@ function Dashboard() {
         "needs_package_review",
         "renewal_review",
         "renewal_manual",
-
+        "new_clients",
       ]),
     [],
   );
@@ -713,8 +835,21 @@ function Dashboard() {
           <Tile
             key={t.key}
             tile={t}
-            active={!t.href && filter === t.key}
-            onClick={() => { if (!t.href) setFilter(t.key as FilterKey); }}
+            active={
+              t.key === "new_clients"
+                ? newClientsActive
+                : !t.href && filter === t.key
+            }
+            onClick={() => {
+              if (t.href) return;
+              if (t.key === "new_clients") {
+                setNewClientsMonth(currentClinicMonth());
+                setNewClientsActive(true);
+              } else {
+                setFilter(t.key as FilterKey);
+                setNewClientsActive(false);
+              }
+            }}
             editing={showAllTiles}
             hidden={hiddenTiles.has(t.key)}
             onToggleHidden={() => toggleTileHidden(t.key)}
@@ -737,7 +872,21 @@ function Dashboard() {
 
 
 
+      {/* New Clients per month — admin tile view */}
+      {newClientsActive && (
+        <NewClientsByMonthView
+          months={newClientsByMonth}
+          selectedMonth={newClientsMonth}
+          onSelectMonth={setNewClientsMonth}
+          selectedClients={selectedNewClients}
+          isScheduled={isScheduled}
+          hideAmount={isStaff}
+          onClose={() => setNewClientsActive(false)}
+        />
+      )}
+
       {/* Filtered list */}
+      {!newClientsActive && (
       <section>
         <div className="mb-3 flex items-baseline justify-between md:mb-4">
           <h2 className="text-lg font-semibold tracking-tight md:text-xl">
@@ -831,7 +980,103 @@ function Dashboard() {
           </div>
         )}
       </section>
+      )}
     </AppShell>
+  );
+}
+
+function NewClientsByMonthView({
+  months,
+  selectedMonth,
+  onSelectMonth,
+  selectedClients,
+  isScheduled,
+  hideAmount,
+  onClose,
+}: {
+  months: NewClientsMonth[];
+  selectedMonth: string;
+  onSelectMonth: (m: string) => void;
+  selectedClients: Client[];
+  isScheduled: (id: string) => boolean;
+  hideAmount: boolean;
+  onClose: () => void;
+}) {
+  return (
+    <section>
+      <div className="mb-3 flex items-center justify-between md:mb-4">
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={onClose}
+            className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
+          >
+            <ArrowLeft className="h-4 w-4" /> Back
+          </button>
+          <h2 className="text-lg font-semibold tracking-tight md:text-xl">
+            New Clients by Month
+          </h2>
+        </div>
+        <span className="text-sm text-slate-500">
+          {selectedClients.length} in {longMonthLabel(selectedMonth)}
+        </span>
+      </div>
+
+      {/* Month picker */}
+      <div className="mb-4 flex flex-wrap gap-2">
+        {months.map((mc) => {
+          const active = mc.month === selectedMonth;
+          return (
+            <button
+              key={mc.month}
+              type="button"
+              onClick={() => onSelectMonth(mc.month)}
+              className={
+                "inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-medium shadow-sm transition-colors " +
+                (active
+                  ? "border-slate-900 bg-slate-900 text-white"
+                  : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50")
+              }
+            >
+              <CalendarDays className="h-4 w-4" />
+              {shortMonthLabel(mc.month)}
+              <span
+                className={
+                  "ml-1 rounded-full px-1.5 py-0.5 text-xs " +
+                  (active
+                    ? "bg-white/20 text-white"
+                    : "bg-slate-100 text-slate-600")
+                }
+              >
+                {mc.clients.length}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      {selectedClients.length === 0 ? (
+        <p className="rounded-lg border border-dashed bg-white p-6 text-sm text-slate-500">
+          No new clients in {longMonthLabel(selectedMonth)}.
+        </p>
+      ) : (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {selectedClients.map((c) => (
+            <div key={c.id} className="flex flex-col gap-2">
+              <SmartClientCard
+                client={c}
+                isScheduled={isScheduled(c.id)}
+                hideAmount={hideAmount}
+              />
+              <div className="-mt-1 flex items-center gap-1.5 text-xs text-slate-500">
+                <CalendarDays className="h-3.5 w-3.5" />
+                Added {formatDate(c.created_at)}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
   );
 }
 

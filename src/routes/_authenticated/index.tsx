@@ -834,8 +834,21 @@ function Dashboard() {
           <Tile
             key={t.key}
             tile={t}
-            active={!t.href && filter === t.key}
-            onClick={() => { if (!t.href) setFilter(t.key as FilterKey); }}
+            active={
+              t.key === "new_clients"
+                ? newClientsActive
+                : !t.href && filter === t.key
+            }
+            onClick={() => {
+              if (t.href) return;
+              if (t.key === "new_clients") {
+                setNewClientsMonth(currentClinicMonth());
+                setNewClientsActive(true);
+              } else {
+                setFilter(t.key as FilterKey);
+                setNewClientsActive(false);
+              }
+            }}
             editing={showAllTiles}
             hidden={hiddenTiles.has(t.key)}
             onToggleHidden={() => toggleTileHidden(t.key)}

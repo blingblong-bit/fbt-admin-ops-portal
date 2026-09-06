@@ -431,6 +431,23 @@ function Dashboard() {
     );
   }, [clients, statusFilter, scheduledSet]);
 
+  // New-clients-per-month grouping. Includes archived clients (they were
+  // genuinely added that month); excludes soft-deleted records. Derived from
+  // the full `clients` list, independent of the status filter.
+  const newClientsByMonth = useMemo(
+    () => groupNewClientsByMonth(clients),
+    [clients],
+  );
+  const newClientsMonthMap = useMemo(() => {
+    const m = new Map<string, NewClientsMonth>();
+    for (const mc of newClientsByMonth) m.set(mc.month, mc);
+    return m;
+  }, [newClientsByMonth]);
+  const currentMonthNewCount =
+    newClientsMonthMap.get(currentClinicMonth())?.clients.length ?? 0;
+  const selectedNewClients =
+    newClientsMonthMap.get(newClientsMonth)?.clients ?? [];
+
   const counts = useMemo(() => {
     const c = {
       all: 0,

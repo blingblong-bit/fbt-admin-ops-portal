@@ -722,6 +722,15 @@ function Dashboard() {
       href: "/renewal-review",
     },
     {
+      key: "new_clients",
+      label: "New Clients",
+      sublabel: longMonthLabel(currentClinicMonth()),
+      icon: <UserPlus className="h-5 w-5" />,
+      count: currentMonthNewCount,
+      tone: currentMonthNewCount > 0 ? "amber" : "slate",
+      staffHidden: true,
+    },
+    {
       key: "all",
       label: "All Active",
       icon: <Users className="h-5 w-5" />,

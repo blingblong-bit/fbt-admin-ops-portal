@@ -215,6 +215,94 @@ function clinicYmd(d: Date): string {
   return `${get("year")}-${get("month")}-${get("day")}`;
 }
 
+// New-clients-per-month counter starts at August 2026. The ~1,700 June-2026
+// records are a bulk import, not genuine new additions, so they are excluded.
+const NEW_CLIENTS_START_MONTH = "2026-08";
+
+/** Clinic-local "YYYY-MM" for an ISO instant. */
+function clinicMonth(iso: string): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: CLINIC_TZ,
+    year: "numeric",
+    month: "2-digit",
+  }).format(new Date(iso));
+}
+
+/** "YYYY-MM" of the current clinic-local month. */
+function currentClinicMonth(): string {
+  return clinicMonth(new Date().toISOString());
+}
+
+/** Build the list of months (YYYY-MM) from the start month through today. */
+function buildMonthRange(startMonth: string): string[] {
+  const [sy, sm] = startMonth.split("-").map(Number);
+  const end = currentClinicMonth();
+  const [ey, em] = end.split("-").map(Number);
+  const months: string[] = [];
+  let y = sy;
+  let m = sm;
+  while (y < ey || (y === ey && m <= em)) {
+    months.push(`${y}-${String(m).padStart(2, "0")}`);
+    m += 1;
+    if (m > 12) {
+      m = 1;
+      y += 1;
+    }
+  }
+  return months;
+}
+
+/** Short month name for a "YYYY-MM" key, e.g. "2026-09" -> "Sep". */
+function shortMonthLabel(monthKey: string): string {
+  const [y, m] = monthKey.split("-").map(Number);
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    timeZone: "UTC",
+  }).format(new Date(Date.UTC(y, m - 1, 1)));
+}
+
+/** Long month + year for a "YYYY-MM" key, e.g. "2026-09" -> "September 2026". */
+function longMonthLabel(monthKey: string): string {
+  const [y, m] = monthKey.split("-").map(Number);
+  return new Intl.DateTimeFormat("en-US", {
+    month: "long",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(new Date(Date.UTC(y, m - 1, 1)));
+}
+
+interface NewClientsMonth {
+  month: string;
+  clients: Client[];
+}
+
+/**
+ * Group non-soft-deleted clients created on/after NEW_CLIENTS_START_MONTH by
+ * their clinic-local created_at month, sorted newest month first and within
+ * each month by created_at descending (newest additions first).
+ */
+function groupNewClientsByMonth(clients: Client[]): NewClientsMonth[] {
+  const buckets = new Map<string, Client[]>();
+  for (const c of clients) {
+    if (c.deleted_at) continue;
+    const month = clinicMonth(c.created_at);
+    if (month < NEW_CLIENTS_START_MONTH) continue;
+    const arr = buckets.get(month) ?? [];
+    arr.push(c);
+    buckets.set(month, arr);
+  }
+  const months = buildMonthRange(NEW_CLIENTS_START_MONTH);
+  return months
+    .slice()
+    .reverse()
+    .map((month) => ({
+      month,
+      clients: (buckets.get(month) ?? [])
+        .slice()
+        .sort((a, b) => b.created_at.localeCompare(a.created_at)),
+    }));
+}
+
 
 function Dashboard() {
   const { isStaff } = useRole();

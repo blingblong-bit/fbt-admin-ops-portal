@@ -871,7 +871,21 @@ function Dashboard() {
 
 
 
+      {/* New Clients per month — admin tile view */}
+      {newClientsActive && (
+        <NewClientsByMonthView
+          months={newClientsByMonth}
+          selectedMonth={newClientsMonth}
+          onSelectMonth={setNewClientsMonth}
+          selectedClients={selectedNewClients}
+          isScheduled={isScheduled}
+          hideAmount={isStaff}
+          onClose={() => setNewClientsActive(false)}
+        />
+      )}
+
       {/* Filtered list */}
+      {!newClientsActive && (
       <section>
         <div className="mb-3 flex items-baseline justify-between md:mb-4">
           <h2 className="text-lg font-semibold tracking-tight md:text-xl">

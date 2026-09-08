@@ -1649,6 +1649,11 @@ export type RenewalForecastRow = {
   week_bucket: "this" | "next" | "later";
   package_price: number;
   next_package_price: number;
+  /** Staff has already prepared the next package (pending activation). */
+  pre_renewed: boolean;
+  pending_start_ymd: string | null;
+  pending_total_visits: number | null;
+  pending_package_name: string | null;
 };
 
 export type RenewalForecastResult = {

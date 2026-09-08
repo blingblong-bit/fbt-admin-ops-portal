@@ -777,6 +777,14 @@ function Dashboard() {
       tone: counts.needs_renewal > 0 ? "amber" : "slate",
     },
     {
+      key: "renewal_scheduled",
+      label: "Renewal Scheduled",
+      sublabel: "next package prepared — activates at check-in",
+      icon: <RefreshCw className="h-5 w-5" />,
+      count: counts.renewal_scheduled,
+      tone: counts.renewal_scheduled > 0 ? "emerald" : "slate",
+    },
+    {
       key: "needs_package_review",
       label: "First Visit — No Package Info",
       sublabel: "assessment only — needs package review",

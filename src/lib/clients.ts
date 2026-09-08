@@ -15,6 +15,11 @@ export interface Client {
   package_total_visits: number;
   package_price: number;
   next_package_price: number | null;
+  /** Prepared ("pre-renewed") next package — inactive until its first visit. */
+  pending_renewal_start_date?: string | null;
+  pending_renewal_price?: number | null;
+  pending_renewal_total_visits?: number | null;
+  pending_renewal_package_name?: string | null;
   package_start_date: string | null;
   visits_used: number | null;
   amount_paid: number;

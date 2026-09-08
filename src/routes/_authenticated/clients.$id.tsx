@@ -230,7 +230,8 @@ function ClientDetailPage() {
         <div className="flex flex-col items-end gap-1">
           <div className="flex flex-wrap gap-2">
 
-            {(c.package_total_visits ?? 0) > 0 && remaining !== 0 && (
+            {(c.package_total_visits ?? 0) > 0 &&
+              (remaining !== 0 || !!c.pending_renewal_start_date) && (
               <Button
                 onClick={() => completeVisit.mutate()}
                 title={!hasVisitData ? "Visits unknown — verify before completing." : undefined}

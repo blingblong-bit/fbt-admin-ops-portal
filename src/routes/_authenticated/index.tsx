@@ -1015,15 +1015,35 @@ function Dashboard() {
                   scheduleStatus = "not_scheduled";
                 }
               }
+              const forecast =
+                filter === "needs_renewal" ? renewalMap.get(c.id) : undefined;
               return (
-                <SmartClientCard
-                  key={c.id}
-                  client={c}
-                  isScheduled={isScheduled(c.id)}
-                  hideAmount={isStaff}
-                  scheduleStatus={scheduleStatus}
-                  scheduleStatusDetail={scheduleStatusDetail}
-                />
+                <div key={c.id} className="flex flex-col gap-2">
+                  <SmartClientCard
+                    client={c}
+                    isScheduled={isScheduled(c.id)}
+                    hideAmount={isStaff}
+                    scheduleStatus={scheduleStatus}
+                    scheduleStatusDetail={scheduleStatusDetail}
+                  />
+                  {forecast && (
+                    <div className="-mt-1 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+                      <div>
+                        {forecast.visits_used} of {forecast.package_total_visits} visits used ·{" "}
+                        {forecast.remaining} remaining · {forecast.upcoming_count} upcoming
+                        {forecast.upcoming_count === 1 ? " appointment" : " appointments"}
+                      </div>
+                      <div className="mt-1 font-medium">
+                        New package starts {formatYmd(forecast.first_uncovered_ymd)}
+                      </div>
+                      {!isStaff && (
+                        <div className="mt-1">
+                          Next package amount: {formatCurrency(forecast.next_package_price)}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
               );
             })}
           </div>

@@ -574,6 +574,19 @@ function RenewDialog({
         throw new Error("Amount paid cannot exceed package price");
       }
       // Reset visits_used first to satisfy validation trigger.
+      // Package history: keep the completed package and its final visit count.
+      await supabase.from("client_activities").insert({
+        client_id: client.id,
+        activity_type: "package_completed",
+        description: `Package completed: "${client.package_name ?? "—"}" (${client.visits_used ?? 0}/${client.package_total_visits} visits)`,
+        metadata: {
+          package_name: client.package_name,
+          package_total_visits: client.package_total_visits,
+          visits_used: client.visits_used ?? 0,
+          package_price: Number(client.package_price ?? 0),
+          amount_paid: Number(client.amount_paid ?? 0),
+        },
+      });
       const { error: e1 } = await supabase
         .from("clients")
         .update({ visits_used: 0, amount_paid: 0 })
@@ -589,6 +602,11 @@ function RenewDialog({
           amount_paid: Number(form.amount_paid),
           // Pending next-package state is consumed by the renewal.
           next_package_price: null,
+          pending_renewal_start_date: null,
+          pending_renewal_price: null,
+          pending_renewal_total_visits: null,
+          pending_renewal_package_name: null,
+          pending_renewal_created_at: null,
         })
         .eq("id", client.id);
       if (e2) throw e2;

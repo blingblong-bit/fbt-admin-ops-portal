@@ -18,7 +18,12 @@ import {
 } from "@/components/PackageReviewBadge";
 
 
-import { getScheduledClientIds, getClientAppointments, type ClientAppointment } from "@/lib/schedule.functions";
+import {
+  getScheduledClientIds,
+  getClientAppointments,
+  completeVisitForClient,
+  type ClientAppointment,
+} from "@/lib/schedule.functions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 import { Button } from "@/components/ui/button";
@@ -114,12 +119,20 @@ function ClientDetailPage() {
     qc.invalidateQueries({ queryKey: ["clients"] });
   };
 
+  const completeVisitFn = useServerFn(completeVisitForClient);
+
   const completeVisit = useMutation({
     mutationFn: async () => {
       if (!c) return;
       const current = c.visits_used ?? 0;
+      // A prepared next package starts with this visit — let the server handle
+      // activating it instead of blocking on the finished package's count.
       if (current >= c.package_total_visits) {
-        throw new Error("All visits already used");
+        if (!c.pending_renewal_start_date) {
+          throw new Error("All visits already used");
+        }
+        await completeVisitFn({ data: { clientId: id } });
+        return;
       }
       const next = current + 1;
       const { error } = await supabase

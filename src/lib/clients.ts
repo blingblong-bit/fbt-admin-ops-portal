@@ -137,7 +137,7 @@ export function statusClasses(s: ClientStatus): string {
 type SimpleClient = Pick<
   Client,
   "package_total_visits" | "visits_used" | "package_price" | "amount_paid"
-> & Partial<Pick<Client, "payment_model">>;
+> & Partial<Pick<Client, "payment_model" | "previous_package_owed">>;
 
 
 /**
@@ -145,7 +145,7 @@ type SimpleClient = Pick<
  * pass `isScheduled` based on the current Square booking window.
  */
 export function simpleStatus(c: SimpleClient, isScheduled: boolean): SimpleStatus {
-  const owed = amountOwed(c);
+  const owed = totalOwed(c);
   const remaining = visitsRemaining(c);
   if (remaining !== null && c.package_total_visits > 0 && remaining === 0) return "Package Complete";
   if (owed > 0) return "Payment Due";
@@ -167,12 +167,13 @@ export function effectiveStatus(
     | "amount_paid"
     | "manual_active"
     | "status"
-  >,
+  > &
+    Partial<Pick<Client, "previous_package_owed">>,
   isScheduled: boolean,
 ): LifecycleStatus {
   if (c.status === "archived") return "archived";
   if (c.manual_active) return "active";
-  const owed = amountOwed(c);
+  const owed = totalOwed(c);
   const remaining = visitsRemaining(c);
   const visitsLeft = remaining ?? 0;
   if (visitsLeft > 0 || owed > 0) return "active";
@@ -211,7 +212,7 @@ export function simpleStatusDot(s: SimpleStatus): string {
 }
 
 export function primaryAction(c: SimpleClient, isScheduled: boolean): PrimaryActionKind {
-  const owed = amountOwed(c);
+  const owed = totalOwed(c);
   const remaining = visitsRemaining(c);
   if (remaining !== null && c.package_total_visits > 0 && remaining === 0) return "renew_package";
   if (owed > 0) return "record_payment";

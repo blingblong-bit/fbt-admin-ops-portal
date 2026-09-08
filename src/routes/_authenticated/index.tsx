@@ -497,6 +497,7 @@ function Dashboard() {
       critical_total: 0,
       package_complete: 0,
       needs_renewal: 0,
+      renewal_scheduled: 0,
       needs_package_review: 0,
       // Money owed for the NEXT package, tracked separately from the
       // current-package balance above.

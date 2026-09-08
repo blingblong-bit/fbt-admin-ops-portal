@@ -162,6 +162,7 @@ function matchesFilter(
   isOverduePrior: boolean,
   startBucket: StartBucket = null,
   needsPkgReview: boolean = false,
+  needsRenewal: boolean = false,
 ): boolean {
 
   const owed = amountOwed(c);

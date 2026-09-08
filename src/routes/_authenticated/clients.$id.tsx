@@ -552,7 +552,7 @@ function RenewDialog({
       setForm({
         package_name: client.package_name ?? "",
         package_total_visits: client.package_total_visits || 8,
-        package_price: client.package_price || 0,
+        package_price: client.next_package_price ?? client.package_price ?? 0,
         amount_paid: 0,
         package_start_date: nextApptYmd ?? clinicYmd(new Date()),
       });

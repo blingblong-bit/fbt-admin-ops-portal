@@ -782,7 +782,7 @@ function Dashboard() {
       sublabel: "next package prepared — activates at check-in",
       icon: <RefreshCw className="h-5 w-5" />,
       count: counts.renewal_scheduled,
-      tone: counts.renewal_scheduled > 0 ? "emerald" : "slate",
+      tone: "slate",
     },
     {
       key: "needs_package_review",

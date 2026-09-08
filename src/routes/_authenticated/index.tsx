@@ -579,6 +579,7 @@ function Dashboard() {
         startBucketOf(c),
         needsPackageReview(c, dismissedIds, c.id),
         renewalMap.has(c.id),
+        renewalMap.get(c.id)?.pre_renewed === true,
       ),
     );
 

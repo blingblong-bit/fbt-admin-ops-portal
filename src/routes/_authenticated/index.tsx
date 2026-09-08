@@ -193,10 +193,10 @@ function matchesFilter(
     case "package_complete":
       return r !== null && c.package_total_visits > 0 && r === 0;
     case "needs_renewal":
-      // Package fully used up AND a future booking exists — the "already
-      // finished" subset of the Renewal Pending badge. Clears itself as soon
-      // as staff runs Renew Package (visits_used resets).
-      return r !== null && c.package_total_visits > 0 && r === 0 && isScheduled;
+      // Driven by the upcoming-appointment forecast: the client has booked
+      // more upcoming visits than their current package can still cover, so
+      // one of those appointments starts a new package.
+      return needsRenewal;
     case "needs_package_review":
       return needsPkgReview;
   }

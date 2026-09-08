@@ -1534,3 +1534,155 @@ export const unmarkClientUnavailableNextWeek = createServerFn({ method: "POST" }
   });
 
 
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Needs Renewal forecast
+//
+// A client needs renewal as soon as they have booked MORE upcoming visits than
+// their current package can still cover. remaining = total - used; the next
+// `remaining` upcoming appointments are covered by the current package, and the
+// first appointment after those is the first visit — and the start date — of
+// the next package. Check In remains the only thing that increments visits;
+// appointments are used purely to forecast.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type RenewalForecastRow = {
+  client_id: string;
+  visits_used: number;
+  package_total_visits: number;
+  remaining: number;
+  upcoming_count: number;
+  appointment_ymds: string[];
+  first_uncovered_index: number; // 0-based index into appointment_ymds
+  first_uncovered_ymd: string;
+  week_bucket: "this" | "next" | "later";
+  package_price: number;
+  next_package_price: number;
+};
+
+export type RenewalForecastResult = {
+  rows: RenewalForecastRow[];
+  week_start: string;
+  next_week_start: string;
+  error: string | null;
+};
+
+const FORECAST_DAYS = 90;
+
+export const getRenewalForecast = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }): Promise<RenewalForecastResult> => {
+    const todayYmd = ymdInTz(new Date());
+    const weekStartYmd = workWeekStartFromYmd(todayYmd);
+    const nextWeekStartYmd = addDaysYmd(weekStartYmd, 7);
+    const empty: RenewalForecastResult = {
+      rows: [],
+      week_start: weekStartYmd,
+      next_week_start: nextWeekStartYmd,
+      error: null,
+    };
+
+    const token = process.env.SQUARE_PRODUCTION_ACCESS_TOKEN;
+    if (!token) return { ...empty, error: "SQUARE_PRODUCTION_ACCESS_TOKEN is not configured" };
+
+    // Square caps a bookings query at 31 days — page through in 30-day windows.
+    const now = new Date();
+    const bookings: SquareBooking[] = [];
+    for (let i = 0; i < Math.ceil(FORECAST_DAYS / 30); i++) {
+      const start = new Date(now.getTime() + i * 30 * MS_PER_DAY);
+      const end = new Date(now.getTime() + (i + 1) * 30 * MS_PER_DAY);
+      const { bookings: page, error } = await fetchSquareBookings(
+        token,
+        start.toISOString(),
+        end.toISOString(),
+      );
+      if (error) return { ...empty, error };
+      bookings.push(...page);
+    }
+
+    // Upcoming, non-cancelled bookings grouped by Square customer.
+    const nowIso = now.toISOString();
+    const byCustomer = new Map<string, string[]>();
+    for (const b of bookings) {
+      const status = (b.status ?? "").toString().toUpperCase();
+      if (/CANCEL|DECLINE|NO_SHOW/.test(status)) continue;
+      if (!b.start_at || !b.customer_id) continue;
+      if (b.start_at < nowIso) continue;
+      const list = byCustomer.get(b.customer_id) ?? [];
+      list.push(b.start_at);
+      byCustomer.set(b.customer_id, list);
+    }
+    if (byCustomer.size === 0) return empty;
+
+    const { data: rows, error: cErr } = await context.supabase
+      .from("clients")
+      .select(
+        "id, square_customer_id, visits_used, package_total_visits, package_price, next_package_price, status",
+      )
+      .is("deleted_at", null)
+      .neq("status", "archived")
+      .gt("package_total_visits", 0)
+      .not("visits_used", "is", null)
+      .in("square_customer_id", Array.from(byCustomer.keys()));
+    if (cErr) throw cErr;
+
+    const out: RenewalForecastRow[] = [];
+    for (const r of (rows ?? []) as Array<{
+      id: string;
+      square_customer_id: string | null;
+      visits_used: number | null;
+      package_total_visits: number;
+      package_price: number | string | null;
+      next_package_price: number | string | null;
+    }>) {
+      const starts = [...(byCustomer.get(r.square_customer_id ?? "") ?? [])].sort();
+      if (starts.length === 0) continue;
+      const used = Number(r.visits_used ?? 0);
+      const total = Number(r.package_total_visits ?? 0);
+      const remaining = Math.max(0, total - used);
+      if (starts.length <= remaining) continue;
+
+      const ymds = starts.map((s) => ymdInTz(new Date(s)));
+      const firstUncoveredYmd = ymds[remaining];
+      const bucketStart = workWeekStartFromYmd(firstUncoveredYmd);
+      const week_bucket =
+        bucketStart === weekStartYmd ? "this" : bucketStart === nextWeekStartYmd ? "next" : "later";
+      const basePrice = Number(r.package_price ?? 0);
+      const override = r.next_package_price === null ? null : Number(r.next_package_price);
+
+      out.push({
+        client_id: r.id,
+        visits_used: used,
+        package_total_visits: total,
+        remaining,
+        upcoming_count: starts.length,
+        appointment_ymds: ymds,
+        first_uncovered_index: remaining,
+        first_uncovered_ymd: firstUncoveredYmd,
+        week_bucket,
+        package_price: basePrice,
+        next_package_price: override ?? basePrice,
+      });
+    }
+
+    out.sort((a, b) => a.first_uncovered_ymd.localeCompare(b.first_uncovered_ymd));
+    return { ...empty, rows: out };
+  });
+
+/** Staff override for a client's projected next-package amount. */
+export const setNextPackagePrice = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { clientId: string; price: number | null }) => {
+    if (!d?.clientId || typeof d.clientId !== "string") throw new Error("clientId required");
+    const price = d.price === null || d.price === undefined ? null : Number(d.price);
+    if (price !== null && (!Number.isFinite(price) || price < 0)) throw new Error("Invalid price");
+    return { clientId: d.clientId, price };
+  })
+  .handler(async ({ data, context }): Promise<{ ok: true }> => {
+    const { error } = await context.supabase
+      .from("clients")
+      .update({ next_package_price: data.price })
+      .eq("id", data.clientId);
+    if (error) throw error;
+    return { ok: true };
+  });

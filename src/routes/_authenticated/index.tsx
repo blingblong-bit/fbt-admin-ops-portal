@@ -170,6 +170,7 @@ function matchesFilter(
   startBucket: StartBucket = null,
   needsPkgReview: boolean = false,
   needsRenewal: boolean = false,
+  renewalScheduled: boolean = false,
 ): boolean {
 
   const currentOwed = amountOwed(c);
@@ -205,8 +206,12 @@ function matchesFilter(
     case "needs_renewal":
       // Driven by the upcoming-appointment forecast: the client has booked
       // more upcoming visits than their current package can still cover, so
-      // one of those appointments starts a new package.
-      return needsRenewal;
+      // one of those appointments starts a new package. Once staff prepares
+      // the next package the client moves to "Renewal Scheduled".
+      return needsRenewal && !renewalScheduled;
+    case "renewal_scheduled":
+      // Already handled: a prepared/pending next package exists.
+      return renewalScheduled;
     case "needs_package_review":
       return needsPkgReview;
   }

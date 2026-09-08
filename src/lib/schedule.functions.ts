@@ -1725,19 +1725,23 @@ export const getRenewalForecast = createServerFn({ method: "GET" })
       list.push(b.start_at);
       byCustomer.set(b.customer_id, list);
     }
-    if (byCustomer.size === 0) return empty;
-
-    const { data: rows, error: cErr } = await context.supabase
-      .from("clients")
-      .select(
-        "id, square_customer_id, visits_used, package_total_visits, package_price, next_package_price, status, pending_renewal_start_date, pending_renewal_price, pending_renewal_total_visits, pending_renewal_package_name",
-      )
-      .is("deleted_at", null)
-      .neq("status", "archived")
-      .gt("package_total_visits", 0)
-      .not("visits_used", "is", null)
-      .in("square_customer_id", Array.from(byCustomer.keys()));
-    if (cErr) throw cErr;
+    // No early return when there are zero bookings: prepared renewals with no
+    // upcoming appointment must still be listed further down.
+    let rows: unknown[] | null = [];
+    if (byCustomer.size > 0) {
+      const { data, error: cErr } = await context.supabase
+        .from("clients")
+        .select(
+          "id, square_customer_id, visits_used, package_total_visits, package_price, next_package_price, status, pending_renewal_start_date, pending_renewal_price, pending_renewal_total_visits, pending_renewal_package_name",
+        )
+        .is("deleted_at", null)
+        .neq("status", "archived")
+        .gt("package_total_visits", 0)
+        .not("visits_used", "is", null)
+        .in("square_customer_id", Array.from(byCustomer.keys()));
+      if (cErr) throw cErr;
+      rows = data;
+    }
 
     const out: RenewalForecastRow[] = [];
     for (const r of (rows ?? []) as unknown as Array<{

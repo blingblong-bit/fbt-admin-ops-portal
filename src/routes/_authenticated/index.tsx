@@ -107,6 +107,7 @@ type FilterKey =
   | "critical"
   | "package_complete"
   | "needs_renewal"
+  | "renewal_scheduled"
   | "needs_package_review";
 
 const FILTER_LABEL: Record<FilterKey, string> = {
@@ -120,6 +121,7 @@ const FILTER_LABEL: Record<FilterKey, string> = {
   critical: "Critical",
   package_complete: "Package Complete",
   needs_renewal: "Needs Renewal",
+  renewal_scheduled: "Renewal Scheduled",
   needs_package_review: "First Visit — No Package Info, Needs Review",
 };
 

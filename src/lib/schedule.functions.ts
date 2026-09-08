@@ -659,12 +659,26 @@ export const completeVisitForClient = createServerFn({ method: "POST" })
 
 
 
-    const { data: c, error } = await context.supabase
+    const { data: c0, error } = await context.supabase
       .from("clients")
-      .select("visits_used, package_total_visits, payment_model")
+      .select(
+        "visits_used, package_total_visits, package_name, package_price, amount_paid, payment_model, pending_renewal_start_date, pending_renewal_price, pending_renewal_total_visits, pending_renewal_package_name",
+      )
       .eq("id", data.clientId)
       .single();
     if (error) throw error;
+    let c = c0 as unknown as {
+      visits_used: number | null;
+      package_total_visits: number;
+      package_name: string | null;
+      package_price: number | string | null;
+      amount_paid: number | string | null;
+      payment_model: string | null;
+      pending_renewal_start_date: string | null;
+      pending_renewal_price: number | string | null;
+      pending_renewal_total_visits: number | null;
+      pending_renewal_package_name: string | null;
+    } | null;
 
     const payPerVisit = c?.payment_model === "pay_per_visit";
     const noPackage = (c?.package_total_visits ?? 0) === 0;
@@ -688,9 +702,83 @@ export const completeVisitForClient = createServerFn({ method: "POST" })
       return { ok: true, visits_used: null, mode } as const;
     }
 
+    // Pre-renewed next package: activate it at the moment the first uncovered
+    // appointment is actually checked in — never earlier. The current package
+    // keeps its real count (e.g. 8/8) right up to that visit, and the new
+    // package starts at 0 so this check-in lands on 1/total.
+    let activated = false;
+    if (c?.pending_renewal_start_date) {
+      const visitYmd = ymdInTz(
+        data.appointmentStartAt ? new Date(data.appointmentStartAt) : new Date(),
+      );
+      if (visitYmd >= c.pending_renewal_start_date) {
+        const finalUsed = Number(c.visits_used ?? 0);
+        const newTotal = Number(c.pending_renewal_total_visits ?? c.package_total_visits ?? 0);
+        const newPrice = Number(c.pending_renewal_price ?? c.package_price ?? 0);
+        const newName = c.pending_renewal_package_name ?? c.package_name ?? null;
+
+        // Package history: preserve the completed package and its final count.
+        await context.supabase.from("client_activities").insert({
+          client_id: data.clientId,
+          activity_type: "package_completed",
+          description: `Package completed: "${c.package_name ?? "—"}" (${finalUsed}/${c.package_total_visits} visits)`,
+          metadata: {
+            package_name: c.package_name,
+            package_total_visits: c.package_total_visits,
+            visits_used: finalUsed,
+            package_price: Number(c.package_price ?? 0),
+            amount_paid: Number(c.amount_paid ?? 0),
+          },
+        });
+
+        // Reset the counter first so the validation trigger never sees
+        // visits_used > package_total_visits.
+        const { error: rErr } = await context.supabase
+          .from("clients")
+          .update({ visits_used: 0, amount_paid: 0 })
+          .eq("id", data.clientId);
+        if (rErr) throw rErr;
+        const { error: aErr } = await context.supabase
+          .from("clients")
+          .update({
+            package_name: newName,
+            package_total_visits: newTotal,
+            package_price: newPrice,
+            package_start_date: c.pending_renewal_start_date,
+            next_package_price: null,
+            pending_renewal_start_date: null,
+            pending_renewal_price: null,
+            pending_renewal_total_visits: null,
+            pending_renewal_package_name: null,
+            pending_renewal_created_at: null,
+          })
+          .eq("id", data.clientId);
+        if (aErr) throw aErr;
+
+        await context.supabase.from("client_activities").insert({
+          client_id: data.clientId,
+          activity_type: "renewal",
+          description: `Package renewed (pre-renewal activated): "${newName ?? "—"}" (${newTotal} visits, $${newPrice.toFixed(2)})`,
+          metadata: {
+            source: "pre_renewal_activation",
+            package_name: newName,
+            package_total_visits: newTotal,
+            package_price: newPrice,
+            package_start_date: c.pending_renewal_start_date,
+            ...(data.bookingId ? { booking_id: data.bookingId } : {}),
+          },
+        });
+
+        activated = true;
+        c = { ...c, visits_used: 0, package_total_visits: newTotal, package_name: newName };
+      }
+    }
+
     const current = c?.visits_used ?? 0;
     if (c && current >= c.package_total_visits) {
-      throw new Error("All visits already used");
+      throw new Error(
+        "New package starts with this visit — use Renew Package (or Pre-Renew Next Package) first.",
+      );
     }
     const next = current + 1;
     const { error: uErr } = await context.supabase
@@ -702,9 +790,12 @@ export const completeVisitForClient = createServerFn({ method: "POST" })
       client_id: data.clientId,
       activity_type: "visit",
       description: `Visit completed (${next}/${c?.package_total_visits ?? "?"}) — from Schedule Check`,
-      metadata: data.bookingId ? { booking_id: data.bookingId } : null,
+      metadata: {
+        ...(data.bookingId ? { booking_id: data.bookingId } : {}),
+        ...(activated ? { new_package_first_visit: true } : {}),
+      },
     });
-    return { ok: true, visits_used: next, mode: "package" } as const;
+    return { ok: true, visits_used: next, mode: "package", activated_renewal: activated } as const;
   });
 
 export type CheckedInProbe = {
@@ -1558,6 +1649,11 @@ export type RenewalForecastRow = {
   week_bucket: "this" | "next" | "later";
   package_price: number;
   next_package_price: number;
+  /** Staff has already prepared the next package (pending activation). */
+  pre_renewed: boolean;
+  pending_start_ymd: string | null;
+  pending_total_visits: number | null;
+  pending_package_name: string | null;
 };
 
 export type RenewalForecastResult = {
@@ -1617,7 +1713,7 @@ export const getRenewalForecast = createServerFn({ method: "GET" })
     const { data: rows, error: cErr } = await context.supabase
       .from("clients")
       .select(
-        "id, square_customer_id, visits_used, package_total_visits, package_price, next_package_price, status",
+        "id, square_customer_id, visits_used, package_total_visits, package_price, next_package_price, status, pending_renewal_start_date, pending_renewal_price, pending_renewal_total_visits, pending_renewal_package_name",
       )
       .is("deleted_at", null)
       .neq("status", "archived")
@@ -1627,13 +1723,17 @@ export const getRenewalForecast = createServerFn({ method: "GET" })
     if (cErr) throw cErr;
 
     const out: RenewalForecastRow[] = [];
-    for (const r of (rows ?? []) as Array<{
+    for (const r of (rows ?? []) as unknown as Array<{
       id: string;
       square_customer_id: string | null;
       visits_used: number | null;
       package_total_visits: number;
       package_price: number | string | null;
       next_package_price: number | string | null;
+      pending_renewal_start_date: string | null;
+      pending_renewal_price: number | string | null;
+      pending_renewal_total_visits: number | null;
+      pending_renewal_package_name: string | null;
     }>) {
       const starts = [...(byCustomer.get(r.square_customer_id ?? "") ?? [])].sort();
       if (starts.length === 0) continue;
@@ -1644,11 +1744,18 @@ export const getRenewalForecast = createServerFn({ method: "GET" })
 
       const ymds = starts.map((s) => ymdInTz(new Date(s)));
       const firstUncoveredYmd = ymds[remaining];
-      const bucketStart = workWeekStartFromYmd(firstUncoveredYmd);
+      const pendingStart = r.pending_renewal_start_date;
+      // Once staff pre-renews, the prepared start date drives the weekly
+      // bucket (they may have adjusted it); otherwise use the forecast.
+      const bucketStart = workWeekStartFromYmd(pendingStart ?? firstUncoveredYmd);
       const week_bucket =
         bucketStart === weekStartYmd ? "this" : bucketStart === nextWeekStartYmd ? "next" : "later";
       const basePrice = Number(r.package_price ?? 0);
       const override = r.next_package_price === null ? null : Number(r.next_package_price);
+      const pendingPrice =
+        r.pending_renewal_price === null || r.pending_renewal_price === undefined
+          ? null
+          : Number(r.pending_renewal_price);
 
       out.push({
         client_id: r.id,
@@ -1661,7 +1768,11 @@ export const getRenewalForecast = createServerFn({ method: "GET" })
         first_uncovered_ymd: firstUncoveredYmd,
         week_bucket,
         package_price: basePrice,
-        next_package_price: override ?? basePrice,
+        next_package_price: pendingPrice ?? override ?? basePrice,
+        pre_renewed: !!pendingStart,
+        pending_start_ymd: pendingStart,
+        pending_total_visits: r.pending_renewal_total_visits ?? null,
+        pending_package_name: r.pending_renewal_package_name ?? null,
       });
     }
 
@@ -1684,5 +1795,102 @@ export const setNextPackagePrice = createServerFn({ method: "POST" })
       .update({ next_package_price: data.price })
       .eq("id", data.clientId);
     if (error) throw error;
+    return { ok: true };
+  });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Pre-renewal: staff prepare the next package ahead of time. This NEVER touches
+// the active package or visits_used — the prepared package is stored on the
+// client and only activated by the Check In of the first uncovered appointment
+// (see completeVisitForClient).
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const preRenewNextPackage = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    (d: {
+      clientId: string;
+      startYmd: string;
+      price: number;
+      totalVisits: number;
+      packageName?: string | null;
+    }) => {
+      if (!d?.clientId || typeof d.clientId !== "string") throw new Error("clientId required");
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(d.startYmd ?? "")) throw new Error("Valid start date required");
+      const price = Number(d.price);
+      const totalVisits = Number(d.totalVisits);
+      if (!Number.isFinite(price) || price < 0) throw new Error("Invalid price");
+      if (!Number.isFinite(totalVisits) || totalVisits < 1) throw new Error("Invalid visit total");
+      return {
+        clientId: d.clientId,
+        startYmd: d.startYmd,
+        price,
+        totalVisits: Math.round(totalVisits),
+        packageName: (d.packageName ?? "").toString().trim() || null,
+      };
+    },
+  )
+  .handler(async ({ data, context }): Promise<{ ok: true }> => {
+    const { data: existing, error: rErr } = await context.supabase
+      .from("clients")
+      .select("package_name, pending_renewal_start_date")
+      .eq("id", data.clientId)
+      .single();
+    if (rErr) throw rErr;
+    const wasPending = !!(existing as { pending_renewal_start_date: string | null } | null)
+      ?.pending_renewal_start_date;
+    const name =
+      data.packageName ?? ((existing as { package_name: string | null } | null)?.package_name ?? null);
+
+    const { error } = await context.supabase
+      .from("clients")
+      .update({
+        pending_renewal_start_date: data.startYmd,
+        pending_renewal_price: data.price,
+        pending_renewal_total_visits: data.totalVisits,
+        pending_renewal_package_name: name,
+        pending_renewal_created_at: new Date().toISOString(),
+      })
+      .eq("id", data.clientId);
+    if (error) throw error;
+
+    await context.supabase.from("client_activities").insert({
+      client_id: data.clientId,
+      activity_type: wasPending ? "pre_renewal_updated" : "pre_renewal",
+      description: `Next package ${wasPending ? "updated" : "prepared"} — starts ${data.startYmd} (${data.totalVisits} visits, $${data.price.toFixed(2)}). Current package unchanged.`,
+      metadata: {
+        pending_start_date: data.startYmd,
+        pending_price: data.price,
+        pending_total_visits: data.totalVisits,
+        pending_package_name: name,
+      },
+    });
+    return { ok: true };
+  });
+
+export const cancelPendingRenewal = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { clientId: string }) => {
+    if (!d?.clientId || typeof d.clientId !== "string") throw new Error("clientId required");
+    return { clientId: d.clientId };
+  })
+  .handler(async ({ data, context }): Promise<{ ok: true }> => {
+    const { error } = await context.supabase
+      .from("clients")
+      .update({
+        pending_renewal_start_date: null,
+        pending_renewal_price: null,
+        pending_renewal_total_visits: null,
+        pending_renewal_package_name: null,
+        pending_renewal_created_at: null,
+      })
+      .eq("id", data.clientId);
+    if (error) throw error;
+    await context.supabase.from("client_activities").insert({
+      client_id: data.clientId,
+      activity_type: "pre_renewal_cancelled",
+      description: "Prepared next package cancelled — current package unchanged.",
+      metadata: null,
+    });
     return { ok: true };
   });

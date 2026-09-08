@@ -26,6 +26,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { AppShell } from "@/components/AppShell";
 import { StatusBadge } from "@/components/StatusBadge";
 import { SmartClientCard } from "@/components/SmartClientCard";
+import { PreRenewCard } from "@/components/PreRenewCard";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -1026,23 +1027,7 @@ function Dashboard() {
                     scheduleStatus={scheduleStatus}
                     scheduleStatusDetail={scheduleStatusDetail}
                   />
-                  {forecast && (
-                    <div className="-mt-1 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
-                      <div>
-                        {forecast.visits_used} of {forecast.package_total_visits} visits used ·{" "}
-                        {forecast.remaining} remaining · {forecast.upcoming_count} upcoming
-                        {forecast.upcoming_count === 1 ? " appointment" : " appointments"}
-                      </div>
-                      <div className="mt-1 font-medium">
-                        New package starts {formatYmd(forecast.first_uncovered_ymd)}
-                      </div>
-                      {!isStaff && (
-                        <div className="mt-1">
-                          Next package amount: {formatCurrency(forecast.next_package_price)}
-                        </div>
-                      )}
-                    </div>
-                  )}
+                  {forecast && <PreRenewCard forecast={forecast} hideAmount={isStaff} />}
                 </div>
               );
             })}

@@ -67,6 +67,11 @@ export type Database = {
           package_start_date: string | null
           package_total_visits: number
           payment_model: string
+          pending_renewal_created_at: string | null
+          pending_renewal_package_name: string | null
+          pending_renewal_price: number | null
+          pending_renewal_start_date: string | null
+          pending_renewal_total_visits: number | null
           phone: string | null
           square_customer_id: string | null
           square_visit_note: string | null
@@ -91,6 +96,11 @@ export type Database = {
           package_start_date?: string | null
           package_total_visits?: number
           payment_model?: string
+          pending_renewal_created_at?: string | null
+          pending_renewal_package_name?: string | null
+          pending_renewal_price?: number | null
+          pending_renewal_start_date?: string | null
+          pending_renewal_total_visits?: number | null
           phone?: string | null
           square_customer_id?: string | null
           square_visit_note?: string | null
@@ -115,6 +125,11 @@ export type Database = {
           package_start_date?: string | null
           package_total_visits?: number
           payment_model?: string
+          pending_renewal_created_at?: string | null
+          pending_renewal_package_name?: string | null
+          pending_renewal_price?: number | null
+          pending_renewal_start_date?: string | null
+          pending_renewal_total_visits?: number | null
           phone?: string | null
           square_customer_id?: string | null
           square_visit_note?: string | null

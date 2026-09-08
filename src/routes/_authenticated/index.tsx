@@ -608,7 +608,7 @@ function Dashboard() {
         (a, b) => (visitsRemaining(a) ?? 0) - (visitsRemaining(b) ?? 0),
       );
     }
-    if (filter === "needs_renewal") {
+    if (filter === "needs_renewal" || filter === "renewal_scheduled") {
       // Soonest new-package start first.
       return [...searched].sort((a, b) =>
         (renewalMap.get(a.id)?.first_uncovered_ymd ?? "").localeCompare(

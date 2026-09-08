@@ -806,7 +806,10 @@ function AppointmentMobileCard({
     : noPackage
       ? "✓ Checked In — No Package Info"
       : "✓ Checked In";
+  const pendingRenewal = !!a.client?.pending_renewal_start_date;
   const packageComplete = hasPackage && !payPerVisit && used >= total;
+  // A prepared next package activates on this check-in, so don't hide the button.
+  const blockCheckIn = packageComplete && !pendingRenewal;
   const owed = a.client
     ? Math.max(0, Number(a.client.package_price ?? 0) - Number(a.client.amount_paid ?? 0))
     : 0;
@@ -873,7 +876,7 @@ function AppointmentMobileCard({
                 View
               </Link>
             </Button>
-            {showCheckIn && onCheckIn && !packageComplete ? (
+            {showCheckIn && onCheckIn && !blockCheckIn ? (
               <Button
                 size="lg"
                 className="h-11"
@@ -933,7 +936,10 @@ function AppointmentDesktopRow({
     : noPackage
       ? "✓ Checked In — No Package Info"
       : "✓ Checked In";
+  const pendingRenewal = !!a.client?.pending_renewal_start_date;
   const packageComplete = hasPackage && !payPerVisit && used >= total;
+  // A prepared next package activates on this check-in, so don't hide the button.
+  const blockCheckIn = packageComplete && !pendingRenewal;
   const owed = a.client
     ? Math.max(0, Number(a.client.package_price ?? 0) - Number(a.client.amount_paid ?? 0))
     : 0;
@@ -1011,7 +1017,7 @@ function AppointmentDesktopRow({
                   View Client
                 </Link>
               </Button>
-              {showCheckIn && onCheckIn && !packageComplete && (
+              {showCheckIn && onCheckIn && !blockCheckIn && (
                 <Button
                   size="sm"
                   disabled={busy || isCheckedIn}
@@ -1550,6 +1556,8 @@ function AppointmentsCard({
                   const hasPackage = !!a.client && (a.client.package_total_visits ?? 0) > 0;
                   const visitsUnknown = hasPackage && remaining === null;
                   const visitsZero = hasPackage && remaining === 0;
+                  const pendingRenewal = !!a.client?.pending_renewal_start_date;
+                  const blockVisit = visitsZero && !pendingRenewal;
                   const owed = a.client
                     ? Math.max(
                         0,
@@ -1627,7 +1635,7 @@ function AppointmentsCard({
                                 View
                               </Link>
                             </Button>
-                            {showCompleteVisit && onCompleteVisit && !visitsZero ? (
+                            {showCompleteVisit && onCompleteVisit && !blockVisit ? (
                               <Button
                                 size="lg"
                                 className="h-11"
@@ -1685,6 +1693,8 @@ function AppointmentsCard({
                   const hasPackage = !!a.client && (a.client.package_total_visits ?? 0) > 0;
                   const visitsUnknown = hasPackage && remaining === null;
                   const visitsZero = hasPackage && remaining === 0;
+                  const pendingRenewal = !!a.client?.pending_renewal_start_date;
+                  const blockVisit = visitsZero && !pendingRenewal;
                   return (
                     <TableRow key={a.booking_id}>
                       <TableCell className="whitespace-nowrap text-sm">
@@ -1741,7 +1751,7 @@ function AppointmentsCard({
                                   View Client
                                 </Link>
                               </Button>
-                              {showCompleteVisit && onCompleteVisit && !visitsZero && (
+                              {showCompleteVisit && onCompleteVisit && !blockVisit && (
                                 <Button
                                   size="sm"
                                   disabled={completing === a.client.id}

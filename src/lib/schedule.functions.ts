@@ -36,6 +36,8 @@ export type ScheduleClientLite = {
   status: string | null;
   manual_active: boolean | null;
   payment_model?: string | null;
+  /** Prepared next package — lets a fully-used client still be checked in. */
+  pending_renewal_start_date?: string | null;
 };
 
 export type ProductionCustomerInfo = {
@@ -434,7 +436,7 @@ export const getScheduleCheck = createServerFn({ method: "GET" })
         const { data: page, error: cErr } = await context.supabase
           .from("clients")
           .select(
-            "id, first_name, last_name, phone, package_total_visits, package_name, visits_used, package_price, amount_paid, internal_notes, square_customer_id, status, manual_active, payment_model",
+            "id, first_name, last_name, phone, package_total_visits, package_name, visits_used, package_price, amount_paid, internal_notes, square_customer_id, status, manual_active, payment_model, pending_renewal_start_date",
           )
           .is("deleted_at", null)
           .range(from, from + pageSize - 1);

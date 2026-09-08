@@ -841,6 +841,7 @@ function Dashboard() {
         "critical",
         "payment_history",
         "needs_renewal",
+        "renewal_scheduled",
         "needs_package_review",
         "renewal_review",
         "renewal_manual",

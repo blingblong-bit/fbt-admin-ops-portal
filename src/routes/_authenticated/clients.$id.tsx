@@ -522,18 +522,25 @@ function RenewDialog({
     staleTime: 60_000,
     enabled: open,
   });
+  // The next package starts on the first appointment the CURRENT package can
+  // no longer cover: skip the remaining covered visits, take the next one.
   const nextApptYmd = (() => {
-    const appts = upcomingQuery.data?.appointments ?? [];
-    const next = appts
+    const appts = (upcomingQuery.data?.appointments ?? [])
       .filter((a) => !/CANCEL|DECLINE|NO_SHOW/i.test(a.status))
-      .sort((a, b) => a.start_at.localeCompare(b.start_at))[0];
-    return next ? clinicYmd(new Date(next.start_at)) : null;
+      .sort((a, b) => a.start_at.localeCompare(b.start_at));
+    if (appts.length === 0) return null;
+    const remaining = Math.max(
+      0,
+      Number(client.package_total_visits ?? 0) - Number(client.visits_used ?? 0),
+    );
+    const target = appts[remaining] ?? appts[appts.length - 1];
+    return clinicYmd(new Date(target.start_at));
   })();
 
   const [form, setForm] = useState({
     package_name: client.package_name ?? "",
     package_total_visits: client.package_total_visits || 8,
-    package_price: client.package_price || 0,
+    package_price: client.next_package_price ?? client.package_price ?? 0,
     amount_paid: 0,
     package_start_date: clinicYmd(new Date()),
   });
@@ -580,6 +587,8 @@ function RenewDialog({
           package_price: Number(form.package_price),
           package_start_date: form.package_start_date || null,
           amount_paid: Number(form.amount_paid),
+          // Pending next-package state is consumed by the renewal.
+          next_package_price: null,
         })
         .eq("id", client.id);
       if (e2) throw e2;

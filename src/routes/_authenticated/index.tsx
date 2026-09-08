@@ -47,6 +47,8 @@ import {
   getThisWeekScheduledClientIds,
   getNextWeekScheduledClientIds,
   getPriorWeeksScheduledClientLastDates,
+  getRenewalForecast,
+  type RenewalForecastRow,
 } from "@/lib/schedule.functions";
 import type { ScheduleStatus } from "@/components/SmartClientCard";
 import { useRole } from "@/hooks/useRole";
@@ -162,6 +164,7 @@ function matchesFilter(
   isOverduePrior: boolean,
   startBucket: StartBucket = null,
   needsPkgReview: boolean = false,
+  needsRenewal: boolean = false,
 ): boolean {
 
   const owed = amountOwed(c);
@@ -192,10 +195,10 @@ function matchesFilter(
     case "package_complete":
       return r !== null && c.package_total_visits > 0 && r === 0;
     case "needs_renewal":
-      // Package fully used up AND a future booking exists — the "already
-      // finished" subset of the Renewal Pending badge. Clears itself as soon
-      // as staff runs Renew Package (visits_used resets).
-      return r !== null && c.package_total_visits > 0 && r === 0 && isScheduled;
+      // Driven by the upcoming-appointment forecast: the client has booked
+      // more upcoming visits than their current package can still cover, so
+      // one of those appointments starts a new package.
+      return needsRenewal;
     case "needs_package_review":
       return needsPkgReview;
   }
@@ -344,6 +347,21 @@ function Dashboard() {
   );
   const isScheduledNextWeek = (id: string) => nextWeekSet.has(id);
 
+  // Needs Renewal forecast: clients who have booked more upcoming visits than
+  // their current package can still cover.
+  const fetchRenewalForecast = useServerFn(getRenewalForecast);
+  const renewalQuery = useQuery({
+    queryKey: ["renewal-forecast"],
+    queryFn: () => fetchRenewalForecast(),
+    staleTime: 60_000,
+  });
+  const renewalMap = useMemo(() => {
+    const m = new Map<string, RenewalForecastRow>();
+    for (const row of renewalQuery.data?.rows ?? []) m.set(row.client_id, row);
+    return m;
+  }, [renewalQuery.data]);
+
+
   const fetchPriorScheduled = useServerFn(getPriorWeeksScheduledClientLastDates);
   const priorScheduledQuery = useQuery({
     queryKey: ["scheduled-prior-weeks-last-dates"],
@@ -467,6 +485,10 @@ function Dashboard() {
       package_complete: 0,
       needs_renewal: 0,
       needs_package_review: 0,
+      // Money owed for the NEXT package, tracked separately from the
+      // current-package balance above.
+      next_package_this_week_total: 0,
+      next_package_next_week_total: 0,
     };
 
     for (const cl of visibleClients) {
@@ -490,6 +512,16 @@ function Dashboard() {
         }
       }
 
+      const forecast = renewalMap.get(cl.id);
+      if (forecast) {
+        c.needs_renewal += 1;
+        if (forecast.week_bucket === "this") {
+          c.next_package_this_week_total += forecast.next_package_price;
+        } else if (forecast.week_bucket === "next") {
+          c.next_package_next_week_total += forecast.next_package_price;
+        }
+      }
+
       if (!isScheduled(cl.id)) c.not_scheduled += 1;
       if (r !== null && r > 0 && r <= 2) c.almost_finished += 1;
       if (owed > 0 && r !== null && r <= 2) {
@@ -498,12 +530,11 @@ function Dashboard() {
       }
       if (r !== null && cl.package_total_visits > 0 && r === 0) {
         c.package_complete += 1;
-        if (isScheduled(cl.id)) c.needs_renewal += 1;
       }
       if (needsPackageReview(cl, dismissedIds, cl.id)) c.needs_package_review += 1;
     }
     return c;
-  }, [visibleClients, scheduledSet, thisWeekSet, nextWeekSet, carriedOverRecentMap, overduePriorMap, thisWeekEndYmd, nextWeekEndYmd, dismissedIds]);
+  }, [visibleClients, scheduledSet, thisWeekSet, nextWeekSet, carriedOverRecentMap, overduePriorMap, thisWeekEndYmd, nextWeekEndYmd, dismissedIds, renewalMap]);
 
 
   const filtered = useMemo(() => {
@@ -518,6 +549,7 @@ function Dashboard() {
         isOverduePrior(c.id),
         startBucketOf(c),
         needsPackageReview(c, dismissedIds, c.id),
+        renewalMap.has(c.id),
       ),
     );
 
@@ -546,8 +578,16 @@ function Dashboard() {
         (a, b) => (visitsRemaining(a) ?? 0) - (visitsRemaining(b) ?? 0),
       );
     }
+    if (filter === "needs_renewal") {
+      // Soonest new-package start first.
+      return [...searched].sort((a, b) =>
+        (renewalMap.get(a.id)?.first_uncovered_ymd ?? "").localeCompare(
+          renewalMap.get(b.id)?.first_uncovered_ymd ?? "",
+        ),
+      );
+    }
     return [...searched].sort((a, b) => fullName(a).localeCompare(fullName(b)));
-  }, [visibleClients, filter, search, scheduledSet, thisWeekSet, nextWeekSet, carriedOverRecentMap, overduePriorMap, thisWeekEndYmd, nextWeekEndYmd]);
+  }, [visibleClients, filter, search, scheduledSet, thisWeekSet, nextWeekSet, carriedOverRecentMap, overduePriorMap, thisWeekEndYmd, nextWeekEndYmd, renewalMap, dismissedIds]);
 
   const reviewCountQuery = useQuery({
     queryKey: ["square_payments_needs_review_count"],
@@ -610,6 +650,8 @@ function Dashboard() {
       count: counts.payment_due_this_week,
       money: counts.payment_due_this_week_total,
       moneyLabel: "outstanding",
+      extraMoney: counts.next_package_this_week_total,
+      extraMoneyLabel: "next package",
       tone: "red",
       staffHidden: true,
     },
@@ -621,6 +663,8 @@ function Dashboard() {
       count: counts.payment_due_next_week,
       money: counts.payment_due_next_week_total,
       moneyLabel: "outstanding",
+      extraMoney: counts.next_package_next_week_total,
+      extraMoneyLabel: "next package",
       tone: "red",
       staffHidden: true,
     },
@@ -693,8 +737,13 @@ function Dashboard() {
     {
       key: "needs_renewal",
       label: "Needs Renewal",
+      sublabel: "booked past current package",
       icon: <RefreshCw className="h-5 w-5" />,
       count: counts.needs_renewal,
+      money: isStaff
+        ? undefined
+        : counts.next_package_this_week_total + counts.next_package_next_week_total,
+      moneyLabel: "next packages due soon",
       tone: counts.needs_renewal > 0 ? "amber" : "slate",
     },
     {
@@ -966,15 +1015,35 @@ function Dashboard() {
                   scheduleStatus = "not_scheduled";
                 }
               }
+              const forecast =
+                filter === "needs_renewal" ? renewalMap.get(c.id) : undefined;
               return (
-                <SmartClientCard
-                  key={c.id}
-                  client={c}
-                  isScheduled={isScheduled(c.id)}
-                  hideAmount={isStaff}
-                  scheduleStatus={scheduleStatus}
-                  scheduleStatusDetail={scheduleStatusDetail}
-                />
+                <div key={c.id} className="flex flex-col gap-2">
+                  <SmartClientCard
+                    client={c}
+                    isScheduled={isScheduled(c.id)}
+                    hideAmount={isStaff}
+                    scheduleStatus={scheduleStatus}
+                    scheduleStatusDetail={scheduleStatusDetail}
+                  />
+                  {forecast && (
+                    <div className="-mt-1 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+                      <div>
+                        {forecast.visits_used} of {forecast.package_total_visits} visits used ·{" "}
+                        {forecast.remaining} remaining · {forecast.upcoming_count} upcoming
+                        {forecast.upcoming_count === 1 ? " appointment" : " appointments"}
+                      </div>
+                      <div className="mt-1 font-medium">
+                        New package starts {formatYmd(forecast.first_uncovered_ymd)}
+                      </div>
+                      {!isStaff && (
+                        <div className="mt-1">
+                          Next package amount: {formatCurrency(forecast.next_package_price)}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
               );
             })}
           </div>
@@ -1088,6 +1157,8 @@ type TileDef = {
   count: number;
   money?: number;
   moneyLabel?: string;
+  extraMoney?: number;
+  extraMoneyLabel?: string;
   tone: "red" | "amber" | "slate";
   href?: string;
   countLabel?: string;
@@ -1146,6 +1217,11 @@ function Tile({
       {tile.money !== undefined && tile.money > 0 && (
         <div className="text-xs font-medium text-slate-600">
           {formatCurrency(tile.money)} {tile.moneyLabel}
+        </div>
+      )}
+      {tile.extraMoney !== undefined && tile.extraMoney > 0 && (
+        <div className="text-xs font-medium text-amber-700">
+          + {formatCurrency(tile.extraMoney)} {tile.extraMoneyLabel}
         </div>
       )}
     </>
@@ -1285,3 +1361,14 @@ function formatYmdRange(startYmd?: string, endYmd?: string): string | undefined 
 
 // Keep StatusBadge import used elsewhere referenced to avoid unused-import noise
 void StatusBadge;
+
+/** Format a "YYYY-MM-DD" as "Mon D, YYYY". */
+function formatYmd(ymd: string): string {
+  const [y, m, d] = ymd.split("-").map(Number);
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(new Date(Date.UTC(y, m - 1, d)));
+}

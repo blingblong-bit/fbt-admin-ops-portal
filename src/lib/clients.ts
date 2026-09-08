@@ -14,6 +14,7 @@ export interface Client {
   package_name: string | null;
   package_total_visits: number;
   package_price: number;
+  next_package_price: number | null;
   package_start_date: string | null;
   visits_used: number | null;
   amount_paid: number;

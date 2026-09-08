@@ -1797,3 +1797,100 @@ export const setNextPackagePrice = createServerFn({ method: "POST" })
     if (error) throw error;
     return { ok: true };
   });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Pre-renewal: staff prepare the next package ahead of time. This NEVER touches
+// the active package or visits_used — the prepared package is stored on the
+// client and only activated by the Check In of the first uncovered appointment
+// (see completeVisitForClient).
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const preRenewNextPackage = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    (d: {
+      clientId: string;
+      startYmd: string;
+      price: number;
+      totalVisits: number;
+      packageName?: string | null;
+    }) => {
+      if (!d?.clientId || typeof d.clientId !== "string") throw new Error("clientId required");
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(d.startYmd ?? "")) throw new Error("Valid start date required");
+      const price = Number(d.price);
+      const totalVisits = Number(d.totalVisits);
+      if (!Number.isFinite(price) || price < 0) throw new Error("Invalid price");
+      if (!Number.isFinite(totalVisits) || totalVisits < 1) throw new Error("Invalid visit total");
+      return {
+        clientId: d.clientId,
+        startYmd: d.startYmd,
+        price,
+        totalVisits: Math.round(totalVisits),
+        packageName: (d.packageName ?? "").toString().trim() || null,
+      };
+    },
+  )
+  .handler(async ({ data, context }): Promise<{ ok: true }> => {
+    const { data: existing, error: rErr } = await context.supabase
+      .from("clients")
+      .select("package_name, pending_renewal_start_date")
+      .eq("id", data.clientId)
+      .single();
+    if (rErr) throw rErr;
+    const wasPending = !!(existing as { pending_renewal_start_date: string | null } | null)
+      ?.pending_renewal_start_date;
+    const name =
+      data.packageName ?? ((existing as { package_name: string | null } | null)?.package_name ?? null);
+
+    const { error } = await context.supabase
+      .from("clients")
+      .update({
+        pending_renewal_start_date: data.startYmd,
+        pending_renewal_price: data.price,
+        pending_renewal_total_visits: data.totalVisits,
+        pending_renewal_package_name: name,
+        pending_renewal_created_at: new Date().toISOString(),
+      })
+      .eq("id", data.clientId);
+    if (error) throw error;
+
+    await context.supabase.from("client_activities").insert({
+      client_id: data.clientId,
+      activity_type: wasPending ? "pre_renewal_updated" : "pre_renewal",
+      description: `Next package ${wasPending ? "updated" : "prepared"} — starts ${data.startYmd} (${data.totalVisits} visits, $${data.price.toFixed(2)}). Current package unchanged.`,
+      metadata: {
+        pending_start_date: data.startYmd,
+        pending_price: data.price,
+        pending_total_visits: data.totalVisits,
+        pending_package_name: name,
+      },
+    });
+    return { ok: true };
+  });
+
+export const cancelPendingRenewal = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { clientId: string }) => {
+    if (!d?.clientId || typeof d.clientId !== "string") throw new Error("clientId required");
+    return { clientId: d.clientId };
+  })
+  .handler(async ({ data, context }): Promise<{ ok: true }> => {
+    const { error } = await context.supabase
+      .from("clients")
+      .update({
+        pending_renewal_start_date: null,
+        pending_renewal_price: null,
+        pending_renewal_total_visits: null,
+        pending_renewal_package_name: null,
+        pending_renewal_created_at: null,
+      })
+      .eq("id", data.clientId);
+    if (error) throw error;
+    await context.supabase.from("client_activities").insert({
+      client_id: data.clientId,
+      activity_type: "pre_renewal_cancelled",
+      description: "Prepared next package cancelled — current package unchanged.",
+      metadata: null,
+    });
+    return { ok: true };
+  });

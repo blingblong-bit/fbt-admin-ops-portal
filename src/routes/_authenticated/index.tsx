@@ -1054,7 +1054,9 @@ function Dashboard() {
                 }
               }
               const forecast =
-                filter === "needs_renewal" ? renewalMap.get(c.id) : undefined;
+                filter === "needs_renewal" || filter === "renewal_scheduled"
+                  ? renewalMap.get(c.id)
+                  : undefined;
               return (
                 <div key={c.id} className="flex flex-col gap-2">
                   <SmartClientCard

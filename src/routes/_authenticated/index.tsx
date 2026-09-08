@@ -485,6 +485,10 @@ function Dashboard() {
       package_complete: 0,
       needs_renewal: 0,
       needs_package_review: 0,
+      // Money owed for the NEXT package, tracked separately from the
+      // current-package balance above.
+      next_package_this_week_total: 0,
+      next_package_next_week_total: 0,
     };
 
     for (const cl of visibleClients) {
@@ -508,6 +512,16 @@ function Dashboard() {
         }
       }
 
+      const forecast = renewalMap.get(cl.id);
+      if (forecast) {
+        c.needs_renewal += 1;
+        if (forecast.week_bucket === "this") {
+          c.next_package_this_week_total += forecast.next_package_price;
+        } else if (forecast.week_bucket === "next") {
+          c.next_package_next_week_total += forecast.next_package_price;
+        }
+      }
+
       if (!isScheduled(cl.id)) c.not_scheduled += 1;
       if (r !== null && r > 0 && r <= 2) c.almost_finished += 1;
       if (owed > 0 && r !== null && r <= 2) {
@@ -516,12 +530,11 @@ function Dashboard() {
       }
       if (r !== null && cl.package_total_visits > 0 && r === 0) {
         c.package_complete += 1;
-        if (isScheduled(cl.id)) c.needs_renewal += 1;
       }
       if (needsPackageReview(cl, dismissedIds, cl.id)) c.needs_package_review += 1;
     }
     return c;
-  }, [visibleClients, scheduledSet, thisWeekSet, nextWeekSet, carriedOverRecentMap, overduePriorMap, thisWeekEndYmd, nextWeekEndYmd, dismissedIds]);
+  }, [visibleClients, scheduledSet, thisWeekSet, nextWeekSet, carriedOverRecentMap, overduePriorMap, thisWeekEndYmd, nextWeekEndYmd, dismissedIds, renewalMap]);
 
 
   const filtered = useMemo(() => {

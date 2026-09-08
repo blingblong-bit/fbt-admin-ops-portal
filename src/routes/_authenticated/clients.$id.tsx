@@ -117,6 +117,8 @@ function ClientDetailPage() {
     qc.invalidateQueries({ queryKey: ["client", id] });
     qc.invalidateQueries({ queryKey: ["activities", id] });
     qc.invalidateQueries({ queryKey: ["clients"] });
+    // A check-in/renewal can clear a prepared next package — refresh Needs Renewal.
+    qc.invalidateQueries({ queryKey: ["renewal-forecast"] });
   };
 
   const completeVisitFn = useServerFn(completeVisitForClient);

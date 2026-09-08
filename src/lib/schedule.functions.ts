@@ -1713,7 +1713,7 @@ export const getRenewalForecast = createServerFn({ method: "GET" })
     const { data: rows, error: cErr } = await context.supabase
       .from("clients")
       .select(
-        "id, square_customer_id, visits_used, package_total_visits, package_price, next_package_price, status",
+        "id, square_customer_id, visits_used, package_total_visits, package_price, next_package_price, status, pending_renewal_start_date, pending_renewal_price, pending_renewal_total_visits, pending_renewal_package_name",
       )
       .is("deleted_at", null)
       .neq("status", "archived")
@@ -1723,13 +1723,17 @@ export const getRenewalForecast = createServerFn({ method: "GET" })
     if (cErr) throw cErr;
 
     const out: RenewalForecastRow[] = [];
-    for (const r of (rows ?? []) as Array<{
+    for (const r of (rows ?? []) as unknown as Array<{
       id: string;
       square_customer_id: string | null;
       visits_used: number | null;
       package_total_visits: number;
       package_price: number | string | null;
       next_package_price: number | string | null;
+      pending_renewal_start_date: string | null;
+      pending_renewal_price: number | string | null;
+      pending_renewal_total_visits: number | null;
+      pending_renewal_package_name: string | null;
     }>) {
       const starts = [...(byCustomer.get(r.square_customer_id ?? "") ?? [])].sort();
       if (starts.length === 0) continue;
@@ -1740,11 +1744,18 @@ export const getRenewalForecast = createServerFn({ method: "GET" })
 
       const ymds = starts.map((s) => ymdInTz(new Date(s)));
       const firstUncoveredYmd = ymds[remaining];
-      const bucketStart = workWeekStartFromYmd(firstUncoveredYmd);
+      const pendingStart = r.pending_renewal_start_date;
+      // Once staff pre-renews, the prepared start date drives the weekly
+      // bucket (they may have adjusted it); otherwise use the forecast.
+      const bucketStart = workWeekStartFromYmd(pendingStart ?? firstUncoveredYmd);
       const week_bucket =
         bucketStart === weekStartYmd ? "this" : bucketStart === nextWeekStartYmd ? "next" : "later";
       const basePrice = Number(r.package_price ?? 0);
       const override = r.next_package_price === null ? null : Number(r.next_package_price);
+      const pendingPrice =
+        r.pending_renewal_price === null || r.pending_renewal_price === undefined
+          ? null
+          : Number(r.pending_renewal_price);
 
       out.push({
         client_id: r.id,
@@ -1757,7 +1768,11 @@ export const getRenewalForecast = createServerFn({ method: "GET" })
         first_uncovered_ymd: firstUncoveredYmd,
         week_bucket,
         package_price: basePrice,
-        next_package_price: override ?? basePrice,
+        next_package_price: pendingPrice ?? override ?? basePrice,
+        pre_renewed: !!pendingStart,
+        pending_start_ymd: pendingStart,
+        pending_total_visits: r.pending_renewal_total_visits ?? null,
+        pending_package_name: r.pending_renewal_package_name ?? null,
       });
     }
 

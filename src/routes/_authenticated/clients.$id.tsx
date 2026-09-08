@@ -197,6 +197,11 @@ function ClientDetailPage() {
             <StatusBadge client={c} isScheduled={isScheduled} />
             {renewalFlagged && <RenewalFlagBadge />}
             {packageReviewNeeded && <PackageReviewBadge />}
+            {c.pending_renewal_start_date && (
+              <span className="inline-flex items-center rounded-full border border-emerald-300 bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-900">
+                ✅ Renewal scheduled for {formatDate(c.pending_renewal_start_date)}
+              </span>
+            )}
           </div>
 
 
@@ -539,10 +544,11 @@ function RenewDialog({
 
   const [form, setForm] = useState({
     package_name: client.package_name ?? "",
-    package_total_visits: client.package_total_visits || 8,
-    package_price: client.next_package_price ?? client.package_price ?? 0,
+    package_total_visits: client.pending_renewal_total_visits ?? client.package_total_visits ?? 8,
+    package_price:
+      client.pending_renewal_price ?? client.next_package_price ?? client.package_price ?? 0,
     amount_paid: 0,
-    package_start_date: clinicYmd(new Date()),
+    package_start_date: client.pending_renewal_start_date ?? clinicYmd(new Date()),
   });
   const [startDateTouched, setStartDateTouched] = useState(false);
 
@@ -551,10 +557,12 @@ function RenewDialog({
       setStartDateTouched(false);
       setForm({
         package_name: client.package_name ?? "",
-        package_total_visits: client.package_total_visits || 8,
-        package_price: client.next_package_price ?? client.package_price ?? 0,
+        package_total_visits: client.pending_renewal_total_visits ?? client.package_total_visits ?? 8,
+        package_price:
+          client.pending_renewal_price ?? client.next_package_price ?? client.package_price ?? 0,
         amount_paid: 0,
-        package_start_date: nextApptYmd ?? clinicYmd(new Date()),
+        package_start_date:
+          client.pending_renewal_start_date ?? nextApptYmd ?? clinicYmd(new Date()),
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -563,9 +571,9 @@ function RenewDialog({
   // Appointments may resolve after the dialog opens — apply the prefill then,
   // unless staff already edited the field.
   useEffect(() => {
-    if (!open || startDateTouched || !nextApptYmd) return;
+    if (!open || startDateTouched || !nextApptYmd || client.pending_renewal_start_date) return;
     setForm((f) => (f.package_start_date === nextApptYmd ? f : { ...f, package_start_date: nextApptYmd }));
-  }, [open, startDateTouched, nextApptYmd]);
+  }, [open, startDateTouched, nextApptYmd, client.pending_renewal_start_date]);
 
 
   const mutation = useMutation({

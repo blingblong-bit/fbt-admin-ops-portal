@@ -299,11 +299,25 @@ function ClientDetailPage() {
           <CardContent className="space-y-2 text-sm">
             <Row label="Package Price" value={formatCurrency(c.package_price)} />
             <Row label="Amount Paid" value={formatCurrency(c.amount_paid)} />
+            {previousOwed(c) > 0 && (
+              <Row
+                label="Previous Package Owed"
+                value={formatCurrency(previousOwed(c))}
+                valueClass="text-red-600 font-semibold"
+              />
+            )}
             <Row
-              label="Amount Owed"
+              label="Current Package Owed"
               value={formatCurrency(owed)}
               valueClass={owed > 0 ? "text-red-600 font-semibold" : ""}
             />
+            {previousOwed(c) > 0 && (
+              <Row
+                label="Total Owed"
+                value={formatCurrency(totalOwed(c))}
+                valueClass="text-red-700 font-semibold"
+              />
+            )}
             {(() => {
               const last = activities.find(
                 (a) =>

@@ -581,6 +581,13 @@ function RenewDialog({
       if (Number(form.amount_paid) > Number(form.package_price)) {
         throw new Error("Amount paid cannot exceed package price");
       }
+      // Unpaid money on the finished package survives the renewal as separate
+      // "previous package" debt instead of being wiped by the amount_paid reset.
+      const unpaidCarried = Math.max(
+        0,
+        Number(client.package_price ?? 0) - Number(client.amount_paid ?? 0),
+      );
+      const carriedTotal = Number(client.previous_package_owed ?? 0) + unpaidCarried;
       // Reset visits_used first to satisfy validation trigger.
       // Package history: keep the completed package and its final visit count.
       await supabase.from("client_activities").insert({
@@ -593,11 +600,12 @@ function RenewDialog({
           visits_used: client.visits_used ?? 0,
           package_price: Number(client.package_price ?? 0),
           amount_paid: Number(client.amount_paid ?? 0),
+          unpaid_carried_forward: unpaidCarried,
         },
       });
       const { error: e1 } = await supabase
         .from("clients")
-        .update({ visits_used: 0, amount_paid: 0 })
+        .update({ visits_used: 0, amount_paid: 0, previous_package_owed: carriedTotal })
         .eq("id", client.id);
       if (e1) throw e1;
       const { error: e2 } = await supabase

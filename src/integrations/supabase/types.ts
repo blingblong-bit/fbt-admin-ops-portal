@@ -61,6 +61,7 @@ export type Database = {
           last_name: string
           manual_active: boolean
           needs_review: boolean
+          next_package_price: number | null
           package_name: string | null
           package_price: number
           package_start_date: string | null
@@ -84,6 +85,7 @@ export type Database = {
           last_name: string
           manual_active?: boolean
           needs_review?: boolean
+          next_package_price?: number | null
           package_name?: string | null
           package_price?: number
           package_start_date?: string | null
@@ -107,6 +109,7 @@ export type Database = {
           last_name?: string
           manual_active?: boolean
           needs_review?: boolean
+          next_package_price?: number | null
           package_name?: string | null
           package_price?: number
           package_start_date?: string | null

@@ -779,6 +779,24 @@ function TimeGroupBlock({
   );
 }
 
+
+/** Local YYYY-MM-DD for an appointment instant. */
+function apptYmd(startAt: string): string {
+  return new Date(startAt).toLocaleDateString("en-CA");
+}
+
+/**
+ * True when this appointment is the visit that starts a prepared ("pre-renewed")
+ * next package — check-in activates it, so no "package complete" warning applies.
+ */
+function isRenewalStartVisit(
+  pendingStart: string | null | undefined,
+  startAt: string | null | undefined,
+): boolean {
+  if (!pendingStart || !startAt) return false;
+  return apptYmd(startAt) >= pendingStart.slice(0, 10);
+}
+
 function AppointmentMobileCard({
   appointment: a,
   isNext,
@@ -807,6 +825,10 @@ function AppointmentMobileCard({
       ? "✓ Checked In — No Package Info"
       : "✓ Checked In";
   const pendingRenewal = !!a.client?.pending_renewal_start_date;
+  const renewalStartVisit = isRenewalStartVisit(
+    a.client?.pending_renewal_start_date,
+    a.start_at,
+  );
   const packageComplete = hasPackage && !payPerVisit && used >= total;
   // A prepared next package activates on this check-in, so don't hide the button.
   const blockCheckIn = packageComplete && !pendingRenewal;
@@ -861,7 +883,12 @@ function AppointmentMobileCard({
               {hideOwed ? "OWES" : `Owes ${formatCurrency(owed)}`}
             </span>
           )}
-          {packageComplete && (
+          {pendingRenewal && (
+            <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-emerald-800">
+              Next Package Ready
+            </span>
+          )}
+          {packageComplete && !renewalStartVisit && (
             <span className="rounded-full bg-amber-100 px-2 py-0.5 text-amber-900">
               Package complete
             </span>
@@ -937,6 +964,10 @@ function AppointmentDesktopRow({
       ? "✓ Checked In — No Package Info"
       : "✓ Checked In";
   const pendingRenewal = !!a.client?.pending_renewal_start_date;
+  const renewalStartVisit = isRenewalStartVisit(
+    a.client?.pending_renewal_start_date,
+    a.start_at,
+  );
   const packageComplete = hasPackage && !payPerVisit && used >= total;
   // A prepared next package activates on this check-in, so don't hide the button.
   const blockCheckIn = packageComplete && !pendingRenewal;
@@ -1027,7 +1058,12 @@ function AppointmentDesktopRow({
                 </Button>
               )}
             </div>
-            {packageComplete && (
+            {pendingRenewal && (
+              <span className="text-[11px] font-medium text-emerald-700">
+                Pre-Renewed — next package starts at this check-in
+              </span>
+            )}
+            {packageComplete && !renewalStartVisit && (
               <span className="text-[11px] text-amber-700">
                 ⚠ Package complete — verify before recording another visit.
               </span>
@@ -1557,6 +1593,10 @@ function AppointmentsCard({
                   const visitsUnknown = hasPackage && remaining === null;
                   const visitsZero = hasPackage && remaining === 0;
                   const pendingRenewal = !!a.client?.pending_renewal_start_date;
+                  const renewalStartVisit = isRenewalStartVisit(
+                    a.client?.pending_renewal_start_date,
+                    a.start_at,
+                  );
                   const blockVisit = visitsZero && !pendingRenewal;
                   const owed = a.client
                     ? Math.max(
@@ -1615,7 +1655,12 @@ function AppointmentsCard({
                               Owes {formatCurrency(owed)}
                             </span>
                           )}
-                          {visitsZero && (
+                          {pendingRenewal && (
+                            <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-emerald-800">
+                              Next Package Ready
+                            </span>
+                          )}
+                          {visitsZero && !renewalStartVisit && (
                             <span className="rounded-full bg-amber-100 px-2 py-0.5 text-amber-900">
                               Package complete
                             </span>
@@ -1694,6 +1739,10 @@ function AppointmentsCard({
                   const visitsUnknown = hasPackage && remaining === null;
                   const visitsZero = hasPackage && remaining === 0;
                   const pendingRenewal = !!a.client?.pending_renewal_start_date;
+                  const renewalStartVisit = isRenewalStartVisit(
+                    a.client?.pending_renewal_start_date,
+                    a.start_at,
+                  );
                   const blockVisit = visitsZero && !pendingRenewal;
                   return (
                     <TableRow key={a.booking_id}>
@@ -1771,7 +1820,12 @@ function AppointmentsCard({
                                 ⚠ Visits unknown — verify before completing.
                               </span>
                             )}
-                            {visitsZero && (
+                            {pendingRenewal && (
+                              <span className="text-[11px] font-medium text-emerald-700">
+                                Pre-Renewed — next package starts at this check-in
+                              </span>
+                            )}
+                            {visitsZero && !renewalStartVisit && (
                               <span className="text-[11px] text-amber-700">
                                 ⚠ Visits show 0 — verify in Square before completing.
                               </span>

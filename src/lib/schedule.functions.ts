@@ -718,6 +718,15 @@ export const completeVisitForClient = createServerFn({ method: "POST" })
         const newPrice = Number(c.pending_renewal_price ?? c.package_price ?? 0);
         const newName = c.pending_renewal_package_name ?? c.package_name ?? null;
 
+        // Anything still unpaid on the finished package is carried forward as
+        // separate "previous package" debt — never merged into the new price
+        // and never silently dropped by the amount_paid reset below.
+        const unpaidCarried = Math.max(
+          0,
+          Number(c.package_price ?? 0) - Number(c.amount_paid ?? 0),
+        );
+        const carriedTotal = Number(c.previous_package_owed ?? 0) + unpaidCarried;
+
         // Package history: preserve the completed package and its final count.
         await context.supabase.from("client_activities").insert({
           client_id: data.clientId,
@@ -729,6 +738,7 @@ export const completeVisitForClient = createServerFn({ method: "POST" })
             visits_used: finalUsed,
             package_price: Number(c.package_price ?? 0),
             amount_paid: Number(c.amount_paid ?? 0),
+            unpaid_carried_forward: unpaidCarried,
           },
         });
 
@@ -736,7 +746,7 @@ export const completeVisitForClient = createServerFn({ method: "POST" })
         // visits_used > package_total_visits.
         const { error: rErr } = await context.supabase
           .from("clients")
-          .update({ visits_used: 0, amount_paid: 0 })
+          .update({ visits_used: 0, amount_paid: 0, previous_package_owed: carriedTotal })
           .eq("id", data.clientId);
         if (rErr) throw rErr;
         const { error: aErr } = await context.supabase

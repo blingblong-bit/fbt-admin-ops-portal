@@ -444,7 +444,9 @@ function PaymentDialog({
   client: Client;
   onDone: () => void;
 }) {
-  const owed = amountOwed(client);
+  // Payments clear the oldest debt first, so the ceiling is everything owed.
+  const owed = totalOwed(client);
+  const prev = previousOwed(client);
   const [amount, setAmount] = useState(owed);
   useEffect(() => setAmount(owed), [owed, open]);
   const recordPayment = useServerFn(recordManualPayment);
@@ -485,6 +487,12 @@ function PaymentDialog({
           <p className="text-sm text-slate-500">
             Outstanding balance: <strong>{formatCurrency(owed)}</strong>
           </p>
+          {prev > 0 && (
+            <p className="text-xs text-amber-700">
+              Includes {formatCurrency(prev)} left from a previous package — payments clear that
+              first.
+            </p>
+          )}
           <Label>Payment Amount ($)</Label>
           <Input
             type="number"

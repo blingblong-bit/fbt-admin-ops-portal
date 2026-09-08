@@ -347,6 +347,21 @@ function Dashboard() {
   );
   const isScheduledNextWeek = (id: string) => nextWeekSet.has(id);
 
+  // Needs Renewal forecast: clients who have booked more upcoming visits than
+  // their current package can still cover.
+  const fetchRenewalForecast = useServerFn(getRenewalForecast);
+  const renewalQuery = useQuery({
+    queryKey: ["renewal-forecast"],
+    queryFn: () => fetchRenewalForecast(),
+    staleTime: 60_000,
+  });
+  const renewalMap = useMemo(() => {
+    const m = new Map<string, RenewalForecastRow>();
+    for (const row of renewalQuery.data?.rows ?? []) m.set(row.client_id, row);
+    return m;
+  }, [renewalQuery.data]);
+
+
   const fetchPriorScheduled = useServerFn(getPriorWeeksScheduledClientLastDates);
   const priorScheduledQuery = useQuery({
     queryKey: ["scheduled-prior-weeks-last-dates"],

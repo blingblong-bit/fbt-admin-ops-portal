@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { StatusBadge } from "@/components/StatusBadge";
 import {
-  amountOwed,
+  totalOwed,
   formatCurrency,
   fullName,
   isPayPerVisit,
@@ -44,7 +44,7 @@ export function SmartClientCard({
   scheduleStatusDetail?: string;
 }) {
   const qc = useQueryClient();
-  const owed = amountOwed(client);
+  const owed = totalOwed(client);
   const action = primaryAction(client, isScheduled);
   const [paymentOpen, setPaymentOpen] = useState(false);
 
@@ -172,7 +172,7 @@ function PaymentDialog({
   client: Client;
   onDone: () => void;
 }) {
-  const owed = amountOwed(client);
+  const owed = totalOwed(client);
   const [amount, setAmount] = useState(owed);
   useEffect(() => setAmount(owed), [owed, open]);
 

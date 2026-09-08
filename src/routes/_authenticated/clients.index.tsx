@@ -17,7 +17,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
-  amountOwed,
+  totalOwed,
   effectiveStatus,
   formatCurrency,
   fullName,
@@ -159,7 +159,7 @@ function ClientsListPage() {
       {/* Mobile: stacked client cards */}
       <div className="space-y-2 md:hidden">
         {filtered.map((c) => {
-          const owed = amountOwed(c);
+          const owed = totalOwed(c);
           return (
             <Link
               key={c.id}
@@ -236,8 +236,8 @@ function ClientsListPage() {
                       {scheduledSet.has(c.id) ? "✅" : "⭕"}
                     </TableCell>
                     {!isStaff && (
-                      <TableCell className={amountOwed(c) > 0 ? "font-medium text-red-600 whitespace-nowrap" : "whitespace-nowrap"}>
-                        {formatCurrency(amountOwed(c))}
+                      <TableCell className={totalOwed(c) > 0 ? "font-medium text-red-600 whitespace-nowrap" : "whitespace-nowrap"}>
+                        {formatCurrency(totalOwed(c))}
                       </TableCell>
                     )}
                     <TableCell>

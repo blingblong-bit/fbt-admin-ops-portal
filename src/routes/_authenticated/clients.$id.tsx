@@ -225,7 +225,7 @@ function ClientDetailPage() {
                 Complete Visit
               </Button>
             )}
-            <Button variant="outline" onClick={() => setPaymentOpen(true)} disabled={owed === 0}>
+            <Button variant="outline" onClick={() => setPaymentOpen(true)} disabled={totalOwed(c) === 0}>
               Record Payment
             </Button>
             <Button variant="outline" onClick={() => setEditOpen(true)}>

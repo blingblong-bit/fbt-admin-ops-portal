@@ -662,7 +662,7 @@ export const completeVisitForClient = createServerFn({ method: "POST" })
     const { data: c0, error } = await context.supabase
       .from("clients")
       .select(
-        "visits_used, package_total_visits, package_name, package_price, amount_paid, payment_model, pending_renewal_start_date, pending_renewal_price, pending_renewal_total_visits, pending_renewal_package_name",
+        "visits_used, package_total_visits, package_name, package_price, amount_paid, previous_package_owed, payment_model, pending_renewal_start_date, pending_renewal_price, pending_renewal_total_visits, pending_renewal_package_name",
       )
       .eq("id", data.clientId)
       .single();
@@ -673,6 +673,7 @@ export const completeVisitForClient = createServerFn({ method: "POST" })
       package_name: string | null;
       package_price: number | string | null;
       amount_paid: number | string | null;
+      previous_package_owed: number | string | null;
       payment_model: string | null;
       pending_renewal_start_date: string | null;
       pending_renewal_price: number | string | null;

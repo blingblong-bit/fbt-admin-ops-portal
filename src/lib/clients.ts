@@ -14,6 +14,8 @@ export interface Client {
   package_name: string | null;
   package_total_visits: number;
   package_price: number;
+  /** Unpaid balance carried over from packages that already ended. */
+  previous_package_owed?: number | null;
   next_package_price: number | null;
   /** Prepared ("pre-renewed") next package — inactive until its first visit. */
   pending_renewal_start_date?: string | null;
@@ -85,16 +87,34 @@ export function needsPackageReview(
 }
 
 
+/** Balance on the client's CURRENT package only. */
 export function amountOwed(c: Pick<Client, "package_price" | "amount_paid"> & Partial<Pick<Client, "payment_model">>) {
   return Math.max(0, Number(c.package_price ?? 0) - Number(c.amount_paid ?? 0));
 }
 
+/**
+ * Unpaid money carried over from packages that already ended. Kept separate
+ * from the current package so a renewal never erases (or absorbs) old debt.
+ */
+export function previousOwed(c: Partial<Pick<Client, "previous_package_owed">>): number {
+  return Math.max(0, Number(c.previous_package_owed ?? 0));
+}
+
+/** Everything the client owes: previous packages + current package. */
+export function totalOwed(
+  c: Pick<Client, "package_price" | "amount_paid"> &
+    Partial<Pick<Client, "payment_model" | "previous_package_owed">>,
+): number {
+  return amountOwed(c) + previousOwed(c);
+}
+
 
 export function computeStatus(
-  c: Pick<Client, "package_total_visits" | "visits_used" | "package_price" | "amount_paid">,
+  c: Pick<Client, "package_total_visits" | "visits_used" | "package_price" | "amount_paid"> &
+    Partial<Pick<Client, "previous_package_owed">>,
 ): ClientStatus {
   const remaining = visitsRemaining(c);
-  const owed = amountOwed(c);
+  const owed = totalOwed(c);
   if (remaining !== null && c.package_total_visits > 0 && remaining === 0) return "Completed";
   if (owed > 0) return "Payment Due";
   if (remaining !== null && remaining <= 2) return "Ending Soon";

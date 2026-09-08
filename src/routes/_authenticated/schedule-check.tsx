@@ -114,6 +114,8 @@ function ScheduleCheckPage() {
       qc.invalidateQueries({ queryKey: ["schedule-check"] });
       qc.invalidateQueries({ queryKey: ["clients"] });
       qc.invalidateQueries({ queryKey: ["completed-visit-bookings"] });
+      // A check-in can activate a prepared next package — refresh Needs Renewal.
+      qc.invalidateQueries({ queryKey: ["renewal-forecast"] });
     },
     onError: (e: Error) => toast.error(e.message),
   });

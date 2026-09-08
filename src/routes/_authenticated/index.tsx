@@ -47,6 +47,8 @@ import {
   getThisWeekScheduledClientIds,
   getNextWeekScheduledClientIds,
   getPriorWeeksScheduledClientLastDates,
+  getRenewalForecast,
+  type RenewalForecastRow,
 } from "@/lib/schedule.functions";
 import type { ScheduleStatus } from "@/components/SmartClientCard";
 import { useRole } from "@/hooks/useRole";

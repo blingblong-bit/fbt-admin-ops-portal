@@ -513,12 +513,16 @@ function Dashboard() {
           c.payment_due_this_week_total += currentOwed;
         }
         // Old-package debt is always overdue; current debt is overdue only
-        // when there's no booking this week and no future package start.
-        const currentIsOverdue = currentOwed > 0 && !bucket && !currentIsThisWeek;
+        // when there's no booking this week, none next week, and no future
+        // package start. Mirrors the row helper so each dollar lands once.
+        const currentIsNextWeek = bucket ? bucket === "next" : isScheduledNextWeek(cl.id);
+        const currentIsOverdue =
+          currentOwed > 0 && !bucket && !currentIsThisWeek && !currentIsNextWeek;
         if (prevOwed > 0 || currentIsOverdue) {
           c.overdue_prior_weeks += 1;
           c.overdue_prior_weeks_total += prevOwed + (currentIsOverdue ? currentOwed : 0);
         }
+
         if (currentOwed > 0 && (bucket ? bucket === "next" : isScheduledNextWeek(cl.id))) {
           c.payment_due_next_week += 1;
           c.payment_due_next_week_total += currentOwed;

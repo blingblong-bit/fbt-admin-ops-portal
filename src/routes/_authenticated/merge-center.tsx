@@ -28,7 +28,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { formatCurrency, formatDate, fullName, amountOwed, visitsRemaining } from "@/lib/clients";
+import { formatCurrency, formatDate, fullName, totalOwed, visitsRemaining } from "@/lib/clients";
 
 export const Route = createFileRoute("/_authenticated/merge-center")({
   beforeLoad: requireAdmin,
@@ -259,7 +259,7 @@ function ClientCol({
   isKept: boolean;
   blocked?: boolean;
 }) {
-  const owed = amountOwed(c);
+  const owed = totalOwed(c);
   const remaining = visitsRemaining(c);
   const label = blocked
     ? side === "left"

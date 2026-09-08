@@ -63,10 +63,19 @@ export function PreRenewCard({
         {forecast.remaining} remaining · {forecast.upcoming_count} upcoming
         {forecast.upcoming_count === 1 ? " appointment" : " appointments"}
       </div>
-      <div className="mt-1">
-        First uncovered appointment: {formatDate(forecast.first_uncovered_ymd)}
-      </div>
-      <div className="mt-1 font-medium">New package starts {formatDate(startYmd)}</div>
+      {forecast.no_upcoming ? (
+        <div className="mt-1 rounded-md border border-amber-300 bg-amber-100 px-2 py-1 font-semibold">
+          Prepared Renewal — No Upcoming Appointment. Nothing is booked, so this isn't counted in
+          any weekly payment total. Edit or cancel it below.
+        </div>
+      ) : (
+        <div className="mt-1">
+          First uncovered appointment: {formatDate(forecast.first_uncovered_ymd)}
+        </div>
+      )}
+      {startYmd && (
+        <div className="mt-1 font-medium">New package starts {formatDate(startYmd)}</div>
+      )}
       {!hideAmount && (
         <div className="mt-1">
           Next package amount: {formatCurrency(forecast.next_package_price)}
@@ -77,7 +86,9 @@ export function PreRenewCard({
       {forecast.pre_renewed ? (
         <div className="mt-2 space-y-2">
           <div className="rounded-md border border-emerald-300 bg-emerald-50 px-2 py-1 font-semibold text-emerald-900">
-            ✅ Renewal scheduled for {formatDate(startYmd)} — activates at that check-in
+            {forecast.no_upcoming
+              ? "Renewal prepared — activates at the first check-in on or after its start date"
+              : `✅ Renewal scheduled for ${formatDate(startYmd)} — activates at that check-in`}
           </div>
           <div className="flex gap-2">
             <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setOpen(true)}>

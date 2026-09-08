@@ -8,7 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
 import {
-  amountOwed,
+  totalOwed,
+  previousOwed,
   formatDate,
   formatDateTimeLocal,
   fullName,
@@ -141,7 +142,8 @@ function BackupPage() {
         package_name: c.package_name ?? "",
         package_price: Number(c.package_price ?? 0),
         amount_paid: Number(c.amount_paid ?? 0),
-        amount_owed: amountOwed(c),
+        amount_owed: totalOwed(c),
+        previous_package_owed: previousOwed(c),
         package_total_visits: c.package_total_visits,
         visits_used: c.visits_used ?? "",
         visits_remaining: remaining ?? "",

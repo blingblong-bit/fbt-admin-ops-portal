@@ -23,7 +23,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { amountOwed, formatCurrency, formatDate, fullName, type Client } from "@/lib/clients";
+import { totalOwed, formatCurrency, formatDate, fullName, type Client } from "@/lib/clients";
 
 export const Route = createFileRoute("/_authenticated/clients/deleted")({
   beforeLoad: requireAdmin,
@@ -121,8 +121,8 @@ function DeletedClientsPage() {
                   <TableCell className="font-medium">{fullName(c)}</TableCell>
                   <TableCell>{c.phone ?? "—"}</TableCell>
                   <TableCell>{c.package_name ?? "—"}</TableCell>
-                  <TableCell className={amountOwed(c) > 0 ? "font-medium text-red-600" : ""}>
-                    {formatCurrency(amountOwed(c))}
+                  <TableCell className={totalOwed(c) > 0 ? "font-medium text-red-600" : ""}>
+                    {formatCurrency(totalOwed(c))}
                   </TableCell>
                   <TableCell>{formatDate(c.deleted_at)}</TableCell>
                   <TableCell className="text-right">

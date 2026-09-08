@@ -73,6 +73,7 @@ export type Database = {
           pending_renewal_start_date: string | null
           pending_renewal_total_visits: number | null
           phone: string | null
+          previous_package_owed: number
           square_customer_id: string | null
           square_visit_note: string | null
           status: string
@@ -102,6 +103,7 @@ export type Database = {
           pending_renewal_start_date?: string | null
           pending_renewal_total_visits?: number | null
           phone?: string | null
+          previous_package_owed?: number
           square_customer_id?: string | null
           square_visit_note?: string | null
           status?: string
@@ -131,6 +133,7 @@ export type Database = {
           pending_renewal_start_date?: string | null
           pending_renewal_total_visits?: number | null
           phone?: string | null
+          previous_package_owed?: number
           square_customer_id?: string | null
           square_visit_note?: string | null
           status?: string

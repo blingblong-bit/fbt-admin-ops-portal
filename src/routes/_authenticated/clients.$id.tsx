@@ -36,6 +36,8 @@ import {
 } from "@/components/ui/dialog";
 import {
   amountOwed,
+  previousOwed,
+  totalOwed,
   formatCurrency,
   formatDate,
   fullName,
@@ -223,7 +225,7 @@ function ClientDetailPage() {
                 Complete Visit
               </Button>
             )}
-            <Button variant="outline" onClick={() => setPaymentOpen(true)} disabled={owed === 0}>
+            <Button variant="outline" onClick={() => setPaymentOpen(true)} disabled={totalOwed(c) === 0}>
               Record Payment
             </Button>
             <Button variant="outline" onClick={() => setEditOpen(true)}>
@@ -299,11 +301,25 @@ function ClientDetailPage() {
           <CardContent className="space-y-2 text-sm">
             <Row label="Package Price" value={formatCurrency(c.package_price)} />
             <Row label="Amount Paid" value={formatCurrency(c.amount_paid)} />
+            {previousOwed(c) > 0 && (
+              <Row
+                label="Previous Package Owed"
+                value={formatCurrency(previousOwed(c))}
+                valueClass="text-red-600 font-semibold"
+              />
+            )}
             <Row
-              label="Amount Owed"
+              label="Current Package Owed"
               value={formatCurrency(owed)}
               valueClass={owed > 0 ? "text-red-600 font-semibold" : ""}
             />
+            {previousOwed(c) > 0 && (
+              <Row
+                label="Total Owed"
+                value={formatCurrency(totalOwed(c))}
+                valueClass="text-red-700 font-semibold"
+              />
+            )}
             {(() => {
               const last = activities.find(
                 (a) =>
@@ -428,7 +444,9 @@ function PaymentDialog({
   client: Client;
   onDone: () => void;
 }) {
-  const owed = amountOwed(client);
+  // Payments clear the oldest debt first, so the ceiling is everything owed.
+  const owed = totalOwed(client);
+  const prev = previousOwed(client);
   const [amount, setAmount] = useState(owed);
   useEffect(() => setAmount(owed), [owed, open]);
   const recordPayment = useServerFn(recordManualPayment);
@@ -469,6 +487,12 @@ function PaymentDialog({
           <p className="text-sm text-slate-500">
             Outstanding balance: <strong>{formatCurrency(owed)}</strong>
           </p>
+          {prev > 0 && (
+            <p className="text-xs text-amber-700">
+              Includes {formatCurrency(prev)} left from a previous package — payments clear that
+              first.
+            </p>
+          )}
           <Label>Payment Amount ($)</Label>
           <Input
             type="number"
@@ -581,6 +605,13 @@ function RenewDialog({
       if (Number(form.amount_paid) > Number(form.package_price)) {
         throw new Error("Amount paid cannot exceed package price");
       }
+      // Unpaid money on the finished package survives the renewal as separate
+      // "previous package" debt instead of being wiped by the amount_paid reset.
+      const unpaidCarried = Math.max(
+        0,
+        Number(client.package_price ?? 0) - Number(client.amount_paid ?? 0),
+      );
+      const carriedTotal = Number(client.previous_package_owed ?? 0) + unpaidCarried;
       // Reset visits_used first to satisfy validation trigger.
       // Package history: keep the completed package and its final visit count.
       await supabase.from("client_activities").insert({
@@ -593,11 +624,12 @@ function RenewDialog({
           visits_used: client.visits_used ?? 0,
           package_price: Number(client.package_price ?? 0),
           amount_paid: Number(client.amount_paid ?? 0),
+          unpaid_carried_forward: unpaidCarried,
         },
       });
       const { error: e1 } = await supabase
         .from("clients")
-        .update({ visits_used: 0, amount_paid: 0 })
+        .update({ visits_used: 0, amount_paid: 0, previous_package_owed: carriedTotal })
         .eq("id", client.id);
       if (e1) throw e1;
       const { error: e2 } = await supabase

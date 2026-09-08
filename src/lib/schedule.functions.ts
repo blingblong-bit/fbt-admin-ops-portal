@@ -662,7 +662,7 @@ export const completeVisitForClient = createServerFn({ method: "POST" })
     const { data: c0, error } = await context.supabase
       .from("clients")
       .select(
-        "visits_used, package_total_visits, package_name, package_price, amount_paid, payment_model, pending_renewal_start_date, pending_renewal_price, pending_renewal_total_visits, pending_renewal_package_name",
+        "visits_used, package_total_visits, package_name, package_price, amount_paid, previous_package_owed, payment_model, pending_renewal_start_date, pending_renewal_price, pending_renewal_total_visits, pending_renewal_package_name",
       )
       .eq("id", data.clientId)
       .single();
@@ -673,6 +673,7 @@ export const completeVisitForClient = createServerFn({ method: "POST" })
       package_name: string | null;
       package_price: number | string | null;
       amount_paid: number | string | null;
+      previous_package_owed: number | string | null;
       payment_model: string | null;
       pending_renewal_start_date: string | null;
       pending_renewal_price: number | string | null;
@@ -717,6 +718,15 @@ export const completeVisitForClient = createServerFn({ method: "POST" })
         const newPrice = Number(c.pending_renewal_price ?? c.package_price ?? 0);
         const newName = c.pending_renewal_package_name ?? c.package_name ?? null;
 
+        // Anything still unpaid on the finished package is carried forward as
+        // separate "previous package" debt — never merged into the new price
+        // and never silently dropped by the amount_paid reset below.
+        const unpaidCarried = Math.max(
+          0,
+          Number(c.package_price ?? 0) - Number(c.amount_paid ?? 0),
+        );
+        const carriedTotal = Number(c.previous_package_owed ?? 0) + unpaidCarried;
+
         // Package history: preserve the completed package and its final count.
         await context.supabase.from("client_activities").insert({
           client_id: data.clientId,
@@ -728,6 +738,7 @@ export const completeVisitForClient = createServerFn({ method: "POST" })
             visits_used: finalUsed,
             package_price: Number(c.package_price ?? 0),
             amount_paid: Number(c.amount_paid ?? 0),
+            unpaid_carried_forward: unpaidCarried,
           },
         });
 
@@ -735,7 +746,7 @@ export const completeVisitForClient = createServerFn({ method: "POST" })
         // visits_used > package_total_visits.
         const { error: rErr } = await context.supabase
           .from("clients")
-          .update({ visits_used: 0, amount_paid: 0 })
+          .update({ visits_used: 0, amount_paid: 0, previous_package_owed: carriedTotal })
           .eq("id", data.clientId);
         if (rErr) throw rErr;
         const { error: aErr } = await context.supabase
@@ -1654,6 +1665,12 @@ export type RenewalForecastRow = {
   pending_start_ymd: string | null;
   pending_total_visits: number | null;
   pending_package_name: string | null;
+  /**
+   * Prepared renewal whose upcoming appointments were all cancelled (or which
+   * never had one). Kept visible so staff can edit or cancel it, but excluded
+   * from the weekly payment totals.
+   */
+  no_upcoming: boolean;
 };
 
 export type RenewalForecastResult = {
@@ -1773,6 +1790,60 @@ export const getRenewalForecast = createServerFn({ method: "GET" })
         pending_start_ymd: pendingStart,
         pending_total_visits: r.pending_renewal_total_visits ?? null,
         pending_package_name: r.pending_renewal_package_name ?? null,
+        no_upcoming: false,
+      });
+    }
+
+    // Prepared renewals with no qualifying upcoming appointment must not
+    // vanish — surface them separately so staff can still edit or cancel.
+    const seen = new Set(out.map((r) => r.client_id));
+    const { data: pendingRows, error: pErr } = await context.supabase
+      .from("clients")
+      .select(
+        "id, visits_used, package_total_visits, package_price, next_package_price, pending_renewal_start_date, pending_renewal_price, pending_renewal_total_visits, pending_renewal_package_name",
+      )
+      .is("deleted_at", null)
+      .neq("status", "archived")
+      .not("pending_renewal_start_date", "is", null);
+    if (pErr) throw pErr;
+    for (const r of (pendingRows ?? []) as unknown as Array<{
+      id: string;
+      visits_used: number | null;
+      package_total_visits: number;
+      package_price: number | string | null;
+      next_package_price: number | string | null;
+      pending_renewal_start_date: string | null;
+      pending_renewal_price: number | string | null;
+      pending_renewal_total_visits: number | null;
+      pending_renewal_package_name: string | null;
+    }>) {
+      if (seen.has(r.id)) continue;
+      const used = Number(r.visits_used ?? 0);
+      const total = Number(r.package_total_visits ?? 0);
+      const basePrice = Number(r.package_price ?? 0);
+      const pendingPrice =
+        r.pending_renewal_price === null || r.pending_renewal_price === undefined
+          ? null
+          : Number(r.pending_renewal_price);
+      const override = r.next_package_price === null ? null : Number(r.next_package_price);
+      out.push({
+        client_id: r.id,
+        visits_used: used,
+        package_total_visits: total,
+        remaining: Math.max(0, total - used),
+        upcoming_count: 0,
+        appointment_ymds: [],
+        first_uncovered_index: 0,
+        first_uncovered_ymd: r.pending_renewal_start_date ?? "",
+        // Never counted in This Week / Next Week without a real appointment.
+        week_bucket: "later",
+        package_price: basePrice,
+        next_package_price: pendingPrice ?? override ?? basePrice,
+        pre_renewed: true,
+        pending_start_ymd: r.pending_renewal_start_date,
+        pending_total_visits: r.pending_renewal_total_visits ?? null,
+        pending_package_name: r.pending_renewal_package_name ?? null,
+        no_upcoming: true,
       });
     }
 

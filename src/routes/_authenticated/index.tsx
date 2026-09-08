@@ -32,6 +32,8 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
   amountOwed,
+  previousOwed,
+  totalOwed,
   effectiveStatus,
   formatDate,
   formatCurrency,
@@ -168,7 +170,9 @@ function matchesFilter(
   needsRenewal: boolean = false,
 ): boolean {
 
-  const owed = amountOwed(c);
+  const currentOwed = amountOwed(c);
+  const prevOwed = previousOwed(c);
+  const owed = currentOwed + prevOwed;
   const r = visitsRemaining(c);
   switch (f) {
     case "all":
@@ -178,15 +182,16 @@ function matchesFilter(
     case "payment_due_this_week":
       // Owes money AND has a booking this week (or a future package start
       // that lands in this week).
-      return owed > 0 && (startBucket ? startBucket === "this" : isScheduledThisWeek);
+      return currentOwed > 0 && (startBucket ? startBucket === "this" : isScheduledThisWeek);
     case "payment_due_next_week":
-      return owed > 0 && (startBucket ? startBucket === "next" : isScheduledNextWeek);
+      return currentOwed > 0 && (startBucket ? startBucket === "next" : isScheduledNextWeek);
     case "overdue_prior_weeks":
       // Owes money AND does NOT have a booking this week — mutually
       // exclusive with Payment Due — This Week, and together they cover
       // every client with an outstanding balance. A package that hasn't
       // started yet is never overdue.
-      return owed > 0 && !startBucket && !isScheduledThisWeek;
+      // Debt carried over from a finished package is always overdue.
+      return prevOwed > 0 || (currentOwed > 0 && !startBucket && !isScheduledThisWeek);
     case "not_scheduled":
       return !isScheduled;
     case "almost_finished":
@@ -572,7 +577,7 @@ function Dashboard() {
       filter === "overdue_prior_weeks" ||
       filter === "critical"
     ) {
-      return [...searched].sort((a, b) => amountOwed(b) - amountOwed(a));
+      return [...searched].sort((a, b) => totalOwed(b) - totalOwed(a));
     }
     if (filter === "almost_finished") {
       return [...searched].sort(
@@ -1251,7 +1256,7 @@ function Tile({
 
 
 function PaymentTotals({ clients }: { clients: Client[] }) {
-  const owed = clients.map((c) => amountOwed(c));
+  const owed = clients.map((c) => totalOwed(c));
   const total = owed.reduce((a, b) => a + b, 0);
   const highest = owed.length ? Math.max(...owed) : 0;
   const average = owed.length ? total / owed.length : 0;
@@ -1284,7 +1289,7 @@ function exportPaymentDueCsv(clients: Client[]) {
     ["Name", "Amount Owed"],
     ...clients.map((c) => [
       fullName(c),
-      String(amountOwed(c)),
+      String(totalOwed(c)),
     ]),
   ];
   const csv = rows.map((r) => r.map((cell) => `"${cell.replace(/"/g, '""')}"`).join(",")).join("\n");

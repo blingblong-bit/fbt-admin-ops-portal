@@ -650,6 +650,8 @@ function Dashboard() {
       count: counts.payment_due_this_week,
       money: counts.payment_due_this_week_total,
       moneyLabel: "outstanding",
+      extraMoney: counts.next_package_this_week_total,
+      extraMoneyLabel: "next package",
       tone: "red",
       staffHidden: true,
     },
@@ -661,6 +663,8 @@ function Dashboard() {
       count: counts.payment_due_next_week,
       money: counts.payment_due_next_week_total,
       moneyLabel: "outstanding",
+      extraMoney: counts.next_package_next_week_total,
+      extraMoneyLabel: "next package",
       tone: "red",
       staffHidden: true,
     },
@@ -733,8 +737,13 @@ function Dashboard() {
     {
       key: "needs_renewal",
       label: "Needs Renewal",
+      sublabel: "booked past current package",
       icon: <RefreshCw className="h-5 w-5" />,
       count: counts.needs_renewal,
+      money: isStaff
+        ? undefined
+        : counts.next_package_this_week_total + counts.next_package_next_week_total,
+      moneyLabel: "next packages due soon",
       tone: counts.needs_renewal > 0 ? "amber" : "slate",
     },
     {
@@ -1128,6 +1137,8 @@ type TileDef = {
   count: number;
   money?: number;
   moneyLabel?: string;
+  extraMoney?: number;
+  extraMoneyLabel?: string;
   tone: "red" | "amber" | "slate";
   href?: string;
   countLabel?: string;
@@ -1186,6 +1197,11 @@ function Tile({
       {tile.money !== undefined && tile.money > 0 && (
         <div className="text-xs font-medium text-slate-600">
           {formatCurrency(tile.money)} {tile.moneyLabel}
+        </div>
+      )}
+      {tile.extraMoney !== undefined && tile.extraMoney > 0 && (
+        <div className="text-xs font-medium text-amber-700">
+          + {formatCurrency(tile.extraMoney)} {tile.extraMoneyLabel}
         </div>
       )}
     </>

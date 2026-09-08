@@ -498,23 +498,30 @@ function Dashboard() {
     };
 
     for (const cl of visibleClients) {
-      const owed = amountOwed(cl);
+      const currentOwed = amountOwed(cl);
+      const prevOwed = previousOwed(cl);
+      const owed = currentOwed + prevOwed;
       const r = visitsRemaining(cl);
       c.all += 1;
       if (owed > 0) {
         const bucket = startBucketOf(cl);
         c.payment_due += 1;
         c.payment_due_total += owed;
-        if (bucket ? bucket === "this" : isScheduledThisWeek(cl.id)) {
+        const currentIsThisWeek = bucket ? bucket === "this" : isScheduledThisWeek(cl.id);
+        if (currentOwed > 0 && currentIsThisWeek) {
           c.payment_due_this_week += 1;
-          c.payment_due_this_week_total += owed;
-        } else if (!bucket) {
-          c.overdue_prior_weeks += 1;
-          c.overdue_prior_weeks_total += owed;
+          c.payment_due_this_week_total += currentOwed;
         }
-        if (bucket ? bucket === "next" : isScheduledNextWeek(cl.id)) {
+        // Old-package debt is always overdue; current debt is overdue only
+        // when there's no booking this week and no future package start.
+        const currentIsOverdue = currentOwed > 0 && !bucket && !currentIsThisWeek;
+        if (prevOwed > 0 || currentIsOverdue) {
+          c.overdue_prior_weeks += 1;
+          c.overdue_prior_weeks_total += prevOwed + (currentIsOverdue ? currentOwed : 0);
+        }
+        if (currentOwed > 0 && (bucket ? bucket === "next" : isScheduledNextWeek(cl.id))) {
           c.payment_due_next_week += 1;
-          c.payment_due_next_week_total += owed;
+          c.payment_due_next_week_total += currentOwed;
         }
       }
 

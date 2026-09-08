@@ -1361,3 +1361,14 @@ function formatYmdRange(startYmd?: string, endYmd?: string): string | undefined 
 
 // Keep StatusBadge import used elsewhere referenced to avoid unused-import noise
 void StatusBadge;
+
+/** Format a "YYYY-MM-DD" as "Mon D, YYYY". */
+function formatYmd(ymd: string): string {
+  const [y, m, d] = ymd.split("-").map(Number);
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(new Date(Date.UTC(y, m - 1, d)));
+}

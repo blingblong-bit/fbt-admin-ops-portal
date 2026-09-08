@@ -107,6 +107,7 @@ type FilterKey =
   | "critical"
   | "package_complete"
   | "needs_renewal"
+  | "renewal_scheduled"
   | "needs_package_review";
 
 const FILTER_LABEL: Record<FilterKey, string> = {
@@ -120,6 +121,7 @@ const FILTER_LABEL: Record<FilterKey, string> = {
   critical: "Critical",
   package_complete: "Package Complete",
   needs_renewal: "Needs Renewal",
+  renewal_scheduled: "Renewal Scheduled",
   needs_package_review: "First Visit — No Package Info, Needs Review",
 };
 
@@ -168,6 +170,7 @@ function matchesFilter(
   startBucket: StartBucket = null,
   needsPkgReview: boolean = false,
   needsRenewal: boolean = false,
+  renewalScheduled: boolean = false,
 ): boolean {
 
   const currentOwed = amountOwed(c);
@@ -203,8 +206,12 @@ function matchesFilter(
     case "needs_renewal":
       // Driven by the upcoming-appointment forecast: the client has booked
       // more upcoming visits than their current package can still cover, so
-      // one of those appointments starts a new package.
-      return needsRenewal;
+      // one of those appointments starts a new package. Once staff prepares
+      // the next package the client moves to "Renewal Scheduled".
+      return needsRenewal && !renewalScheduled;
+    case "renewal_scheduled":
+      // Already handled: a prepared/pending next package exists.
+      return renewalScheduled;
     case "needs_package_review":
       return needsPkgReview;
   }
@@ -490,6 +497,7 @@ function Dashboard() {
       critical_total: 0,
       package_complete: 0,
       needs_renewal: 0,
+      renewal_scheduled: 0,
       needs_package_review: 0,
       // Money owed for the NEXT package, tracked separately from the
       // current-package balance above.
@@ -531,13 +539,17 @@ function Dashboard() {
 
       const forecast = renewalMap.get(cl.id);
       if (forecast) {
-        c.needs_renewal += 1;
+        // Prepared renewals are "handled" and leave the action queue, but
+        // their next-package money still counts in the weekly totals.
+        if (forecast.pre_renewed) c.renewal_scheduled += 1;
+        else c.needs_renewal += 1;
         if (forecast.week_bucket === "this") {
           c.next_package_this_week_total += forecast.next_package_price;
         } else if (forecast.week_bucket === "next") {
           c.next_package_next_week_total += forecast.next_package_price;
         }
       }
+
 
       if (!isScheduled(cl.id)) c.not_scheduled += 1;
       if (r !== null && r > 0 && r <= 2) c.almost_finished += 1;
@@ -567,6 +579,7 @@ function Dashboard() {
         startBucketOf(c),
         needsPackageReview(c, dismissedIds, c.id),
         renewalMap.has(c.id),
+        renewalMap.get(c.id)?.pre_renewed === true,
       ),
     );
 
@@ -595,7 +608,7 @@ function Dashboard() {
         (a, b) => (visitsRemaining(a) ?? 0) - (visitsRemaining(b) ?? 0),
       );
     }
-    if (filter === "needs_renewal") {
+    if (filter === "needs_renewal" || filter === "renewal_scheduled") {
       // Soonest new-package start first.
       return [...searched].sort((a, b) =>
         (renewalMap.get(a.id)?.first_uncovered_ymd ?? "").localeCompare(
@@ -764,6 +777,14 @@ function Dashboard() {
       tone: counts.needs_renewal > 0 ? "amber" : "slate",
     },
     {
+      key: "renewal_scheduled",
+      label: "Renewal Scheduled",
+      sublabel: "next package prepared — activates at check-in",
+      icon: <RefreshCw className="h-5 w-5" />,
+      count: counts.renewal_scheduled,
+      tone: "slate",
+    },
+    {
       key: "needs_package_review",
       label: "First Visit — No Package Info",
       sublabel: "assessment only — needs package review",
@@ -820,6 +841,7 @@ function Dashboard() {
         "critical",
         "payment_history",
         "needs_renewal",
+        "renewal_scheduled",
         "needs_package_review",
         "renewal_review",
         "renewal_manual",
@@ -1033,7 +1055,9 @@ function Dashboard() {
                 }
               }
               const forecast =
-                filter === "needs_renewal" ? renewalMap.get(c.id) : undefined;
+                filter === "needs_renewal" || filter === "renewal_scheduled"
+                  ? renewalMap.get(c.id)
+                  : undefined;
               return (
                 <div key={c.id} className="flex flex-col gap-2">
                   <SmartClientCard

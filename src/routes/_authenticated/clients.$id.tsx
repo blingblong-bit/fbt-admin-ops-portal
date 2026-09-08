@@ -36,6 +36,8 @@ import {
 } from "@/components/ui/dialog";
 import {
   amountOwed,
+  previousOwed,
+  totalOwed,
   formatCurrency,
   formatDate,
   fullName,

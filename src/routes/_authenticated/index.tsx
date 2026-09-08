@@ -549,6 +549,7 @@ function Dashboard() {
         isOverduePrior(c.id),
         startBucketOf(c),
         needsPackageReview(c, dismissedIds, c.id),
+        renewalMap.has(c.id),
       ),
     );
 
@@ -577,8 +578,16 @@ function Dashboard() {
         (a, b) => (visitsRemaining(a) ?? 0) - (visitsRemaining(b) ?? 0),
       );
     }
+    if (filter === "needs_renewal") {
+      // Soonest new-package start first.
+      return [...searched].sort((a, b) =>
+        (renewalMap.get(a.id)?.first_uncovered_ymd ?? "").localeCompare(
+          renewalMap.get(b.id)?.first_uncovered_ymd ?? "",
+        ),
+      );
+    }
     return [...searched].sort((a, b) => fullName(a).localeCompare(fullName(b)));
-  }, [visibleClients, filter, search, scheduledSet, thisWeekSet, nextWeekSet, carriedOverRecentMap, overduePriorMap, thisWeekEndYmd, nextWeekEndYmd]);
+  }, [visibleClients, filter, search, scheduledSet, thisWeekSet, nextWeekSet, carriedOverRecentMap, overduePriorMap, thisWeekEndYmd, nextWeekEndYmd, renewalMap, dismissedIds]);
 
   const reviewCountQuery = useQuery({
     queryKey: ["square_payments_needs_review_count"],

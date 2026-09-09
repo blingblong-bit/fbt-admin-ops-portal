@@ -240,7 +240,7 @@ function ClientDetailPage() {
             {(c.package_total_visits ?? 0) > 0 &&
               (remaining !== 0 || !!c.pending_renewal_start_date) && (
               <Button
-                onClick={() => completeVisit.mutate()}
+                onClick={() => setVisitPickerOpen(true)}
                 title={!hasVisitData ? "Visits unknown — verify before completing." : undefined}
               >
                 Complete Visit

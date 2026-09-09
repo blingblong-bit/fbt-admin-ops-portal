@@ -1588,6 +1588,67 @@ export const getClientAppointments = createServerFn({ method: "GET" })
     return { appointments, fetched_count: bookings.length, error: null };
   });
 
+/**
+ * Recent past appointments for one client that have no recorded check-in yet.
+ * Used by the client page so a manual "Complete Visit" can be attached to the
+ * appointment it belongs to instead of being saved without a reference.
+ */
+export const getUncheckedRecentAppointments = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { clientId: string }) => {
+    if (!d?.clientId || typeof d.clientId !== "string") throw new Error("clientId required");
+    return d;
+  })
+  .handler(async ({ data, context }): Promise<{ appointments: ClientAppointment[] }> => {
+    const token = process.env.SQUARE_PRODUCTION_ACCESS_TOKEN;
+    if (!token) return { appointments: [] };
+
+    const { data: client, error: cErr } = await context.supabase
+      .from("clients")
+      .select("square_customer_id")
+      .eq("id", data.clientId)
+      .single();
+    if (cErr) throw cErr;
+    const squareCustomerId = (client as { square_customer_id: string | null } | null)
+      ?.square_customer_id;
+    if (!squareCustomerId) return { appointments: [] };
+
+    const now = Date.now();
+    const { bookings } = await fetchSquareBookings(
+      token,
+      new Date(now - 14 * MS_PER_DAY).toISOString(),
+      new Date(now + MS_PER_DAY).toISOString(),
+    );
+    const mine = bookings.filter(
+      (b) =>
+        b.customer_id === squareCustomerId &&
+        b.start_at &&
+        new Date(b.start_at).getTime() <= now &&
+        !/(CANCELLED|CANCELED|DECLINED|NO_SHOW)/i.test((b.status ?? "").toString()),
+    );
+    const probes: CheckedInProbe[] = mine.map((b) => ({
+      booking_id: b.id,
+      client_id: data.clientId,
+      start_at: b.start_at as string,
+    }));
+    const checkedIn = new Set(await resolveCheckedInBookingIds(context.supabase, probes));
+
+    const appointments: ClientAppointment[] = mine
+      .filter((b) => !checkedIn.has(b.id))
+      .map((b) => ({
+        booking_id: b.id,
+        start_at: b.start_at as string,
+        status: (b.status ?? "UNKNOWN").toString(),
+        duration_minutes: b.appointment_segments?.[0]?.duration_minutes ?? null,
+        service_name: null,
+        team_member_name: null,
+      }))
+      .sort((a, b) => b.start_at.localeCompare(a.start_at));
+
+    return { appointments };
+  });
+
+
 export const getContactedClientIds = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { clientIds: string[] }) => {

@@ -559,6 +559,28 @@ async function handlePaymentEvent(supabaseAdmin: SupabaseClient<Database>, event
 }
 
 
+/**
+ * Returns how much the client is overpaid on the current package (0 when fine).
+ * Guards against packages that were renewed as "already paid" and then receive
+ * a real Square payment on top, which used to create a silent credit.
+ */
+async function detectOverpayment(
+  supabaseAdmin: SupabaseClient<Database>,
+  clientId: string | null,
+): Promise<number> {
+  if (!clientId) return 0;
+  const { data } = await supabaseAdmin
+    .from("clients")
+    .select("package_price, amount_paid")
+    .eq("id", clientId)
+    .maybeSingle();
+  if (!data) return 0;
+  const price = Number(data.package_price ?? 0);
+  const paid = Number(data.amount_paid ?? 0);
+  if (price <= 0) return 0; // no package price on file — separate review path
+  return paid > price ? Number((paid - price).toFixed(2)) : 0;
+}
+
 async function handleBookingEvent(supabaseAdmin: SupabaseClient<Database>, eventType: string, event: SquareEvent) {
   const booking = event.data?.object?.booking;
   const bookingId = booking?.id ?? event.data?.id ?? null;

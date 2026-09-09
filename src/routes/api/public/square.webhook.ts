@@ -537,7 +537,9 @@ async function handlePaymentEvent(supabaseAdmin: SupabaseClient<Database>, event
         ? "reconciled_already_credited"
         : newAppliedZero
           ? `applied_zero_${method ?? "unknown"}`
-          : `applied_payment_${method ?? "unknown"}`
+          : overCredit > 0
+            ? `overpayment_review_${method ?? "unknown"}`
+            : `applied_payment_${method ?? "unknown"}`
       : applyErr
         ? "apply_blocked"
         : clientId
@@ -548,7 +550,9 @@ async function handlePaymentEvent(supabaseAdmin: SupabaseClient<Database>, event
         ? `Payment ${squarePaymentId} (${amountDisplay}) already credited — flags set applied=true`
         : newAppliedZero
           ? `Payment ${squarePaymentId} (${amountDisplay}) matched to client via ${method} but $0 credited — package_price cap already reached, flagged for review`
-          : `Applied ${amountDisplay} to client via ${method}`
+          : overCredit > 0
+            ? `Applied ${amountDisplay} to client via ${method}, but the package is now overpaid by $${overCredit.toFixed(2)} — flagged for review`
+            : `Applied ${amountDisplay} to client via ${method}`
       : applyErr
         ? `COMPLETED payment ${squarePaymentId} (${amountDisplay}) matched to client but credit was blocked: ${formatErr(applyErr)}`
         : clientId

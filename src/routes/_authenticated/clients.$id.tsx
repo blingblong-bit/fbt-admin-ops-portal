@@ -21,6 +21,7 @@ import {
 import {
   getScheduledClientIds,
   getClientAppointments,
+  getUncheckedRecentAppointments,
   completeVisitForClient,
   type ClientAppointment,
 } from "@/lib/schedule.functions";
@@ -122,38 +123,42 @@ function ClientDetailPage() {
   };
 
   const completeVisitFn = useServerFn(completeVisitForClient);
+  const fetchUnchecked = useServerFn(getUncheckedRecentAppointments);
+
+  const [visitPickerOpen, setVisitPickerOpen] = useState(false);
+  const uncheckedQ = useQuery({
+    queryKey: ["unchecked-appointments", id],
+    queryFn: () => fetchUnchecked({ data: { clientId: id } }),
+    enabled: visitPickerOpen,
+  });
 
   const completeVisit = useMutation({
-    mutationFn: async () => {
+    // All visits go through the shared check-in so the duplicate guards and
+    // package/renewal handling are identical everywhere.
+    mutationFn: async (appt?: { bookingId: string; startAt: string }) => {
       if (!c) return;
-      const current = c.visits_used ?? 0;
-      // A prepared next package starts with this visit — let the server handle
-      // activating it instead of blocking on the finished package's count.
-      if (current >= c.package_total_visits) {
-        if (!c.pending_renewal_start_date) {
-          throw new Error("All visits already used");
-        }
-        await completeVisitFn({ data: { clientId: id } });
-        return;
+      if (!appt && (c.visits_used ?? 0) >= c.package_total_visits && !c.pending_renewal_start_date) {
+        throw new Error("All visits already used");
       }
-      const next = current + 1;
-      const { error } = await supabase
-        .from("clients")
-        .update({ visits_used: next })
-        .eq("id", id);
-      if (error) throw error;
-      await supabase.from("client_activities").insert({
-        client_id: id,
-        activity_type: "visit",
-        description: `Visit completed (${next}/${c.package_total_visits})`,
+      await completeVisitFn({
+        data: {
+          clientId: id,
+          ...(appt ? { bookingId: appt.bookingId, appointmentStartAt: appt.startAt } : {}),
+        },
       });
     },
     onSuccess: () => {
       toast.success("Visit recorded");
+      setVisitPickerOpen(false);
+      qc.invalidateQueries({ queryKey: ["unchecked-appointments", id] });
+      qc.invalidateQueries({ queryKey: ["day-review"] });
+      qc.invalidateQueries({ queryKey: ["missed-check-ins"] });
+      qc.invalidateQueries({ queryKey: ["completed-visit-bookings"] });
       refresh();
     },
     onError: (e: Error) => toast.error(e.message),
   });
+
 
   // Scheduling is derived from live Square bookings — no manual toggle.
   const renewalFlagged = useIsRenewalFlagged(id);
@@ -235,7 +240,7 @@ function ClientDetailPage() {
             {(c.package_total_visits ?? 0) > 0 &&
               (remaining !== 0 || !!c.pending_renewal_start_date) && (
               <Button
-                onClick={() => completeVisit.mutate()}
+                onClick={() => setVisitPickerOpen(true)}
                 title={!hasVisitData ? "Visits unknown — verify before completing." : undefined}
               >
                 Complete Visit
@@ -414,6 +419,57 @@ function ClientDetailPage() {
           </CardContent>
         </Card>
       </div>
+
+      <Dialog open={visitPickerOpen} onOpenChange={(o) => !o && setVisitPickerOpen(false)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Complete Visit</DialogTitle>
+            <DialogDescription>
+              Pick the appointment this visit was for, so it isn't counted twice.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            {uncheckedQ.isLoading ? (
+              <p className="text-sm text-slate-500">Looking up recent appointments…</p>
+            ) : (uncheckedQ.data?.appointments.length ?? 0) === 0 ? (
+              <p className="text-sm text-slate-500">
+                No recent appointment without a check-in was found.
+              </p>
+            ) : (
+              uncheckedQ.data!.appointments.map((a) => (
+                <Button
+                  key={a.booking_id}
+                  variant="outline"
+                  className="min-h-11 w-full justify-start"
+                  disabled={completeVisit.isPending}
+                  onClick={() =>
+                    completeVisit.mutate({ bookingId: a.booking_id, startAt: a.start_at })
+                  }
+                >
+                  {new Date(a.start_at).toLocaleString("en-US", {
+                    timeZone: "America/Chicago",
+                    weekday: "short",
+                    month: "short",
+                    day: "numeric",
+                    hour: "numeric",
+                    minute: "2-digit",
+                  })}
+                </Button>
+              ))
+            )}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="ghost"
+              disabled={completeVisit.isPending}
+              onClick={() => completeVisit.mutate(undefined)}
+            >
+              No appointment — just record a visit
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
 
       <PaymentDialog
         open={paymentOpen}

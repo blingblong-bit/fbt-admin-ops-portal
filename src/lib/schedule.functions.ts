@@ -659,6 +659,56 @@ export const completeVisitForClient = createServerFn({ method: "POST" })
       if (hit) throw new Error("Visit already recorded for this client today.");
     }
 
+    // Attribution guard: a visit recorded without a booking reference (manual
+    // "Complete Visit" from the client page, older builds) can already belong
+    // to this appointment. Replay the same matching the review screens use and
+    // reject if this booking is already covered, so a catch-up entry can't be
+    // counted twice.
+    if (data.bookingId && data.appointmentStartAt) {
+      const token = process.env.SQUARE_PRODUCTION_ACCESS_TOKEN;
+      const { data: cRow } = await context.supabase
+        .from("clients")
+        .select("square_customer_id")
+        .eq("id", data.clientId)
+        .single();
+      const squareCustomerId = (cRow as { square_customer_id: string | null } | null)
+        ?.square_customer_id;
+      if (token && squareCustomerId) {
+        const anchor = new Date(data.appointmentStartAt).getTime();
+        const DAY_MS = 86_400_000;
+        const { bookings } = await fetchSquareBookings(
+          token,
+          new Date(anchor - 14 * DAY_MS).toISOString(),
+          new Date(anchor + 2 * DAY_MS).toISOString(),
+        );
+        const probes: CheckedInProbe[] = bookings
+          .filter(
+            (b) =>
+              b.customer_id === squareCustomerId &&
+              b.start_at &&
+              !/(CANCELLED|CANCELED|DECLINED|NO_SHOW)/i.test((b.status ?? "").toString()),
+          )
+          .map((b) => ({
+            booking_id: b.id,
+            client_id: data.clientId,
+            start_at: b.start_at as string,
+          }));
+        if (!probes.some((p) => p.booking_id === data.bookingId)) {
+          probes.push({
+            booking_id: data.bookingId,
+            client_id: data.clientId,
+            start_at: data.appointmentStartAt,
+          });
+        }
+        const covered = await resolveCheckedInBookingIds(context.supabase, probes);
+        if (covered.includes(data.bookingId)) {
+          throw new Error("Visit already recorded for this appointment.");
+        }
+      }
+    }
+
+
+
 
 
     const { data: c0, error } = await context.supabase
@@ -898,11 +948,14 @@ async function resolveCheckedInBookingIds(
 
 
     const byBooking = new Set<string>();
-    // Visit rows with no booking reference, counted per client+day. These get
-    // handed out to that day's unmatched appointments in time order, one each,
-    // so a client booked twice in a day doesn't show both slots checked in
+    // Visit rows with no booking reference, queued per client in the order they
+    // were recorded. They get handed out to that client's unmatched
+    // appointments oldest-first, and a visit can only cover an appointment on
+    // or before the day it was recorded. That way a catch-up entry typed today
+    // for yesterday's appointment still counts as that appointment's check-in,
+    // while a client booked twice in a day doesn't show both slots checked in
     // after a single check-in.
-    const looseByClientDay = new Map<string, number>();
+    const looseByClient = new Map<string, string[]>();
     for (const row of rows ?? []) {
       const bid = (row.metadata as { booking_id?: string } | null)?.booking_id;
       if (bid) {
@@ -910,28 +963,47 @@ async function resolveCheckedInBookingIds(
         continue;
       }
       if (row.client_id && row.created_at) {
-        const key = `${row.client_id}|${ymdInTz(new Date(row.created_at as string))}`;
-        looseByClientDay.set(key, (looseByClientDay.get(key) ?? 0) + 1);
+        const ymd = ymdInTz(new Date(row.created_at as string));
+        const list = looseByClient.get(row.client_id) ?? [];
+        list.push(ymd);
+        looseByClient.set(row.client_id, list);
       }
     }
+    for (const list of looseByClient.values()) list.sort();
 
     const found = new Set<string>();
-    const leftovers: CheckedInProbe[] = [];
+    const leftoversByClient = new Map<string, CheckedInProbe[]>();
     for (const a of appts) {
       if (byBooking.has(a.booking_id)) {
         found.add(a.booking_id);
         continue;
       }
-      if (a.client_id && a.start_at) leftovers.push(a);
+      if (a.client_id && a.start_at) {
+        const list = leftoversByClient.get(a.client_id) ?? [];
+        list.push(a);
+        leftoversByClient.set(a.client_id, list);
+      }
     }
 
-    leftovers.sort((x, y) => new Date(x.start_at!).getTime() - new Date(y.start_at!).getTime());
-    for (const a of leftovers) {
-      const key = `${a.client_id}|${ymdInTz(new Date(a.start_at!))}`;
-      const budget = looseByClientDay.get(key) ?? 0;
-      if (budget > 0) {
-        found.add(a.booking_id);
-        looseByClientDay.set(key, budget - 1);
+    for (const [clientId, list] of leftoversByClient) {
+      list.sort((x, y) => new Date(x.start_at!).getTime() - new Date(y.start_at!).getTime());
+      const visits = looseByClient.get(clientId);
+      if (!visits || visits.length === 0) continue;
+      const used = new Set<number>();
+      for (const a of list) {
+        const apptYmd = ymdInTz(new Date(a.start_at!));
+        let idx = -1;
+        for (let i = 0; i < visits.length; i++) {
+          if (used.has(i)) continue;
+          if (visits[i]! >= apptYmd) {
+            idx = i;
+            break;
+          }
+        }
+        if (idx >= 0) {
+          used.add(idx);
+          found.add(a.booking_id);
+        }
       }
     }
 
@@ -1515,6 +1587,67 @@ export const getClientAppointments = createServerFn({ method: "GET" })
 
     return { appointments, fetched_count: bookings.length, error: null };
   });
+
+/**
+ * Recent past appointments for one client that have no recorded check-in yet.
+ * Used by the client page so a manual "Complete Visit" can be attached to the
+ * appointment it belongs to instead of being saved without a reference.
+ */
+export const getUncheckedRecentAppointments = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { clientId: string }) => {
+    if (!d?.clientId || typeof d.clientId !== "string") throw new Error("clientId required");
+    return d;
+  })
+  .handler(async ({ data, context }): Promise<{ appointments: ClientAppointment[] }> => {
+    const token = process.env.SQUARE_PRODUCTION_ACCESS_TOKEN;
+    if (!token) return { appointments: [] };
+
+    const { data: client, error: cErr } = await context.supabase
+      .from("clients")
+      .select("square_customer_id")
+      .eq("id", data.clientId)
+      .single();
+    if (cErr) throw cErr;
+    const squareCustomerId = (client as { square_customer_id: string | null } | null)
+      ?.square_customer_id;
+    if (!squareCustomerId) return { appointments: [] };
+
+    const now = Date.now();
+    const { bookings } = await fetchSquareBookings(
+      token,
+      new Date(now - 14 * MS_PER_DAY).toISOString(),
+      new Date(now + MS_PER_DAY).toISOString(),
+    );
+    const mine = bookings.filter(
+      (b) =>
+        b.customer_id === squareCustomerId &&
+        b.start_at &&
+        new Date(b.start_at).getTime() <= now &&
+        !/(CANCELLED|CANCELED|DECLINED|NO_SHOW)/i.test((b.status ?? "").toString()),
+    );
+    const probes: CheckedInProbe[] = mine.map((b) => ({
+      booking_id: b.id,
+      client_id: data.clientId,
+      start_at: b.start_at as string,
+    }));
+    const checkedIn = new Set(await resolveCheckedInBookingIds(context.supabase, probes));
+
+    const appointments: ClientAppointment[] = mine
+      .filter((b) => !checkedIn.has(b.id))
+      .map((b) => ({
+        booking_id: b.id,
+        start_at: b.start_at as string,
+        status: (b.status ?? "UNKNOWN").toString(),
+        duration_minutes: b.appointment_segments?.[0]?.duration_minutes ?? null,
+        service_name: null,
+        team_member_name: null,
+      }))
+      .sort((a, b) => b.start_at.localeCompare(a.start_at));
+
+    return { appointments };
+  });
+
 
 export const getContactedClientIds = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])

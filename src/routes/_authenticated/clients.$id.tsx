@@ -21,6 +21,7 @@ import {
 import {
   getScheduledClientIds,
   getClientAppointments,
+  getUncheckedRecentAppointments,
   completeVisitForClient,
   type ClientAppointment,
 } from "@/lib/schedule.functions";

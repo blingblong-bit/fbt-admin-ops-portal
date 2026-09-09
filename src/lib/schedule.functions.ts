@@ -838,7 +838,21 @@ export const getCompletedVisitBookingIds = createServerFn({ method: "POST" })
   .handler(async ({ data, context }): Promise<string[]> => {
     const appts: CheckedInProbe[] =
       data.appointments ?? (data.bookingIds ?? []).map((id) => ({ booking_id: id }));
+    return resolveCheckedInBookingIds(context.supabase, appts);
+  });
+
+/**
+ * Shared implementation: given probes, return the booking IDs that already
+ * have a completed "visit" activity. Used by Schedule Check and by the
+ * Missed Check-Ins review so both agree on what "checked in" means.
+ */
+async function resolveCheckedInBookingIds(
+  supabase: { from: (t: string) => any },
+  appts: CheckedInProbe[],
+): Promise<string[]> {
+  {
     if (appts.length === 0) return [];
+
 
     // Scope the read to the clients on screen and a date window around the
     // appointments shown, then page through results. An unscoped read hits

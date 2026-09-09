@@ -771,6 +771,20 @@ function Dashboard() {
       staffHidden: true,
     },
     {
+      key: "missed_check_ins",
+      label: "Missed Check-Ins",
+      sublabel:
+        missedOlder > 0
+          ? `Yesterday · ${missedOlder} older unresolved`
+          : "Yesterday",
+      icon: <CalendarX className="h-5 w-5" />,
+      count: missedYesterday,
+      countLabel: "client",
+      tone: missedYesterday > 0 || missedOlder > 0 ? "amber" : "slate",
+      href: "/missed-check-ins",
+    },
+
+    {
       key: "package_complete",
       label: "Package Complete",
       icon: <CircleSlash className="h-5 w-5" />,

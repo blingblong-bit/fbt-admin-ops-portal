@@ -431,33 +431,39 @@ async function handlePaymentEvent(supabaseAdmin: SupabaseClient<Database>, event
       return;
     }
 
+    const promotedAppliedZero = !result.alreadyApplied && !(result.appliedAmount > 0);
+    const overCredit = await detectOverpayment(supabaseAdmin, clientId);
+
     await supabaseAdmin
       .from("square_payments")
       .update({
         status,
         client_id: clientId,
         applied: true,
-        needs_review: false,
+        needs_review: overCredit > 0,
         raw_event: event as unknown as never,
       })
       .eq("id", existingPayment.id);
 
-    const promotedAppliedZero = !result.alreadyApplied && !(result.appliedAmount > 0);
     await supabaseAdmin.from("square_sync_log").insert({
       event_type: eventType,
       square_customer_id: squareCustomerId,
       client_id: clientId,
-      status: promotedAppliedZero ? "applied_zero" : "success",
+      status: promotedAppliedZero ? "applied_zero" : overCredit > 0 ? "review" : "success",
       action: result.alreadyApplied
         ? "reconciled_already_credited"
         : promotedAppliedZero
           ? `applied_zero_${method ?? "unknown"}`
-          : `applied_payment_${method ?? "unknown"}`,
+          : overCredit > 0
+            ? `overpayment_review_${method ?? "unknown"}`
+            : `applied_payment_${method ?? "unknown"}`,
       message: result.alreadyApplied
         ? `Payment ${squarePaymentId} activity already existed on client — reconciled flags (applied=true, needs_review=false)`
         : promotedAppliedZero
           ? `Promoted payment ${squarePaymentId} (${amountDisplay}) to COMPLETED for client via ${method} but $0 credited — package_price cap already reached`
-          : `Applied ${amountDisplay} to client via ${method} (promoted from APPROVED→COMPLETED)`,
+          : overCredit > 0
+            ? `Applied ${amountDisplay} to client via ${method}, but the package is now overpaid by $${overCredit.toFixed(2)} — flagged for review`
+            : `Applied ${amountDisplay} to client via ${method} (promoted from APPROVED→COMPLETED)`,
       raw_event: event as unknown as never,
     });
     return;
@@ -491,11 +497,15 @@ async function handlePaymentEvent(supabaseAdmin: SupabaseClient<Database>, event
   }
 
   const newAppliedZero = applied && !alreadyApplied && !(appliedAmount > 0);
+  // A credit that pushes amount_paid past package_price is never silent: the
+  // package may have been renewed as "already paid", so staff must inspect it.
+  const overCredit = applied ? await detectOverpayment(supabaseAdmin, clientId) : 0;
 
-  // Needs review only when we can't identify the customer OR when a COMPLETED
-  // matched payment failed to apply (trigger blocked) OR when it ran but
-  // credited $0 (silent cap — staff needs to reset package_price / amount_paid).
-  const needsReview = !clientId || (isCompleted && !applied) || newAppliedZero;
+  // Needs review when we can't identify the customer OR a COMPLETED matched
+  // payment failed to apply (trigger blocked) OR it credited $0 (silent cap)
+  // OR the client is now overpaid.
+  const needsReview =
+    !clientId || (isCompleted && !applied) || newAppliedZero || overCredit > 0;
 
   await supabaseAdmin.from("square_payments").insert({
     square_payment_id: squarePaymentId,
@@ -527,7 +537,9 @@ async function handlePaymentEvent(supabaseAdmin: SupabaseClient<Database>, event
         ? "reconciled_already_credited"
         : newAppliedZero
           ? `applied_zero_${method ?? "unknown"}`
-          : `applied_payment_${method ?? "unknown"}`
+          : overCredit > 0
+            ? `overpayment_review_${method ?? "unknown"}`
+            : `applied_payment_${method ?? "unknown"}`
       : applyErr
         ? "apply_blocked"
         : clientId
@@ -538,7 +550,9 @@ async function handlePaymentEvent(supabaseAdmin: SupabaseClient<Database>, event
         ? `Payment ${squarePaymentId} (${amountDisplay}) already credited — flags set applied=true`
         : newAppliedZero
           ? `Payment ${squarePaymentId} (${amountDisplay}) matched to client via ${method} but $0 credited — package_price cap already reached, flagged for review`
-          : `Applied ${amountDisplay} to client via ${method}`
+          : overCredit > 0
+            ? `Applied ${amountDisplay} to client via ${method}, but the package is now overpaid by $${overCredit.toFixed(2)} — flagged for review`
+            : `Applied ${amountDisplay} to client via ${method}`
       : applyErr
         ? `COMPLETED payment ${squarePaymentId} (${amountDisplay}) matched to client but credit was blocked: ${formatErr(applyErr)}`
         : clientId
@@ -548,6 +562,28 @@ async function handlePaymentEvent(supabaseAdmin: SupabaseClient<Database>, event
   });
 }
 
+
+/**
+ * Returns how much the client is overpaid on the current package (0 when fine).
+ * Guards against packages that were renewed as "already paid" and then receive
+ * a real Square payment on top, which used to create a silent credit.
+ */
+async function detectOverpayment(
+  supabaseAdmin: SupabaseClient<Database>,
+  clientId: string | null,
+): Promise<number> {
+  if (!clientId) return 0;
+  const { data } = await supabaseAdmin
+    .from("clients")
+    .select("package_price, amount_paid")
+    .eq("id", clientId)
+    .maybeSingle();
+  if (!data) return 0;
+  const price = Number(data.package_price ?? 0);
+  const paid = Number(data.amount_paid ?? 0);
+  if (price <= 0) return 0; // no package price on file — separate review path
+  return paid > price ? Number((paid - price).toFixed(2)) : 0;
+}
 
 async function handleBookingEvent(supabaseAdmin: SupabaseClient<Database>, eventType: string, event: SquareEvent) {
   const booking = event.data?.object?.booking;

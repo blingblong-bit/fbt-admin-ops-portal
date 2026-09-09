@@ -420,6 +420,57 @@ function ClientDetailPage() {
         </Card>
       </div>
 
+      <Dialog open={visitPickerOpen} onOpenChange={(o) => !o && setVisitPickerOpen(false)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Complete Visit</DialogTitle>
+            <DialogDescription>
+              Pick the appointment this visit was for, so it isn't counted twice.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            {uncheckedQ.isLoading ? (
+              <p className="text-sm text-slate-500">Looking up recent appointments…</p>
+            ) : (uncheckedQ.data?.appointments.length ?? 0) === 0 ? (
+              <p className="text-sm text-slate-500">
+                No recent appointment without a check-in was found.
+              </p>
+            ) : (
+              uncheckedQ.data!.appointments.map((a) => (
+                <Button
+                  key={a.booking_id}
+                  variant="outline"
+                  className="min-h-11 w-full justify-start"
+                  disabled={completeVisit.isPending}
+                  onClick={() =>
+                    completeVisit.mutate({ bookingId: a.booking_id, startAt: a.start_at })
+                  }
+                >
+                  {new Date(a.start_at).toLocaleString("en-US", {
+                    timeZone: "America/Chicago",
+                    weekday: "short",
+                    month: "short",
+                    day: "numeric",
+                    hour: "numeric",
+                    minute: "2-digit",
+                  })}
+                </Button>
+              ))
+            )}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="ghost"
+              disabled={completeVisit.isPending}
+              onClick={() => completeVisit.mutate(undefined)}
+            >
+              No appointment — just record a visit
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+
       <PaymentDialog
         open={paymentOpen}
         onClose={() => setPaymentOpen(false)}

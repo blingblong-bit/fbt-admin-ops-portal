@@ -51,6 +51,8 @@ import {
   getNextWeekScheduledClientIds,
   getPriorWeeksScheduledClientLastDates,
   getRenewalForecast,
+  getMissedCheckInSummary,
+
   type RenewalForecastRow,
 } from "@/lib/schedule.functions";
 import type { ScheduleStatus } from "@/components/SmartClientCard";

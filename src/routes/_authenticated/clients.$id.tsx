@@ -122,38 +122,42 @@ function ClientDetailPage() {
   };
 
   const completeVisitFn = useServerFn(completeVisitForClient);
+  const fetchUnchecked = useServerFn(getUncheckedRecentAppointments);
+
+  const [visitPickerOpen, setVisitPickerOpen] = useState(false);
+  const uncheckedQ = useQuery({
+    queryKey: ["unchecked-appointments", id],
+    queryFn: () => fetchUnchecked({ data: { clientId: id } }),
+    enabled: visitPickerOpen,
+  });
 
   const completeVisit = useMutation({
-    mutationFn: async () => {
+    // All visits go through the shared check-in so the duplicate guards and
+    // package/renewal handling are identical everywhere.
+    mutationFn: async (appt?: { bookingId: string; startAt: string }) => {
       if (!c) return;
-      const current = c.visits_used ?? 0;
-      // A prepared next package starts with this visit — let the server handle
-      // activating it instead of blocking on the finished package's count.
-      if (current >= c.package_total_visits) {
-        if (!c.pending_renewal_start_date) {
-          throw new Error("All visits already used");
-        }
-        await completeVisitFn({ data: { clientId: id } });
-        return;
+      if (!appt && (c.visits_used ?? 0) >= c.package_total_visits && !c.pending_renewal_start_date) {
+        throw new Error("All visits already used");
       }
-      const next = current + 1;
-      const { error } = await supabase
-        .from("clients")
-        .update({ visits_used: next })
-        .eq("id", id);
-      if (error) throw error;
-      await supabase.from("client_activities").insert({
-        client_id: id,
-        activity_type: "visit",
-        description: `Visit completed (${next}/${c.package_total_visits})`,
+      await completeVisitFn({
+        data: {
+          clientId: id,
+          ...(appt ? { bookingId: appt.bookingId, appointmentStartAt: appt.startAt } : {}),
+        },
       });
     },
     onSuccess: () => {
       toast.success("Visit recorded");
+      setVisitPickerOpen(false);
+      qc.invalidateQueries({ queryKey: ["unchecked-appointments", id] });
+      qc.invalidateQueries({ queryKey: ["day-review"] });
+      qc.invalidateQueries({ queryKey: ["missed-check-ins"] });
+      qc.invalidateQueries({ queryKey: ["completed-visit-bookings"] });
       refresh();
     },
     onError: (e: Error) => toast.error(e.message),
   });
+
 
   // Scheduling is derived from live Square bookings — no manual toggle.
   const renewalFlagged = useIsRenewalFlagged(id);

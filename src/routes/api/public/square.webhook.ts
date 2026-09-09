@@ -431,33 +431,39 @@ async function handlePaymentEvent(supabaseAdmin: SupabaseClient<Database>, event
       return;
     }
 
+    const promotedAppliedZero = !result.alreadyApplied && !(result.appliedAmount > 0);
+    const overCredit = await detectOverpayment(supabaseAdmin, clientId);
+
     await supabaseAdmin
       .from("square_payments")
       .update({
         status,
         client_id: clientId,
         applied: true,
-        needs_review: false,
+        needs_review: overCredit > 0,
         raw_event: event as unknown as never,
       })
       .eq("id", existingPayment.id);
 
-    const promotedAppliedZero = !result.alreadyApplied && !(result.appliedAmount > 0);
     await supabaseAdmin.from("square_sync_log").insert({
       event_type: eventType,
       square_customer_id: squareCustomerId,
       client_id: clientId,
-      status: promotedAppliedZero ? "applied_zero" : "success",
+      status: promotedAppliedZero ? "applied_zero" : overCredit > 0 ? "review" : "success",
       action: result.alreadyApplied
         ? "reconciled_already_credited"
         : promotedAppliedZero
           ? `applied_zero_${method ?? "unknown"}`
-          : `applied_payment_${method ?? "unknown"}`,
+          : overCredit > 0
+            ? `overpayment_review_${method ?? "unknown"}`
+            : `applied_payment_${method ?? "unknown"}`,
       message: result.alreadyApplied
         ? `Payment ${squarePaymentId} activity already existed on client — reconciled flags (applied=true, needs_review=false)`
         : promotedAppliedZero
           ? `Promoted payment ${squarePaymentId} (${amountDisplay}) to COMPLETED for client via ${method} but $0 credited — package_price cap already reached`
-          : `Applied ${amountDisplay} to client via ${method} (promoted from APPROVED→COMPLETED)`,
+          : overCredit > 0
+            ? `Applied ${amountDisplay} to client via ${method}, but the package is now overpaid by $${overCredit.toFixed(2)} — flagged for review`
+            : `Applied ${amountDisplay} to client via ${method} (promoted from APPROVED→COMPLETED)`,
       raw_event: event as unknown as never,
     });
     return;

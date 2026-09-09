@@ -898,11 +898,14 @@ async function resolveCheckedInBookingIds(
 
 
     const byBooking = new Set<string>();
-    // Visit rows with no booking reference, counted per client+day. These get
-    // handed out to that day's unmatched appointments in time order, one each,
-    // so a client booked twice in a day doesn't show both slots checked in
+    // Visit rows with no booking reference, queued per client in the order they
+    // were recorded. They get handed out to that client's unmatched
+    // appointments oldest-first, and a visit can only cover an appointment on
+    // or before the day it was recorded. That way a catch-up entry typed today
+    // for yesterday's appointment still counts as that appointment's check-in,
+    // while a client booked twice in a day doesn't show both slots checked in
     // after a single check-in.
-    const looseByClientDay = new Map<string, number>();
+    const looseByClient = new Map<string, string[]>();
     for (const row of rows ?? []) {
       const bid = (row.metadata as { booking_id?: string } | null)?.booking_id;
       if (bid) {
@@ -910,28 +913,47 @@ async function resolveCheckedInBookingIds(
         continue;
       }
       if (row.client_id && row.created_at) {
-        const key = `${row.client_id}|${ymdInTz(new Date(row.created_at as string))}`;
-        looseByClientDay.set(key, (looseByClientDay.get(key) ?? 0) + 1);
+        const ymd = ymdInTz(new Date(row.created_at as string));
+        const list = looseByClient.get(row.client_id) ?? [];
+        list.push(ymd);
+        looseByClient.set(row.client_id, list);
       }
     }
+    for (const list of looseByClient.values()) list.sort();
 
     const found = new Set<string>();
-    const leftovers: CheckedInProbe[] = [];
+    const leftoversByClient = new Map<string, CheckedInProbe[]>();
     for (const a of appts) {
       if (byBooking.has(a.booking_id)) {
         found.add(a.booking_id);
         continue;
       }
-      if (a.client_id && a.start_at) leftovers.push(a);
+      if (a.client_id && a.start_at) {
+        const list = leftoversByClient.get(a.client_id) ?? [];
+        list.push(a);
+        leftoversByClient.set(a.client_id, list);
+      }
     }
 
-    leftovers.sort((x, y) => new Date(x.start_at!).getTime() - new Date(y.start_at!).getTime());
-    for (const a of leftovers) {
-      const key = `${a.client_id}|${ymdInTz(new Date(a.start_at!))}`;
-      const budget = looseByClientDay.get(key) ?? 0;
-      if (budget > 0) {
-        found.add(a.booking_id);
-        looseByClientDay.set(key, budget - 1);
+    for (const [clientId, list] of leftoversByClient) {
+      list.sort((x, y) => new Date(x.start_at!).getTime() - new Date(y.start_at!).getTime());
+      const visits = looseByClient.get(clientId);
+      if (!visits || visits.length === 0) continue;
+      const used = new Set<number>();
+      for (const a of list) {
+        const apptYmd = ymdInTz(new Date(a.start_at!));
+        let idx = -1;
+        for (let i = 0; i < visits.length; i++) {
+          if (used.has(i)) continue;
+          if (visits[i]! >= apptYmd) {
+            idx = i;
+            break;
+          }
+        }
+        if (idx >= 0) {
+          used.add(idx);
+          found.add(a.booking_id);
+        }
       }
     }
 

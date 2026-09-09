@@ -878,7 +878,7 @@ async function resolveCheckedInBookingIds(
       const pageSize = 1000;
       let from = 0;
       for (let i = 0; i < 50; i++) {
-        let q = context.supabase
+        let q = supabase
           .from("client_activities")
           .select("client_id, metadata, created_at")
           .eq("activity_type", "visit")
@@ -936,7 +936,9 @@ async function resolveCheckedInBookingIds(
     }
 
     return Array.from(found);
-  });
+  }
+}
+
 
 
 export type LinkableClient = {

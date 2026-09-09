@@ -143,7 +143,7 @@ function MissedCheckInsPage() {
   const summary = summaryQ.data;
 
   return (
-    <AppShell title="Missed Check-Ins">
+    <AppShell>
       <div className="mx-auto w-full max-w-3xl space-y-4 px-3 py-4 sm:px-4">
         <div className="flex flex-wrap items-center gap-2">
           <Button asChild variant="ghost" size="sm">

@@ -872,6 +872,8 @@ function Dashboard() {
         "needs_renewal",
         "renewal_scheduled",
         "needs_package_review",
+        "missed_check_ins",
+
         "renewal_review",
         "renewal_manual",
         "new_clients",

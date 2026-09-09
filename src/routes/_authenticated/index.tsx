@@ -661,6 +661,17 @@ function Dashboard() {
   const renewalYesCount = renewalYesCountQ.data ?? 0;
   const renewalManualCount = renewalManualCountQ.data ?? 0;
 
+  const fetchMissedSummary = useServerFn(getMissedCheckInSummary);
+  const missedQ = useQuery({
+    queryKey: ["missed-check-ins"],
+    queryFn: () => fetchMissedSummary({}),
+    refetchInterval: 5 * 60_000,
+  });
+  const missedYesterday = missedQ.data?.yesterday_count ?? 0;
+  const missedOlder = missedQ.data?.older_count ?? 0;
+
+
+
   const allTiles: (TileDef & { staffHidden?: boolean })[] = [
     {
       key: "payment_due",

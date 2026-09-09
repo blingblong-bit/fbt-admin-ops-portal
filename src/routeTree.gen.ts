@@ -18,6 +18,7 @@ import { Route as AuthenticatedScheduleCheckRouteImport } from './routes/_authen
 import { Route as AuthenticatedRenewalReviewRouteImport } from './routes/_authenticated/renewal-review'
 import { Route as AuthenticatedPaymentHistoryRouteImport } from './routes/_authenticated/payment-history'
 import { Route as AuthenticatedNotesLedgerRouteImport } from './routes/_authenticated/notes-ledger'
+import { Route as AuthenticatedMissedCheckInsRouteImport } from './routes/_authenticated/missed-check-ins'
 import { Route as AuthenticatedMergeCenterRouteImport } from './routes/_authenticated/merge-center'
 import { Route as AuthenticatedImportRouteImport } from './routes/_authenticated/import'
 import { Route as AuthenticatedBackupRouteImport } from './routes/_authenticated/backup'
@@ -79,6 +80,12 @@ const AuthenticatedNotesLedgerRoute =
   AuthenticatedNotesLedgerRouteImport.update({
     id: '/notes-ledger',
     path: '/notes-ledger',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedMissedCheckInsRoute =
+  AuthenticatedMissedCheckInsRouteImport.update({
+    id: '/missed-check-ins',
+    path: '/missed-check-ins',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
 const AuthenticatedMergeCenterRoute =
@@ -157,6 +164,7 @@ export interface FileRoutesByFullPath {
   '/backup': typeof AuthenticatedBackupRoute
   '/import': typeof AuthenticatedImportRoute
   '/merge-center': typeof AuthenticatedMergeCenterRoute
+  '/missed-check-ins': typeof AuthenticatedMissedCheckInsRoute
   '/notes-ledger': typeof AuthenticatedNotesLedgerRoute
   '/payment-history': typeof AuthenticatedPaymentHistoryRoute
   '/renewal-review': typeof AuthenticatedRenewalReviewRoute
@@ -179,6 +187,7 @@ export interface FileRoutesByTo {
   '/backup': typeof AuthenticatedBackupRoute
   '/import': typeof AuthenticatedImportRoute
   '/merge-center': typeof AuthenticatedMergeCenterRoute
+  '/missed-check-ins': typeof AuthenticatedMissedCheckInsRoute
   '/notes-ledger': typeof AuthenticatedNotesLedgerRoute
   '/payment-history': typeof AuthenticatedPaymentHistoryRoute
   '/renewal-review': typeof AuthenticatedRenewalReviewRoute
@@ -204,6 +213,7 @@ export interface FileRoutesById {
   '/_authenticated/backup': typeof AuthenticatedBackupRoute
   '/_authenticated/import': typeof AuthenticatedImportRoute
   '/_authenticated/merge-center': typeof AuthenticatedMergeCenterRoute
+  '/_authenticated/missed-check-ins': typeof AuthenticatedMissedCheckInsRoute
   '/_authenticated/notes-ledger': typeof AuthenticatedNotesLedgerRoute
   '/_authenticated/payment-history': typeof AuthenticatedPaymentHistoryRoute
   '/_authenticated/renewal-review': typeof AuthenticatedRenewalReviewRoute
@@ -230,6 +240,7 @@ export interface FileRouteTypes {
     | '/backup'
     | '/import'
     | '/merge-center'
+    | '/missed-check-ins'
     | '/notes-ledger'
     | '/payment-history'
     | '/renewal-review'
@@ -252,6 +263,7 @@ export interface FileRouteTypes {
     | '/backup'
     | '/import'
     | '/merge-center'
+    | '/missed-check-ins'
     | '/notes-ledger'
     | '/payment-history'
     | '/renewal-review'
@@ -276,6 +288,7 @@ export interface FileRouteTypes {
     | '/_authenticated/backup'
     | '/_authenticated/import'
     | '/_authenticated/merge-center'
+    | '/_authenticated/missed-check-ins'
     | '/_authenticated/notes-ledger'
     | '/_authenticated/payment-history'
     | '/_authenticated/renewal-review'
@@ -369,6 +382,13 @@ declare module '@tanstack/react-router' {
       path: '/notes-ledger'
       fullPath: '/notes-ledger'
       preLoaderRoute: typeof AuthenticatedNotesLedgerRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/missed-check-ins': {
+      id: '/_authenticated/missed-check-ins'
+      path: '/missed-check-ins'
+      fullPath: '/missed-check-ins'
+      preLoaderRoute: typeof AuthenticatedMissedCheckInsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/merge-center': {
@@ -469,6 +489,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedBackupRoute: typeof AuthenticatedBackupRoute
   AuthenticatedImportRoute: typeof AuthenticatedImportRoute
   AuthenticatedMergeCenterRoute: typeof AuthenticatedMergeCenterRoute
+  AuthenticatedMissedCheckInsRoute: typeof AuthenticatedMissedCheckInsRoute
   AuthenticatedNotesLedgerRoute: typeof AuthenticatedNotesLedgerRoute
   AuthenticatedPaymentHistoryRoute: typeof AuthenticatedPaymentHistoryRoute
   AuthenticatedRenewalReviewRoute: typeof AuthenticatedRenewalReviewRoute
@@ -486,6 +507,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedBackupRoute: AuthenticatedBackupRoute,
   AuthenticatedImportRoute: AuthenticatedImportRoute,
   AuthenticatedMergeCenterRoute: AuthenticatedMergeCenterRoute,
+  AuthenticatedMissedCheckInsRoute: AuthenticatedMissedCheckInsRoute,
   AuthenticatedNotesLedgerRoute: AuthenticatedNotesLedgerRoute,
   AuthenticatedPaymentHistoryRoute: AuthenticatedPaymentHistoryRoute,
   AuthenticatedRenewalReviewRoute: AuthenticatedRenewalReviewRoute,

@@ -5,6 +5,8 @@ import {
   AlertTriangle,
   ArrowLeft,
   CalendarDays,
+  CalendarX,
+
   ClipboardList,
 
   CalendarClock,
@@ -51,6 +53,8 @@ import {
   getNextWeekScheduledClientIds,
   getPriorWeeksScheduledClientLastDates,
   getRenewalForecast,
+  getMissedCheckInSummary,
+
   type RenewalForecastRow,
 } from "@/lib/schedule.functions";
 import type { ScheduleStatus } from "@/components/SmartClientCard";
@@ -661,6 +665,17 @@ function Dashboard() {
   const renewalYesCount = renewalYesCountQ.data ?? 0;
   const renewalManualCount = renewalManualCountQ.data ?? 0;
 
+  const fetchMissedSummary = useServerFn(getMissedCheckInSummary);
+  const missedQ = useQuery({
+    queryKey: ["missed-check-ins"],
+    queryFn: () => fetchMissedSummary({}),
+    refetchInterval: 5 * 60_000,
+  });
+  const missedYesterday = missedQ.data?.yesterday_count ?? 0;
+  const missedOlder = missedQ.data?.older_count ?? 0;
+
+
+
   const allTiles: (TileDef & { staffHidden?: boolean })[] = [
     {
       key: "payment_due",
@@ -758,6 +773,20 @@ function Dashboard() {
       staffHidden: true,
     },
     {
+      key: "missed_check_ins",
+      label: "Missed Check-Ins",
+      sublabel:
+        missedOlder > 0
+          ? `Yesterday · ${missedOlder} older unresolved`
+          : "Yesterday",
+      icon: <CalendarX className="h-5 w-5" />,
+      count: missedYesterday,
+      countLabel: "client",
+      tone: missedYesterday > 0 || missedOlder > 0 ? "amber" : "slate",
+      href: "/missed-check-ins",
+    },
+
+    {
       key: "package_complete",
       label: "Package Complete",
       icon: <CircleSlash className="h-5 w-5" />,
@@ -843,6 +872,8 @@ function Dashboard() {
         "needs_renewal",
         "renewal_scheduled",
         "needs_package_review",
+        "missed_check_ins",
+
         "renewal_review",
         "renewal_manual",
         "new_clients",

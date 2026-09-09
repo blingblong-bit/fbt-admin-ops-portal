@@ -838,7 +838,21 @@ export const getCompletedVisitBookingIds = createServerFn({ method: "POST" })
   .handler(async ({ data, context }): Promise<string[]> => {
     const appts: CheckedInProbe[] =
       data.appointments ?? (data.bookingIds ?? []).map((id) => ({ booking_id: id }));
+    return resolveCheckedInBookingIds(context.supabase, appts);
+  });
+
+/**
+ * Shared implementation: given probes, return the booking IDs that already
+ * have a completed "visit" activity. Used by Schedule Check and by the
+ * Missed Check-Ins review so both agree on what "checked in" means.
+ */
+async function resolveCheckedInBookingIds(
+  supabase: { from: (t: string) => any },
+  appts: CheckedInProbe[],
+): Promise<string[]> {
+  {
     if (appts.length === 0) return [];
+
 
     // Scope the read to the clients on screen and a date window around the
     // appointments shown, then page through results. An unscoped read hits
@@ -864,7 +878,7 @@ export const getCompletedVisitBookingIds = createServerFn({ method: "POST" })
       const pageSize = 1000;
       let from = 0;
       for (let i = 0; i < 50; i++) {
-        let q = context.supabase
+        let q = supabase
           .from("client_activities")
           .select("client_id, metadata, created_at")
           .eq("activity_type", "visit")
@@ -922,7 +936,9 @@ export const getCompletedVisitBookingIds = createServerFn({ method: "POST" })
     }
 
     return Array.from(found);
-  });
+  }
+}
+
 
 
 export type LinkableClient = {
@@ -1971,3 +1987,274 @@ export const cancelPendingRenewal = createServerFn({ method: "POST" })
     });
     return { ok: true };
   });
+
+// ---------------------------------------------------------------------------
+// Missed Check-Ins
+// ---------------------------------------------------------------------------
+
+export type DayReviewRow = {
+  booking_id: string;
+  start_at: string;
+  status: string;
+  team_member_name: string | null;
+  service_name: string | null;
+  square_customer_id: string | null;
+  customer_name: string | null;
+  client: ScheduleClientLite | null;
+  /** checked_in | missed | upcoming | cancelled | no_show | unmatched */
+  check_state:
+    | "checked_in"
+    | "missed"
+    | "upcoming"
+    | "cancelled"
+    | "no_show"
+    | "unmatched";
+};
+
+export type DayReviewResult = {
+  date: string;
+  rows: DayReviewRow[];
+  missed_count: number;
+  error: string | null;
+};
+
+type RawDayAppt = {
+  booking_id: string;
+  start_at: string;
+  status: string;
+  team_member_name: string | null;
+  service_name: string | null;
+  square_customer_id: string | null;
+  client: ScheduleClientLite | null;
+};
+
+/** Load Square bookings for a clinic-local date range and match them to clients. */
+async function loadAppointmentsForRange(
+  supabase: { from: (t: string) => any },
+  token: string,
+  startYmd: string,
+  endYmdInclusive: string,
+  opts?: { withNames?: boolean },
+): Promise<{ appts: RawDayAppt[]; error: string | null }> {
+  const startIso = ymdLocalToInstant(startYmd).toISOString();
+  const endIso = new Date(
+    ymdLocalToInstant(addDaysYmd(endYmdInclusive, 1)).getTime() - 1,
+  ).toISOString();
+  const { bookings, error } = await fetchSquareBookings(token, startIso, endIso);
+
+  const clients: ScheduleClientLite[] = [];
+  {
+    const pageSize = 1000;
+    let from = 0;
+    for (let i = 0; i < 100; i++) {
+      const { data: page, error: cErr } = await supabase
+        .from("clients")
+        .select(
+          "id, first_name, last_name, phone, package_total_visits, package_name, visits_used, package_price, amount_paid, internal_notes, square_customer_id, status, manual_active, payment_model, pending_renewal_start_date",
+        )
+        .is("deleted_at", null)
+        .range(from, from + pageSize - 1);
+      if (cErr) throw cErr;
+      if (!page || page.length === 0) break;
+      clients.push(...(page as ScheduleClientLite[]));
+      if (page.length < pageSize) break;
+      from += pageSize;
+    }
+  }
+  const byCustomerId = new Map<string, ScheduleClientLite>();
+  for (const c of clients) if (c.square_customer_id) byCustomerId.set(c.square_customer_id, c);
+
+  const sorted = [...bookings]
+    .filter((b) => b.start_at)
+    .sort((a, b) => (a.start_at ?? "").localeCompare(b.start_at ?? ""));
+
+  let teamMemberNames = new Map<string, string>();
+  let serviceNames = new Map<string, string>();
+  if (opts?.withNames) {
+    const tmIds = Array.from(
+      new Set(
+        sorted.flatMap((b) => b.appointment_segments ?? []).map((s) => s.team_member_id ?? "").filter(Boolean),
+      ),
+    );
+    const svcIds = Array.from(
+      new Set(
+        sorted
+          .flatMap((b) => b.appointment_segments ?? [])
+          .map((s) => s.service_variation_id ?? "")
+          .filter(Boolean),
+      ),
+    );
+    [teamMemberNames, serviceNames] = await Promise.all([
+      fetchTeamMemberNames(token, tmIds),
+      fetchServiceNames(token, svcIds),
+    ]);
+  }
+
+  const appts: RawDayAppt[] = sorted.map((b) => {
+    const seg = b.appointment_segments?.[0];
+    return {
+      booking_id: b.id,
+      start_at: b.start_at as string,
+      status: (b.status ?? "UNKNOWN").toString(),
+      team_member_name: seg?.team_member_id ? teamMemberNames.get(seg.team_member_id) ?? null : null,
+      service_name: seg?.service_variation_id ? serviceNames.get(seg.service_variation_id) ?? null : null,
+      square_customer_id: b.customer_id ?? null,
+      client: b.customer_id ? byCustomerId.get(b.customer_id) ?? null : null,
+    };
+  });
+  return { appts, error };
+}
+
+function isCancelledStatus(s: string) {
+  return /(CANCELLED|CANCELED|DECLINED)/i.test(s);
+}
+function isNoShowStatus(s: string) {
+  return /NO_SHOW/i.test(s);
+}
+
+/**
+ * Read-only day review used by the Missed Check-Ins screen. Never mutates
+ * package counts or appointment statuses.
+ */
+export const getDayReview = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { date: string }) => {
+    if (!d || !/^\d{4}-\d{2}-\d{2}$/.test(d.date ?? "")) throw new Error("Invalid date");
+    return d;
+  })
+  .handler(async ({ data, context }): Promise<DayReviewResult> => {
+    const token = process.env.SQUARE_PRODUCTION_ACCESS_TOKEN;
+    if (!token) {
+      return { date: data.date, rows: [], missed_count: 0, error: "Square is not configured" };
+    }
+    const { appts, error } = await loadAppointmentsForRange(
+      context.supabase,
+      token,
+      data.date,
+      data.date,
+      { withNames: true },
+    );
+    const dayAppts = appts.filter((a) => ymdInTz(new Date(a.start_at)) === data.date);
+
+    const candidates = dayAppts.filter(
+      (a) => a.client && !isCancelledStatus(a.status) && !isNoShowStatus(a.status),
+    );
+    const checkedIn = new Set(
+      await resolveCheckedInBookingIds(
+        context.supabase,
+        candidates.map((a) => ({
+          booking_id: a.booking_id,
+          client_id: a.client!.id,
+          start_at: a.start_at,
+        })),
+      ),
+    );
+
+    const now = Date.now();
+    const rows: DayReviewRow[] = dayAppts.map((a) => {
+      let state: DayReviewRow["check_state"];
+      if (isCancelledStatus(a.status)) state = "cancelled";
+      else if (isNoShowStatus(a.status)) state = "no_show";
+      else if (!a.client) state = "unmatched";
+      else if (checkedIn.has(a.booking_id)) state = "checked_in";
+      else if (new Date(a.start_at).getTime() > now) state = "upcoming";
+      else state = "missed";
+      return {
+        booking_id: a.booking_id,
+        start_at: a.start_at,
+        status: a.status,
+        team_member_name: a.team_member_name,
+        service_name: a.service_name,
+        square_customer_id: a.square_customer_id,
+        customer_name: null,
+        client: a.client,
+        check_state: state,
+      };
+    });
+
+    return {
+      date: data.date,
+      rows,
+      missed_count: rows.filter((r) => r.check_state === "missed").length,
+      error,
+    };
+  });
+
+export type MissedCheckInSummary = {
+  yesterday: string;
+  yesterday_count: number;
+  older_count: number;
+  older_dates: string[];
+  error: string | null;
+};
+
+/**
+ * Dashboard tile counts: yesterday's missed check-ins plus older unresolved
+ * ones so nothing silently ages out of view.
+ */
+export const getMissedCheckInSummary = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }): Promise<MissedCheckInSummary> => {
+    const todayYmd = ymdInTz(new Date());
+    const yesterdayYmd = addDaysYmd(todayYmd, -1);
+    const OLDER_DAYS = 14;
+    const oldestYmd = addDaysYmd(todayYmd, -(OLDER_DAYS + 1));
+    const token = process.env.SQUARE_PRODUCTION_ACCESS_TOKEN;
+    if (!token) {
+      return {
+        yesterday: yesterdayYmd,
+        yesterday_count: 0,
+        older_count: 0,
+        older_dates: [],
+        error: "Square is not configured",
+      };
+    }
+    const { appts, error } = await loadAppointmentsForRange(
+      context.supabase,
+      token,
+      oldestYmd,
+      yesterdayYmd,
+    );
+    const now = Date.now();
+    const candidates = appts.filter(
+      (a) =>
+        a.client &&
+        !isCancelledStatus(a.status) &&
+        !isNoShowStatus(a.status) &&
+        new Date(a.start_at).getTime() <= now,
+    );
+    const checkedIn = new Set(
+      await resolveCheckedInBookingIds(
+        context.supabase,
+        candidates.map((a) => ({
+          booking_id: a.booking_id,
+          client_id: a.client!.id,
+          start_at: a.start_at,
+        })),
+      ),
+    );
+    const missed = candidates.filter((a) => !checkedIn.has(a.booking_id));
+    let yesterdayCount = 0;
+    const olderDates = new Set<string>();
+    let olderCount = 0;
+    for (const m of missed) {
+      const ymd = ymdInTz(new Date(m.start_at));
+      if (ymd === yesterdayYmd) yesterdayCount += 1;
+      else if (ymd < yesterdayYmd) {
+        olderCount += 1;
+        olderDates.add(ymd);
+      }
+    }
+    return {
+      yesterday: yesterdayYmd,
+      yesterday_count: yesterdayCount,
+      older_count: olderCount,
+      older_dates: Array.from(olderDates).sort().reverse(),
+      error,
+    };
+  });
+
+/** Clinic-local today, for the review screen's date controls. */
+export const getClinicToday = createServerFn({ method: "GET" }).handler(async () => ({
+  today: ymdInTz(new Date()),
+}));

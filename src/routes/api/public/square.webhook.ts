@@ -497,11 +497,15 @@ async function handlePaymentEvent(supabaseAdmin: SupabaseClient<Database>, event
   }
 
   const newAppliedZero = applied && !alreadyApplied && !(appliedAmount > 0);
+  // A credit that pushes amount_paid past package_price is never silent: the
+  // package may have been renewed as "already paid", so staff must inspect it.
+  const overCredit = applied ? await detectOverpayment(supabaseAdmin, clientId) : 0;
 
-  // Needs review only when we can't identify the customer OR when a COMPLETED
-  // matched payment failed to apply (trigger blocked) OR when it ran but
-  // credited $0 (silent cap — staff needs to reset package_price / amount_paid).
-  const needsReview = !clientId || (isCompleted && !applied) || newAppliedZero;
+  // Needs review when we can't identify the customer OR a COMPLETED matched
+  // payment failed to apply (trigger blocked) OR it credited $0 (silent cap)
+  // OR the client is now overpaid.
+  const needsReview =
+    !clientId || (isCompleted && !applied) || newAppliedZero || overCredit > 0;
 
   await supabaseAdmin.from("square_payments").insert({
     square_payment_id: squarePaymentId,

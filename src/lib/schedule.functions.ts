@@ -659,6 +659,56 @@ export const completeVisitForClient = createServerFn({ method: "POST" })
       if (hit) throw new Error("Visit already recorded for this client today.");
     }
 
+    // Attribution guard: a visit recorded without a booking reference (manual
+    // "Complete Visit" from the client page, older builds) can already belong
+    // to this appointment. Replay the same matching the review screens use and
+    // reject if this booking is already covered, so a catch-up entry can't be
+    // counted twice.
+    if (data.bookingId && data.appointmentStartAt) {
+      const token = process.env.SQUARE_PRODUCTION_ACCESS_TOKEN;
+      const { data: cRow } = await context.supabase
+        .from("clients")
+        .select("square_customer_id")
+        .eq("id", data.clientId)
+        .single();
+      const squareCustomerId = (cRow as { square_customer_id: string | null } | null)
+        ?.square_customer_id;
+      if (token && squareCustomerId) {
+        const anchor = new Date(data.appointmentStartAt).getTime();
+        const DAY_MS = 86_400_000;
+        const { bookings } = await fetchSquareBookings(
+          token,
+          new Date(anchor - 14 * DAY_MS).toISOString(),
+          new Date(anchor + 2 * DAY_MS).toISOString(),
+        );
+        const probes: CheckedInProbe[] = bookings
+          .filter(
+            (b) =>
+              b.customer_id === squareCustomerId &&
+              b.start_at &&
+              !/(CANCELLED|CANCELED|DECLINED|NO_SHOW)/i.test((b.status ?? "").toString()),
+          )
+          .map((b) => ({
+            booking_id: b.id,
+            client_id: data.clientId,
+            start_at: b.start_at as string,
+          }));
+        if (!probes.some((p) => p.booking_id === data.bookingId)) {
+          probes.push({
+            booking_id: data.bookingId,
+            client_id: data.clientId,
+            start_at: data.appointmentStartAt,
+          });
+        }
+        const covered = await resolveCheckedInBookingIds(context.supabase, probes);
+        if (covered.includes(data.bookingId)) {
+          throw new Error("Visit already recorded for this appointment.");
+        }
+      }
+    }
+
+
+
 
 
     const { data: c0, error } = await context.supabase

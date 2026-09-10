@@ -1477,7 +1477,9 @@ function WeeklyPaymentView({
                     <SmartClientCard
                       client={row.client}
                       isScheduled={isScheduled(row.client.id)}
-                      badges={[{ label: section.badge, className: section.badgeClass }]}
+                      badges={section.key === "current"
+                        ? []
+                        : [{ label: section.badge, className: section.badgeClass }]}
                       balanceLabel={row.nextAmount > 0 ? "Current package owed" : "Current balance"}
                       balanceAmount={row.currentAmount}
                       additionalAmounts={amounts}

@@ -140,6 +140,21 @@ function MissedCheckInsPage() {
     onError: (e: Error) => toast.error(e.message || "Check in failed"),
   });
 
+  const dismiss = useMutation({
+    mutationFn: (vars: { clientId: string; bookingId: string; startAt: string }) =>
+      dismissMissed({
+        data: { clientId: vars.clientId, bookingId: vars.bookingId, startAt: vars.startAt },
+      }),
+    onSuccess: () => {
+      toast.success("Dismissed — no visit recorded");
+      qc.invalidateQueries({ queryKey: ["day-review"] });
+      qc.invalidateQueries({ queryKey: ["missed-check-ins"] });
+    },
+    onError: (e: Error) => toast.error(e.message || "Dismiss failed"),
+  });
+
+
+
   const rows = dayQ.data?.rows ?? [];
   const missedCount = dayQ.data?.missed_count ?? 0;
   const summary = summaryQ.data;

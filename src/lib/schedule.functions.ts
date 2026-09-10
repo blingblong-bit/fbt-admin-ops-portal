@@ -2338,6 +2338,10 @@ export const getDayReview = createServerFn({ method: "GET" })
         })),
       ),
     );
+    const dismissed = await resolveDismissedBookingIds(
+      context.supabase,
+      candidates.map((a) => a.booking_id),
+    );
 
     const now = Date.now();
     const rows: DayReviewRow[] = dayAppts.map((a) => {
@@ -2347,7 +2351,9 @@ export const getDayReview = createServerFn({ method: "GET" })
       else if (!a.client) state = "unmatched";
       else if (checkedIn.has(a.booking_id)) state = "checked_in";
       else if (new Date(a.start_at).getTime() > now) state = "upcoming";
+      else if (dismissed.has(a.booking_id)) state = "dismissed";
       else state = "missed";
+
       return {
         booking_id: a.booking_id,
         start_at: a.start_at,

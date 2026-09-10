@@ -77,6 +77,8 @@ const STATE_META: Record<
 > = {
   checked_in: { label: "Checked In", className: "bg-emerald-100 text-emerald-800 border-emerald-200" },
   missed: { label: "Missed Check-In", className: "bg-red-100 text-red-800 border-red-200" },
+  dismissed: { label: "Dismissed", className: "bg-slate-100 text-slate-600 border-slate-200" },
+
   upcoming: { label: "Upcoming", className: "bg-slate-100 text-slate-700 border-slate-200" },
   cancelled: { label: "Cancelled", className: "bg-slate-200 text-slate-600 border-slate-300" },
   no_show: { label: "No-Show", className: "bg-amber-100 text-amber-800 border-amber-200" },

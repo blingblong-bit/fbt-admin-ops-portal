@@ -513,6 +513,11 @@ function Dashboard() {
       // current-package balance above.
       next_package_this_week_total: 0,
       next_package_next_week_total: 0,
+      // Split of all forecasted next-package money by whether staff has
+      // already prepared the renewal. Keeps the two renewal tiles from
+      // reporting the same dollars twice.
+      next_package_prepared_total: 0,
+      next_package_unprepared_total: 0,
     };
 
     for (const cl of visibleClients) {
@@ -551,8 +556,13 @@ function Dashboard() {
       if (forecast) {
         // Prepared renewals are "handled" and leave the action queue, but
         // their next-package money still counts in the weekly totals.
-        if (forecast.pre_renewed) c.renewal_scheduled += 1;
-        else c.needs_renewal += 1;
+        if (forecast.pre_renewed) {
+          c.renewal_scheduled += 1;
+          c.next_package_prepared_total += forecast.next_package_price;
+        } else {
+          c.needs_renewal += 1;
+          c.next_package_unprepared_total += forecast.next_package_price;
+        }
         if (forecast.week_bucket === "this") {
           c.next_package_this_week_total += forecast.next_package_price;
         } else if (forecast.week_bucket === "next") {
@@ -818,10 +828,8 @@ function Dashboard() {
       sublabel: "booked past current package",
       icon: <RefreshCw className="h-5 w-5" />,
       count: counts.needs_renewal,
-      money: isStaff
-        ? undefined
-        : counts.next_package_this_week_total + counts.next_package_next_week_total,
-      moneyLabel: "next packages due soon",
+      money: isStaff ? undefined : counts.next_package_unprepared_total,
+      moneyLabel: "next packages not yet prepared",
       tone: counts.needs_renewal > 0 ? "amber" : "slate",
     },
     {
@@ -830,6 +838,8 @@ function Dashboard() {
       sublabel: "next package prepared — activates at check-in",
       icon: <RefreshCw className="h-5 w-5" />,
       count: counts.renewal_scheduled,
+      money: isStaff ? undefined : counts.next_package_prepared_total,
+      moneyLabel: "next packages prepared",
       tone: "slate",
     },
     {
@@ -885,6 +895,7 @@ function Dashboard() {
       new Set<string>([
         "payment_due",
         "payment_due_this_week",
+        "payment_due_next_week",
         "overdue_prior_weeks",
         "critical",
         "payment_history",

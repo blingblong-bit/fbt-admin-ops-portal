@@ -12,6 +12,8 @@ import {
   getMissedCheckInSummary,
   getClinicToday,
   completeVisitForClient,
+  dismissMissedCheckIn,
+
   type DayReviewRow,
 } from "@/lib/schedule.functions";
 

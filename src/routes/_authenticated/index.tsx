@@ -60,6 +60,11 @@ import {
 import type { ScheduleStatus } from "@/components/SmartClientCard";
 import { useRole } from "@/hooks/useRole";
 import { visibleTileMoney } from "@/lib/dashboard-tile-visibility";
+import {
+  groupWeeklyPayments,
+  type WeeklyPaymentGroups,
+  type WeeklyPaymentRow,
+} from "@/lib/weekly-payment-groups";
 
 
 export const Route = createFileRoute("/_authenticated/")({
@@ -570,6 +575,19 @@ function Dashboard() {
     return c;
   }, [visibleClients, scheduledSet, thisWeekSet, nextWeekSet, carriedOverRecentMap, overduePriorMap, thisWeekEndYmd, nextWeekEndYmd, dismissedIds, renewalMap]);
 
+  const weeklyPaymentGroups = useMemo(() => {
+    if (filter !== "payment_due_this_week" && filter !== "payment_due_next_week") return null;
+    const bucket = filter === "payment_due_this_week" ? "this" : "next";
+    return groupWeeklyPayments(visibleClients, renewalMap, bucket, (client) => {
+      const owed = amountOwed(client);
+      const startBucket = startBucketOf(client);
+      const scheduledForWeek = bucket === "this"
+        ? isScheduledThisWeek(client.id)
+        : isScheduledNextWeek(client.id);
+      return owed > 0 && (startBucket ? startBucket === bucket : scheduledForWeek);
+    });
+  }, [filter, visibleClients, renewalMap, thisWeekSet, nextWeekSet, thisWeekEndYmd, nextWeekEndYmd]);
+
 
   const filtered = useMemo(() => {
     const list = visibleClients.filter((c) =>
@@ -1017,13 +1035,23 @@ function Dashboard() {
             {!isStaff && (filter === "payment_due" || filter === "payment_due_this_week" || filter === "payment_due_next_week" || filter === "overdue_prior_weeks") && filtered.length > 0 && (
               <button
                 type="button"
-                onClick={() => exportPaymentDueCsv(filtered)}
+                onClick={() => weeklyPaymentGroups
+                  ? exportWeeklyPaymentCsv(weeklyPaymentGroups)
+                  : exportPaymentDueCsv(filtered)}
                 className="text-sm font-medium text-slate-600 underline-offset-2 hover:text-slate-900 hover:underline"
               >
                 Export CSV
               </button>
             )}
-            <span className="text-sm text-slate-500">{filtered.length}</span>
+            <span className="text-sm text-slate-500">
+              {weeklyPaymentGroups
+                ? new Set([
+                    ...weeklyPaymentGroups.current,
+                    ...weeklyPaymentGroups.renewalScheduled,
+                    ...weeklyPaymentGroups.needsRenewal,
+                  ].map((row) => row.client.id)).size
+                : filtered.length}
+            </span>
           </div>
         </div>
 
@@ -1048,11 +1076,18 @@ function Dashboard() {
         </div>
 
 
-        {!isStaff && (filter === "payment_due" || filter === "payment_due_this_week" || filter === "payment_due_next_week" || filter === "overdue_prior_weeks") && filtered.length > 0 && (
+        {!isStaff && !weeklyPaymentGroups && (filter === "payment_due" || filter === "overdue_prior_weeks") && filtered.length > 0 && (
           <PaymentTotals clients={filtered} />
         )}
 
-        {filtered.length === 0 ? (
+        {!isStaff && weeklyPaymentGroups ? (
+          <WeeklyPaymentView
+            groups={weeklyPaymentGroups}
+            weekLabel={filter === "payment_due_this_week" ? "This Week" : "Next Week"}
+            search={search}
+            isScheduled={isScheduled}
+          />
+        ) : filtered.length === 0 ? (
           <p className="rounded-lg border border-dashed bg-white p-6 text-sm text-slate-500">
             {search
               ? "No matches in this view."
@@ -1355,6 +1390,112 @@ function PaymentTotals({ clients }: { clients: Client[] }) {
   );
 }
 
+function WeeklyPaymentView({
+  groups,
+  weekLabel,
+  search,
+  isScheduled,
+}: {
+  groups: WeeklyPaymentGroups;
+  weekLabel: string;
+  search: string;
+  isScheduled: (id: string) => boolean;
+}) {
+  const q = search.trim().toLowerCase();
+  const matches = (row: WeeklyPaymentRow) =>
+    !q || `${row.client.first_name} ${row.client.last_name} ${row.client.phone ?? ""}`.toLowerCase().includes(q);
+  const sections = [
+    {
+      key: "current",
+      title: `Current Package Due ${weekLabel}`,
+      amount: groups.totals.current,
+      rows: groups.current.filter(matches),
+      badge: "Payment Due",
+      badgeClass: "border-red-200 bg-red-100 text-red-800",
+    },
+    {
+      key: "scheduled",
+      title: `Renewal Scheduled — ${weekLabel}`,
+      amount: groups.totals.renewalScheduled,
+      rows: groups.renewalScheduled.filter(matches),
+      badge: "Renewal Scheduled",
+      badgeClass: "border-emerald-200 bg-emerald-100 text-emerald-800",
+    },
+    {
+      key: "needs",
+      title: `Needs Renewal — ${weekLabel}`,
+      amount: groups.totals.needsRenewal,
+      rows: groups.needsRenewal.filter(matches),
+      badge: "Needs Renewal",
+      badgeClass: "border-amber-200 bg-amber-100 text-amber-800",
+    },
+  ];
+
+  return (
+    <div className="space-y-8">
+      <div className="grid grid-cols-2 gap-3 rounded-lg border bg-white p-4 lg:grid-cols-4">
+        {[
+          ["Current package due", groups.totals.current],
+          ["Renewal scheduled", groups.totals.renewalScheduled],
+          ["Needs renewal", groups.totals.needsRenewal],
+          ["Combined total", groups.totals.combined],
+        ].map(([label, amount]) => (
+          <div key={String(label)}>
+            <div className="text-xs uppercase tracking-wide text-slate-500">{label}</div>
+            <div className="mt-1 text-xl font-semibold text-slate-900">
+              {formatCurrency(Number(amount))}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {sections.map((section) => (
+        <section key={section.key}>
+          <div className="mb-3 flex items-end justify-between gap-3 border-b pb-2">
+            <div>
+              <h3 className="font-semibold text-slate-900">{section.title}</h3>
+              <p className="text-sm text-slate-500">{section.rows.length} clients</p>
+            </div>
+            <div className="text-lg font-semibold text-slate-900">{formatCurrency(section.amount)}</div>
+          </div>
+          {section.rows.length === 0 ? (
+            <p className="rounded-lg border border-dashed bg-white p-4 text-sm text-slate-500">
+              {q ? "No matches in this section." : "No clients in this section."}
+            </p>
+          ) : (
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {section.rows.map((row) => {
+                const hasBoth = row.currentAmount > 0 && row.nextAmount > 0;
+                const amounts = row.nextAmount > 0
+                  ? [
+                      { label: "Next package amount", amount: row.nextAmount, className: "text-amber-700" },
+                      ...(hasBoth ? [{ label: "Total owed", amount: row.currentAmount + row.nextAmount }] : []),
+                    ]
+                  : [];
+                return (
+                  <div key={`${section.key}-${row.client.id}`} className="flex flex-col gap-2">
+                    <SmartClientCard
+                      client={row.client}
+                      isScheduled={isScheduled(row.client.id)}
+                      badges={[{ label: section.badge, className: section.badgeClass }]}
+                      balanceLabel={row.nextAmount > 0 ? "Current package owed" : "Current balance"}
+                      balanceAmount={row.currentAmount}
+                      additionalAmounts={amounts}
+                    />
+                    {row.forecast && row.nextAmount > 0 && (
+                      <PreRenewCard forecast={row.forecast as RenewalForecastRow} />
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </section>
+      ))}
+    </div>
+  );
+}
+
 function exportPaymentDueCsv(clients: Client[]) {
   const rows = [
     ["Name", "Amount Owed"],
@@ -1369,6 +1510,43 @@ function exportPaymentDueCsv(clients: Client[]) {
   const a = document.createElement("a");
   a.href = url;
   a.download = "payment-due-export.csv";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function exportWeeklyPaymentCsv(groups: WeeklyPaymentGroups) {
+  const byClient = new Map<string, WeeklyPaymentRow>();
+  for (const row of [...groups.current, ...groups.renewalScheduled, ...groups.needsRenewal]) {
+    const prior = byClient.get(row.client.id);
+    byClient.set(row.client.id, {
+      ...row,
+      currentAmount: Math.max(prior?.currentAmount ?? 0, row.currentAmount),
+      nextAmount: Math.max(prior?.nextAmount ?? 0, row.nextAmount),
+    });
+  }
+  const rows = [
+    ["Name", "Current Package Owed", "Next Package Owed", "Renewal State", "Renewal Start", "Total Owed"],
+    ...[...byClient.values()].map((row) => [
+      fullName(row.client),
+      String(row.currentAmount),
+      String(row.nextAmount),
+      row.forecast ? (row.forecast.pre_renewed ? "Renewal Scheduled" : "Needs Renewal") : "Payment Due",
+      row.forecast?.pending_start_ymd ?? row.forecast?.first_uncovered_ymd ?? "",
+      String(row.currentAmount + row.nextAmount),
+    ]),
+  ];
+  downloadCsv(rows, "weekly-payment-due-export.csv");
+}
+
+function downloadCsv(rows: string[][], filename: string) {
+  const csv = rows.map((r) => r.map((cell) => `"${cell.replace(/"/g, '""')}"`).join(",")).join("\n");
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);

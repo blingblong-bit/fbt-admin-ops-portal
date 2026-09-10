@@ -2436,7 +2436,9 @@ export const getMissedCheckInSummary = createServerFn({ method: "GET" })
       (a) => !checkedIn.has(a.booking_id) && !dismissed.has(a.booking_id),
     );
 
+    let yesterdayCount = 0;
     const olderDates = new Set<string>();
+
     let olderCount = 0;
     for (const m of missed) {
       const ymd = ymdInTz(new Date(m.start_at));

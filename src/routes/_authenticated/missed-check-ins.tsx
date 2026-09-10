@@ -330,6 +330,26 @@ function MissedCheckInsPage() {
                       </Button>
                     ) : null}
 
+                    {r.check_state === "missed" && c ? (
+                      <Button
+                        variant="outline"
+                        className="min-h-11 w-full"
+                        disabled={
+                          dismiss.isPending && dismiss.variables?.bookingId === r.booking_id
+                        }
+                        onClick={() =>
+                          dismiss.mutate({
+                            clientId: c.id,
+                            bookingId: r.booking_id,
+                            startAt: r.start_at,
+                          })
+                        }
+                      >
+                        Dismiss — no visit
+                      </Button>
+                    ) : null}
+
+
                     {r.check_state === "unmatched" ? (
                       <Button asChild variant="outline" className="min-h-11 w-full">
                         <Link to="/schedule-check">Link this customer</Link>

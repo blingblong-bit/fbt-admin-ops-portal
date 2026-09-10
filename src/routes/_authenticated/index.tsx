@@ -895,6 +895,7 @@ function Dashboard() {
       new Set<string>([
         "payment_due",
         "payment_due_this_week",
+        "payment_due_next_week",
         "overdue_prior_weeks",
         "critical",
         "payment_history",

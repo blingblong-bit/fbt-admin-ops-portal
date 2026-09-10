@@ -9,6 +9,8 @@ const searchSchema = z.object({
 });
 
 export const Route = createFileRoute("/auth")({
+  ssr: false,
+  pendingComponent: () => null,
   head: () => ({
     meta: [
       { title: "Staff Sign In | FIT Beyond Therapy" },

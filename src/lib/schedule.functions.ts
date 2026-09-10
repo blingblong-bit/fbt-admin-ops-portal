@@ -2248,6 +2248,60 @@ function isNoShowStatus(s: string) {
 }
 
 /**
+ * Booking IDs staff explicitly dismissed from the Missed Check-Ins queue.
+ * Dismissal never touches packages or visit counts — it only clears the row
+ * from the exception list so the tile can return to zero.
+ */
+async function resolveDismissedBookingIds(
+  supabase: { from: (t: string) => any },
+  bookingIds: string[],
+): Promise<Set<string>> {
+  const out = new Set<string>();
+  if (bookingIds.length === 0) return out;
+  const wanted = new Set(bookingIds);
+  const pageSize = 1000;
+  let from = 0;
+  for (let i = 0; i < 50; i++) {
+    const { data, error } = await supabase
+      .from("client_activities")
+      .select("metadata")
+      .eq("activity_type", "missed_check_in_dismissed")
+      .order("created_at", { ascending: true })
+      .range(from, from + pageSize - 1);
+    if (error) throw error;
+    const list = (data ?? []) as { metadata: { booking_id?: string } | null }[];
+    for (const row of list) {
+      const bid = row.metadata?.booking_id;
+      if (bid && wanted.has(bid)) out.add(bid);
+    }
+    if (list.length < pageSize) break;
+    from += pageSize;
+  }
+  return out;
+}
+
+/** Dismiss a past appointment from the Missed Check-Ins queue (no visit recorded). */
+export const dismissMissedCheckIn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { clientId: string; bookingId: string; startAt?: string; reason?: string }) => {
+    if (!d?.clientId || !d?.bookingId) throw new Error("clientId and bookingId required");
+    return d;
+  })
+  .handler(async ({ data, context }): Promise<{ ok: true }> => {
+    const { error } = await context.supabase.from("client_activities").insert({
+      client_id: data.clientId,
+      activity_type: "missed_check_in_dismissed",
+      description: data.reason
+        ? `Missed check-in dismissed: ${data.reason}`
+        : "Missed check-in dismissed — no visit recorded.",
+      metadata: { booking_id: data.bookingId, start_at: data.startAt ?? null },
+    });
+    if (error) throw error;
+    return { ok: true };
+  });
+
+
+/**
  * Read-only day review used by the Missed Check-Ins screen. Never mutates
  * package counts or appointment statuses.
  */

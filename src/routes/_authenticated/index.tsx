@@ -513,6 +513,11 @@ function Dashboard() {
       // current-package balance above.
       next_package_this_week_total: 0,
       next_package_next_week_total: 0,
+      // Split of all forecasted next-package money by whether staff has
+      // already prepared the renewal. Keeps the two renewal tiles from
+      // reporting the same dollars twice.
+      next_package_prepared_total: 0,
+      next_package_unprepared_total: 0,
     };
 
     for (const cl of visibleClients) {

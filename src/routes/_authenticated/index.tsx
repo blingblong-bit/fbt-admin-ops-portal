@@ -556,8 +556,13 @@ function Dashboard() {
       if (forecast) {
         // Prepared renewals are "handled" and leave the action queue, but
         // their next-package money still counts in the weekly totals.
-        if (forecast.pre_renewed) c.renewal_scheduled += 1;
-        else c.needs_renewal += 1;
+        if (forecast.pre_renewed) {
+          c.renewal_scheduled += 1;
+          c.next_package_prepared_total += forecast.next_package_price;
+        } else {
+          c.needs_renewal += 1;
+          c.next_package_unprepared_total += forecast.next_package_price;
+        }
         if (forecast.week_bucket === "this") {
           c.next_package_this_week_total += forecast.next_package_price;
         } else if (forecast.week_bucket === "next") {

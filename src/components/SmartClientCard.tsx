@@ -25,6 +25,15 @@ import {
 
 
 export type ScheduleStatus = "this_week" | "next_week" | "not_scheduled" | "carried_over" | "overdue_prior";
+export type ClientCardBadge = {
+  label: string;
+  className: string;
+};
+export type ClientCardAmount = {
+  label: string;
+  amount: number;
+  className?: string;
+};
 
 export function SmartClientCard({
   client,
@@ -32,6 +41,10 @@ export function SmartClientCard({
   hideAmount = false,
   scheduleStatus,
   scheduleStatusDetail,
+  badges = [],
+  balanceLabel = "Balance",
+  balanceAmount,
+  additionalAmounts = [],
 }: {
   client: Client;
   /** Derived from live Square bookings. */
@@ -42,6 +55,10 @@ export function SmartClientCard({
   scheduleStatus?: ScheduleStatus;
   /** Extra text appended to the schedule tag (e.g. carried-over week range). */
   scheduleStatusDetail?: string;
+  badges?: ClientCardBadge[];
+  balanceLabel?: string;
+  balanceAmount?: number;
+  additionalAmounts?: ClientCardAmount[];
 }) {
   const qc = useQueryClient();
   const owed = totalOwed(client);
@@ -108,6 +125,14 @@ export function SmartClientCard({
         <div className="flex flex-col items-end gap-1.5">
           <StatusBadge client={client} isScheduled={isScheduled} />
           {scheduleStatus && <ScheduleStatusBadge status={scheduleStatus} detail={scheduleStatusDetail} />}
+          {badges.map((badge) => (
+            <span
+              key={badge.label}
+              className={`inline-flex items-center rounded-md border px-2 py-0.5 text-[11px] font-semibold ${badge.className}`}
+            >
+              {badge.label}
+            </span>
+          ))}
         </div>
       </div>
 
@@ -118,7 +143,7 @@ export function SmartClientCard({
           <dd className="text-right text-slate-800">{client.package_name ?? "—"}</dd>
         </div>
         <div className="flex justify-between gap-3">
-          <dt className="text-slate-500">Balance</dt>
+          <dt className="text-slate-500">{balanceLabel}</dt>
           <dd
             className={`text-right font-semibold ${
               owed > 0 ? "text-red-600" : "text-slate-700"
@@ -128,9 +153,17 @@ export function SmartClientCard({
               ? <span className="text-slate-500 font-normal">Pay-per-visit</span>
               : hideAmount
                 ? (owed > 0 ? "Owes" : "Paid")
-                : owed > 0 ? formatCurrency(owed) : "Paid"}
+                : (balanceAmount ?? owed) > 0 ? formatCurrency(balanceAmount ?? owed) : "Paid"}
           </dd>
         </div>
+        {!hideAmount && additionalAmounts.map((item) => (
+          <div key={item.label} className="flex justify-between gap-3">
+            <dt className="text-slate-500">{item.label}</dt>
+            <dd className={`text-right font-semibold ${item.className ?? "text-slate-800"}`}>
+              {formatCurrency(item.amount)}
+            </dd>
+          </div>
+        ))}
 
       </dl>
 

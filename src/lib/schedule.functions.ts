@@ -2428,8 +2428,14 @@ export const getMissedCheckInSummary = createServerFn({ method: "GET" })
         })),
       ),
     );
-    const missed = candidates.filter((a) => !checkedIn.has(a.booking_id));
-    let yesterdayCount = 0;
+    const dismissed = await resolveDismissedBookingIds(
+      context.supabase,
+      candidates.map((a) => a.booking_id),
+    );
+    const missed = candidates.filter(
+      (a) => !checkedIn.has(a.booking_id) && !dismissed.has(a.booking_id),
+    );
+
     const olderDates = new Set<string>();
     let olderCount = 0;
     for (const m of missed) {

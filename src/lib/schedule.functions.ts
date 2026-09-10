@@ -2134,14 +2134,16 @@ export type DayReviewRow = {
   square_customer_id: string | null;
   customer_name: string | null;
   client: ScheduleClientLite | null;
-  /** checked_in | missed | upcoming | cancelled | no_show | unmatched */
+  /** checked_in | missed | dismissed | upcoming | cancelled | no_show | unmatched */
   check_state:
     | "checked_in"
     | "missed"
+    | "dismissed"
     | "upcoming"
     | "cancelled"
     | "no_show"
     | "unmatched";
+
 };
 
 export type DayReviewResult = {

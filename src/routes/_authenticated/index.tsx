@@ -59,6 +59,7 @@ import {
 } from "@/lib/schedule.functions";
 import type { ScheduleStatus } from "@/components/SmartClientCard";
 import { useRole } from "@/hooks/useRole";
+import { visibleTileMoney } from "@/lib/dashboard-tile-visibility";
 
 
 export const Route = createFileRoute("/_authenticated/")({
@@ -954,6 +955,7 @@ function Dashboard() {
           <Tile
             key={t.key}
             tile={t}
+            hideMoney={isStaff}
             active={
               t.key === "new_clients"
                 ? newClientsActive
@@ -1224,6 +1226,7 @@ type TileDef = {
 
 function Tile({
   tile,
+  hideMoney,
   active,
   onClick,
   editing = false,
@@ -1231,12 +1234,14 @@ function Tile({
   onToggleHidden,
 }: {
   tile: TileDef;
+  hideMoney: boolean;
   active: boolean;
   onClick: () => void;
   editing?: boolean;
   hidden?: boolean;
   onToggleHidden?: () => void;
 }) {
+  const visibleMoney = visibleTileMoney(tile, hideMoney);
   const activeRing =
     tile.tone === "red"
       ? "ring-red-500 border-red-300 bg-red-50"
@@ -1270,14 +1275,14 @@ function Tile({
           </span>
         </div>
       )}
-      {tile.money !== undefined && tile.money > 0 && (
+      {visibleMoney.money !== undefined && visibleMoney.money > 0 && (
         <div className="text-xs font-medium text-slate-600">
-          {formatCurrency(tile.money)} {tile.moneyLabel}
+          {formatCurrency(visibleMoney.money)} {tile.moneyLabel}
         </div>
       )}
-      {tile.extraMoney !== undefined && tile.extraMoney > 0 && (
+      {visibleMoney.extraMoney !== undefined && visibleMoney.extraMoney > 0 && (
         <div className="text-xs font-medium text-amber-700">
-          + {formatCurrency(tile.extraMoney)} {tile.extraMoneyLabel}
+          + {formatCurrency(visibleMoney.extraMoney)} {tile.extraMoneyLabel}
         </div>
       )}
     </>

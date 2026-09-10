@@ -828,10 +828,8 @@ function Dashboard() {
       sublabel: "booked past current package",
       icon: <RefreshCw className="h-5 w-5" />,
       count: counts.needs_renewal,
-      money: isStaff
-        ? undefined
-        : counts.next_package_this_week_total + counts.next_package_next_week_total,
-      moneyLabel: "next packages due soon",
+      money: isStaff ? undefined : counts.next_package_unprepared_total,
+      moneyLabel: "next packages not yet prepared",
       tone: counts.needs_renewal > 0 ? "amber" : "slate",
     },
     {
@@ -840,6 +838,8 @@ function Dashboard() {
       sublabel: "next package prepared — activates at check-in",
       icon: <RefreshCw className="h-5 w-5" />,
       count: counts.renewal_scheduled,
+      money: isStaff ? undefined : counts.next_package_prepared_total,
+      moneyLabel: "next packages prepared",
       tone: "slate",
     },
     {

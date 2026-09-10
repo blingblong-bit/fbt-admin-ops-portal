@@ -2134,14 +2134,16 @@ export type DayReviewRow = {
   square_customer_id: string | null;
   customer_name: string | null;
   client: ScheduleClientLite | null;
-  /** checked_in | missed | upcoming | cancelled | no_show | unmatched */
+  /** checked_in | missed | dismissed | upcoming | cancelled | no_show | unmatched */
   check_state:
     | "checked_in"
     | "missed"
+    | "dismissed"
     | "upcoming"
     | "cancelled"
     | "no_show"
     | "unmatched";
+
 };
 
 export type DayReviewResult = {
@@ -2246,6 +2248,60 @@ function isNoShowStatus(s: string) {
 }
 
 /**
+ * Booking IDs staff explicitly dismissed from the Missed Check-Ins queue.
+ * Dismissal never touches packages or visit counts — it only clears the row
+ * from the exception list so the tile can return to zero.
+ */
+async function resolveDismissedBookingIds(
+  supabase: { from: (t: string) => any },
+  bookingIds: string[],
+): Promise<Set<string>> {
+  const out = new Set<string>();
+  if (bookingIds.length === 0) return out;
+  const wanted = new Set(bookingIds);
+  const pageSize = 1000;
+  let from = 0;
+  for (let i = 0; i < 50; i++) {
+    const { data, error } = await supabase
+      .from("client_activities")
+      .select("metadata")
+      .eq("activity_type", "missed_check_in_dismissed")
+      .order("created_at", { ascending: true })
+      .range(from, from + pageSize - 1);
+    if (error) throw error;
+    const list = (data ?? []) as { metadata: { booking_id?: string } | null }[];
+    for (const row of list) {
+      const bid = row.metadata?.booking_id;
+      if (bid && wanted.has(bid)) out.add(bid);
+    }
+    if (list.length < pageSize) break;
+    from += pageSize;
+  }
+  return out;
+}
+
+/** Dismiss a past appointment from the Missed Check-Ins queue (no visit recorded). */
+export const dismissMissedCheckIn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { clientId: string; bookingId: string; startAt?: string; reason?: string }) => {
+    if (!d?.clientId || !d?.bookingId) throw new Error("clientId and bookingId required");
+    return d;
+  })
+  .handler(async ({ data, context }): Promise<{ ok: true }> => {
+    const { error } = await context.supabase.from("client_activities").insert({
+      client_id: data.clientId,
+      activity_type: "missed_check_in_dismissed",
+      description: data.reason
+        ? `Missed check-in dismissed: ${data.reason}`
+        : "Missed check-in dismissed — no visit recorded.",
+      metadata: { booking_id: data.bookingId, start_at: data.startAt ?? null },
+    });
+    if (error) throw error;
+    return { ok: true };
+  });
+
+
+/**
  * Read-only day review used by the Missed Check-Ins screen. Never mutates
  * package counts or appointment statuses.
  */
@@ -2282,6 +2338,10 @@ export const getDayReview = createServerFn({ method: "GET" })
         })),
       ),
     );
+    const dismissed = await resolveDismissedBookingIds(
+      context.supabase,
+      candidates.map((a) => a.booking_id),
+    );
 
     const now = Date.now();
     const rows: DayReviewRow[] = dayAppts.map((a) => {
@@ -2291,7 +2351,9 @@ export const getDayReview = createServerFn({ method: "GET" })
       else if (!a.client) state = "unmatched";
       else if (checkedIn.has(a.booking_id)) state = "checked_in";
       else if (new Date(a.start_at).getTime() > now) state = "upcoming";
+      else if (dismissed.has(a.booking_id)) state = "dismissed";
       else state = "missed";
+
       return {
         booking_id: a.booking_id,
         start_at: a.start_at,
@@ -2366,9 +2428,17 @@ export const getMissedCheckInSummary = createServerFn({ method: "GET" })
         })),
       ),
     );
-    const missed = candidates.filter((a) => !checkedIn.has(a.booking_id));
+    const dismissed = await resolveDismissedBookingIds(
+      context.supabase,
+      candidates.map((a) => a.booking_id),
+    );
+    const missed = candidates.filter(
+      (a) => !checkedIn.has(a.booking_id) && !dismissed.has(a.booking_id),
+    );
+
     let yesterdayCount = 0;
     const olderDates = new Set<string>();
+
     let olderCount = 0;
     for (const m of missed) {
       const ymd = ymdInTz(new Date(m.start_at));

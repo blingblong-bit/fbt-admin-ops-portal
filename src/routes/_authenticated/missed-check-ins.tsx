@@ -12,6 +12,8 @@ import {
   getMissedCheckInSummary,
   getClinicToday,
   completeVisitForClient,
+  dismissMissedCheckIn,
+
   type DayReviewRow,
 } from "@/lib/schedule.functions";
 
@@ -77,6 +79,8 @@ const STATE_META: Record<
 > = {
   checked_in: { label: "Checked In", className: "bg-emerald-100 text-emerald-800 border-emerald-200" },
   missed: { label: "Missed Check-In", className: "bg-red-100 text-red-800 border-red-200" },
+  dismissed: { label: "Dismissed", className: "bg-slate-100 text-slate-600 border-slate-200" },
+
   upcoming: { label: "Upcoming", className: "bg-slate-100 text-slate-700 border-slate-200" },
   cancelled: { label: "Cancelled", className: "bg-slate-200 text-slate-600 border-slate-300" },
   no_show: { label: "No-Show", className: "bg-amber-100 text-amber-800 border-amber-200" },
@@ -89,6 +93,8 @@ function MissedCheckInsPage() {
   const fetchDay = useServerFn(getDayReview);
   const fetchSummary = useServerFn(getMissedCheckInSummary);
   const completeVisit = useServerFn(completeVisitForClient);
+  const dismissMissed = useServerFn(dismissMissedCheckIn);
+
 
   const todayQ = useQuery({
     queryKey: ["clinic-today"],
@@ -137,6 +143,21 @@ function MissedCheckInsPage() {
     },
     onError: (e: Error) => toast.error(e.message || "Check in failed"),
   });
+
+  const dismiss = useMutation({
+    mutationFn: (vars: { clientId: string; bookingId: string; startAt: string }) =>
+      dismissMissed({
+        data: { clientId: vars.clientId, bookingId: vars.bookingId, startAt: vars.startAt },
+      }),
+    onSuccess: () => {
+      toast.success("Dismissed — no visit recorded");
+      qc.invalidateQueries({ queryKey: ["day-review"] });
+      qc.invalidateQueries({ queryKey: ["missed-check-ins"] });
+    },
+    onError: (e: Error) => toast.error(e.message || "Dismiss failed"),
+  });
+
+
 
   const rows = dayQ.data?.rows ?? [];
   const missedCount = dayQ.data?.missed_count ?? 0;
@@ -308,6 +329,26 @@ function MissedCheckInsPage() {
                         {busy ? "Checking in…" : "Check In"}
                       </Button>
                     ) : null}
+
+                    {r.check_state === "missed" && c ? (
+                      <Button
+                        variant="outline"
+                        className="min-h-11 w-full"
+                        disabled={
+                          dismiss.isPending && dismiss.variables?.bookingId === r.booking_id
+                        }
+                        onClick={() =>
+                          dismiss.mutate({
+                            clientId: c.id,
+                            bookingId: r.booking_id,
+                            startAt: r.start_at,
+                          })
+                        }
+                      >
+                        Dismiss — no visit
+                      </Button>
+                    ) : null}
+
 
                     {r.check_state === "unmatched" ? (
                       <Button asChild variant="outline" className="min-h-11 w-full">

@@ -93,6 +93,8 @@ function MissedCheckInsPage() {
   const fetchDay = useServerFn(getDayReview);
   const fetchSummary = useServerFn(getMissedCheckInSummary);
   const completeVisit = useServerFn(completeVisitForClient);
+  const dismissMissed = useServerFn(dismissMissedCheckIn);
+
 
   const todayQ = useQuery({
     queryKey: ["clinic-today"],

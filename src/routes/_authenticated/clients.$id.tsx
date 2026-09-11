@@ -523,6 +523,9 @@ function PaymentDialog({
   const [amount, setAmount] = useState(owed);
   useEffect(() => setAmount(owed), [owed, open]);
   const recordPayment = useServerFn(recordManualPayment);
+  // Stable per-submission key: a retry after a timeout reuses it, so the
+  // payment can only ever be recorded once.
+  const requestKeyRef = useRef<string | null>(null);
 
   const mutation = useMutation({
     mutationFn: async () => {
@@ -534,13 +537,16 @@ function PaymentDialog({
       // The RPC locks the client row, checks idempotency by payment id,
       // updates amount_paid, and inserts the activity row in one transaction.
       const amountCents = Math.round(amt * 100);
+      const isRetry = requestKeyRef.current !== null;
+      if (!requestKeyRef.current) requestKeyRef.current = crypto.randomUUID();
       const result = await recordPayment({
-        data: { client_id: client.id, amount_cents: amountCents },
+        data: { client_id: client.id, amount_cents: amountCents, request_key: requestKeyRef.current },
       });
-      if (!result.credited) {
+      if (!result.credited && !isRetry) {
         throw new Error("Payment was not applied (duplicate id — try again).");
       }
     },
+
 
     onSuccess: () => {
       toast.success("Payment recorded");

@@ -460,9 +460,9 @@ async function handlePaymentEvent(supabaseAdmin: SupabaseClient<Database>, event
       message: result.alreadyApplied
         ? `Payment ${squarePaymentId} activity already existed on client — reconciled flags (applied=true, needs_review=false)`
         : promotedAppliedZero
-          ? `Promoted payment ${squarePaymentId} (${amountDisplay}) to COMPLETED for client via ${method} but $0 credited — package_price cap already reached`
+          ? `Promoted payment ${squarePaymentId} (${amountDisplay}) to COMPLETED for client via ${method} but $0 credited — nothing was applied, flagged for review`
           : overCredit > 0
-            ? `Applied ${amountDisplay} to client via ${method}, but the package is now overpaid by $${overCredit.toFixed(2)} — flagged for review`
+            ? `Applied ${amountDisplay} to client via ${method}, but $${overCredit.toFixed(2)} is unexplained (no prepared renewal or no package set up) — flagged for review`
             : `Applied ${amountDisplay} to client via ${method} (promoted from APPROVED→COMPLETED)`,
       raw_event: event as unknown as never,
     });
@@ -549,9 +549,9 @@ async function handlePaymentEvent(supabaseAdmin: SupabaseClient<Database>, event
       ? alreadyApplied
         ? `Payment ${squarePaymentId} (${amountDisplay}) already credited — flags set applied=true`
         : newAppliedZero
-          ? `Payment ${squarePaymentId} (${amountDisplay}) matched to client via ${method} but $0 credited — package_price cap already reached, flagged for review`
+          ? `Payment ${squarePaymentId} (${amountDisplay}) matched to client via ${method} but $0 credited — nothing was applied, flagged for review`
           : overCredit > 0
-            ? `Applied ${amountDisplay} to client via ${method}, but the package is now overpaid by $${overCredit.toFixed(2)} — flagged for review`
+            ? `Applied ${amountDisplay} to client via ${method}, but $${overCredit.toFixed(2)} is unexplained (no prepared renewal or no package set up) — flagged for review`
             : `Applied ${amountDisplay} to client via ${method}`
       : applyErr
         ? `COMPLETED payment ${squarePaymentId} (${amountDisplay}) matched to client but credit was blocked: ${formatErr(applyErr)}`

@@ -745,10 +745,10 @@ function RenewDialog({
             </div>
             <div>
               <Label>Paid Today ($)</Label>
-              <Input type="number" min={0} step="0.01" max={form.package_price} value={form.amount_paid} onChange={(e) => up("amount_paid", Number(e.target.value))} />
+              <Input type="number" min={0} step="0.01" value={form.amount_paid} onChange={(e) => up("amount_paid", Number(e.target.value))} />
               <p className="mt-1 text-xs text-muted-foreground">
-                Leave at $0 unless money was collected right now. A new package always starts
-                unpaid — Square payments reduce the balance automatically.
+                Leave at $0 unless money was collected right now. Money already paid ahead for
+                this prepared package is applied automatically.
               </p>
             </div>
           </div>

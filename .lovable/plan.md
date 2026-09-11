@@ -17,6 +17,7 @@ The audit also found review cases that should not be silently changed:
      - unpaid remainder becomes `previous_package_owed`;
      - any paid amount above the old package price becomes starting `amount_paid` on the new package.
    - Apply the same calculation in both renewal paths so the behavior cannot differ between Schedule Check and Client Detail.
+   - Move the renewal rollover into one authenticated database transaction with a client-row lock, so a Square payment cannot land between the balance read and reset or leave a half-finished renewal.
    - Record the carried payment credit in package-completion and renewal activity details for traceability.
 
 2. **Correct the confirmed affected client**
@@ -29,6 +30,7 @@ The audit also found review cases that should not be silently changed:
    - Keep package overpayments flagged for staff review.
    - Flag positive payments applied to package-model clients with no package price/setup, while excluding deliberate pay-per-visit clients.
    - Remove obsolete messages that still claim payments were capped at the package price.
+   - Keep manual payments on the same oldest-debt-first path; add a short-lived request key so a retry after a timeout cannot accidentally record the same manual payment twice.
 
 4. **Strengthen automated checks**
    - Update the payment mock to cover `previous_package_owed` and the oldest-debt-first split.
@@ -46,4 +48,5 @@ The audit also found review cases that should not be silently changed:
 
 - The payment database function already locks the client row, prevents duplicate application by Square payment ID, pays previous-package debt first, and sends the remainder to the current package.
 - The defect is in prepared-renewal activation, which currently resets `amount_paid` to zero without preserving excess credit already received for the next package.
+- Both current renewal paths use separate updates; consolidating them into one locked operation also removes the verified race window with incoming Square payments.
 - Existing older payment activities may lack the newer split metadata; that is historical format, not evidence that those payments failed.

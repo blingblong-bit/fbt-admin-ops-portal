@@ -69,6 +69,7 @@ export type Database = {
           payment_model: string
           pending_renewal_created_at: string | null
           pending_renewal_package_name: string | null
+          pending_renewal_paid: number
           pending_renewal_price: number | null
           pending_renewal_start_date: string | null
           pending_renewal_total_visits: number | null
@@ -99,6 +100,7 @@ export type Database = {
           payment_model?: string
           pending_renewal_created_at?: string | null
           pending_renewal_package_name?: string | null
+          pending_renewal_paid?: number
           pending_renewal_price?: number | null
           pending_renewal_start_date?: string | null
           pending_renewal_total_visits?: number | null
@@ -129,6 +131,7 @@ export type Database = {
           payment_model?: string
           pending_renewal_created_at?: string | null
           pending_renewal_package_name?: string | null
+          pending_renewal_paid?: number
           pending_renewal_price?: number | null
           pending_renewal_start_date?: string | null
           pending_renewal_total_visits?: number | null
@@ -611,6 +614,24 @@ export type Database = {
         Returns: boolean
       }
       is_staff: { Args: { _user_id: string }; Returns: boolean }
+      renew_client_package: {
+        Args: {
+          p_booking_id?: string
+          p_client_id: string
+          p_extra_paid?: number
+          p_package_name: string
+          p_price: number
+          p_source?: string
+          p_start_date: string
+          p_total_visits: number
+        }
+        Returns: {
+          amount_paid: number
+          prepaid_applied: number
+          previous_package_owed: number
+          unpaid_carried_forward: number
+        }[]
+      }
     }
     Enums: {
       app_role: "superadmin" | "admin" | "moderator" | "user" | "staff"

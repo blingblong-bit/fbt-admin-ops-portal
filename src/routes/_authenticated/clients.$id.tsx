@@ -7,6 +7,7 @@ import { fallback, zodValidator } from "@tanstack/zod-adapter";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { recordManualPayment } from "@/lib/payments.functions";
+import { renewPackage } from "@/lib/renewal.functions";
 import { AppShell } from "@/components/AppShell";
 import { StatusBadge } from "@/components/StatusBadge";
 import { RenewalFlagBadge, useIsRenewalFlagged } from "@/components/RenewalFlagBadge";

@@ -833,7 +833,7 @@ export const retryAllMatchedBlockedPayments = createServerFn({ method: "POST" })
  */
 export const recordManualPayment = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { client_id: string; amount_cents: number }) => d)
+  .inputValidator((d: { client_id: string; amount_cents: number; request_key?: string }) => d)
   .handler(async ({ data, context }) => {
     if (!Number.isInteger(data.amount_cents) || data.amount_cents <= 0) {
       throw new Error("Enter an amount greater than 0");
@@ -845,13 +845,20 @@ export const recordManualPayment = createServerFn({ method: "POST" })
     if (roleErr) throw roleErr;
     if (!isStaff) throw new Error("Not authorized to record payments");
 
+    // A retry/timeout of the same submission reuses the caller's request key,
+    // so apply_square_payment's idempotency check makes the second attempt a
+    // no-op instead of recording the payment twice.
+    const key = (data.request_key ?? "").trim();
+    const paymentId = key ? `manual:${key}` : `manual:${crypto.randomUUID()}`;
+
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const result = await applyPaymentOnce(supabaseAdmin as unknown as SupabaseClient<Database>, {
       clientId: data.client_id,
-      squarePaymentId: `manual:${crypto.randomUUID()}`,
+      squarePaymentId: paymentId,
       amountCents: data.amount_cents,
       matchMethod: "manual",
       manualResolution: true,
     });
     return result;
   });
+

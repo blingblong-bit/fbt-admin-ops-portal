@@ -564,9 +564,14 @@ async function handlePaymentEvent(supabaseAdmin: SupabaseClient<Database>, event
 
 
 /**
- * Returns how much the client is overpaid on the current package (0 when fine).
- * Guards against packages that were renewed as "already paid" and then receive
- * a real Square payment on top, which used to create a silent credit.
+ * Returns the unexplained amount sitting on the current package (0 when fine).
+ *
+ * Money paid ahead of an already-prepared renewal is held against that prepared
+ * package by apply_square_payment, so it never shows here. What remains is a
+ * true exception: an overpaid package with no prepared renewal to explain it,
+ * or money recorded for a package client with no package set up at all.
+ * Pay-per-visit clients are never flagged — paying above a package price is
+ * normal for them.
  */
 async function detectOverpayment(
   supabaseAdmin: SupabaseClient<Database>,
@@ -575,13 +580,15 @@ async function detectOverpayment(
   if (!clientId) return 0;
   const { data } = await supabaseAdmin
     .from("clients")
-    .select("package_price, amount_paid")
+    .select("package_price, amount_paid, payment_model, pending_renewal_start_date")
     .eq("id", clientId)
     .maybeSingle();
   if (!data) return 0;
+  if ((data.payment_model ?? "package") === "pay_per_visit") return 0;
   const price = Number(data.package_price ?? 0);
   const paid = Number(data.amount_paid ?? 0);
-  if (price <= 0) return 0; // no package price on file — separate review path
+  // No package set up: any money recorded needs a package review.
+  if (price <= 0) return paid > 0 ? Number(paid.toFixed(2)) : 0;
   return paid > price ? Number((paid - price).toFixed(2)) : 0;
 }
 

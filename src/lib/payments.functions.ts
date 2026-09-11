@@ -115,7 +115,7 @@ export const resolvePaymentLink = createServerFn({ method: "POST" })
       message: result.alreadyApplied
         ? `Manually linked payment ${payment.square_payment_id} to ${client.first_name} ${client.last_name} — activity already existed, flags reconciled`
         : appliedZero
-          ? `Manually linked payment ${payment.square_payment_id} ($${(payment.amount_cents / 100).toFixed(2)}) to ${client.first_name} ${client.last_name} but $0 credited — package_price cap already reached`
+          ? `Manually linked payment ${payment.square_payment_id} ($${(payment.amount_cents / 100).toFixed(2)}) to ${client.first_name} ${client.last_name} but $0 credited — check the payment amount`
           : `Manually linked payment ${payment.square_payment_id} ($${(payment.amount_cents / 100).toFixed(2)}) to ${client.first_name} ${client.last_name} (buyer_email=${payment.buyer_email ?? "none"})`,
     });
 
@@ -201,7 +201,7 @@ export const resolvePaymentCreateClient = createServerFn({ method: "POST" })
       status: createAppliedZero ? "applied_zero" : "success",
       action: createAppliedZero ? "manual_create_client_applied_zero" : "manual_create_client_applied",
       message: createAppliedZero
-        ? `Created new client ${first} ${last} from payment ${payment.square_payment_id} ($${(payment.amount_cents / 100).toFixed(2)}) but $0 credited — package_price cap already reached`
+        ? `Created new client ${first} ${last} from payment ${payment.square_payment_id} ($${(payment.amount_cents / 100).toFixed(2)}) but $0 credited — check the payment amount`
         : `Created new client ${first} ${last} from payment ${payment.square_payment_id} ($${(payment.amount_cents / 100).toFixed(2)}, buyer_email=${payment.buyer_email ?? "none"})`,
     });
 
@@ -697,7 +697,7 @@ async function retryOnePayment(
       message: result.alreadyApplied
         ? `Retry: payment ${payment.square_payment_id} already credited — flags reconciled`
         : retryAppliedZero
-          ? `Retry: payment ${payment.square_payment_id} ($${(payment.amount_cents / 100).toFixed(2)}) ran without error but $0 was credited — package_price cap already reached`
+          ? `Retry: payment ${payment.square_payment_id} ($${(payment.amount_cents / 100).toFixed(2)}) ran without error but $0 was credited`
           : `Retry: applied $${(payment.amount_cents / 100).toFixed(2)} for payment ${payment.square_payment_id}`,
     });
     return {
@@ -833,7 +833,7 @@ export const retryAllMatchedBlockedPayments = createServerFn({ method: "POST" })
  */
 export const recordManualPayment = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { client_id: string; amount_cents: number }) => d)
+  .inputValidator((d: { client_id: string; amount_cents: number; request_key?: string }) => d)
   .handler(async ({ data, context }) => {
     if (!Number.isInteger(data.amount_cents) || data.amount_cents <= 0) {
       throw new Error("Enter an amount greater than 0");
@@ -845,13 +845,20 @@ export const recordManualPayment = createServerFn({ method: "POST" })
     if (roleErr) throw roleErr;
     if (!isStaff) throw new Error("Not authorized to record payments");
 
+    // A retry/timeout of the same submission reuses the caller's request key,
+    // so apply_square_payment's idempotency check makes the second attempt a
+    // no-op instead of recording the payment twice.
+    const key = (data.request_key ?? "").trim();
+    const paymentId = key ? `manual:${key}` : `manual:${crypto.randomUUID()}`;
+
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const result = await applyPaymentOnce(supabaseAdmin as unknown as SupabaseClient<Database>, {
       clientId: data.client_id,
-      squarePaymentId: `manual:${crypto.randomUUID()}`,
+      squarePaymentId: paymentId,
       amountCents: data.amount_cents,
       matchMethod: "manual",
       manualResolution: true,
     });
     return result;
   });
+

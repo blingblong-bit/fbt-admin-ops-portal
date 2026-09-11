@@ -115,7 +115,7 @@ export const resolvePaymentLink = createServerFn({ method: "POST" })
       message: result.alreadyApplied
         ? `Manually linked payment ${payment.square_payment_id} to ${client.first_name} ${client.last_name} — activity already existed, flags reconciled`
         : appliedZero
-          ? `Manually linked payment ${payment.square_payment_id} ($${(payment.amount_cents / 100).toFixed(2)}) to ${client.first_name} ${client.last_name} but $0 credited — package_price cap already reached`
+          ? `Manually linked payment ${payment.square_payment_id} ($${(payment.amount_cents / 100).toFixed(2)}) to ${client.first_name} ${client.last_name} but $0 credited — check the payment amount`
           : `Manually linked payment ${payment.square_payment_id} ($${(payment.amount_cents / 100).toFixed(2)}) to ${client.first_name} ${client.last_name} (buyer_email=${payment.buyer_email ?? "none"})`,
     });
 
@@ -201,7 +201,7 @@ export const resolvePaymentCreateClient = createServerFn({ method: "POST" })
       status: createAppliedZero ? "applied_zero" : "success",
       action: createAppliedZero ? "manual_create_client_applied_zero" : "manual_create_client_applied",
       message: createAppliedZero
-        ? `Created new client ${first} ${last} from payment ${payment.square_payment_id} ($${(payment.amount_cents / 100).toFixed(2)}) but $0 credited — package_price cap already reached`
+        ? `Created new client ${first} ${last} from payment ${payment.square_payment_id} ($${(payment.amount_cents / 100).toFixed(2)}) but $0 credited — check the payment amount`
         : `Created new client ${first} ${last} from payment ${payment.square_payment_id} ($${(payment.amount_cents / 100).toFixed(2)}, buyer_email=${payment.buyer_email ?? "none"})`,
     });
 
@@ -697,7 +697,7 @@ async function retryOnePayment(
       message: result.alreadyApplied
         ? `Retry: payment ${payment.square_payment_id} already credited — flags reconciled`
         : retryAppliedZero
-          ? `Retry: payment ${payment.square_payment_id} ($${(payment.amount_cents / 100).toFixed(2)}) ran without error but $0 was credited — package_price cap already reached`
+          ? `Retry: payment ${payment.square_payment_id} ($${(payment.amount_cents / 100).toFixed(2)}) ran without error but $0 was credited`
           : `Retry: applied $${(payment.amount_cents / 100).toFixed(2)} for payment ${payment.square_payment_id}`,
     });
     return {

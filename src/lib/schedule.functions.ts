@@ -715,71 +715,23 @@ export const completeVisitForClient = createServerFn({ method: "POST" })
         data.appointmentStartAt ? new Date(data.appointmentStartAt) : new Date(),
       );
       if (visitYmd >= c.pending_renewal_start_date) {
-        const finalUsed = Number(c.visits_used ?? 0);
         const newTotal = Number(c.pending_renewal_total_visits ?? c.package_total_visits ?? 0);
         const newPrice = Number(c.pending_renewal_price ?? c.package_price ?? 0);
         const newName = c.pending_renewal_package_name ?? c.package_name ?? null;
 
-        // Anything still unpaid on the finished package is carried forward as
-        // separate "previous package" debt — never merged into the new price
-        // and never silently dropped by the amount_paid reset below.
-        const unpaidCarried = Math.max(
-          0,
-          Number(c.package_price ?? 0) - Number(c.amount_paid ?? 0),
-        );
-        const carriedTotal = Number(c.previous_package_owed ?? 0) + unpaidCarried;
-
-        // Package history: preserve the completed package and its final count.
-        await context.supabase.from("client_activities").insert({
-          client_id: data.clientId,
-          activity_type: "package_completed",
-          description: `Package completed: "${c.package_name ?? "—"}" (${finalUsed}/${c.package_total_visits} visits)`,
-          metadata: {
-            package_name: c.package_name,
-            package_total_visits: c.package_total_visits,
-            visits_used: finalUsed,
-            package_price: Number(c.package_price ?? 0),
-            amount_paid: Number(c.amount_paid ?? 0),
-            unpaid_carried_forward: unpaidCarried,
-          },
-        });
-
-        // Reset the counter first so the validation trigger never sees
-        // visits_used > package_total_visits.
-        const { error: rErr } = await context.supabase
-          .from("clients")
-          .update({ visits_used: 0, amount_paid: 0, previous_package_owed: carriedTotal })
-          .eq("id", data.clientId);
-        if (rErr) throw rErr;
-        const { error: aErr } = await context.supabase
-          .from("clients")
-          .update({
-            package_name: newName,
-            package_total_visits: newTotal,
-            package_price: newPrice,
-            package_start_date: c.pending_renewal_start_date,
-            next_package_price: null,
-            pending_renewal_start_date: null,
-            pending_renewal_price: null,
-            pending_renewal_total_visits: null,
-            pending_renewal_package_name: null,
-            pending_renewal_created_at: null,
-          })
-          .eq("id", data.clientId);
-        if (aErr) throw aErr;
-
-        await context.supabase.from("client_activities").insert({
-          client_id: data.clientId,
-          activity_type: "renewal",
-          description: `Package renewed (pre-renewal activated): "${newName ?? "—"}" (${newTotal} visits, $${newPrice.toFixed(2)})`,
-          metadata: {
-            source: "pre_renewal_activation",
-            package_name: newName,
-            package_total_visits: newTotal,
-            package_price: newPrice,
-            package_start_date: c.pending_renewal_start_date,
-            ...(data.bookingId ? { booking_id: data.bookingId } : {}),
-          },
+        // One locked database operation: closes the finished package, carries
+        // unpaid money forward as previous-package debt, and starts the new
+        // package already credited with money prepaid against this renewal.
+        const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+        const { renewClientPackage } = await import("@/lib/renewal.functions");
+        await renewClientPackage(supabaseAdmin as never, {
+          clientId: data.clientId,
+          packageName: newName,
+          totalVisits: newTotal,
+          price: newPrice,
+          startDate: c.pending_renewal_start_date,
+          source: "pre_renewal_activation",
+          bookingId: data.bookingId ?? null,
         });
 
         activated = true;

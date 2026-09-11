@@ -1,0 +1,1 @@
+REVOKE EXECUTE ON FUNCTION public.renew_client_package(uuid, text, integer, numeric, date, numeric, text, text) FROM authenticated;

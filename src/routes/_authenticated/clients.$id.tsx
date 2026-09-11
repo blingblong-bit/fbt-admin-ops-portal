@@ -7,6 +7,7 @@ import { fallback, zodValidator } from "@tanstack/zod-adapter";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { recordManualPayment } from "@/lib/payments.functions";
+import { renewPackage } from "@/lib/renewal.functions";
 import { AppShell } from "@/components/AppShell";
 import { StatusBadge } from "@/components/StatusBadge";
 import { RenewalFlagBadge, useIsRenewalFlagged } from "@/components/RenewalFlagBadge";
@@ -617,6 +618,7 @@ function RenewDialog({
   // happened to click Renew. Prefill from the earliest upcoming Square
   // appointment; today's date is only a fallback.
   const fetchAppts = useServerFn(getClientAppointments);
+  const renewPackageFn = useServerFn(renewPackage);
   const upcomingQuery = useQuery({
     queryKey: ["client-appointments", client.id, "upcoming"],
     queryFn: () => fetchAppts({ data: { clientId: client.id, ...windowIso(0, WINDOW_DAYS) } }),
@@ -674,59 +676,19 @@ function RenewDialog({
 
   const mutation = useMutation({
     mutationFn: async () => {
-      if (Number(form.amount_paid) > Number(form.package_price)) {
-        throw new Error("Amount paid cannot exceed package price");
-      }
-      // Unpaid money on the finished package survives the renewal as separate
-      // "previous package" debt instead of being wiped by the amount_paid reset.
-      const unpaidCarried = Math.max(
-        0,
-        Number(client.package_price ?? 0) - Number(client.amount_paid ?? 0),
-      );
-      const carriedTotal = Number(client.previous_package_owed ?? 0) + unpaidCarried;
-      // Reset visits_used first to satisfy validation trigger.
-      // Package history: keep the completed package and its final visit count.
-      await supabase.from("client_activities").insert({
-        client_id: client.id,
-        activity_type: "package_completed",
-        description: `Package completed: "${client.package_name ?? "—"}" (${client.visits_used ?? 0}/${client.package_total_visits} visits)`,
-        metadata: {
-          package_name: client.package_name,
-          package_total_visits: client.package_total_visits,
-          visits_used: client.visits_used ?? 0,
-          package_price: Number(client.package_price ?? 0),
-          amount_paid: Number(client.amount_paid ?? 0),
-          unpaid_carried_forward: unpaidCarried,
+      // One locked server operation: closes the finished package, carries
+      // unpaid money forward as previous-package debt, and starts the new
+      // package already credited with money prepaid against a prepared
+      // renewal — so an incoming payment can't be wiped mid-renewal.
+      await renewPackageFn({
+        data: {
+          clientId: client.id,
+          packageName: form.package_name.trim() || null,
+          totalVisits: Number(form.package_total_visits),
+          price: Number(form.package_price),
+          startDate: form.package_start_date || null,
+          paidNow: Number(form.amount_paid) || 0,
         },
-      });
-      const { error: e1 } = await supabase
-        .from("clients")
-        .update({ visits_used: 0, amount_paid: 0, previous_package_owed: carriedTotal })
-        .eq("id", client.id);
-      if (e1) throw e1;
-      const { error: e2 } = await supabase
-        .from("clients")
-        .update({
-          package_name: form.package_name.trim() || null,
-          package_total_visits: Number(form.package_total_visits),
-          package_price: Number(form.package_price),
-          package_start_date: form.package_start_date || null,
-          amount_paid: Number(form.amount_paid),
-          // Pending next-package state is consumed by the renewal.
-          next_package_price: null,
-          pending_renewal_start_date: null,
-          pending_renewal_price: null,
-          pending_renewal_total_visits: null,
-          pending_renewal_package_name: null,
-          pending_renewal_created_at: null,
-        })
-        .eq("id", client.id);
-      if (e2) throw e2;
-      await supabase.from("client_activities").insert({
-        client_id: client.id,
-        activity_type: "renewal",
-        description: `Package renewed: "${form.package_name}" (${form.package_total_visits} visits, ${formatCurrency(form.package_price)})`,
-        metadata: form,
       });
     },
     onSuccess: () => {
@@ -783,10 +745,10 @@ function RenewDialog({
             </div>
             <div>
               <Label>Paid Today ($)</Label>
-              <Input type="number" min={0} step="0.01" max={form.package_price} value={form.amount_paid} onChange={(e) => up("amount_paid", Number(e.target.value))} />
+              <Input type="number" min={0} step="0.01" value={form.amount_paid} onChange={(e) => up("amount_paid", Number(e.target.value))} />
               <p className="mt-1 text-xs text-muted-foreground">
-                Leave at $0 unless money was collected right now. A new package always starts
-                unpaid — Square payments reduce the balance automatically.
+                Leave at $0 unless money was collected right now. Money already paid ahead for
+                this prepared package is applied automatically.
               </p>
             </div>
           </div>

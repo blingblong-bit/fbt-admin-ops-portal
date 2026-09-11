@@ -1,52 +1,58 @@
 # Verify and repair this week’s payment updates
 
-The read-only audit found **14 non-zero Square payments totaling $3,818.34** this week. All 14 have exactly one matching payment activity, the recorded amounts reconcile to Square, and no duplicate Square payment IDs were found.
+The read-only audit found **14 non-zero Square payments totaling $3,818.34** this week. All 14 have exactly one matching payment activity, the amounts reconcile to Square, and no payment was recorded twice.
 
-One confirmed update failure needs correction: **Jake McGee’s $50 payment was applied, then erased from the current balance when his prepared one-visit package activated about an hour later**. The activation reset `amount_paid` to zero instead of carrying the $50 excess from the completed package into the newly activated package.
+One confirmed failure: **Jake McGee’s $50 payment was applied, then erased when his prepared one-visit package activated about an hour later.** Activation reset the paid amount to zero, so his prepared package now shows $50 owed even though the money was collected.
 
-The audit also found review cases that should not be silently changed:
+Other cases found, deliberately left for staff review rather than auto-corrected:
 
-- **Kristin Nichols:** $345 was applied to an already fully paid $345 package, leaving $690 paid; this is correctly flagged for review.
-- **Hayden Brinkley, Hayvah Eggleston, and Maddox Liles:** payments were recorded while no package price/setup exists. The money is stored, but these records need package/setup review rather than an automatic financial rewrite.
-- **Randy Edwards:** pay-per-visit payments accumulate above the displayed package price by design and should not be treated as a package overpayment.
+- **Kristin Nichols:** $345 landed on an already fully paid $345 package ($690 paid). Correctly flagged for review; no prepared renewal exists to explain it.
+- **Hayden Brinkley, Hayvah Eggleston, Maddox Liles:** money recorded while no package price/setup exists. Needs package setup, not a financial rewrite.
+- **Randy Edwards:** pay-per-visit, so paid above package price is normal.
 
 ## Changes
 
-1. **Preserve payments when a prepared package activates**
-   - On prepared-renewal activation, calculate both sides of the old package:
-     - unpaid remainder becomes `previous_package_owed`;
-     - any paid amount above the old package price becomes starting `amount_paid` on the new package.
-   - Apply the same calculation in both renewal paths so the behavior cannot differ between Schedule Check and Client Detail.
-   - Move the renewal rollover into one authenticated database transaction with a client-row lock, so a Square payment cannot land between the balance read and reset or leave a half-finished renewal.
-   - Record the carried payment credit in package-completion and renewal activity details for traceability.
+1. **Money paid ahead goes to the prepared next package — never to a general credit**
 
-2. **Correct the confirmed affected client**
-   - Restore Jake McGee’s current-package `amount_paid` from $0 to $50, making the activated $50 single-visit package paid in full.
-   - Clear only the review flag caused by that overpayment/reset sequence and add an audit activity describing the correction.
-   - Do not alter Kristin, Hayden, Hayvah, Maddox, Randy, or any other client during this correction.
+   When a payment arrives and the client has a prepared renewal:
+   - pay any real balance on the currently active package first;
+   - if the current package is fully paid and money remains, hold that remainder against the already-prepared next package;
+   - when that prepared package activates, it starts with that amount already paid.
 
-3. **Improve payment review detection**
-   - Continue allowing the full payment amount to be recorded without a cap.
-   - Keep package overpayments flagged for staff review.
-   - Flag positive payments applied to package-model clients with no package price/setup, while excluding deliberate pay-per-visit clients.
-   - Remove obsolete messages that still claim payments were capped at the package price.
-   - Keep manual payments on the same oldest-debt-first path; add a short-lived request key so a retry after a timeout cannot accidentally record the same manual payment twice.
+   If money exceeds the current package price and there is **no** prepared renewal to explain it, nothing is carried forward: it stays a **Payment Review** exception for staff. No general account credit is ever created.
 
-4. **Strengthen automated checks**
-   - Update the payment mock to cover `previous_package_owed` and the oldest-debt-first split.
-   - Add tests for partial/full previous-debt payoff, uncapped current-package payment, duplicate protection, and prepared-package activation after a payment.
+2. **Fix prepared-renewal activation**
+   - Unpaid remainder on the finished package still carries forward as previous-package debt.
+   - Prepaid money held for the prepared package becomes the new package’s paid amount at activation.
+   - Both renewal paths (Schedule Check check-in and the Client Detail renew dialog) use the same rule, done as one locked database operation so an incoming payment can’t be wiped mid-renewal or leave a half-finished renewal.
+
+3. **Activity trail**
+   - The payment records that it was received before activation and reserved for the prepared package.
+   - The activation records how much prepaid money was applied, alongside any unpaid amount carried forward.
+
+4. **Correct the confirmed client**
+   - Restore Jake McGee’s activated package to $50 paid, $0 owed, and clear only the review flag caused by this reset.
+   - Log an audit activity describing the correction. No other client is touched.
+
+5. **Review flags**
+   - Keep recording the full payment amount, uncapped.
+   - Flag unexplained overpayment for review (no prepared renewal to absorb it).
+   - Flag money applied to package clients with no package set up, excluding pay-per-visit.
+   - Remove stale messages claiming payments were capped at the package price.
+
+6. **Tests**
+   - Cover previous-debt-first payment, prepaid-to-prepared-package routing, unexplained overpayment staying flagged, duplicate protection, and activation applying the prepaid amount.
 
 ## Validation
 
-- Reconcile every payment from this Chicago work week again after the changes: Square amount, one-time activity, previous/current split, final paid amount, owed amount, and review status.
-- Confirm Jake shows $50 paid and $0 owed after correction.
-- Confirm no payment, package, visit, or balance changes occurred for the other reviewed clients.
-- Run the focused payment and renewal tests plus TypeScript validation.
-- Do not publish automatically.
+- Re-reconcile every payment from this Chicago week: amount, single application, split, final paid/owed, review status.
+- Confirm Jake shows $50 paid, $0 owed.
+- Confirm no changes to Kristin, Hayden, Hayvah, Maddox, Randy, or anyone else.
+- Run the payment and renewal tests plus type checking. Nothing is published without your go-ahead.
 
 ## Technical notes
 
-- The payment database function already locks the client row, prevents duplicate application by Square payment ID, pays previous-package debt first, and sends the remainder to the current package.
-- The defect is in prepared-renewal activation, which currently resets `amount_paid` to zero without preserving excess credit already received for the next package.
-- Both current renewal paths use separate updates; consolidating them into one locked operation also removes the verified race window with incoming Square payments.
-- Existing older payment activities may lack the newer split metadata; that is historical format, not evidence that those payments failed.
+- Storage for prepaid renewal money: a `pending_renewal_paid` amount on `clients`, defaulted to 0 and floored at 0 by `clients_validate`; consumed and cleared at activation.
+- `apply_square_payment` gains the routing step: previous debt → current package up to its price → prepared-renewal prepaid bucket (only when a prepared renewal exists) → otherwise excess stays on `amount_paid` and is flagged for review. Metadata gains `applied_to_pending_package` and `pre_activation: true`.
+- Activation in `src/lib/schedule.functions.ts` and the `RenewDialog` in `src/routes/_authenticated/clients.$id.tsx` move to a single security-definer function that locks the client row, carries unpaid debt forward, sets `amount_paid` from the prepaid bucket, and writes the `package_completed`/`renewal` activities atomically.
+- `detectOverpayment` in the Square webhook becomes prepared-renewal aware so legitimately prepaid clients are not flagged, while true unexplained excess still is.

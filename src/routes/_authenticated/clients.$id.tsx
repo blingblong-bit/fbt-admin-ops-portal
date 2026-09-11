@@ -618,6 +618,7 @@ function RenewDialog({
   // happened to click Renew. Prefill from the earliest upcoming Square
   // appointment; today's date is only a fallback.
   const fetchAppts = useServerFn(getClientAppointments);
+  const renewPackageFn = useServerFn(renewPackage);
   const upcomingQuery = useQuery({
     queryKey: ["client-appointments", client.id, "upcoming"],
     queryFn: () => fetchAppts({ data: { clientId: client.id, ...windowIso(0, WINDOW_DAYS) } }),

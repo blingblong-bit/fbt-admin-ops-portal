@@ -1415,6 +1415,7 @@ function WeeklyPaymentView({
   search: string;
   isScheduled: (id: string) => boolean;
 }) {
+  const dismissedIds = usePackageReviewDismissedIds().data ?? null;
   const q = search.trim().toLowerCase();
   const matches = (row: WeeklyPaymentRow) =>
     !q || `${row.client.first_name} ${row.client.last_name} ${row.client.phone ?? ""}`.toLowerCase().includes(q);

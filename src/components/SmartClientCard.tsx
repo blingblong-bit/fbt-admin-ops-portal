@@ -77,6 +77,14 @@ export function SmartClientCard({
 
   const primary = (() => {
     switch (action) {
+      case "setup_package":
+        return (
+          <Link to="/clients/$id" params={{ id: client.id }} className="block">
+            <Button size="lg" className="w-full">
+              📝 Set Up Package
+            </Button>
+          </Link>
+        );
       case "record_payment":
         return (
           <Button size="lg" className="w-full" onClick={() => setPaymentOpen(true)}>

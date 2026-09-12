@@ -207,7 +207,17 @@ export function statusClasses(s: ClientStatus): string {
 type SimpleClient = Pick<
   Client,
   "package_total_visits" | "visits_used" | "package_price" | "amount_paid"
-> & Partial<Pick<Client, "payment_model" | "previous_package_owed">>;
+> &
+  Partial<
+    Pick<
+      Client,
+      | "payment_model"
+      | "previous_package_owed"
+      | "pending_renewal_start_date"
+      | "pending_renewal_price"
+      | "pending_renewal_total_visits"
+    >
+  >;
 
 
 /**

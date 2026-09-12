@@ -224,9 +224,15 @@ type SimpleClient = Pick<
  * Schedule status is derived entirely from live Square bookings. Callers must
  * pass `isScheduled` based on the current Square booking window.
  */
-export function simpleStatus(c: SimpleClient, isScheduled: boolean): SimpleStatus {
+export function simpleStatus(
+  c: SimpleClient,
+  isScheduled: boolean,
+  dismissedFromPackageReview = false,
+): SimpleStatus {
   const owed = totalOwed(c);
   const remaining = visitsRemaining(c);
+  // Without a price we cannot conclude anything financial — never "Paid".
+  if (packagePriceUnknown(c, dismissedFromPackageReview)) return "Package Info Needed";
   if (remaining !== null && c.package_total_visits > 0 && remaining === 0) return "Package Complete";
   if (owed > 0) return "Payment Due";
   if (!isScheduled) return "Not Scheduled";

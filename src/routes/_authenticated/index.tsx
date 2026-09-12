@@ -1176,6 +1176,7 @@ function NewClientsByMonthView({
   hideAmount: boolean;
   onClose: () => void;
 }) {
+  const dismissedIds = usePackageReviewDismissedIds().data ?? null;
   return (
     <section>
       <div className="mb-3 flex items-center justify-between md:mb-4">

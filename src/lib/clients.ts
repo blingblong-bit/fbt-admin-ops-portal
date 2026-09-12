@@ -119,6 +119,65 @@ export function totalOwed(
   return amountOwed(c) + previousOwed(c);
 }
 
+type PricedClient = Pick<Client, "package_price" | "amount_paid"> &
+  Partial<
+    Pick<
+      Client,
+      | "payment_model"
+      | "previous_package_owed"
+      | "pending_renewal_start_date"
+      | "pending_renewal_price"
+      | "pending_renewal_total_visits"
+    >
+  >;
+
+/**
+ * A package-model client with no usable price on file. We cannot conclude
+ * anything financial about them — $0 owed is unknown, not "Paid".
+ * Pay-per-visit clients and clients staff dismissed with "No package needed"
+ * are excluded.
+ */
+export function packagePriceUnknown(
+  c: PricedClient,
+  dismissedFromPackageReview = false,
+): boolean {
+  if (isPayPerVisit(c)) return false;
+  if (c.payment_model !== undefined && c.payment_model !== "package") return false;
+  if (dismissedFromPackageReview) return false;
+  return !(Number(c.package_price ?? 0) > 0);
+}
+
+/** Prepared next package that can legitimately absorb extra money. */
+function hasPreparedRenewal(c: PricedClient): boolean {
+  return (
+    !!c.pending_renewal_start_date ||
+    Number(c.pending_renewal_price ?? 0) > 0 ||
+    Number(c.pending_renewal_total_visits ?? 0) > 0
+  );
+}
+
+/** Paid more than the package costs with nothing prepared to explain it. */
+export function unexplainedOverpayment(c: PricedClient): boolean {
+  if (isPayPerVisit(c)) return false;
+  if (!(Number(c.package_price ?? 0) > 0)) return false;
+  if (hasPreparedRenewal(c)) return false;
+  return Number(c.amount_paid ?? 0) > Number(c.package_price ?? 0);
+}
+
+/**
+ * Financial classification precedence for package clients:
+ * unknown price → unexplained overpayment → owes → paid.
+ */
+export function paymentStatus(
+  c: PricedClient,
+  dismissedFromPackageReview = false,
+): PaymentStatusKind {
+  if (packagePriceUnknown(c, dismissedFromPackageReview)) return "package_info_needed";
+  if (unexplainedOverpayment(c)) return "payment_review";
+  if (totalOwed(c) > 0) return "owes";
+  return "paid";
+}
+
 
 export function computeStatus(
   c: Pick<Client, "package_total_visits" | "visits_used" | "package_price" | "amount_paid"> &

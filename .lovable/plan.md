@@ -4,7 +4,7 @@ Today, a package client with no package price set shows a $0 balance, so the app
 
 ## New behavior
 
-For package clients whose package setup is missing or invalid (no price and no visit count / no package name):
+For package clients with no valid price on file (price of $0 or blank), regardless of whether visits or a package name are filled in:
 
 - Never show **Paid**. Show **Package Info Needed** (amber, matching the existing "Needs Package Review" look).
 - Never present $0 as a real balance — the balance line reads "Package info needed" instead of a dollar figure.

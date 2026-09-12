@@ -61,10 +61,13 @@ export function SmartClientCard({
   balanceLabel?: string;
   balanceAmount?: number;
   additionalAmounts?: ClientCardAmount[];
+  /** Staff dismissed this client with "No package needed". */
+  dismissedFromPackageReview?: boolean;
 }) {
   const qc = useQueryClient();
   const owed = totalOwed(client);
-  const action = primaryAction(client, isScheduled);
+  const priceUnknown = packagePriceUnknown(client, dismissedFromPackageReview);
+  const action = primaryAction(client, isScheduled, dismissedFromPackageReview);
   const [paymentOpen, setPaymentOpen] = useState(false);
 
   const refresh = () => {

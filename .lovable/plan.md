@@ -16,10 +16,12 @@ Pay-per-visit clients are untouched: a zero balance is legitimate for them and k
 
 ## Status order for package clients
 
-1. Missing/invalid package setup → Package Info Needed
-2. Valid setup, owed > 0 → Owes $X
-3. Valid setup, owed = 0 → Paid
-4. Paid more than the package costs with no prepared next package → Payment Review
+1. No valid price on file → Package Info Needed
+2. Paid more than the package costs with no prepared next package → Payment Review
+3. Valid setup, owed > 0 → Owes $X
+4. Valid setup, owed = 0 → Paid
+
+Missing visit count or package name stay as setup-review signals, but the price alone decides whether a financial conclusion is possible.
 
 ## Payment tiles and totals
 

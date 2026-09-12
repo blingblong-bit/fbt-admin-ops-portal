@@ -296,12 +296,19 @@ export function simpleStatusDot(s: SimpleStatus): string {
       return "🟡";
     case "Package Complete":
       return "⚫";
+    case "Package Info Needed":
+      return "📝";
   }
 }
 
-export function primaryAction(c: SimpleClient, isScheduled: boolean): PrimaryActionKind {
+export function primaryAction(
+  c: SimpleClient,
+  isScheduled: boolean,
+  dismissedFromPackageReview = false,
+): PrimaryActionKind {
   const owed = totalOwed(c);
   const remaining = visitsRemaining(c);
+  if (packagePriceUnknown(c, dismissedFromPackageReview)) return "setup_package";
   if (remaining !== null && c.package_total_visits > 0 && remaining === 0) return "renew_package";
   if (owed > 0) return "record_payment";
   if (!isScheduled) return "mark_scheduled";

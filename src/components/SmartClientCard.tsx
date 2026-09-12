@@ -136,7 +136,11 @@ export function SmartClientCard({
           )}
         </div>
         <div className="flex flex-col items-end gap-1.5">
-          <StatusBadge client={client} isScheduled={isScheduled} />
+          <StatusBadge
+            client={client}
+            isScheduled={isScheduled}
+            dismissedFromPackageReview={dismissedFromPackageReview}
+          />
           {scheduleStatus && <ScheduleStatusBadge status={scheduleStatus} detail={scheduleStatusDetail} />}
           {badges.map((badge) => (
             <span

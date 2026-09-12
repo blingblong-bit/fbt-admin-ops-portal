@@ -1143,6 +1143,7 @@ function Dashboard() {
                     client={c}
                     isScheduled={isScheduled(c.id)}
                     hideAmount={isStaff}
+                    dismissedFromPackageReview={dismissedIds?.has(c.id) ?? false}
                     scheduleStatus={scheduleStatus}
                     scheduleStatusDetail={scheduleStatusDetail}
                   />
@@ -1175,6 +1176,7 @@ function NewClientsByMonthView({
   hideAmount: boolean;
   onClose: () => void;
 }) {
+  const dismissedIds = usePackageReviewDismissedIds().data ?? null;
   return (
     <section>
       <div className="mb-3 flex items-center justify-between md:mb-4">
@@ -1240,6 +1242,7 @@ function NewClientsByMonthView({
                 client={c}
                 isScheduled={isScheduled(c.id)}
                 hideAmount={hideAmount}
+                dismissedFromPackageReview={dismissedIds?.has(c.id) ?? false}
               />
               <div className="-mt-1 flex items-center gap-1.5 text-xs text-slate-500">
                 <CalendarDays className="h-3.5 w-3.5" />
@@ -1412,6 +1415,7 @@ function WeeklyPaymentView({
   search: string;
   isScheduled: (id: string) => boolean;
 }) {
+  const dismissedIds = usePackageReviewDismissedIds().data ?? null;
   const q = search.trim().toLowerCase();
   const matches = (row: WeeklyPaymentRow) =>
     !q || `${row.client.first_name} ${row.client.last_name} ${row.client.phone ?? ""}`.toLowerCase().includes(q);
@@ -1488,6 +1492,7 @@ function WeeklyPaymentView({
                     <SmartClientCard
                       client={row.client}
                       isScheduled={isScheduled(row.client.id)}
+                      dismissedFromPackageReview={dismissedIds?.has(row.client.id) ?? false}
                       badges={section.key === "current"
                         ? []
                         : [{ label: section.badge, className: section.badgeClass }]}

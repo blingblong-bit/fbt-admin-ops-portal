@@ -43,6 +43,7 @@ import {
 } from "@/components/ui/dialog";
 import {
   amountOwed,
+  packagePriceUnknown,
   previousOwed,
   totalOwed,
   formatCurrency,
@@ -200,6 +201,7 @@ function ClientDetailPage() {
 
   const remaining = visitsRemaining(c);
   const owed = amountOwed(c);
+  const priceUnknown = packagePriceUnknown(c, isDismissedFromReview);
   const hasVisitData = c.visits_used !== null && c.visits_used !== undefined;
   const pct =
     hasVisitData && c.package_total_visits > 0
@@ -217,7 +219,11 @@ function ClientDetailPage() {
         <div>
           <div className="flex flex-wrap items-center gap-3">
             <h1 className="text-3xl font-semibold tracking-tight">{fullName(c)}</h1>
-            <StatusBadge client={c} isScheduled={isScheduled} />
+            <StatusBadge
+              client={c}
+              isScheduled={isScheduled}
+              dismissedFromPackageReview={isDismissedFromReview}
+            />
             {renewalFlagged && <RenewalFlagBadge />}
             {packageReviewNeeded && <PackageReviewBadge />}
             {c.pending_renewal_start_date && (
@@ -332,8 +338,14 @@ function ClientDetailPage() {
             )}
             <Row
               label="Current Package Owed"
-              value={formatCurrency(owed)}
-              valueClass={owed > 0 ? "text-red-600 font-semibold" : ""}
+              value={priceUnknown ? "Package info needed" : formatCurrency(owed)}
+              valueClass={
+                priceUnknown
+                  ? "text-amber-800 font-semibold"
+                  : owed > 0
+                    ? "text-red-600 font-semibold"
+                    : ""
+              }
             />
             {previousOwed(c) > 0 && (
               <Row

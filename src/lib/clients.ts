@@ -1,6 +1,17 @@
 export type ClientStatus = "Completed" | "Payment Due" | "Ending Soon" | "Active";
-export type SimpleStatus = "Payment Due" | "Not Scheduled" | "Active" | "Package Complete";
-export type PrimaryActionKind = "record_payment" | "mark_scheduled" | "renew_package" | "view_client";
+export type SimpleStatus =
+  | "Package Info Needed"
+  | "Payment Due"
+  | "Not Scheduled"
+  | "Active"
+  | "Package Complete";
+export type PrimaryActionKind =
+  | "setup_package"
+  | "record_payment"
+  | "mark_scheduled"
+  | "renew_package"
+  | "view_client";
+export type PaymentStatusKind = "package_info_needed" | "payment_review" | "owes" | "paid";
 export type LifecycleStatus = "active" | "assessment" | "archived";
 export type PaymentModel = "package" | "pay_per_visit";
 
@@ -108,6 +119,65 @@ export function totalOwed(
   return amountOwed(c) + previousOwed(c);
 }
 
+type PricedClient = Pick<Client, "package_price" | "amount_paid"> &
+  Partial<
+    Pick<
+      Client,
+      | "payment_model"
+      | "previous_package_owed"
+      | "pending_renewal_start_date"
+      | "pending_renewal_price"
+      | "pending_renewal_total_visits"
+    >
+  >;
+
+/**
+ * A package-model client with no usable price on file. We cannot conclude
+ * anything financial about them — $0 owed is unknown, not "Paid".
+ * Pay-per-visit clients and clients staff dismissed with "No package needed"
+ * are excluded.
+ */
+export function packagePriceUnknown(
+  c: PricedClient,
+  dismissedFromPackageReview = false,
+): boolean {
+  if (isPayPerVisit(c)) return false;
+  if (c.payment_model !== undefined && c.payment_model !== "package") return false;
+  if (dismissedFromPackageReview) return false;
+  return !(Number(c.package_price ?? 0) > 0);
+}
+
+/** Prepared next package that can legitimately absorb extra money. */
+function hasPreparedRenewal(c: PricedClient): boolean {
+  return (
+    !!c.pending_renewal_start_date ||
+    Number(c.pending_renewal_price ?? 0) > 0 ||
+    Number(c.pending_renewal_total_visits ?? 0) > 0
+  );
+}
+
+/** Paid more than the package costs with nothing prepared to explain it. */
+export function unexplainedOverpayment(c: PricedClient): boolean {
+  if (isPayPerVisit(c)) return false;
+  if (!(Number(c.package_price ?? 0) > 0)) return false;
+  if (hasPreparedRenewal(c)) return false;
+  return Number(c.amount_paid ?? 0) > Number(c.package_price ?? 0);
+}
+
+/**
+ * Financial classification precedence for package clients:
+ * unknown price → unexplained overpayment → owes → paid.
+ */
+export function paymentStatus(
+  c: PricedClient,
+  dismissedFromPackageReview = false,
+): PaymentStatusKind {
+  if (packagePriceUnknown(c, dismissedFromPackageReview)) return "package_info_needed";
+  if (unexplainedOverpayment(c)) return "payment_review";
+  if (totalOwed(c) > 0) return "owes";
+  return "paid";
+}
+
 
 export function computeStatus(
   c: Pick<Client, "package_total_visits" | "visits_used" | "package_price" | "amount_paid"> &
@@ -137,16 +207,32 @@ export function statusClasses(s: ClientStatus): string {
 type SimpleClient = Pick<
   Client,
   "package_total_visits" | "visits_used" | "package_price" | "amount_paid"
-> & Partial<Pick<Client, "payment_model" | "previous_package_owed">>;
+> &
+  Partial<
+    Pick<
+      Client,
+      | "payment_model"
+      | "previous_package_owed"
+      | "pending_renewal_start_date"
+      | "pending_renewal_price"
+      | "pending_renewal_total_visits"
+    >
+  >;
 
 
 /**
  * Schedule status is derived entirely from live Square bookings. Callers must
  * pass `isScheduled` based on the current Square booking window.
  */
-export function simpleStatus(c: SimpleClient, isScheduled: boolean): SimpleStatus {
+export function simpleStatus(
+  c: SimpleClient,
+  isScheduled: boolean,
+  dismissedFromPackageReview = false,
+): SimpleStatus {
   const owed = totalOwed(c);
   const remaining = visitsRemaining(c);
+  // Without a price we cannot conclude anything financial — never "Paid".
+  if (packagePriceUnknown(c, dismissedFromPackageReview)) return "Package Info Needed";
   if (remaining !== null && c.package_total_visits > 0 && remaining === 0) return "Package Complete";
   if (owed > 0) return "Payment Due";
   if (!isScheduled) return "Not Scheduled";
@@ -195,6 +281,8 @@ export function simpleStatusClasses(s: SimpleStatus): string {
       return "bg-amber-100 text-amber-800 border-amber-200";
     case "Package Complete":
       return "bg-slate-200 text-slate-700 border-slate-300";
+    case "Package Info Needed":
+      return "bg-amber-100 text-amber-900 border-amber-300";
   }
 }
 
@@ -208,12 +296,19 @@ export function simpleStatusDot(s: SimpleStatus): string {
       return "🟡";
     case "Package Complete":
       return "⚫";
+    case "Package Info Needed":
+      return "📝";
   }
 }
 
-export function primaryAction(c: SimpleClient, isScheduled: boolean): PrimaryActionKind {
+export function primaryAction(
+  c: SimpleClient,
+  isScheduled: boolean,
+  dismissedFromPackageReview = false,
+): PrimaryActionKind {
   const owed = totalOwed(c);
   const remaining = visitsRemaining(c);
+  if (packagePriceUnknown(c, dismissedFromPackageReview)) return "setup_package";
   if (remaining !== null && c.package_total_visits > 0 && remaining === 0) return "renew_package";
   if (owed > 0) return "record_payment";
   if (!isScheduled) return "mark_scheduled";

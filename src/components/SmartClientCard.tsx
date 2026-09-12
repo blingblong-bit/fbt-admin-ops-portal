@@ -19,6 +19,7 @@ import {
   formatCurrency,
   fullName,
   isPayPerVisit,
+  packagePriceUnknown,
   primaryAction,
   type Client,
 } from "@/lib/clients";
@@ -45,6 +46,7 @@ export function SmartClientCard({
   balanceLabel = "Balance",
   balanceAmount,
   additionalAmounts = [],
+  dismissedFromPackageReview = false,
 }: {
   client: Client;
   /** Derived from live Square bookings. */
@@ -59,10 +61,13 @@ export function SmartClientCard({
   balanceLabel?: string;
   balanceAmount?: number;
   additionalAmounts?: ClientCardAmount[];
+  /** Staff dismissed this client with "No package needed". */
+  dismissedFromPackageReview?: boolean;
 }) {
   const qc = useQueryClient();
   const owed = totalOwed(client);
-  const action = primaryAction(client, isScheduled);
+  const priceUnknown = packagePriceUnknown(client, dismissedFromPackageReview);
+  const action = primaryAction(client, isScheduled, dismissedFromPackageReview);
   const [paymentOpen, setPaymentOpen] = useState(false);
 
   const refresh = () => {
@@ -72,6 +77,14 @@ export function SmartClientCard({
 
   const primary = (() => {
     switch (action) {
+      case "setup_package":
+        return (
+          <Link to="/clients/$id" params={{ id: client.id }} className="block">
+            <Button size="lg" className="w-full">
+              📝 Set Up Package
+            </Button>
+          </Link>
+        );
       case "record_payment":
         return (
           <Button size="lg" className="w-full" onClick={() => setPaymentOpen(true)}>
@@ -123,7 +136,11 @@ export function SmartClientCard({
           )}
         </div>
         <div className="flex flex-col items-end gap-1.5">
-          <StatusBadge client={client} isScheduled={isScheduled} />
+          <StatusBadge
+            client={client}
+            isScheduled={isScheduled}
+            dismissedFromPackageReview={dismissedFromPackageReview}
+          />
           {scheduleStatus && <ScheduleStatusBadge status={scheduleStatus} detail={scheduleStatusDetail} />}
           {badges.map((badge) => (
             <span
@@ -146,16 +163,26 @@ export function SmartClientCard({
           <dt className="text-slate-500">{balanceLabel}</dt>
           <dd
             className={`text-right font-semibold ${
-              owed > 0 ? "text-red-600" : "text-slate-700"
+              priceUnknown ? "text-amber-800" : owed > 0 ? "text-red-600" : "text-slate-700"
             }`}
           >
-            {isPayPerVisit(client)
-              ? <span className="text-slate-500 font-normal">Pay-per-visit</span>
-              : hideAmount
-                ? (owed > 0 ? "Owes" : "Paid")
-                : (balanceAmount ?? owed) > 0 ? formatCurrency(balanceAmount ?? owed) : "Paid"}
+            {priceUnknown
+              ? "Package info needed"
+              : isPayPerVisit(client)
+                ? <span className="text-slate-500 font-normal">Pay-per-visit</span>
+                : hideAmount
+                  ? (owed > 0 ? "Owes" : "Paid")
+                  : (balanceAmount ?? owed) > 0 ? formatCurrency(balanceAmount ?? owed) : "Paid"}
           </dd>
         </div>
+        {priceUnknown && !hideAmount && Number(client.amount_paid ?? 0) > 0 && (
+          <div className="flex justify-between gap-3">
+            <dt className="text-slate-500">Paid so far</dt>
+            <dd className="text-right font-semibold text-slate-800">
+              {formatCurrency(client.amount_paid)}
+            </dd>
+          </div>
+        )}
         {!hideAmount && additionalAmounts.map((item) => (
           <div key={item.label} className="flex justify-between gap-3">
             <dt className="text-slate-500">{item.label}</dt>

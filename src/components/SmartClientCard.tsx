@@ -163,16 +163,26 @@ export function SmartClientCard({
           <dt className="text-slate-500">{balanceLabel}</dt>
           <dd
             className={`text-right font-semibold ${
-              owed > 0 ? "text-red-600" : "text-slate-700"
+              priceUnknown ? "text-amber-800" : owed > 0 ? "text-red-600" : "text-slate-700"
             }`}
           >
-            {isPayPerVisit(client)
-              ? <span className="text-slate-500 font-normal">Pay-per-visit</span>
-              : hideAmount
-                ? (owed > 0 ? "Owes" : "Paid")
-                : (balanceAmount ?? owed) > 0 ? formatCurrency(balanceAmount ?? owed) : "Paid"}
+            {priceUnknown
+              ? "Package info needed"
+              : isPayPerVisit(client)
+                ? <span className="text-slate-500 font-normal">Pay-per-visit</span>
+                : hideAmount
+                  ? (owed > 0 ? "Owes" : "Paid")
+                  : (balanceAmount ?? owed) > 0 ? formatCurrency(balanceAmount ?? owed) : "Paid"}
           </dd>
         </div>
+        {priceUnknown && !hideAmount && Number(client.amount_paid ?? 0) > 0 && (
+          <div className="flex justify-between gap-3">
+            <dt className="text-slate-500">Paid so far</dt>
+            <dd className="text-right font-semibold text-slate-800">
+              {formatCurrency(client.amount_paid)}
+            </dd>
+          </div>
+        )}
         {!hideAmount && additionalAmounts.map((item) => (
           <div key={item.label} className="flex justify-between gap-3">
             <dt className="text-slate-500">{item.label}</dt>

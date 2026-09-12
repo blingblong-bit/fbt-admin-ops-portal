@@ -19,6 +19,7 @@ import {
   formatCurrency,
   fullName,
   isPayPerVisit,
+  packagePriceUnknown,
   primaryAction,
   type Client,
 } from "@/lib/clients";

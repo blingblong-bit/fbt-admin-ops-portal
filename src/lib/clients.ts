@@ -281,6 +281,8 @@ export function simpleStatusClasses(s: SimpleStatus): string {
       return "bg-amber-100 text-amber-800 border-amber-200";
     case "Package Complete":
       return "bg-slate-200 text-slate-700 border-slate-300";
+    case "Package Info Needed":
+      return "bg-amber-100 text-amber-900 border-amber-300";
   }
 }
 

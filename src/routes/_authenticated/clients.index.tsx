@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/table";
 import {
   totalOwed,
+  packagePriceUnknown,
   effectiveStatus,
   formatCurrency,
   fullName,
@@ -27,6 +28,7 @@ import {
 } from "@/lib/clients";
 import { getScheduledClientIds } from "@/lib/schedule.functions";
 import { useRole } from "@/hooks/useRole";
+import { usePackageReviewDismissedIds } from "@/components/PackageReviewBadge";
 
 
 export const Route = createFileRoute("/_authenticated/clients/")({
@@ -160,6 +162,7 @@ function ClientsListPage() {
       <div className="space-y-2 md:hidden">
         {filtered.map((c) => {
           const owed = totalOwed(c);
+          const priceUnknown = packagePriceUnknown(c, dismissedIds?.has(c.id) ?? false);
           return (
             <Link
               key={c.id}
@@ -174,7 +177,11 @@ function ClientsListPage() {
                     <div className="mt-0.5 truncate text-sm text-slate-500">📞 {c.phone}</div>
                   )}
                 </div>
-                <StatusBadge client={c} isScheduled={scheduledSet.has(c.id)} />
+                <StatusBadge
+                  client={c}
+                  isScheduled={scheduledSet.has(c.id)}
+                  dismissedFromPackageReview={dismissedIds?.has(c.id) ?? false}
+                />
               </div>
               <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1.5 text-sm">
                 <div className="text-slate-500">Package</div>
@@ -186,8 +193,12 @@ function ClientsListPage() {
                 {!isStaff && (
                   <>
                     <div className="text-slate-500">Owed</div>
-                    <div className={`text-right font-semibold ${owed > 0 ? "text-red-600" : "text-slate-700"}`}>
-                      {formatCurrency(owed)}
+                    <div
+                      className={`text-right font-semibold ${
+                        priceUnknown ? "text-amber-800" : owed > 0 ? "text-red-600" : "text-slate-700"
+                      }`}
+                    >
+                      {priceUnknown ? "Package info needed" : formatCurrency(owed)}
                     </div>
                   </>
                 )}
@@ -236,12 +247,26 @@ function ClientsListPage() {
                       {scheduledSet.has(c.id) ? "✅" : "⭕"}
                     </TableCell>
                     {!isStaff && (
-                      <TableCell className={totalOwed(c) > 0 ? "font-medium text-red-600 whitespace-nowrap" : "whitespace-nowrap"}>
-                        {formatCurrency(totalOwed(c))}
+                      <TableCell
+                        className={
+                          packagePriceUnknown(c, dismissedIds?.has(c.id) ?? false)
+                            ? "font-medium text-amber-800 whitespace-nowrap"
+                            : totalOwed(c) > 0
+                              ? "font-medium text-red-600 whitespace-nowrap"
+                              : "whitespace-nowrap"
+                        }
+                      >
+                        {packagePriceUnknown(c, dismissedIds?.has(c.id) ?? false)
+                          ? "Package info needed"
+                          : formatCurrency(totalOwed(c))}
                       </TableCell>
                     )}
                     <TableCell>
-                      <StatusBadge client={c} isScheduled={scheduledSet.has(c.id)} />
+                      <StatusBadge
+                        client={c}
+                        isScheduled={scheduledSet.has(c.id)}
+                        dismissedFromPackageReview={dismissedIds?.has(c.id) ?? false}
+                      />
                     </TableCell>
 
                     <TableCell className="text-right whitespace-nowrap">

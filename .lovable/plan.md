@@ -4,7 +4,7 @@ Today, a package client with no package price set shows a $0 balance, so the app
 
 ## New behavior
 
-For package clients whose package setup is missing or invalid (no price and no visit count / no package name):
+For package clients with no valid price on file (price of $0 or blank), regardless of whether visits or a package name are filled in:
 
 - Never show **Paid**. Show **Package Info Needed** (amber, matching the existing "Needs Package Review" look).
 - Never present $0 as a real balance — the balance line reads "Package info needed" instead of a dollar figure.
@@ -16,10 +16,12 @@ Pay-per-visit clients are untouched: a zero balance is legitimate for them and k
 
 ## Status order for package clients
 
-1. Missing/invalid package setup → Package Info Needed
-2. Valid setup, owed > 0 → Owes $X
-3. Valid setup, owed = 0 → Paid
-4. Paid more than the package costs with no prepared next package → Payment Review
+1. No valid price on file → Package Info Needed
+2. Paid more than the package costs with no prepared next package → Payment Review
+3. Valid setup, owed > 0 → Owes $X
+4. Valid setup, owed = 0 → Paid
+
+Missing visit count or package name stay as setup-review signals, but the price alone decides whether a financial conclusion is possible.
 
 ## Payment tiles and totals
 
@@ -31,8 +33,8 @@ No client's money, package price, visit count, or review flag values are edited 
 
 ## Technical detail
 
-- `src/lib/clients.ts`: add `packageSetupIncomplete(c)` (package model, not dismissed-eligible, `package_price <= 0` and `package_total_visits <= 0` and blank `package_name`) plus `paymentStatus(c)` returning `package_info_needed | owes | paid | payment_review`. Extend `SimpleStatus` with `"Package Info Needed"` and wire it into `simpleStatus`, `simpleStatusClasses`, `simpleStatusDot`, and `primaryAction` (new `setup_package` action). `amountOwed`/`totalOwed` keep returning numbers unchanged; callers ask the new helper before rendering "Paid".
+- `src/lib/clients.ts`: add `packagePriceUnknown(c)` (`payment_model === "package"`, not dismissed, `Number(package_price) <= 0`) plus `paymentStatus(c)` returning, in order, `package_info_needed | payment_review | owes | paid`. Payment Review = `amount_paid > package_price` with no prepared renewal (`pending_renewal_*` unset), mirroring the webhook's existing rule. Extend `SimpleStatus` with `"Package Info Needed"` and wire it into `simpleStatus`, `simpleStatusClasses`, `simpleStatusDot`, and `primaryAction` (new `setup_package` action). `amountOwed`/`totalOwed` keep returning numbers unchanged; callers ask the new helper before rendering "Paid".
 - `src/components/StatusBadge.tsx` and `src/components/SmartClientCard.tsx`: render the new status, swap the balance cell for "Package info needed" + "Paid so far", and point the primary button at `/clients/$id`'s package setup.
 - `src/routes/_authenticated/index.tsx`: exclude incomplete-setup clients from `payment_due*` totals and from the "Paid" reading in the client list; keep the existing `needs_package_review` counter as the visibility path.
 - `src/routes/_authenticated/clients.index.tsx` and `clients.$id.tsx`: same balance-cell treatment.
-- New `src/lib/payment-status.test.ts` covering: no package info + $0 paid → not Paid; no package info + payment → not Paid and flagged; $375 package / $375 paid → Paid; $375 package / $0 paid → Owes $375; pay-per-visit with no charge → valid zero balance.
+- New `src/lib/payment-status.test.ts` covering: no package info + $0 paid → not Paid; no package info + positive payment → not Paid, setup required; price missing + 8 visits configured + $0 paid → Package Info Needed; price missing + visits/name configured + positive payment → Package Info Needed; $375 package / $375 paid → Paid; $375 package / $0 paid → Owes $375; $375 package / $690 paid with no prepared renewal → Payment Review; pay-per-visit with no charge → valid zero balance.

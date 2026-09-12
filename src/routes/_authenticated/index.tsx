@@ -1143,6 +1143,7 @@ function Dashboard() {
                     client={c}
                     isScheduled={isScheduled(c.id)}
                     hideAmount={isStaff}
+                    dismissedFromPackageReview={dismissedIds?.has(c.id) ?? false}
                     scheduleStatus={scheduleStatus}
                     scheduleStatusDetail={scheduleStatusDetail}
                   />
@@ -1240,6 +1241,7 @@ function NewClientsByMonthView({
                 client={c}
                 isScheduled={isScheduled(c.id)}
                 hideAmount={hideAmount}
+                dismissedFromPackageReview={dismissedIds?.has(c.id) ?? false}
               />
               <div className="-mt-1 flex items-center gap-1.5 text-xs text-slate-500">
                 <CalendarDays className="h-3.5 w-3.5" />
@@ -1488,6 +1490,7 @@ function WeeklyPaymentView({
                     <SmartClientCard
                       client={row.client}
                       isScheduled={isScheduled(row.client.id)}
+                      dismissedFromPackageReview={dismissedIds?.has(row.client.id) ?? false}
                       badges={section.key === "current"
                         ? []
                         : [{ label: section.badge, className: section.badgeClass }]}

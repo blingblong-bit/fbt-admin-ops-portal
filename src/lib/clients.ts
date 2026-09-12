@@ -1,6 +1,17 @@
 export type ClientStatus = "Completed" | "Payment Due" | "Ending Soon" | "Active";
-export type SimpleStatus = "Payment Due" | "Not Scheduled" | "Active" | "Package Complete";
-export type PrimaryActionKind = "record_payment" | "mark_scheduled" | "renew_package" | "view_client";
+export type SimpleStatus =
+  | "Package Info Needed"
+  | "Payment Due"
+  | "Not Scheduled"
+  | "Active"
+  | "Package Complete";
+export type PrimaryActionKind =
+  | "setup_package"
+  | "record_payment"
+  | "mark_scheduled"
+  | "renew_package"
+  | "view_client";
+export type PaymentStatusKind = "package_info_needed" | "payment_review" | "owes" | "paid";
 export type LifecycleStatus = "active" | "assessment" | "archived";
 export type PaymentModel = "package" | "pay_per_visit";
 

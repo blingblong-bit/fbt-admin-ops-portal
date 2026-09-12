@@ -46,6 +46,7 @@ export function SmartClientCard({
   balanceLabel = "Balance",
   balanceAmount,
   additionalAmounts = [],
+  dismissedFromPackageReview = false,
 }: {
   client: Client;
   /** Derived from live Square bookings. */

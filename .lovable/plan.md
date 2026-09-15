@@ -93,8 +93,9 @@ The timeline is built so future incoming replies and staff replies drop into the
 as a conversation. No live sending or inbound texting is built now.
 
 Message events also write short entries into the normal client activity timeline: draft created,
-sent, delivery failed, client replied, payment received after a dues message. Full wording stays in
-the Messages tab only.
+sent, delivery failed, client replied, payment received after a dues message. A refresh that changes
+nothing writes no activity entry — only creation or a real change in wording, amount, or status is
+logged. Full wording stays in the Messages tab only.
 
 ## Technical notes
 

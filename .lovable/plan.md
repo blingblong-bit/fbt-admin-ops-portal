@@ -104,22 +104,26 @@ logged. Full wording stays in the Messages tab only.
   `amount_due`, `body`, `status` (default `ready_not_sent`), `trigger_source`,
   `validation_warnings jsonb`, `blocked boolean`, `twilio_sid`, `request_key` (unique; encodes the
   obligation, e.g. `renewal:<client>:<start>:<price>` / `balance:<client>:<package_start>`),
-  `sent_at`, `created_at`/`updated_at` + trigger. Staff-only RLS via `is_staff(auth.uid())` plus
+  `sent_at`, `created_at`/`updated_at` + trigger. RLS: SELECT for staff via `is_staff(auth.uid())`;
+  INSERT/UPDATE/DELETE restricted to `has_role(auth.uid(),'admin') OR has_role(auth.uid(),'superadmin')`.
   GRANTs for `authenticated` and `service_role`. Existing `renewal_campaigns` / `renewal_messages`
   tables stay untouched, and client history reads `dues_messages` directly — no duplicate store.
-- **Consent columns on `clients`**: `sms_consent_at timestamptz`, `sms_consent_source text`. Missing
-  consent is a blocking validation warning; drafts still generate in preview mode.
+- **Consent columns on `clients`**: `sms_consent_at timestamptz`, `sms_consent_source text`,
+  `sms_opted_out_at timestamptz`. Eligibility requires consent recorded with no later opt-out;
+  missing consent or an opt-out is a blocking validation warning, and drafts still generate in
+  preview mode.
 - **`src/lib/dues-messaging.ts`** (pure, fully unit-tested): queue eligibility reusing
   `paymentStatus` / `amountOwed` / `previousOwed` / `totalOwed` from `src/lib/clients.ts`, phone
-  validation, consent check, `renderRenewalDueMessage`, `renderBalanceDueMessage`, `duesRequestKey`,
-  and `validateDraft` returning blocking reasons.
+  validation, consent/opt-out check, `renderRenewalDueMessage`, `renderBalanceDueMessage`,
+  `duesRequestKey`, and `validateDraft` returning blocking reasons.
 - **`src/lib/dues-sms.server.ts`**: the only module able to call Twilio. It reads
   `process.env.SMS_DUES_SENDING_ENABLED` inside the function and throws unless it is exactly `true`;
   no caller invokes it yet. Client-side code reads a non-secret `sendingEnabled` value returned by a
   server fn purely to render the banner.
 - **`src/lib/dues-messaging.functions.ts`**: `generateDuesPreviews` (upsert-by-`request_key` rebuild
   of unsent drafts, including marking paid obligations `payment_received`), `getDuesQueue`,
-  `listDuesMessages({ clientId? })`, `getMessagingFlag`; all `requireSupabaseAuth` + admin check.
+  `getMessagingFlag` — admin-checked; `listDuesMessages({ clientId? })` is staff-readable. Activity
+  rows are written only when a draft is created or its body/amount/status actually changes.
 - **`preRenewNextPackage`** in `src/lib/schedule.functions.ts` gains a post-success draft upsert,
   wrapped so a draft failure never fails the renewal.
 - **New routes** `src/routes/_authenticated/dues-queue.tsx` and

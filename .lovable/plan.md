@@ -36,17 +36,28 @@ Each card shows: name, visit progress, package name, current package owed, previ
 total owed, last message status, and a Preview button.
 
 Body:
-> Hi [First Name], this is FIT Beyond Therapy. Just a reminder that there is a remaining balance of
-> $[Amount] on your current package. Reply here if you have any questions. Reply STOP to opt out.
+> Hi [First Name], this is FIT Beyond Therapy. Just a reminder that our records show a remaining
+> balance of $[Amount]. Reply here if you have any questions. Reply STOP to opt out.
 
 Wording always refers to one total balance — it never mentions old-vs-current package buckets.
 
+Renewal messages use the amount actually still due on the prepared package (its price minus anything
+already prepaid), not the full package price.
+
 ## Safety checks
 
-A draft cannot be marked ready when: the phone number is missing or unusable, the client is Package
-Info Needed or Payment Review, the amount due is $0 or less, a renewal message has no start date, or
-the prepared renewal data is inconsistent (missing price or visit count). Blocked cases appear on the
-preview page with the reason, instead of silently doing nothing.
+A draft cannot be marked ready when: the phone number is missing or unusable, no recorded texting
+consent exists for the client, the client is Package Info Needed or Payment Review, the amount due is
+$0 or less, a renewal message has no start date, or the prepared renewal data is inconsistent
+(missing price or visit count). Blocked cases still appear on the preview page with the reason shown
+in red, instead of silently doing nothing.
+
+## Drafts stay in sync — no duplicates
+
+Pressing Pre-Renew again, or hitting Generate / Refresh Preview repeatedly, updates the existing
+unsent draft for that obligation rather than creating another one. If the renewal date or price
+changes, the unsent draft's wording and amount are rebuilt from current records. If the balance gets
+paid before anything is sent, the unsent draft is marked Payment Received and can never be sent.
 
 ## Messaging Preview page (admin only)
 
@@ -59,28 +70,55 @@ rebuilds drafts for the current queue. Nothing sends.
 `ready_not_sent`, `sent`, `delivered`, `failed`, `replied`, `payment_received`. Only
 `ready_not_sent` is created automatically for now.
 
+## Client detail — Messages
+
+A new Messages tab on each client page lists that client's dues messages, newest first: date and
+time, type (renewal or balance), the exact wording, the amount referenced, package start date where
+relevant, what triggered it, status, delivery ID once sending is on, and any blocking warnings.
+While sending is off, each one is clearly labeled "Draft — Not Sent" so nobody mistakes it for a real
+text to the client.
+
+Above it, a small summary line: last dues message and its status, last renewal message and its
+status, and whether the client has replied. Clicking it opens the Messages tab.
+
+The timeline is built so future incoming replies and staff replies drop into the same list and read
+as a conversation. No live sending or inbound texting is built now.
+
+Message events also write short entries into the normal client activity timeline: draft created,
+sent, delivery failed, client replied, payment received after a dues message. Full wording stays in
+the Messages tab only.
+
 ## Technical notes
 
 - **New table `dues_messages`**: `client_id`, `phone`, `message_type` (`renewal_due` | `balance_due`),
-  `package_start_date`, `amount_due`, `body`, `status` (default `ready_not_sent`), `trigger_source`,
-  `validation_warnings jsonb`, `twilio_sid`, `request_key` (unique, for future idempotent sends),
-  `created_at`/`updated_at` + trigger. Staff-only RLS via `is_staff(auth.uid())` plus GRANTs for
-  `authenticated` and `service_role`. Kept separate from the existing `renewal_campaigns` /
-  `renewal_messages` tables, which stay untouched.
-- **`src/lib/dues-messaging.ts`** (pure, fully unit-tested): `SMS_DUES_SENDING_ENABLED = false`,
-  queue eligibility predicate reusing `paymentStatus` / `amountOwed` / `previousOwed` /
-  `totalOwed` from `src/lib/clients.ts`, phone validation, `renderRenewalDueMessage`,
-  `renderBalanceDueMessage`, and `validateDraft` returning blocking reasons.
-- **`src/lib/dues-messaging.functions.ts`**: `generateDuesPreviews` (rebuild drafts for the queue),
-  `listDuesMessages`, `getDuesQueue`, all `requireSupabaseAuth` + admin check. A separate
-  `dues-sms.server.ts` holds the only Twilio call and throws while the flag is false; no caller
-  invokes it yet.
-- **`preRenewNextPackage`** in `src/lib/schedule.functions.ts` gains a post-success draft insert,
+  `direction` (`outbound` default, `inbound` reserved for future replies), `package_start_date`,
+  `amount_due`, `body`, `status` (default `ready_not_sent`), `trigger_source`,
+  `validation_warnings jsonb`, `blocked boolean`, `twilio_sid`, `request_key` (unique; encodes the
+  obligation, e.g. `renewal:<client>:<start>:<price>` / `balance:<client>:<package_start>`),
+  `sent_at`, `created_at`/`updated_at` + trigger. Staff-only RLS via `is_staff(auth.uid())` plus
+  GRANTs for `authenticated` and `service_role`. Existing `renewal_campaigns` / `renewal_messages`
+  tables stay untouched, and client history reads `dues_messages` directly — no duplicate store.
+- **Consent columns on `clients`**: `sms_consent_at timestamptz`, `sms_consent_source text`. Missing
+  consent is a blocking validation warning; drafts still generate in preview mode.
+- **`src/lib/dues-messaging.ts`** (pure, fully unit-tested): queue eligibility reusing
+  `paymentStatus` / `amountOwed` / `previousOwed` / `totalOwed` from `src/lib/clients.ts`, phone
+  validation, consent check, `renderRenewalDueMessage`, `renderBalanceDueMessage`, `duesRequestKey`,
+  and `validateDraft` returning blocking reasons.
+- **`src/lib/dues-sms.server.ts`**: the only module able to call Twilio. It reads
+  `process.env.SMS_DUES_SENDING_ENABLED` inside the function and throws unless it is exactly `true`;
+  no caller invokes it yet. Client-side code reads a non-secret `sendingEnabled` value returned by a
+  server fn purely to render the banner.
+- **`src/lib/dues-messaging.functions.ts`**: `generateDuesPreviews` (upsert-by-`request_key` rebuild
+  of unsent drafts, including marking paid obligations `payment_received`), `getDuesQueue`,
+  `listDuesMessages({ clientId? })`, `getMessagingFlag`; all `requireSupabaseAuth` + admin check.
+- **`preRenewNextPackage`** in `src/lib/schedule.functions.ts` gains a post-success draft upsert,
   wrapped so a draft failure never fails the renewal.
 - **New routes** `src/routes/_authenticated/dues-queue.tsx` and
   `src/routes/_authenticated/messaging-preview.tsx`, both guarded with the existing `requireAdmin`,
-  linked from the Admin Tools nav in `AppShell`.
-- **Tests** (`src/lib/dues-messaging.test.ts`): eligibility inclusion/exclusion cases, both message
-  bodies rendered exactly, each blocking validation reason, and a test asserting the flag is false
-  and the send path refuses.
+  linked from the Admin Tools nav in `AppShell`; Messages section added to
+  `src/routes/_authenticated/clients.$id.tsx`.
+- **Tests** (`src/lib/dues-messaging.test.ts`): eligibility inclusion/exclusion, both message bodies
+  rendered exactly, each blocking reason including missing consent, renewal amount net of prepaid,
+  stable `request_key` across repeat generation, paid-before-send transition, and a test asserting
+  the send module refuses while the flag is off.
 - No client financial values change; nothing is published.

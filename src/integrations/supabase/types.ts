@@ -75,6 +75,9 @@ export type Database = {
           pending_renewal_total_visits: number | null
           phone: string | null
           previous_package_owed: number
+          sms_consent_at: string | null
+          sms_consent_source: string | null
+          sms_opted_out_at: string | null
           square_customer_id: string | null
           square_visit_note: string | null
           status: string
@@ -106,6 +109,9 @@ export type Database = {
           pending_renewal_total_visits?: number | null
           phone?: string | null
           previous_package_owed?: number
+          sms_consent_at?: string | null
+          sms_consent_source?: string | null
+          sms_opted_out_at?: string | null
           square_customer_id?: string | null
           square_visit_note?: string | null
           status?: string
@@ -137,6 +143,9 @@ export type Database = {
           pending_renewal_total_visits?: number | null
           phone?: string | null
           previous_package_owed?: number
+          sms_consent_at?: string | null
+          sms_consent_source?: string | null
+          sms_opted_out_at?: string | null
           square_customer_id?: string | null
           square_visit_note?: string | null
           status?: string
@@ -144,6 +153,74 @@ export type Database = {
           visits_used?: number | null
         }
         Relationships: []
+      }
+      dues_messages: {
+        Row: {
+          amount_due: number
+          blocked: boolean
+          body: string
+          client_id: string
+          created_at: string
+          direction: string
+          id: string
+          message_type: string
+          package_start_date: string | null
+          phone: string | null
+          request_key: string
+          sent_at: string | null
+          status: string
+          trigger_source: string
+          twilio_sid: string | null
+          updated_at: string
+          validation_warnings: Json
+        }
+        Insert: {
+          amount_due?: number
+          blocked?: boolean
+          body: string
+          client_id: string
+          created_at?: string
+          direction?: string
+          id?: string
+          message_type: string
+          package_start_date?: string | null
+          phone?: string | null
+          request_key: string
+          sent_at?: string | null
+          status?: string
+          trigger_source?: string
+          twilio_sid?: string | null
+          updated_at?: string
+          validation_warnings?: Json
+        }
+        Update: {
+          amount_due?: number
+          blocked?: boolean
+          body?: string
+          client_id?: string
+          created_at?: string
+          direction?: string
+          id?: string
+          message_type?: string
+          package_start_date?: string | null
+          phone?: string | null
+          request_key?: string
+          sent_at?: string | null
+          status?: string
+          trigger_source?: string
+          twilio_sid?: string | null
+          updated_at?: string
+          validation_warnings?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dues_messages_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       duplicate_client_reviews: {
         Row: {

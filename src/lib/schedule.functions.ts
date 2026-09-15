@@ -1970,6 +1970,30 @@ export const preRenewNextPackage = createServerFn({ method: "POST" })
         pending_package_name: name,
       },
     });
+
+    // Drafted dues text for the prepared package. Nothing sends — a draft
+    // failure (e.g. a non-admin staff pre-renewal) must never fail the renewal.
+    try {
+      const [{ buildRenewalDraft }, { upsertDraft }] = await Promise.all([
+        import("@/lib/dues-messaging"),
+        import("@/lib/dues-messaging.functions"),
+      ]);
+      const { data: full } = await context.supabase
+        .from("clients")
+        .select("*")
+        .eq("id", data.clientId)
+        .single();
+      if (full) {
+        await upsertDraft(
+          context as never,
+          buildRenewalDraft(full as never),
+          "pre_renew",
+        );
+      }
+    } catch {
+      /* drafts are best-effort while sending is disabled */
+    }
+
     return { ok: true };
   });
 

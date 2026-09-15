@@ -27,6 +27,9 @@ import {
   type ClientAppointment,
 } from "@/lib/schedule.functions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { listDuesMessages } from "@/lib/dues-messaging.functions";
+import { statusLabel } from "@/lib/dues-messaging";
+import { DuesMessageList } from "@/components/DuesMessageList";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -404,6 +407,8 @@ function ClientDetailPage() {
 
 
 
+
+        <MessagesCard clientId={id} />
 
         <Card className="lg:col-span-3">
           <CardHeader>
@@ -1205,6 +1210,48 @@ function BackLink() {
     >
       ← Back
     </button>
+  );
+}
+
+function MessagesCard({ clientId }: { clientId: string }) {
+  const listFn = useServerFn(listDuesMessages);
+  const q = useQuery({
+    queryKey: ["dues-messages", clientId],
+    queryFn: () => listFn({ data: { clientId } }),
+  });
+  const messages = q.data?.messages ?? [];
+  const lastDues = messages.find((m) => m.message_type === "balance_due");
+  const lastRenewal = messages.find((m) => m.message_type === "renewal_due");
+  const replied = messages.some((m) => m.status === "replied" || m.direction === "inbound");
+
+  return (
+    <Card className="lg:col-span-3">
+      <CardHeader>
+        <CardTitle>Messages</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="grid gap-1 rounded-md bg-slate-50 p-3 text-xs text-slate-600 sm:grid-cols-3">
+          <div>
+            Last dues message:{" "}
+            {lastDues
+              ? `${formatDate(lastDues.created_at)} — ${statusLabel(lastDues)}`
+              : "None"}
+          </div>
+          <div>
+            Last renewal message:{" "}
+            {lastRenewal
+              ? `${formatDate(lastRenewal.created_at)} — ${statusLabel(lastRenewal)}`
+              : "None"}
+          </div>
+          <div>Client replied: {replied ? "Yes" : "No"}</div>
+        </div>
+        {q.isLoading ? (
+          <p className="text-sm text-slate-500">Loading…</p>
+        ) : (
+          <DuesMessageList messages={messages} />
+        )}
+      </CardContent>
+    </Card>
   );
 }
 

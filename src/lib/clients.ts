@@ -33,6 +33,12 @@ export interface Client {
   pending_renewal_price?: number | null;
   pending_renewal_total_visits?: number | null;
   pending_renewal_package_name?: string | null;
+  /** Money received before the prepared package activates. */
+  pending_renewal_paid?: number | null;
+  /** Texting consent + opt-out (dues messaging). */
+  sms_consent_at?: string | null;
+  sms_consent_source?: string | null;
+  sms_opted_out_at?: string | null;
   package_start_date: string | null;
   visits_used: number | null;
   amount_paid: number;

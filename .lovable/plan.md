@@ -44,13 +44,21 @@ Wording always refers to one total balance — it never mentions old-vs-current 
 Renewal messages use the amount actually still due on the prepared package (its price minus anything
 already prepaid), not the full package price.
 
+## Who can do what
+
+- Staff can view a client's dues message history and statuses on the client record.
+- Admins and superadmins own the Dues Queue, Messaging Preview, generation/refresh, and any future
+  send action.
+- Reading `dues_messages` is allowed for staff via `is_staff(auth.uid())`; every write, generate, or
+  send action is checked server-side for admin/superadmin.
+
 ## Safety checks
 
 A draft cannot be marked ready when: the phone number is missing or unusable, no recorded texting
-consent exists for the client, the client is Package Info Needed or Payment Review, the amount due is
-$0 or less, a renewal message has no start date, or the prepared renewal data is inconsistent
-(missing price or visit count). Blocked cases still appear on the preview page with the reason shown
-in red, instead of silently doing nothing.
+consent exists (or the client later opted out), the client is Package Info Needed or Payment Review,
+the amount due is $0 or less, a renewal message has no start date, or the prepared renewal data is
+inconsistent (missing price or visit count). Blocked cases still appear on the preview page with the
+reason shown in red, instead of silently doing nothing.
 
 ## Drafts stay in sync — no duplicates
 

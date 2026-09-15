@@ -19,8 +19,10 @@ import { Route as AuthenticatedRenewalReviewRouteImport } from './routes/_authen
 import { Route as AuthenticatedPaymentHistoryRouteImport } from './routes/_authenticated/payment-history'
 import { Route as AuthenticatedNotesLedgerRouteImport } from './routes/_authenticated/notes-ledger'
 import { Route as AuthenticatedMissedCheckInsRouteImport } from './routes/_authenticated/missed-check-ins'
+import { Route as AuthenticatedMessagingPreviewRouteImport } from './routes/_authenticated/messaging-preview'
 import { Route as AuthenticatedMergeCenterRouteImport } from './routes/_authenticated/merge-center'
 import { Route as AuthenticatedImportRouteImport } from './routes/_authenticated/import'
+import { Route as AuthenticatedDuesQueueRouteImport } from './routes/_authenticated/dues-queue'
 import { Route as AuthenticatedBackupRouteImport } from './routes/_authenticated/backup'
 import { Route as AuthenticatedClientsIndexRouteImport } from './routes/_authenticated/clients.index'
 import { Route as ApiPublicVisitDiffSweepTriggerRouteImport } from './routes/api/public/visit-diff-sweep-trigger'
@@ -88,6 +90,12 @@ const AuthenticatedMissedCheckInsRoute =
     path: '/missed-check-ins',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedMessagingPreviewRoute =
+  AuthenticatedMessagingPreviewRouteImport.update({
+    id: '/messaging-preview',
+    path: '/messaging-preview',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedMergeCenterRoute =
   AuthenticatedMergeCenterRouteImport.update({
     id: '/merge-center',
@@ -97,6 +105,11 @@ const AuthenticatedMergeCenterRoute =
 const AuthenticatedImportRoute = AuthenticatedImportRouteImport.update({
   id: '/import',
   path: '/import',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedDuesQueueRoute = AuthenticatedDuesQueueRouteImport.update({
+  id: '/dues-queue',
+  path: '/dues-queue',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedBackupRoute = AuthenticatedBackupRouteImport.update({
@@ -162,8 +175,10 @@ export interface FileRoutesByFullPath {
   '/': typeof AuthenticatedIndexRoute
   '/auth': typeof AuthRoute
   '/backup': typeof AuthenticatedBackupRoute
+  '/dues-queue': typeof AuthenticatedDuesQueueRoute
   '/import': typeof AuthenticatedImportRoute
   '/merge-center': typeof AuthenticatedMergeCenterRoute
+  '/messaging-preview': typeof AuthenticatedMessagingPreviewRoute
   '/missed-check-ins': typeof AuthenticatedMissedCheckInsRoute
   '/notes-ledger': typeof AuthenticatedNotesLedgerRoute
   '/payment-history': typeof AuthenticatedPaymentHistoryRoute
@@ -185,8 +200,10 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
   '/backup': typeof AuthenticatedBackupRoute
+  '/dues-queue': typeof AuthenticatedDuesQueueRoute
   '/import': typeof AuthenticatedImportRoute
   '/merge-center': typeof AuthenticatedMergeCenterRoute
+  '/messaging-preview': typeof AuthenticatedMessagingPreviewRoute
   '/missed-check-ins': typeof AuthenticatedMissedCheckInsRoute
   '/notes-ledger': typeof AuthenticatedNotesLedgerRoute
   '/payment-history': typeof AuthenticatedPaymentHistoryRoute
@@ -211,8 +228,10 @@ export interface FileRoutesById {
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/auth': typeof AuthRoute
   '/_authenticated/backup': typeof AuthenticatedBackupRoute
+  '/_authenticated/dues-queue': typeof AuthenticatedDuesQueueRoute
   '/_authenticated/import': typeof AuthenticatedImportRoute
   '/_authenticated/merge-center': typeof AuthenticatedMergeCenterRoute
+  '/_authenticated/messaging-preview': typeof AuthenticatedMessagingPreviewRoute
   '/_authenticated/missed-check-ins': typeof AuthenticatedMissedCheckInsRoute
   '/_authenticated/notes-ledger': typeof AuthenticatedNotesLedgerRoute
   '/_authenticated/payment-history': typeof AuthenticatedPaymentHistoryRoute
@@ -238,8 +257,10 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/backup'
+    | '/dues-queue'
     | '/import'
     | '/merge-center'
+    | '/messaging-preview'
     | '/missed-check-ins'
     | '/notes-ledger'
     | '/payment-history'
@@ -261,8 +282,10 @@ export interface FileRouteTypes {
   to:
     | '/auth'
     | '/backup'
+    | '/dues-queue'
     | '/import'
     | '/merge-center'
+    | '/messaging-preview'
     | '/missed-check-ins'
     | '/notes-ledger'
     | '/payment-history'
@@ -286,8 +309,10 @@ export interface FileRouteTypes {
     | '/_authenticated'
     | '/auth'
     | '/_authenticated/backup'
+    | '/_authenticated/dues-queue'
     | '/_authenticated/import'
     | '/_authenticated/merge-center'
+    | '/_authenticated/messaging-preview'
     | '/_authenticated/missed-check-ins'
     | '/_authenticated/notes-ledger'
     | '/_authenticated/payment-history'
@@ -391,6 +416,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedMissedCheckInsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/messaging-preview': {
+      id: '/_authenticated/messaging-preview'
+      path: '/messaging-preview'
+      fullPath: '/messaging-preview'
+      preLoaderRoute: typeof AuthenticatedMessagingPreviewRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/merge-center': {
       id: '/_authenticated/merge-center'
       path: '/merge-center'
@@ -403,6 +435,13 @@ declare module '@tanstack/react-router' {
       path: '/import'
       fullPath: '/import'
       preLoaderRoute: typeof AuthenticatedImportRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/dues-queue': {
+      id: '/_authenticated/dues-queue'
+      path: '/dues-queue'
+      fullPath: '/dues-queue'
+      preLoaderRoute: typeof AuthenticatedDuesQueueRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/backup': {
@@ -487,8 +526,10 @@ declare module '@tanstack/react-router' {
 
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedBackupRoute: typeof AuthenticatedBackupRoute
+  AuthenticatedDuesQueueRoute: typeof AuthenticatedDuesQueueRoute
   AuthenticatedImportRoute: typeof AuthenticatedImportRoute
   AuthenticatedMergeCenterRoute: typeof AuthenticatedMergeCenterRoute
+  AuthenticatedMessagingPreviewRoute: typeof AuthenticatedMessagingPreviewRoute
   AuthenticatedMissedCheckInsRoute: typeof AuthenticatedMissedCheckInsRoute
   AuthenticatedNotesLedgerRoute: typeof AuthenticatedNotesLedgerRoute
   AuthenticatedPaymentHistoryRoute: typeof AuthenticatedPaymentHistoryRoute
@@ -505,8 +546,10 @@ interface AuthenticatedRouteRouteChildren {
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedBackupRoute: AuthenticatedBackupRoute,
+  AuthenticatedDuesQueueRoute: AuthenticatedDuesQueueRoute,
   AuthenticatedImportRoute: AuthenticatedImportRoute,
   AuthenticatedMergeCenterRoute: AuthenticatedMergeCenterRoute,
+  AuthenticatedMessagingPreviewRoute: AuthenticatedMessagingPreviewRoute,
   AuthenticatedMissedCheckInsRoute: AuthenticatedMissedCheckInsRoute,
   AuthenticatedNotesLedgerRoute: AuthenticatedNotesLedgerRoute,
   AuthenticatedPaymentHistoryRoute: AuthenticatedPaymentHistoryRoute,

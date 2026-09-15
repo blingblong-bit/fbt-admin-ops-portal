@@ -405,6 +405,8 @@ function ClientDetailPage() {
 
 
 
+        <MessagesCard clientId={id} />
+
         <Card className="lg:col-span-3">
           <CardHeader>
             <CardTitle>Timeline</CardTitle>

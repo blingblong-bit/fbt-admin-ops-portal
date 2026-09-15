@@ -44,13 +44,21 @@ Wording always refers to one total balance — it never mentions old-vs-current 
 Renewal messages use the amount actually still due on the prepared package (its price minus anything
 already prepaid), not the full package price.
 
+## Who can do what
+
+- Staff can view a client's dues message history and statuses on the client record.
+- Admins and superadmins own the Dues Queue, Messaging Preview, generation/refresh, and any future
+  send action.
+- Reading `dues_messages` is allowed for staff via `is_staff(auth.uid())`; every write, generate, or
+  send action is checked server-side for admin/superadmin.
+
 ## Safety checks
 
 A draft cannot be marked ready when: the phone number is missing or unusable, no recorded texting
-consent exists for the client, the client is Package Info Needed or Payment Review, the amount due is
-$0 or less, a renewal message has no start date, or the prepared renewal data is inconsistent
-(missing price or visit count). Blocked cases still appear on the preview page with the reason shown
-in red, instead of silently doing nothing.
+consent exists (or the client later opted out), the client is Package Info Needed or Payment Review,
+the amount due is $0 or less, a renewal message has no start date, or the prepared renewal data is
+inconsistent (missing price or visit count). Blocked cases still appear on the preview page with the
+reason shown in red, instead of silently doing nothing.
 
 ## Drafts stay in sync — no duplicates
 
@@ -85,8 +93,9 @@ The timeline is built so future incoming replies and staff replies drop into the
 as a conversation. No live sending or inbound texting is built now.
 
 Message events also write short entries into the normal client activity timeline: draft created,
-sent, delivery failed, client replied, payment received after a dues message. Full wording stays in
-the Messages tab only.
+sent, delivery failed, client replied, payment received after a dues message. A refresh that changes
+nothing writes no activity entry — only creation or a real change in wording, amount, or status is
+logged. Full wording stays in the Messages tab only.
 
 ## Technical notes
 
@@ -95,22 +104,26 @@ the Messages tab only.
   `amount_due`, `body`, `status` (default `ready_not_sent`), `trigger_source`,
   `validation_warnings jsonb`, `blocked boolean`, `twilio_sid`, `request_key` (unique; encodes the
   obligation, e.g. `renewal:<client>:<start>:<price>` / `balance:<client>:<package_start>`),
-  `sent_at`, `created_at`/`updated_at` + trigger. Staff-only RLS via `is_staff(auth.uid())` plus
+  `sent_at`, `created_at`/`updated_at` + trigger. RLS: SELECT for staff via `is_staff(auth.uid())`;
+  INSERT/UPDATE/DELETE restricted to `has_role(auth.uid(),'admin') OR has_role(auth.uid(),'superadmin')`.
   GRANTs for `authenticated` and `service_role`. Existing `renewal_campaigns` / `renewal_messages`
   tables stay untouched, and client history reads `dues_messages` directly — no duplicate store.
-- **Consent columns on `clients`**: `sms_consent_at timestamptz`, `sms_consent_source text`. Missing
-  consent is a blocking validation warning; drafts still generate in preview mode.
+- **Consent columns on `clients`**: `sms_consent_at timestamptz`, `sms_consent_source text`,
+  `sms_opted_out_at timestamptz`. Eligibility requires consent recorded with no later opt-out;
+  missing consent or an opt-out is a blocking validation warning, and drafts still generate in
+  preview mode.
 - **`src/lib/dues-messaging.ts`** (pure, fully unit-tested): queue eligibility reusing
   `paymentStatus` / `amountOwed` / `previousOwed` / `totalOwed` from `src/lib/clients.ts`, phone
-  validation, consent check, `renderRenewalDueMessage`, `renderBalanceDueMessage`, `duesRequestKey`,
-  and `validateDraft` returning blocking reasons.
+  validation, consent/opt-out check, `renderRenewalDueMessage`, `renderBalanceDueMessage`,
+  `duesRequestKey`, and `validateDraft` returning blocking reasons.
 - **`src/lib/dues-sms.server.ts`**: the only module able to call Twilio. It reads
   `process.env.SMS_DUES_SENDING_ENABLED` inside the function and throws unless it is exactly `true`;
   no caller invokes it yet. Client-side code reads a non-secret `sendingEnabled` value returned by a
   server fn purely to render the banner.
 - **`src/lib/dues-messaging.functions.ts`**: `generateDuesPreviews` (upsert-by-`request_key` rebuild
   of unsent drafts, including marking paid obligations `payment_received`), `getDuesQueue`,
-  `listDuesMessages({ clientId? })`, `getMessagingFlag`; all `requireSupabaseAuth` + admin check.
+  `getMessagingFlag` — admin-checked; `listDuesMessages({ clientId? })` is staff-readable. Activity
+  rows are written only when a draft is created or its body/amount/status actually changes.
 - **`preRenewNextPackage`** in `src/lib/schedule.functions.ts` gains a post-success draft upsert,
   wrapped so a draft failure never fails the renewal.
 - **New routes** `src/routes/_authenticated/dues-queue.tsx` and

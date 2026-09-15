@@ -27,6 +27,9 @@ import {
   type ClientAppointment,
 } from "@/lib/schedule.functions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { listDuesMessages } from "@/lib/dues-messaging.functions";
+import { statusLabel } from "@/lib/dues-messaging";
+import { DuesMessageList } from "@/components/DuesMessageList";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";

@@ -118,8 +118,11 @@ logged. Full wording stays in the Messages tab only.
   `duesRequestKey`, and `validateDraft` returning blocking reasons.
 - **`src/lib/dues-sms.server.ts`**: the only module able to call Twilio. It reads
   `process.env.SMS_DUES_SENDING_ENABLED` inside the function and throws unless it is exactly `true`;
-  no caller invokes it yet. Client-side code reads a non-secret `sendingEnabled` value returned by a
-  server fn purely to render the banner.
+  no caller invokes it yet. A draft is sendable only when `status === "ready_not_sent"` **and**
+  `blocked === false` — a shared `isSendable(draft)` helper both the send path and the UI use, so a
+  draft with missing consent or bad package data can never send on its status string alone.
+  Client-side code reads a non-secret `sendingEnabled` value returned by a server fn purely to render
+  the banner.
 - **`src/lib/dues-messaging.functions.ts`**: `generateDuesPreviews` (upsert-by-`request_key` rebuild
   of unsent drafts, including marking paid obligations `payment_received`), `getDuesQueue`,
   `getMessagingFlag` — admin-checked; `listDuesMessages({ clientId? })` is staff-readable. Activity
@@ -131,7 +134,8 @@ logged. Full wording stays in the Messages tab only.
   linked from the Admin Tools nav in `AppShell`; Messages section added to
   `src/routes/_authenticated/clients.$id.tsx`.
 - **Tests** (`src/lib/dues-messaging.test.ts`): eligibility inclusion/exclusion, both message bodies
-  rendered exactly, each blocking reason including missing consent, renewal amount net of prepaid,
-  stable `request_key` across repeat generation, paid-before-send transition, and a test asserting
-  the send module refuses while the flag is off.
+  rendered exactly, each blocking reason including missing consent and later opt-out, renewal amount
+  net of prepaid, stable `request_key` across repeat generation, paid-before-send transition, a test
+  asserting the send module refuses while the flag is off, and a test that a draft with
+  `status = ready_not_sent` but `blocked = true` is refused by the send path.
 - No client financial values change; nothing is published.

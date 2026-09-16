@@ -1,21 +1,33 @@
 # Dry-run acceptance testing for dues messaging
 
 Run the full acceptance checklist against the built workflow while sending stays off. No
-client financial or package values change; nothing is published; no text leaves the system.
+real-client financial, package, consent, message or activity data changes; nothing is
+published; no text leaves the system. Disposable ZZTEST records may change as the scenarios
+require and are fully deleted afterwards.
 
-## One thing to decide first
+## Why test records are needed
 
 No client in the system currently has texting consent recorded (0 of 1,755 active records;
-1,707 have a phone number, none have opted out). That means every draft generated today will
-be correctly marked blocked with "No recorded texting consent".
+1,707 have a phone number, none have opted out). Every draft generated against real data today
+would correctly come back blocked with "No recorded texting consent" — right behaviour, but it
+makes the consent tests indistinguishable from everything else.
 
-That is the intended safety behaviour, but it makes the consent-based tests indistinguishable
-from everything else. To test properly, the run uses two disposable test clients created for
-the test and deleted afterwards — one with consent, one without — instead of touching real
-records. Real client data is read-only throughout.
+So the run uses a disposable ZZTEST cohort, with a separate record per scenario wherever states
+could contaminate one another. At minimum:
 
-Separately, this run will reveal whether consent needs to be captured before any real sending
-phase can begin. That is a follow-up decision, not part of this plan.
+- valid consent + unpaid package
+- missing consent
+- consent then a later opt-out
+- invalid phone number
+- fully paid package
+- prepaid prepared renewal
+- Package Info Needed
+- Payment Review / unexplained overpayment
+- pay-per-visit with an actual unpaid balance
+
+Additional invalid-renewal cases (no start date, no price, no visit count) reuse one dedicated
+renewal-validation record, reset between assertions. Everything is keyed by the prefix, so
+cleanup stays simple.
 
 ## What gets verified
 
@@ -76,8 +88,7 @@ Every write-capable messaging action in this run is restricted to the disposable
 
 1. Snapshot two baselines: all client financial/package fields, and all existing message rows
    plus message-related timeline entries (counts and IDs).
-2. Create the disposable test clients covering each scenario (consent, no consent, opt-out,
-   bad phone, paid, unpaid, prepaid renewal, incomplete package, overpayment).
+2. Create the ZZTEST cohort, one record per scenario listed above.
 3. Exercise Pre-Renew, Generate/Refresh (test-scoped) and payment-before-send through the real
    app paths in a browser session, capturing screenshots of the Dues Queue, Messaging Preview
    and a client Messages tab.
@@ -111,6 +122,19 @@ Every write-capable messaging action in this run is restricted to the disposable
   the deleted test client IDs and asserts zero rows, rather than trusting cascade.
 - Any failure is reported with the failing case; fixes are proposed separately rather than
   applied silently during the test run.
+
+## Final report format
+
+```text
+Acceptance: N/N passed
+Outbound SMS calls: 0
+Real-client financial changes: 0
+Real-client messaging changes: 0
+ZZTEST artifacts remaining: 0
+Sending flag: OFF
+Published: No
+```
+
 
 ## After this run
 

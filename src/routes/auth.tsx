@@ -67,6 +67,8 @@ function AuthPage() {
     }
   }
 
+  if (!mounted) return null;
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
       <div className="w-full max-w-sm rounded-xl border bg-white p-8 shadow-sm">

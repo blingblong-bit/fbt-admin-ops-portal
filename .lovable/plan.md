@@ -84,6 +84,14 @@ Every write-capable messaging action in this run is restricted to the disposable
 - The test-only scope is removed after validation unless it turns out to be worth keeping as a
   normal operating feature.
 
+**Fail-closed guard.** While acceptance-test mode is active, Generate / Refresh Preview refuses
+to run unless it is handed a non-empty list of test client IDs, and every ID on that list is a
+disposable test record. A missing, empty or contaminated list makes it stop immediately and
+write nothing — so one forgotten argument can never fan out across all 1,755 real clients.
+
+Asserted directly: calling it in acceptance-test mode without the scoped test IDs produces zero
+database writes.
+
 ## How it runs
 
 1. Snapshot two baselines: all client financial/package fields, and all existing message rows
@@ -102,9 +110,13 @@ Every write-capable messaging action in this run is restricted to the disposable
 
 - Scenario setup uses direct inserts of test clients (prefix `ZZTEST`) and cleanup by that
   prefix, matching how earlier validation runs were done here.
-- `generateDuesPreviews` gains a temporary optional `clientIds` input; when supplied, both the
-  eligibility loop and the paid-obligation closing loop are filtered to those IDs. The
-  acceptance run always supplies it. It is removed after validation unless kept deliberately.
+- `generateDuesPreviews` gains a temporary `clientIds` input; when supplied, both the
+  eligibility loop and the paid-obligation closing loop are filtered to those IDs.
+- Fail-closed: while `DUES_ACCEPTANCE_TEST_MODE` is on, the handler validates `clientIds`
+  before any read or write — it must be non-empty and every ID must resolve to a client whose
+  name carries the `ZZTEST` prefix; otherwise it throws before the first statement runs. A test
+  asserts a scope-less call in that mode leaves `dues_messages` and `client_activities` counts
+  unchanged. Both the flag and the input are removed after validation unless kept deliberately.
 - Browser checks drive the running app at `/dues-queue`, `/messaging-preview` and
   `/clients/:id` with a real session; the staff-role pass uses a second account.
 - Idempotency is asserted on `dues_messages.request_key` row counts and on the absence of

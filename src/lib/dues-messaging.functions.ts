@@ -124,11 +124,26 @@ export async function upsertDraft(
   plan: DraftPlan,
   triggerSource: string,
 ): Promise<{ created: boolean; changed: boolean }> {
-  const { data: existing } = await context.supabase
+  // One obligation can need more than one draft over time: once a draft is
+  // closed (payment received) or sent, a later Pre-Renew for the same client
+  // must be able to start a fresh one. Drafts for the same obligation share a
+  // base key and are distinguished by a `#n` generation suffix.
+  const baseKey = plan.requestKey;
+  const { data: history } = await context.supabase
     .from("dues_messages")
     .select("*")
-    .eq("request_key", plan.requestKey)
-    .maybeSingle();
+    .like("request_key", `${baseKey}%`)
+    .order("created_at", { ascending: false });
+
+  const siblings = ((history ?? []) as DuesMessage[]).filter(
+    (m) => m.request_key === baseKey || m.request_key.startsWith(`${baseKey}#`),
+  );
+  const existing = siblings.find((m) => m.status === "ready_not_sent") ?? null;
+  const requestKey = existing
+    ? existing.request_key
+    : siblings.length === 0
+      ? baseKey
+      : `${baseKey}#${siblings.length}`;
 
   const row = {
     client_id: plan.clientId,

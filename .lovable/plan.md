@@ -88,8 +88,7 @@ Every write-capable messaging action in this run is restricted to the disposable
 
 1. Snapshot two baselines: all client financial/package fields, and all existing message rows
    plus message-related timeline entries (counts and IDs).
-2. Create the disposable test clients covering each scenario (consent, no consent, opt-out,
-   bad phone, paid, unpaid, prepaid renewal, incomplete package, overpayment).
+2. Create the ZZTEST cohort, one record per scenario listed above.
 3. Exercise Pre-Renew, Generate/Refresh (test-scoped) and payment-before-send through the real
    app paths in a browser session, capturing screenshots of the Dues Queue, Messaging Preview
    and a client Messages tab.

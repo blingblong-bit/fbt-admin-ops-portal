@@ -49,37 +49,71 @@ phase can begin. That is a follow-up decision, not part of this plan.
   no new timeline entry
 
 **Sending gate**
-- With the flag off, the send module throws and no texting service is contacted
+- With the flag off, the send module throws
+- The texting transport is instrumented during the whole run and records zero outbound calls
 
 **No data drift**
 - A before/after comparison of every client's package price, visits, amount paid, previous
   debt and prepared-renewal fields shows zero changes across the whole run
+- Real-client message history and message-related timeline entries are identical before and
+  after, by count and by row
+- After the test records are deleted, nothing of theirs is left behind anywhere
+
+## Test isolation — no writes to real clients
+
+Every write-capable messaging action in this run is restricted to the disposable test records.
+
+- Pre-Renew is pressed only on test clients.
+- Generate / Refresh Preview runs under a test-only scope that limits it to the created test
+  client IDs, so it cannot fan out across the 1,755 real records and create hundreds of blocked
+  drafts and timeline entries.
+- Real clients may be read to verify queue membership counts and blocking logic, but no draft,
+  activity, consent or any other row is written for them.
+- The test-only scope is removed after validation unless it turns out to be worth keeping as a
+  normal operating feature.
 
 ## How it runs
 
-1. Snapshot all client financial/package fields to a comparison baseline.
+1. Snapshot two baselines: all client financial/package fields, and all existing message rows
+   plus message-related timeline entries (counts and IDs).
 2. Create the disposable test clients covering each scenario (consent, no consent, opt-out,
    bad phone, paid, unpaid, prepaid renewal, incomplete package, overpayment).
-3. Exercise Pre-Renew, Generate/Refresh, and payment-before-send through the real app paths in
-   a browser session, capturing screenshots of the Dues Queue, Messaging Preview and a client
-   Messages tab.
+3. Exercise Pre-Renew, Generate/Refresh (test-scoped) and payment-before-send through the real
+   app paths in a browser session, capturing screenshots of the Dues Queue, Messaging Preview
+   and a client Messages tab.
 4. Re-run as a staff-role account to confirm read-only visibility and blocked admin actions.
 5. Run the unit suite plus added cases, and assert the send module refuses with the flag off.
-6. Delete the test clients and their drafts/activities, then diff against the baseline.
-7. Report each checklist item as pass/fail with the evidence behind it.
+6. Delete the test clients, then verify cleanup explicitly: zero remaining messages, timeline
+   entries, prepared renewals or other rows referencing them.
+7. Diff both baselines and report each checklist item as pass/fail with its evidence.
 
 ## Technical notes
 
 - Scenario setup uses direct inserts of test clients (prefix `ZZTEST`) and cleanup by that
   prefix, matching how earlier validation runs were done here.
+- `generateDuesPreviews` gains a temporary optional `clientIds` input; when supplied, both the
+  eligibility loop and the paid-obligation closing loop are filtered to those IDs. The
+  acceptance run always supplies it. It is removed after validation unless kept deliberately.
 - Browser checks drive the running app at `/dues-queue`, `/messaging-preview` and
   `/clients/:id` with a real session; the staff-role pass uses a second account.
 - Idempotency is asserted on `dues_messages.request_key` row counts and on the absence of
   repeat `dues_message_draft_updated` activity rows after a no-op refresh.
 - Send-gate assertions call `sendDuesMessage` directly in tests: flag off throws, and
-  `status = ready_not_sent` with `blocked = true` throws for being blocked.
-- Baseline diff compares `package_price`, `package_total_visits`, `visits_used`,
-  `amount_paid`, `previous_package_owed`, `package_start_date` and every
-  `pending_renewal_*` column for all non-test clients.
+  `status = ready_not_sent` with `blocked = true` throws for being blocked. In addition the
+  run mocks/instruments the outbound HTTP transport and asserts zero calls to any texting
+  provider host.
+- Financial baseline diff compares `package_price`, `package_total_visits`, `visits_used`,
+  `amount_paid`, `previous_package_owed`, `package_start_date` and every `pending_renewal_*`
+  column for all non-test clients.
+- Messaging baseline diff compares `dues_messages` row IDs and count, and `client_activities`
+  rows of type `dues_message_*`, before and after.
+- Cleanup verification queries `dues_messages`, `client_activities` and any FK references for
+  the deleted test client IDs and asserts zero rows, rather than trusting cascade.
 - Any failure is reported with the failing case; fixes are proposed separately rather than
   applied silently during the test run.
+
+## After this run
+
+Zero of 1,755 clients have texting consent on file. This does not block the dry run, but no
+real text can ever go out until there is a legitimate way to record consent. That is the next
+piece of work, handled properly rather than worked around.

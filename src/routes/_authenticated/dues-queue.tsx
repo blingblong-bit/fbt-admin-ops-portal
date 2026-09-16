@@ -57,7 +57,7 @@ function DuesQueuePage() {
   const queue = useQuery({ queryKey: ["dues-queue"], queryFn: () => queueFn() });
 
   const generate = useMutation({
-    mutationFn: () => genFn(),
+    mutationFn: () => genFn({ data: {} }),
     onSuccess: (r) => {
       toast.success(`Drafts refreshed — ${r.created} new, ${r.updated} updated. Nothing sent.`);
       qc.invalidateQueries({ queryKey: ["dues-queue"] });

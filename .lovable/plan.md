@@ -123,6 +123,19 @@ Every write-capable messaging action in this run is restricted to the disposable
 - Any failure is reported with the failing case; fixes are proposed separately rather than
   applied silently during the test run.
 
+## Final report format
+
+```text
+Acceptance: N/N passed
+Outbound SMS calls: 0
+Real-client financial changes: 0
+Real-client messaging changes: 0
+ZZTEST artifacts remaining: 0
+Sending flag: OFF
+Published: No
+```
+
+
 ## After this run
 
 Zero of 1,755 clients have texting consent on file. This does not block the dry run, but no

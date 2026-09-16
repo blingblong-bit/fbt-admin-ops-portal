@@ -151,6 +151,11 @@ describe("idempotency", () => {
     expect(duesRequestKey("renewal_due", c)).toBe(duesRequestKey("renewal_due", c));
     expect(duesRequestKey("balance_due", c)).toBe("balance:c1:2026-09-01");
   });
+  it("keeps one renewal obligation per client when the date or price changes", () => {
+    const before = { ...base, pending_renewal_start_date: "2026-09-21", pending_renewal_price: 375 };
+    const after = { ...base, pending_renewal_start_date: "2026-10-05", pending_renewal_price: 400 };
+    expect(duesRequestKey("renewal_due", after)).toBe(duesRequestKey("renewal_due", before));
+  });
   it("reports no change when nothing material moved", () => {
     const plan = buildBalanceDraft(base);
     const existing = {

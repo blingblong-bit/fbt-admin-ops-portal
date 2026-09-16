@@ -43,7 +43,7 @@ function MessagingPreviewPage() {
   });
 
   const generate = useMutation({
-    mutationFn: () => genFn(),
+    mutationFn: () => genFn({ data: {} }),
     onSuccess: (r) => {
       toast.success(
         `Previews refreshed — ${r.created} new, ${r.updated} updated, ${r.closed} closed. Nothing sent.`,

@@ -124,11 +124,26 @@ export async function upsertDraft(
   plan: DraftPlan,
   triggerSource: string,
 ): Promise<{ created: boolean; changed: boolean }> {
-  const { data: existing } = await context.supabase
+  // One obligation can need more than one draft over time: once a draft is
+  // closed (payment received) or sent, a later Pre-Renew for the same client
+  // must be able to start a fresh one. Drafts for the same obligation share a
+  // base key and are distinguished by a `#n` generation suffix.
+  const baseKey = plan.requestKey;
+  const { data: history } = await context.supabase
     .from("dues_messages")
     .select("*")
-    .eq("request_key", plan.requestKey)
-    .maybeSingle();
+    .like("request_key", `${baseKey}%`)
+    .order("created_at", { ascending: false });
+
+  const siblings = ((history ?? []) as DuesMessage[]).filter(
+    (m) => m.request_key === baseKey || m.request_key.startsWith(`${baseKey}#`),
+  );
+  const existing = siblings.find((m) => m.status === "ready_not_sent") ?? null;
+  const requestKey = existing
+    ? existing.request_key
+    : siblings.length === 0
+      ? baseKey
+      : `${baseKey}#${siblings.length}`;
 
   const row = {
     client_id: plan.clientId,
@@ -141,10 +156,15 @@ export async function upsertDraft(
     trigger_source: triggerSource,
     validation_warnings: plan.warnings,
     blocked: plan.blocked,
-    request_key: plan.requestKey,
+    request_key: requestKey,
   };
 
   if (!existing) {
+    // A follow-up generation is only worth drafting when money is actually due;
+    // otherwise a settled obligation would spawn a new draft on every refresh.
+    if (siblings.length > 0 && !(plan.amountDue > 0)) {
+      return { created: false, changed: false };
+    }
     const { error } = await context.supabase
       .from("dues_messages")
       .insert({ ...row, status: "ready_not_sent" });
@@ -153,14 +173,12 @@ export async function upsertDraft(
       client_id: plan.clientId,
       activity_type: "dues_message_draft_created",
       description: `Dues message drafted (${plan.messageType === "renewal_due" ? "renewal" : "balance"}) — not sent.`,
-      metadata: { request_key: plan.requestKey, amount_due: plan.amountDue, blocked: plan.blocked },
+      metadata: { request_key: requestKey, amount_due: plan.amountDue, blocked: plan.blocked },
     });
     return { created: true, changed: true };
   }
 
   const prior = existing as DuesMessage;
-  // Only unsent drafts are ever rebuilt.
-  if (prior.status !== "ready_not_sent") return { created: false, changed: false };
 
   const changed = draftChanged(prior, plan);
   if (!changed) return { created: false, changed: false };
@@ -174,7 +192,7 @@ export async function upsertDraft(
     client_id: plan.clientId,
     activity_type: "dues_message_draft_updated",
     description: "Dues message draft updated from current records — not sent.",
-    metadata: { request_key: plan.requestKey, amount_due: plan.amountDue, blocked: plan.blocked },
+    metadata: { request_key: requestKey, amount_due: plan.amountDue, blocked: plan.blocked },
   });
   return { created: false, changed: true };
 }

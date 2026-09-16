@@ -84,6 +84,14 @@ Every write-capable messaging action in this run is restricted to the disposable
 - The test-only scope is removed after validation unless it turns out to be worth keeping as a
   normal operating feature.
 
+**Fail-closed guard.** While acceptance-test mode is active, Generate / Refresh Preview refuses
+to run unless it is handed a non-empty list of test client IDs, and every ID on that list is a
+disposable test record. A missing, empty or contaminated list makes it stop immediately and
+write nothing — so one forgotten argument can never fan out across all 1,755 real clients.
+
+Asserted directly: calling it in acceptance-test mode without the scoped test IDs produces zero
+database writes.
+
 ## How it runs
 
 1. Snapshot two baselines: all client financial/package fields, and all existing message rows

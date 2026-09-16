@@ -179,75 +179,138 @@ export async function upsertDraft(
   return { created: false, changed: true };
 }
 
-/** Rebuild drafts for the current queue + prepared renewals. Nothing sends. */
+export type GenerateResult = {
+  created: number;
+  updated: number;
+  closed: number;
+  total: number;
+};
+
+/** Acceptance-test mode forces every generation call to be scoped to test records. */
+export function acceptanceTestMode(): boolean {
+  return process.env["DUES_ACCEPTANCE_TEST_MODE"] === "true";
+}
+
+export const TEST_CLIENT_PREFIX = "ZZTEST";
+
+function isTestRecord(c: { first_name?: string | null; last_name?: string | null }): boolean {
+  return (
+    (c.first_name ?? "").startsWith(TEST_CLIENT_PREFIX) ||
+    (c.last_name ?? "").startsWith(TEST_CLIENT_PREFIX)
+  );
+}
+
+/**
+ * Rebuild drafts for the current queue + prepared renewals. Nothing sends.
+ *
+ * Fail-closed: while acceptance-test mode is on, this refuses to run unless it
+ * is handed a non-empty `clientIds` list where every ID resolves to a
+ * disposable ZZTEST record. It throws before any read or write, so a forgotten
+ * argument can never fan out across real clients.
+ */
+export async function runGenerateDuesPreviews(
+  ctx: Ctx,
+  opts: { clientIds?: string[] | null } = {},
+): Promise<GenerateResult> {
+  const scope = opts.clientIds ?? null;
+  const testMode = acceptanceTestMode();
+
+  if (testMode && (!scope || scope.length === 0)) {
+    throw new Error(
+      "Acceptance-test mode: generateDuesPreviews requires a non-empty clientIds scope",
+    );
+  }
+
+  const [allClients, dismissed] = await Promise.all([
+    loadEligibleClients(ctx),
+    loadDismissedIds(ctx),
+  ]);
+
+  let clients = allClients;
+  if (scope && scope.length > 0) {
+    const wanted = new Set(scope);
+    clients = allClients.filter((c) => wanted.has(c.id));
+    if (testMode) {
+      if (clients.length !== wanted.size) {
+        throw new Error("Acceptance-test mode: clientIds contains unknown client IDs");
+      }
+      const contaminated = clients.filter((c) => !isTestRecord(c));
+      if (contaminated.length > 0) {
+        throw new Error(
+          "Acceptance-test mode: clientIds contains non-test client IDs — refusing to write",
+        );
+      }
+    }
+  }
+
+  const { isDuesQueueEligible } = await import("@/lib/dues-messaging");
+
+  let created = 0;
+  let updated = 0;
+
+  for (const c of clients) {
+    const isDismissed = dismissed.has(c.id);
+    if (c.pending_renewal_start_date) {
+      const r = await upsertDraft(ctx, buildRenewalDraft(c, isDismissed), "pre_renew");
+      if (r.created) created++;
+      else if (r.changed) updated++;
+    }
+    if (isDuesQueueEligible(c, isDismissed)) {
+      const r = await upsertDraft(ctx, buildBalanceDraft(c, isDismissed), "dues_queue");
+      if (r.created) created++;
+      else if (r.changed) updated++;
+    }
+  }
+
+  // Obligations paid before sending: close the unsent draft for good.
+  let openQuery = ctx.supabase
+    .from("dues_messages")
+    .select("id, client_id, message_type, request_key")
+    .eq("status", "ready_not_sent");
+  if (scope && scope.length > 0) openQuery = openQuery.in("client_id", scope);
+  const { data: openDrafts } = await openQuery;
+  const byId = new Map(clients.map((c) => [c.id, c]));
+  let closed = 0;
+  for (const d of (openDrafts ?? []) as Pick<
+    DuesMessage,
+    "id" | "client_id" | "message_type" | "request_key"
+  >[]) {
+    const c = byId.get(d.client_id);
+    if (!c) continue;
+    const stillOwed =
+      d.message_type === "renewal_due"
+        ? Math.max(
+            0,
+            Number(c.pending_renewal_price ?? 0) - Number(c.pending_renewal_paid ?? 0),
+          ) > 0 && !!c.pending_renewal_start_date
+        : totalOwed(c) > 0;
+    if (stillOwed) continue;
+    await ctx.supabase
+      .from("dues_messages")
+      .update({ status: "payment_received" })
+      .eq("id", d.id);
+    await ctx.supabase.from("client_activities").insert({
+      client_id: d.client_id,
+      activity_type: "dues_message_payment_received",
+      description: "Balance settled before the dues message was sent — draft closed.",
+      metadata: { request_key: d.request_key },
+    });
+    closed++;
+  }
+
+  const { count } = await ctx.supabase
+    .from("dues_messages")
+    .select("id", { count: "exact", head: true });
+  return { created, updated, closed, total: count ?? 0 };
+}
+
 export const generateDuesPreviews = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .handler(
-    async ({
-      context,
-    }): Promise<{ created: number; updated: number; closed: number; total: number }> => {
-      const ctx = context as unknown as Ctx;
-      await assertAdmin(ctx);
-      const [clients, dismissed] = await Promise.all([
-        loadEligibleClients(ctx),
-        loadDismissedIds(ctx),
-      ]);
-      const { isDuesQueueEligible } = await import("@/lib/dues-messaging");
-
-      let created = 0;
-      let updated = 0;
-
-      for (const c of clients) {
-        const isDismissed = dismissed.has(c.id);
-        if (c.pending_renewal_start_date) {
-          const r = await upsertDraft(ctx, buildRenewalDraft(c, isDismissed), "pre_renew");
-          if (r.created) created++;
-          else if (r.changed) updated++;
-        }
-        if (isDuesQueueEligible(c, isDismissed)) {
-          const r = await upsertDraft(ctx, buildBalanceDraft(c, isDismissed), "dues_queue");
-          if (r.created) created++;
-          else if (r.changed) updated++;
-        }
-      }
-
-      // Obligations paid before sending: close the unsent draft for good.
-      const { data: openDrafts } = await ctx.supabase
-        .from("dues_messages")
-        .select("id, client_id, message_type, request_key")
-        .eq("status", "ready_not_sent");
-      const byId = new Map(clients.map((c) => [c.id, c]));
-      let closed = 0;
-      for (const d of (openDrafts ?? []) as Pick<
-        DuesMessage,
-        "id" | "client_id" | "message_type" | "request_key"
-      >[]) {
-        const c = byId.get(d.client_id);
-        if (!c) continue;
-        const stillOwed =
-          d.message_type === "renewal_due"
-            ? Math.max(
-                0,
-                Number(c.pending_renewal_price ?? 0) - Number(c.pending_renewal_paid ?? 0),
-              ) > 0 && !!c.pending_renewal_start_date
-            : totalOwed(c) > 0;
-        if (stillOwed) continue;
-        await ctx.supabase
-          .from("dues_messages")
-          .update({ status: "payment_received" })
-          .eq("id", d.id);
-        await ctx.supabase.from("client_activities").insert({
-          client_id: d.client_id,
-          activity_type: "dues_message_payment_received",
-          description: "Balance settled before the dues message was sent — draft closed.",
-          metadata: { request_key: d.request_key },
-        });
-        closed++;
-      }
-
-      const { count } = await ctx.supabase
-        .from("dues_messages")
-        .select("id", { count: "exact", head: true });
-      return { created, updated, closed, total: count ?? 0 };
-    },
-  );
+  .inputValidator((d: { clientIds?: string[] } | undefined) => ({
+    clientIds: d?.clientIds ?? null,
+  }))
+  .handler(async ({ context, data }): Promise<GenerateResult> => {
+    const ctx = context as unknown as Ctx;
+    await assertAdmin(ctx);
+    return runGenerateDuesPreviews(ctx, { clientIds: data.clientIds });
+  });

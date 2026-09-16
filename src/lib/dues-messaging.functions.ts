@@ -192,7 +192,7 @@ export async function upsertDraft(
     client_id: plan.clientId,
     activity_type: "dues_message_draft_updated",
     description: "Dues message draft updated from current records — not sent.",
-    metadata: { request_key: plan.requestKey, amount_due: plan.amountDue, blocked: plan.blocked },
+    metadata: { request_key: requestKey, amount_due: plan.amountDue, blocked: plan.blocked },
   });
   return { created: false, changed: true };
 }

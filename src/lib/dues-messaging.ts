@@ -145,6 +145,10 @@ export function renderBalanceDueMessage(input: { firstName: string; amount: numb
 /**
  * Stable key for the underlying obligation, so repeat Pre-Renew / Refresh
  * actions update one draft instead of creating duplicates.
+ *
+ * A client has at most one prepared renewal at a time, so the renewal key is
+ * the client alone — changing the prepared start date or price rewrites that
+ * same unsent draft instead of leaving a stale one behind.
  */
 export function duesRequestKey(
   type: DuesMessageType,
@@ -152,9 +156,7 @@ export function duesRequestKey(
     package_start_date?: string | null;
   },
 ): string {
-  if (type === "renewal_due") {
-    return `renewal:${c.id}:${c.pending_renewal_start_date ?? "none"}`;
-  }
+  if (type === "renewal_due") return `renewal:${c.id}`;
   return `balance:${c.id}:${c.package_start_date ?? "none"}`;
 }
 

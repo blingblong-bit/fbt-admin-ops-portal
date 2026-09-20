@@ -2,19 +2,29 @@
 
 Goal: finish lightweight consent capture, texting-service plumbing, delivery/reply tracking, and a controlled manual Send action. Real texting stays switched off until you approve a live test. No real client financial or package values change.
 
-## 1. Lightweight consent capture
+## 1. Verbal SMS consent
 
-Consent is never inferred — not from a package purchase, a phone number, a booking, a payment, or being a long-standing client.
+Consent is never inferred — not from a package purchase, a phone number, a booking, or a payment.
 
-Client detail gets a "Record SMS Consent" action for staff and admins. It opens a confirmation modal with the exact wording staff should read:
+Client detail gets a "Record SMS Consent" action for staff and admins. Staff asks:
 
-> "Would you like to receive recurring text messages from FIT Beyond Therapy about appointments, package renewals, amounts due, and service-related updates? Message frequency varies. Message and data rates may apply. Consent is optional and is not a condition of purchase. You can reply STOP at any time to opt out or HELP for help."
+> "Can we text you about appointments, package renewals, and balances due?"
 
-Staff confirm the client said yes, and the record stores the consent time, source (`in_person_verbal`), and the staff member who recorded it, plus an activity entry. Staff can also mark a client opted out when told verbally, storing the opt-out time and source.
+If the client says yes, staff presses Record SMS Consent. The record stores the consent time, source (`in_person_verbal`), and the staff member who recorded it, plus an activity entry. Staff can also mark a client opted out when asked verbally, storing the opt-out time and source. Nothing extra is texted to the client at consent time.
 
 Consent is required before any draft becomes sendable. Drafts still generate without it, showing "Blocked — SMS consent not recorded".
 
-## 2. Eligibility visibility
+## 2. First-message rule and later wording
+
+The first successfully **sent** outbound message to a client carries the footer "Reply STOP to opt out or HELP for help." First-message status is determined from actual sent/delivered outbound history, never from drafts.
+
+First balance message: "Hi John, this is FIT Beyond Therapy. Our records show a remaining balance of $375. Reply here if you have any questions. Reply STOP to opt out or HELP for help."
+
+First renewal message: "Hi John, this is FIT Beyond Therapy. Your next 8-visit package is scheduled to start on September 16. The amount due will be $375. Reply here if you have any questions. Reply STOP to opt out or HELP for help."
+
+Later messages drop the footer: "Hi John, this is FIT Beyond Therapy. Just a reminder that our records show a remaining balance of $375. Reply here if you have any questions." — and the renewal equivalent. STOP and HELP keep working regardless of whether the footer is printed. Because the footer depends on send history, the body is rebuilt at send time.
+
+## 3. Eligibility visibility
 
 Each client shows one SMS status: Consented / Not Consented / Opted Out / Invalid or Missing Phone — on the client record and on Dues Queue cards. A small admin view lists counts per bucket with a filterable client list. A draft is sendable only when consent exists, no later opt-out exists, the phone is valid, and all existing dues validation passes.
 

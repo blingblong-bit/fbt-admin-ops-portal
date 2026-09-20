@@ -16,7 +16,9 @@ Consent is required before any draft becomes sendable. Drafts still generate wit
 
 ## 2. First-message rule and later wording
 
-The first successfully **sent** outbound message to a client carries Twilio's required footer, verbatim: "Reply STOP to unsubscribe or HELP for help." First-message status is determined from actual sent/delivered outbound history, never from drafts.
+The first successfully **sent** outbound message to a client carries Twilio's required footer, verbatim: "Reply STOP to unsubscribe or HELP for help."
+
+"First message" means the first outbound message successfully submitted through this Twilio workflow — status `sent`, `delivered`, or any equivalent successful submission counts. Drafts, blocked drafts, and failed/undelivered messages do not count, so a client whose only prior attempt failed still receives the footer on the next one.
 
 First balance message: "Hi John, this is FIT Beyond Therapy. Our records show a remaining balance of $375. Reply here if you have any questions. Reply STOP to unsubscribe or HELP for help."
 
@@ -73,7 +75,7 @@ Ships with: automatic draft generation, consent required, admin review, manual S
 ## Technical notes
 
 - Existing `hasSmsConsent` / `validateDraft` consent and opt-out rules stay; the warning text becomes "Blocked — SMS consent not recorded".
-- Message builders in `src/lib/dues-messaging.ts` take an `includeFooter` flag; drafts preview with the footer only when no prior outbound message for that client has status `sent`/`delivered`, and the body is rebuilt with the correct footer at send time.
+- Message builders in `src/lib/dues-messaging.ts` take an `includeFooter` flag. A shared `hasPriorSuccessfulSend(messages)` helper returns true only for outbound rows with status `sent` or `delivered` (failed/undelivered/blocked/draft rows are ignored); the footer is included when it returns false, and the body is rebuilt with the correct footer at send time.
 - Migration: add `sms_consent_recorded_by uuid`, `sms_opt_out_source text` to `clients`; add `error_code`/`error_message` and a Twilio-SID index to `dues_messages`; allow `direction = 'inbound'` rows without a request key collision. Staff read / admin write RLS retained; consent writes go through a dedicated server function, not direct table writes.
 - Server functions in `src/lib/dues-messaging.functions.ts` (record consent, mark opted out, send-now, eligibility counts) with the existing admin assertion for send.
 - Webhooks as TanStack routes under `src/routes/api/public/` (`sms.status.ts`, `sms.inbound.ts`) following the existing `square.webhook.ts` pattern, with Twilio signature validation.

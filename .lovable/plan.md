@@ -75,7 +75,7 @@ Ships with: automatic draft generation, consent required, admin review, manual S
 ## Technical notes
 
 - Existing `hasSmsConsent` / `validateDraft` consent and opt-out rules stay; the warning text becomes "Blocked — SMS consent not recorded".
-- Message builders in `src/lib/dues-messaging.ts` take an `includeFooter` flag; drafts preview with the footer only when no prior outbound message for that client has status `sent`/`delivered`, and the body is rebuilt with the correct footer at send time.
+- Message builders in `src/lib/dues-messaging.ts` take an `includeFooter` flag. A shared `hasPriorSuccessfulSend(messages)` helper returns true only for outbound rows with status `sent` or `delivered` (failed/undelivered/blocked/draft rows are ignored); the footer is included when it returns false, and the body is rebuilt with the correct footer at send time.
 - Migration: add `sms_consent_recorded_by uuid`, `sms_opt_out_source text` to `clients`; add `error_code`/`error_message` and a Twilio-SID index to `dues_messages`; allow `direction = 'inbound'` rows without a request key collision. Staff read / admin write RLS retained; consent writes go through a dedicated server function, not direct table writes.
 - Server functions in `src/lib/dues-messaging.functions.ts` (record consent, mark opted out, send-now, eligibility counts) with the existing admin assertion for send.
 - Webhooks as TanStack routes under `src/routes/api/public/` (`sms.status.ts`, `sms.inbound.ts`) following the existing `square.webhook.ts` pattern, with Twilio signature validation.

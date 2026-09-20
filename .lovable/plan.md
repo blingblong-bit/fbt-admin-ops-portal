@@ -44,7 +44,7 @@ Pre-Renew keeps preparing the renewal and creating/updating its draft, never sen
 
 ## 11. Controlled live test (only on your go-ahead)
 
-One dedicated test client with a phone you control and a legitimate test balance. Flag turned on briefly, one message sent, delivery confirmed, reply received, STOP tested and verified to block the next send, then the flag goes back OFF. No production client is used.
+One dedicated test client with a phone you control, consent recorded, and a legitimate test balance. Flag turned on briefly, one message sent, delivery confirmed, reply received, STOP tested and verified to block the next send, then the flag goes back OFF. No production client is used.
 
 ## 12. Regression suite
 

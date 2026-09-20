@@ -44,7 +44,9 @@ New public endpoint receiving Twilio status callbacks, verified by Twilio signat
 
 ## 7. Inbound replies, STOP and HELP
 
-New public inbound endpoint (signature-verified) matching the sender's number to a client and storing the reply in the same message history as an inbound item. STOP / UNSUBSCRIBE / CANCEL / END / QUIT records an opt-out, blocks all future dues sends, and logs an activity. HELP returns the approved help reply only if the messaging service isn't already handling those keywords.
+New public inbound endpoint (signature-verified) matching the sender's number to a client and storing the reply in the same message history as an inbound item. STOP / UNSUBSCRIBE / CANCEL / END / QUIT records an opt-out in the Hub, blocks all future dues sends, and logs an activity.
+
+When Advanced Opt-Out is enabled on the Messaging Service, Twilio already sends the STOP/HELP reply and blocks that number itself — the app records the event (using the `OptOutType` field) and sends no reply of its own, so the client never gets a duplicate. Only if Advanced Opt-Out is not enabled does the app return the approved HELP response.
 
 ## 8. Conversation-style Messages tab
 

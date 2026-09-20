@@ -28,7 +28,7 @@ Later messages drop the footer: "Hi John, this is FIT Beyond Therapy. Just a rem
 
 Each client shows one SMS status: Consented / Not Consented / Opted Out / Invalid or Missing Phone — on the client record and on Dues Queue cards. A small admin view lists counts per bucket with a filterable client list. A draft is sendable only when consent exists, no later opt-out exists, the phone is valid, and all existing dues validation passes.
 
-## 3. Texting service connection (sending still off)
+## 4. Texting service connection (sending still off)
 
 Connect Twilio using Lovable's supported secure server-side integration or project secrets. No Twilio credentials may be committed to source code or exposed to the browser. `src/lib/dues-sms.server.ts` remains the only application module allowed to invoke the Twilio API, and it refuses unless, checked fresh at send time: the server flag is exactly true, draft is `ready_not_sent` and not blocked, consent valid, no later opt-out, phone valid, amount still owed, and this request key has never been sent. Nothing is trusted from the stored draft.
 

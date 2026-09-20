@@ -42,7 +42,7 @@ Admin/superadmin-only "Send Now" on Dues Queue and Messaging Preview. While send
 
 New public endpoint receiving Twilio status callbacks, verified by Twilio signature, matching the message by its Twilio ID: queued/sent → Sent, delivered → Delivered, failed/undelivered → Failed with the error detail stored. Repeated identical statuses write nothing new. Delivery callbacks never touch balances or packages.
 
-## 6. Inbound replies, STOP and HELP
+## 7. Inbound replies, STOP and HELP
 
 New public inbound endpoint (signature-verified) matching the sender's number to a client and storing the reply in the same message history as an inbound item. STOP / UNSUBSCRIBE / CANCEL / END / QUIT records an opt-out, blocks all future dues sends, and logs an activity. HELP returns the approved help reply only if the messaging service isn't already handling those keywords.
 

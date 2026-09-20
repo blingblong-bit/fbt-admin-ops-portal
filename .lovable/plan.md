@@ -2,57 +2,67 @@
 
 Goal: finish lightweight consent capture, texting-service plumbing, delivery/reply tracking, and a controlled manual Send action. Real texting stays switched off until you approve a live test. No real client financial or package values change.
 
-## 1. Lightweight consent capture
+## 1. Verbal SMS consent
 
-Consent is never inferred — not from a package purchase, a phone number, a booking, a payment, or being a long-standing client.
+Consent is never inferred — not from a package purchase, a phone number, a booking, or a payment.
 
-Client detail gets a "Record SMS Consent" action for staff and admins. It opens a confirmation modal with the exact wording staff should read:
+Client detail gets a "Record SMS Consent" action for staff and admins. Staff asks:
 
-> "Would you like to receive recurring text messages from FIT Beyond Therapy about appointments, package renewals, amounts due, and service-related updates? Message frequency varies. Message and data rates may apply. Consent is optional and is not a condition of purchase. You can reply STOP at any time to opt out or HELP for help."
+> "Can we text you about appointments, package renewals, and balances due?"
 
-Staff confirm the client said yes, and the record stores the consent time, source (`in_person_verbal`), and the staff member who recorded it, plus an activity entry. Staff can also mark a client opted out when told verbally, storing the opt-out time and source.
+If the client says yes, staff presses Record SMS Consent. The record stores the consent time, source (`in_person_verbal`), and the staff member who recorded it, plus an activity entry. Staff can also mark a client opted out when asked verbally, storing the opt-out time and source. Nothing extra is texted to the client at consent time.
 
 Consent is required before any draft becomes sendable. Drafts still generate without it, showing "Blocked — SMS consent not recorded".
 
-## 2. Eligibility visibility
+## 2. First-message rule and later wording
+
+The first successfully **sent** outbound message to a client carries the footer "Reply STOP to opt out or HELP for help." First-message status is determined from actual sent/delivered outbound history, never from drafts.
+
+First balance message: "Hi John, this is FIT Beyond Therapy. Our records show a remaining balance of $375. Reply here if you have any questions. Reply STOP to opt out or HELP for help."
+
+First renewal message: "Hi John, this is FIT Beyond Therapy. Your next 8-visit package is scheduled to start on September 16. The amount due will be $375. Reply here if you have any questions. Reply STOP to opt out or HELP for help."
+
+Later messages drop the footer: "Hi John, this is FIT Beyond Therapy. Just a reminder that our records show a remaining balance of $375. Reply here if you have any questions." — and the renewal equivalent. STOP and HELP keep working regardless of whether the footer is printed. Because the footer depends on send history, the body is rebuilt at send time.
+
+## 3. Eligibility visibility
 
 Each client shows one SMS status: Consented / Not Consented / Opted Out / Invalid or Missing Phone — on the client record and on Dues Queue cards. A small admin view lists counts per bucket with a filterable client list. A draft is sendable only when consent exists, no later opt-out exists, the phone is valid, and all existing dues validation passes.
 
-## 3. Texting service connection (sending still off)
+## 4. Texting service connection (sending still off)
 
 Connect Twilio using Lovable's supported secure server-side integration or project secrets. No Twilio credentials may be committed to source code or exposed to the browser. `src/lib/dues-sms.server.ts` remains the only application module allowed to invoke the Twilio API, and it refuses unless, checked fresh at send time: the server flag is exactly true, draft is `ready_not_sent` and not blocked, consent valid, no later opt-out, phone valid, amount still owed, and this request key has never been sent. Nothing is trusted from the stored draft.
 
 In practice this means `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, and the sending number / Messaging Service SID are stored as project secrets and read inside the server handler only.
 
-## 4. Manual Send Now (disabled while the flag is off)
+## 5. Manual Send Now (disabled while the flag is off)
 
 Admin/superadmin-only "Send Now" on Dues Queue and Messaging Preview. While sending is off the button is visibly disabled with the "SMS Sending Disabled" banner. When later enabled: confirmation modal showing client, phone, amount, message type and exact text; sends one message; idempotent by request key; stores the Twilio message ID, `sent_at`, status `sent`, and an activity entry. No bulk send.
 
-## 5. Delivery status webhook
+## 6. Delivery status webhook
 
 New public endpoint receiving Twilio status callbacks, verified by Twilio signature, matching the message by its Twilio ID: queued/sent → Sent, delivered → Delivered, failed/undelivered → Failed with the error detail stored. Repeated identical statuses write nothing new. Delivery callbacks never touch balances or packages.
 
-## 6. Inbound replies, STOP and HELP
+## 7. Inbound replies, STOP and HELP
 
 New public inbound endpoint (signature-verified) matching the sender's number to a client and storing the reply in the same message history as an inbound item. STOP / UNSUBSCRIBE / CANCEL / END / QUIT records an opt-out, blocks all future dues sends, and logs an activity. HELP returns the approved help reply only if the messaging service isn't already handling those keywords.
 
-## 7. Conversation-style Messages tab
+## 8. Conversation-style Messages tab
 
 The existing client Messages tab is restyled as a conversation: outbound on one side, inbound on the other, with time, status, failure reason, and the amount/package context for dues drafts. Staff can read; only admin/superadmin see Send controls.
 
-## 8–10. Existing behaviour preserved
+## 9. Pre-Renew and dues queue preserved
 
 Pre-Renew keeps preparing the renewal and creating/updating its draft, never sending. Missing consent shows "Blocked — SMS consent not recorded"; recording consent and refreshing makes it sendable when everything else is valid. Dues Queue eligibility rules are unchanged; cards gain SMS eligibility alongside visit progress, balance, last status, Preview and the (disabled) Send Now. Immediately before any send, the balance is re-checked: settled → draft marked Payment Received and no send; changed amount → body regenerated and admin must confirm again.
 
-## 11. Controlled live test (only on your go-ahead)
+## 10. Controlled live test (only on your go-ahead)
 
 One dedicated test client with a phone you control, consent recorded, and a legitimate test balance. Flag turned on briefly, one message sent, delivery confirmed, reply received, STOP tested and verified to block the next send, then the flag goes back OFF. No production client is used.
 
-## 12. Regression suite
+## 11. Regression suite
 
-Automated tests for every rule listed in your item 12, including blocked-but-ready drafts refusing to send, retry sending only one message, duplicate webhooks not duplicating activity, staff-cannot-send, and no financial values changing.
+Automated tests covering: consent recorded → sendable; no consent, later opt-out, invalid phone, Package Info Needed, Payment Review → blocked; unpaid balance eligible, fully paid not; prepaid renewal net amount; paid before send → payment_received, no send; retry sends one message only; duplicate webhook writes no duplicate activity; inbound reply stored once; STOP blocks the next send; staff read but cannot send; flag OFF → send refuses; blocked-but-ready refuses; first message includes the STOP/HELP footer and the second does not; no financial values change.
 
-## 13. Launch state
+## 12. Launch state
 
 Ships with: automatic draft generation, consent required, admin review, manual Send Now only, automatic delivery/reply tracking, no bulk send, no auto-send on Pre-Renew.
 
@@ -61,6 +71,7 @@ Ships with: automatic draft generation, consent required, admin review, manual S
 ## Technical notes
 
 - Existing `hasSmsConsent` / `validateDraft` consent and opt-out rules stay; the warning text becomes "Blocked — SMS consent not recorded".
+- Message builders in `src/lib/dues-messaging.ts` take an `includeFooter` flag; drafts preview with the footer only when no prior outbound message for that client has status `sent`/`delivered`, and the body is rebuilt with the correct footer at send time.
 - Migration: add `sms_consent_recorded_by uuid`, `sms_opt_out_source text` to `clients`; add `error_code`/`error_message` and a Twilio-SID index to `dues_messages`; allow `direction = 'inbound'` rows without a request key collision. Staff read / admin write RLS retained; consent writes go through a dedicated server function, not direct table writes.
 - Server functions in `src/lib/dues-messaging.functions.ts` (record consent, mark opted out, send-now, eligibility counts) with the existing admin assertion for send.
 - Webhooks as TanStack routes under `src/routes/api/public/` (`sms.status.ts`, `sms.inbound.ts`) following the existing `square.webhook.ts` pattern, with Twilio signature validation.

@@ -46,7 +46,7 @@ New public endpoint receiving Twilio status callbacks, verified by Twilio signat
 
 New public inbound endpoint (signature-verified) matching the sender's number to a client and storing the reply in the same message history as an inbound item. STOP / UNSUBSCRIBE / CANCEL / END / QUIT records an opt-out, blocks all future dues sends, and logs an activity. HELP returns the approved help reply only if the messaging service isn't already handling those keywords.
 
-## 7. Conversation-style Messages tab
+## 8. Conversation-style Messages tab
 
 The existing client Messages tab is restyled as a conversation: outbound on one side, inbound on the other, with time, status, failure reason, and the amount/package context for dues drafts. Staff can read; only admin/superadmin see Send controls.
 

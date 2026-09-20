@@ -48,12 +48,13 @@ Automated tests for every rule listed in your item 12, including blocked-but-rea
 
 ## 13. Launch state
 
-Ships with: automatic draft generation, consent required, admin review, manual Send Now only, automatic delivery/reply tracking, no bulk send, no auto-send on Pre-Renew.
+Ships with: automatic draft generation, opt-outs honoured, admin review, manual Send Now only, automatic delivery/reply tracking, no bulk send, no auto-send on Pre-Renew.
 
 ## Technical notes
 
-- Migration: add `sms_consent_recorded_by uuid`, `sms_opt_out_source text` to `clients`; add `error_code`/`error_message` and a Twilio-SID index to `dues_messages`; allow `direction = 'inbound'` rows without a request key collision. Staff read / admin write RLS retained; consent writes allowed for staff via a dedicated server function, not direct table writes.
-- Server functions in `src/lib/dues-messaging.functions.ts` (consent record/opt-out, send-now, eligibility counts) with the existing admin assertion for send.
+- `hasSmsConsent` is replaced by an opt-out-only check; the "No recorded texting consent" warning is removed from `validateDraft` and its tests, and the opt-out test stays.
+- Migration: add `sms_opt_out_source text` to `clients`; add `error_code`/`error_message` and a Twilio-SID index to `dues_messages`; allow `direction = 'inbound'` rows without a request key collision. Existing `sms_consent_at` / `sms_consent_source` columns are left in place, unused.
+- Server functions in `src/lib/dues-messaging.functions.ts` (opt-out / undo opt-out, send-now, eligibility counts) with the existing admin assertion for send.
 - Webhooks as TanStack routes under `src/routes/api/public/` (`sms.status.ts`, `sms.inbound.ts`) following the existing `square.webhook.ts` pattern, with Twilio signature validation.
 - `dues-sms.server.ts` calls Twilio through the connector gateway; `SMS_DUES_SENDING_ENABLED` stays unset/false.
 - `DUES_ACCEPTANCE_TEST_MODE` fail-closed scoping stays as-is.

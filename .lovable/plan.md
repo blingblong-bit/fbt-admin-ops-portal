@@ -50,7 +50,7 @@ New public inbound endpoint (signature-verified) matching the sender's number to
 
 The existing client Messages tab is restyled as a conversation: outbound on one side, inbound on the other, with time, status, failure reason, and the amount/package context for dues drafts. Staff can read; only admin/superadmin see Send controls.
 
-## 8–10. Existing behaviour preserved
+## 9. Pre-Renew and dues queue preserved
 
 Pre-Renew keeps preparing the renewal and creating/updating its draft, never sending. Missing consent shows "Blocked — SMS consent not recorded"; recording consent and refreshing makes it sendable when everything else is valid. Dues Queue eligibility rules are unchanged; cards gain SMS eligibility alongside visit progress, balance, last status, Preview and the (disabled) Send Now. Immediately before any send, the balance is re-checked: settled → draft marked Payment Received and no send; changed amount → body regenerated and admin must confirm again.
 

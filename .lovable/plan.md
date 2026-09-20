@@ -64,12 +64,12 @@ Ships with: automatic draft generation, consent required, admin review, manual S
 - Migration: add `sms_consent_recorded_by uuid`, `sms_opt_out_source text` to `clients`; add `error_code`/`error_message` and a Twilio-SID index to `dues_messages`; allow `direction = 'inbound'` rows without a request key collision. Staff read / admin write RLS retained; consent writes go through a dedicated server function, not direct table writes.
 - Server functions in `src/lib/dues-messaging.functions.ts` (record consent, mark opted out, send-now, eligibility counts) with the existing admin assertion for send.
 - Webhooks as TanStack routes under `src/routes/api/public/` (`sms.status.ts`, `sms.inbound.ts`) following the existing `square.webhook.ts` pattern, with Twilio signature validation.
-- `dues-sms.server.ts` calls Twilio through the connector gateway; `SMS_DUES_SENDING_ENABLED` stays unset/false.
+- `dues-sms.server.ts` calls the Twilio REST API server-side with credentials read from project secrets inside the handler; `SMS_DUES_SENDING_ENABLED` stays unset/false.
 - `DUES_ACCEPTANCE_TEST_MODE` fail-closed scoping stays as-is.
 
 ## What I need from you
 
-- Approval to open the Twilio connection card (needed before any live test).
+- Your Twilio Account SID and Auth Token, saved through the secure secrets form (never pasted in chat).
 - The Twilio sending number or Messaging Service to use, and whether its Advanced Opt-Out already handles STOP/HELP.
 - A phone number you control for the controlled live test.
 - Note: all 1,755 clients start as Not Consented, so staff will need to record consent before anyone can be texted.

@@ -40,7 +40,7 @@ The existing client Messages tab is restyled as a conversation: outbound on one 
 
 ## 8–10. Existing behaviour preserved
 
-Pre-Renew keeps preparing the renewal and creating/updating its draft, never sending. Drafts are now blocked only by an opt-out, an unusable phone number, incomplete package info, payment review, or a $0 amount. Dues Queue eligibility rules are unchanged; cards gain SMS eligibility alongside visit progress, balance, last status, Preview and the (disabled) Send Now. Immediately before any send, the balance is re-checked: settled → draft marked Payment Received and no send; changed amount → body regenerated and admin must confirm again.
+Pre-Renew keeps preparing the renewal and creating/updating its draft, never sending. Missing consent shows "Blocked — SMS consent not recorded"; recording consent and refreshing makes it sendable when everything else is valid. Dues Queue eligibility rules are unchanged; cards gain SMS eligibility alongside visit progress, balance, last status, Preview and the (disabled) Send Now. Immediately before any send, the balance is re-checked: settled → draft marked Payment Received and no send; changed amount → body regenerated and admin must confirm again.
 
 ## 11. Controlled live test (only on your go-ahead)
 

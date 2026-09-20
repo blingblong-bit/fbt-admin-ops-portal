@@ -1,22 +1,22 @@
 # Dues Messaging — Production Readiness (sending stays OFF)
 
-Goal: finish consent capture, texting-service plumbing, delivery/reply tracking, and a controlled manual Send action. Real texting stays switched off until you approve a live test. No real client financial or package values change.
+Goal: finish the texting-service plumbing, delivery/reply tracking, and a controlled manual Send action. Real texting stays switched off until you approve a live test. No real client financial or package values change.
 
-## 1. Consent capture
+## 1. No consent step — purchase is the agreement
 
-Add to each client record: consent timestamp, source, the staff member who recorded it, opt-out timestamp, opt-out source.
+Per your direction, buying a package is the client's agreement to receive dues and package messages. The separate "Record SMS Consent" workflow is removed from the plan, and the existing "no recorded texting consent" blocker is dropped from draft validation.
 
-Client detail gets a "Record SMS Consent" action (staff and admin) opening a confirmation modal with the exact disclosure wording supplied. Saving requires the staff member to confirm the client agreed out loud, then stores the timestamp, source (`in_person_verbal` by default, selectable), the signed-in staff user, clears an earlier opt-out only when this is a genuine new consent, and writes an activity entry. Consent is never inferred from a phone number, purchase, or booking.
+What stays: **opt-out is always honoured.** If a client replies STOP, or staff are told verbally, the record is marked opted out and no further dues message can be sent to them. Staff get a small "Mark opted out" / "Undo opt-out" action on the client record, and each opt-out writes an activity entry.
 
-An "Opted out" action is also available for staff who are told verbally.
+(One note for your awareness: US carriers can still filter messages where a business can't show agreement, so every message keeps the "Reply STOP to opt out" line and we keep the opt-out record.)
 
 ## 2. Eligibility visibility
 
-Each client shows one SMS status: Consented / Not Consented / Opted Out / Invalid or Missing Phone. A small admin SMS Consent view lists counts for each bucket with a filterable client list. Draft validation keeps using exactly these fields.
+Each client shows one SMS status: Eligible / Opted Out / Invalid or Missing Phone. A small admin view lists counts for each bucket with a filterable client list. Draft validation uses exactly these fields.
 
 ## 3. Texting service connection (sending still off)
 
-Connect Twilio through the workspace connector (no keys in code). `src/lib/dues-sms.server.ts` remains the only module that can contact Twilio and refuses unless, checked fresh at send time: the server flag is exactly true, draft is `ready_not_sent` and not blocked, consent valid, no opt-out, phone valid, amount still owed, and this request key has never been sent. Nothing is trusted from the stored draft.
+Connect Twilio through the workspace connector (no keys in code). `src/lib/dues-sms.server.ts` remains the only module that can contact Twilio and refuses unless, checked fresh at send time: the server flag is exactly true, draft is `ready_not_sent` and not blocked, the client has not opted out, phone valid, amount still owed, and this request key has never been sent. Nothing is trusted from the stored draft.
 
 ## 4. Manual Send Now (disabled while the flag is off)
 

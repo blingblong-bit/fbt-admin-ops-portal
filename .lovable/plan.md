@@ -16,13 +16,13 @@ Consent is required before any draft becomes sendable. Drafts still generate wit
 
 ## 2. First-message rule and later wording
 
-The first successfully **sent** outbound message to a client carries the footer "Reply STOP to opt out or HELP for help." First-message status is determined from actual sent/delivered outbound history, never from drafts.
+The first successfully **sent** outbound message to a client carries Twilio's required footer, verbatim: "Reply STOP to unsubscribe or HELP for help." First-message status is determined from actual sent/delivered outbound history, never from drafts.
 
-First balance message: "Hi John, this is FIT Beyond Therapy. Our records show a remaining balance of $375. Reply here if you have any questions. Reply STOP to opt out or HELP for help."
+First balance message: "Hi John, this is FIT Beyond Therapy. Our records show a remaining balance of $375. Reply here if you have any questions. Reply STOP to unsubscribe or HELP for help."
 
-First renewal message: "Hi John, this is FIT Beyond Therapy. Your next 8-visit package is scheduled to start on September 16. The amount due will be $375. Reply here if you have any questions. Reply STOP to opt out or HELP for help."
+First renewal message: "Hi John, this is FIT Beyond Therapy. Your next 8-visit package is scheduled to start on September 16. The amount due will be $375. Reply here if you have any questions. Reply STOP to unsubscribe or HELP for help."
 
-Later messages drop the footer: "Hi John, this is FIT Beyond Therapy. Just a reminder that our records show a remaining balance of $375. Reply here if you have any questions." — and the renewal equivalent. STOP and HELP keep working regardless of whether the footer is printed. Because the footer depends on send history, the body is rebuilt at send time.
+Later messages drop the footer: "Hi John, this is FIT Beyond Therapy. Just a reminder that our records show a remaining balance of $375. Reply here if you have any questions." — and the renewal equivalent. Every message still identifies FIT Beyond Therapy by name. STOP and HELP keep working regardless of whether the footer is printed. Because the footer depends on send history, the body is rebuilt at send time.
 
 ## 3. Eligibility visibility
 

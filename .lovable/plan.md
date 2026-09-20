@@ -56,6 +56,8 @@ Automated tests for every rule listed in your item 12, including blocked-but-rea
 
 Ships with: automatic draft generation, consent required, admin review, manual Send Now only, automatic delivery/reply tracking, no bulk send, no auto-send on Pre-Renew.
 
+**Launch rule:** `SMS_DUES_SENDING_ENABLED` is never switched on globally during implementation. All Twilio configuration, webhook endpoints, consent controls, and the Send Now UI are built and validated with the flag OFF. The first enablement is only for the dedicated controlled test client, after explicit approval.
+
 ## Technical notes
 
 - Existing `hasSmsConsent` / `validateDraft` consent and opt-out rules stay; the warning text becomes "Blocked — SMS consent not recorded".

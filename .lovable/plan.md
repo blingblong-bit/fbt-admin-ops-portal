@@ -34,7 +34,7 @@ Connect Twilio using Lovable's supported secure server-side integration or proje
 
 In practice this means `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, and the sending number / Messaging Service SID are stored as project secrets and read inside the server handler only.
 
-## 4. Manual Send Now (disabled while the flag is off)
+## 5. Manual Send Now (disabled while the flag is off)
 
 Admin/superadmin-only "Send Now" on Dues Queue and Messaging Preview. While sending is off the button is visibly disabled with the "SMS Sending Disabled" banner. When later enabled: confirmation modal showing client, phone, amount, message type and exact text; sends one message; idempotent by request key; stores the Twilio message ID, `sent_at`, status `sent`, and an activity entry. No bulk send.
 

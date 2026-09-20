@@ -64,3 +64,4 @@ Ships with: automatic draft generation, opt-outs honoured, admin review, manual 
 - Approval to open the Twilio connection card (needed before any live test).
 - The Twilio sending number or Messaging Service to use, and whether its Advanced Opt-Out already handles STOP/HELP.
 - A phone number you control for the controlled live test.
+- Confirmation that all current clients should be treated as eligible (no consent gate), with only opt-outs excluded.

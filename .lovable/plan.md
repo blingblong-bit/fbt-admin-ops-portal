@@ -8,7 +8,7 @@ Consent is never inferred — not from a package purchase, a phone number, a boo
 
 Client detail gets a "Record SMS Consent" action for staff and admins. It opens a confirmation modal with the exact wording staff should read:
 
-> "Would you like to receive text messages from FIT Beyond Therapy about appointments, package renewals, amounts due, and service-related updates? Message frequency varies. Message and data rates may apply. You can reply STOP at any time."
+> "Would you like to receive recurring text messages from FIT Beyond Therapy about appointments, package renewals, amounts due, and service-related updates? Message frequency varies. Message and data rates may apply. Consent is optional and is not a condition of purchase. You can reply STOP at any time to opt out or HELP for help."
 
 Staff confirm the client said yes, and the record stores the consent time, source (`in_person_verbal`), and the staff member who recorded it, plus an activity entry. Staff can also mark a client opted out when told verbally, storing the opt-out time and source.
 

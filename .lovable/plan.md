@@ -20,7 +20,9 @@ Each client shows one SMS status: Consented / Not Consented / Opted Out / Invali
 
 ## 3. Texting service connection (sending still off)
 
-Connect Twilio through the workspace connector (no keys in code). `src/lib/dues-sms.server.ts` remains the only module that can contact Twilio and refuses unless, checked fresh at send time: the server flag is exactly true, draft is `ready_not_sent` and not blocked, consent valid, no later opt-out, phone valid, amount still owed, and this request key has never been sent. Nothing is trusted from the stored draft.
+Connect Twilio using Lovable's supported secure server-side integration or project secrets. No Twilio credentials may be committed to source code or exposed to the browser. `src/lib/dues-sms.server.ts` remains the only application module allowed to invoke the Twilio API, and it refuses unless, checked fresh at send time: the server flag is exactly true, draft is `ready_not_sent` and not blocked, consent valid, no later opt-out, phone valid, amount still owed, and this request key has never been sent. Nothing is trusted from the stored draft.
+
+In practice this means `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, and the sending number / Messaging Service SID are stored as project secrets and read inside the server handler only.
 
 ## 4. Manual Send Now (disabled while the flag is off)
 

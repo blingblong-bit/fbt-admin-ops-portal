@@ -58,11 +58,11 @@ Pre-Renew keeps preparing the renewal and creating/updating its draft, never sen
 
 One dedicated test client with a phone you control, consent recorded, and a legitimate test balance. Flag turned on briefly, one message sent, delivery confirmed, reply received, STOP tested and verified to block the next send, then the flag goes back OFF. No production client is used.
 
-## 12. Regression suite
+## 11. Regression suite
 
-Automated tests for every rule listed in your item 12, including blocked-but-ready drafts refusing to send, retry sending only one message, duplicate webhooks not duplicating activity, staff-cannot-send, and no financial values changing.
+Automated tests covering: consent recorded → sendable; no consent, later opt-out, invalid phone, Package Info Needed, Payment Review → blocked; unpaid balance eligible, fully paid not; prepaid renewal net amount; paid before send → payment_received, no send; retry sends one message only; duplicate webhook writes no duplicate activity; inbound reply stored once; STOP blocks the next send; staff read but cannot send; flag OFF → send refuses; blocked-but-ready refuses; first message includes the STOP/HELP footer and the second does not; no financial values change.
 
-## 13. Launch state
+## 12. Launch state
 
 Ships with: automatic draft generation, consent required, admin review, manual Send Now only, automatic delivery/reply tracking, no bulk send, no auto-send on Pre-Renew.
 

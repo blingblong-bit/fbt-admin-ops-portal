@@ -20,7 +20,9 @@ Each client shows one SMS status: Consented / Not Consented / Opted Out / Invali
 
 ## 3. Texting service connection (sending still off)
 
-Connect Twilio through the workspace connector (no keys in code). `src/lib/dues-sms.server.ts` remains the only module that can contact Twilio and refuses unless, checked fresh at send time: the server flag is exactly true, draft is `ready_not_sent` and not blocked, consent valid, no later opt-out, phone valid, amount still owed, and this request key has never been sent. Nothing is trusted from the stored draft.
+Connect Twilio using Lovable's supported secure server-side integration or project secrets. No Twilio credentials may be committed to source code or exposed to the browser. `src/lib/dues-sms.server.ts` remains the only application module allowed to invoke the Twilio API, and it refuses unless, checked fresh at send time: the server flag is exactly true, draft is `ready_not_sent` and not blocked, consent valid, no later opt-out, phone valid, amount still owed, and this request key has never been sent. Nothing is trusted from the stored draft.
+
+In practice this means `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, and the sending number / Messaging Service SID are stored as project secrets and read inside the server handler only.
 
 ## 4. Manual Send Now (disabled while the flag is off)
 
@@ -54,18 +56,20 @@ Automated tests for every rule listed in your item 12, including blocked-but-rea
 
 Ships with: automatic draft generation, consent required, admin review, manual Send Now only, automatic delivery/reply tracking, no bulk send, no auto-send on Pre-Renew.
 
+**Launch rule:** `SMS_DUES_SENDING_ENABLED` is never switched on globally during implementation. All Twilio configuration, webhook endpoints, consent controls, and the Send Now UI are built and validated with the flag OFF. The first enablement is only for the dedicated controlled test client, after explicit approval.
+
 ## Technical notes
 
 - Existing `hasSmsConsent` / `validateDraft` consent and opt-out rules stay; the warning text becomes "Blocked — SMS consent not recorded".
 - Migration: add `sms_consent_recorded_by uuid`, `sms_opt_out_source text` to `clients`; add `error_code`/`error_message` and a Twilio-SID index to `dues_messages`; allow `direction = 'inbound'` rows without a request key collision. Staff read / admin write RLS retained; consent writes go through a dedicated server function, not direct table writes.
 - Server functions in `src/lib/dues-messaging.functions.ts` (record consent, mark opted out, send-now, eligibility counts) with the existing admin assertion for send.
 - Webhooks as TanStack routes under `src/routes/api/public/` (`sms.status.ts`, `sms.inbound.ts`) following the existing `square.webhook.ts` pattern, with Twilio signature validation.
-- `dues-sms.server.ts` calls Twilio through the connector gateway; `SMS_DUES_SENDING_ENABLED` stays unset/false.
+- `dues-sms.server.ts` calls the Twilio REST API server-side with credentials read from project secrets inside the handler; `SMS_DUES_SENDING_ENABLED` stays unset/false.
 - `DUES_ACCEPTANCE_TEST_MODE` fail-closed scoping stays as-is.
 
 ## What I need from you
 
-- Approval to open the Twilio connection card (needed before any live test).
+- Your Twilio Account SID and Auth Token, saved through the secure secrets form (never pasted in chat).
 - The Twilio sending number or Messaging Service to use, and whether its Advanced Opt-Out already handles STOP/HELP.
 - A phone number you control for the controlled live test.
 - Note: all 1,755 clients start as Not Consented, so staff will need to record consent before anyone can be texted.

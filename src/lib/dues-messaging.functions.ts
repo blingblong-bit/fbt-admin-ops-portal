@@ -120,6 +120,41 @@ export const getDuesQueue = createServerFn({ method: "GET" })
   });
 
 /**
+ * Re-derives this client's unsent balance/renewal drafts from their current
+ * record and rewrites blocked / warnings / wording / amount in place. Used
+ * after a state change (e.g. consent recorded) that can make a stored draft's
+ * blocking reason obsolete.
+ */
+async function revalidateOpenDrafts(context: Ctx, client: DuesClient): Promise<void> {
+  const { data } = await context.supabase
+    .from("dues_messages")
+    .select("id, message_type")
+    .eq("client_id", client.id)
+    .eq("status", "ready_not_sent")
+    .in("message_type", ["balance_due", "renewal_due"]);
+  const rows = (data ?? []) as { id: string; message_type: string }[];
+  if (rows.length === 0) return;
+
+  const dismissed = await loadDismissedIds(context);
+  const isDismissed = dismissed.has(client.id);
+  for (const row of rows) {
+    const plan =
+      row.message_type === "renewal_due"
+        ? buildRenewalDraft(client, isDismissed)
+        : buildBalanceDraft(client, isDismissed);
+    await context.supabase
+      .from("dues_messages")
+      .update({
+        body: plan.body,
+        amount_due: plan.amountDue,
+        validation_warnings: plan.warnings,
+        blocked: plan.blocked,
+      })
+      .eq("id", row.id);
+  }
+}
+
+/**
  * Idempotent draft upsert. Reuses the unsent draft for the same obligation,
  * rebuilds its wording/amount from current records, and only writes an
  * activity row on creation or a material change.

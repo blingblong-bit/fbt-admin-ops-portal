@@ -42,7 +42,7 @@ export const Route = createFileRoute("/api/public/sms/status")({
 
         const sid = params["MessageSid"] ?? params["SmsSid"];
         const status = mapStatus(params["MessageStatus"] ?? "");
-        if (!sid || !status) return EMPTY;
+        if (!sid || !status) return EMPTY();
 
         const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
         const { data: row } = await supabaseAdmin
@@ -50,8 +50,8 @@ export const Route = createFileRoute("/api/public/sms/status")({
           .select("id, client_id, status, request_key")
           .eq("twilio_sid", sid)
           .maybeSingle();
-        if (!row) return EMPTY;
-        if (row.status === status) return EMPTY; // repeated identical status
+        if (!row) return EMPTY();
+        if (row.status === status) return EMPTY(); // repeated identical status
 
         await supabaseAdmin
           .from("dues_messages")
@@ -75,7 +75,7 @@ export const Route = createFileRoute("/api/public/sms/status")({
           });
         }
 
-        return EMPTY;
+        return EMPTY();
       },
     },
   },

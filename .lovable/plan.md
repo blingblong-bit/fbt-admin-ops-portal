@@ -47,9 +47,11 @@ Messages go out through the **Messaging Service SID** tied to the approved A2P c
 
 ## 5. Manual Send Now (disabled while the flag is off)
 
-Admin/superadmin-only "Send Now" on Dues Queue and Messaging Preview. While sending is off the button is visibly disabled with the "SMS Sending Disabled" banner. When later enabled: confirmation modal showing client, phone, amount, message type and exact text; sends one message; idempotent by request key; stores the Twilio message ID, `sent_at`, status `sent`, and an activity entry. No bulk send.
+Admin/superadmin-only "Send Now" on Dues Queue and Messaging Preview. While sending is off the button is visibly disabled with the "SMS Sending Disabled" banner. When later enabled: confirmation modal showing client, phone, message type and exact text; sends one message; idempotent by request key; stores the Twilio message ID, `sent_at`, status `sent`, and an activity entry. No bulk send.
 
-If a client's `consent_confirmation` has not been sent yet, the send path sends that one first and the dues message goes out on the next action — a consented client never receives a dues text before their confirmation.
+The modal shows an amount only for `balance_due` and `renewal_due`; for `consent_confirmation` the amount field is omitted entirely rather than showing $0 or N/A.
+
+If a client's current `consent_confirmation` has not been sent yet, the send path sends that one first and the dues message goes out on the next action — a consented client never receives a dues text before their confirmation.
 
 ## 6. Delivery status webhook
 
@@ -75,7 +77,7 @@ One dedicated test client with a phone you control, consent recorded, and a legi
 
 ## 11. Regression suite
 
-Automated tests covering: consent recorded → sendable and exactly one `consent_confirmation` draft created (repeat recording does not duplicate it); confirmation body matches the approved wording; a consented client who owes $0 still has a sendable confirmation; dues bodies contain no send-history logic and always name FIT Beyond Therapy; no consent, later opt-out, invalid phone, Package Info Needed, Payment Review → blocked; unpaid balance eligible, fully paid not; prepaid renewal net amount; paid before send → payment_received, no send; retry sends one message only; duplicate webhook writes no duplicate activity; inbound reply stored once; STOP blocks the next send; staff read but cannot send; flag OFF → send refuses; blocked-but-ready refuses; no financial values change.
+Automated tests covering: consent recorded → sendable and exactly one `consent_confirmation` draft created (repeat saves of the same consent event do not duplicate it); consent → opt-out → re-consent creates a second, distinct confirmation obligation; confirmation body matches the approved wording; a consented client who owes $0 still has a sendable confirmation; dues bodies contain no send-history logic and always name FIT Beyond Therapy; no consent, later opt-out, invalid phone, Package Info Needed, Payment Review → blocked; unpaid balance eligible, fully paid not; prepaid renewal net amount; paid before send → payment_received, no send; retry sends one message only; duplicate webhook writes no duplicate activity; inbound reply stored once; STOP blocks the next send; staff read but cannot send; flag OFF → send refuses; blocked-but-ready refuses; no financial values change.
 
 ## 12. Launch state
 
@@ -86,7 +88,7 @@ Ships with: automatic draft generation, consent required, admin review, manual S
 ## Technical notes
 
 - Existing `hasSmsConsent` / `validateDraft` consent and opt-out rules stay; the warning text becomes "Blocked — SMS consent not recorded". `validateDraft` branches on message type: the "Amount due is $0 or less" and package-review checks apply to `balance_due` / `renewal_due` only, never to `consent_confirmation`.
-- `src/lib/dues-messaging.ts` gains `consent_confirmation` as a third `DuesMessageType` with `renderConsentConfirmationMessage()` and request key `consent:${clientId}` (idempotent — re-recording consent reuses the unsent draft). No `hasPriorSuccessfulSend` / send-history logic in any builder; existing dues bodies simply drop their "Reply STOP to opt out." tail.
+- `src/lib/dues-messaging.ts` gains `consent_confirmation` as a third `DuesMessageType` with `renderConsentConfirmationMessage()`. Its request key is tied to the specific consent **event**, not the client forever — `consent:${clientId}:${sms_consent_at}`. Repeated saves of the same consent event reuse the same unsent draft, but a genuine re-consent after an opt-out is a new event and so creates a new confirmation obligation. No `hasPriorSuccessfulSend` / send-history logic in any builder; existing dues bodies simply drop their "Reply STOP to opt out." tail.
 - `sendDuesMessage` applies the same per-type branch at send time, re-reading the client from the database rather than trusting the draft.
 - Migration: add `sms_consent_recorded_by uuid`, `sms_opt_out_source text` to `clients`; add `error_code`/`error_message` and a Twilio-SID index to `dues_messages`; allow `direction = 'inbound'` rows without a request key collision; allow `message_type = 'consent_confirmation'`. Staff read / admin write RLS retained; consent writes go through a dedicated server function, not direct table writes.
 - Server functions in `src/lib/dues-messaging.functions.ts` (record consent, mark opted out, send-now, eligibility counts) with the existing admin assertion for send.

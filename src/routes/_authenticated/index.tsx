@@ -934,6 +934,7 @@ function Dashboard() {
         "renewal_review",
         "renewal_manual",
         "new_clients",
+        "dues_texts",
       ]),
     [],
   );

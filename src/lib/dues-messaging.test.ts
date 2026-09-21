@@ -78,13 +78,13 @@ describe("message bodies", () => {
         amount: 375,
       }),
     ).toBe(
-      "Hi Jane, this is FIT Beyond Therapy. Your next 8-visit package is scheduled to start on 09/21/2026. The amount due will be $375.00. Reply here if you have any questions. Reply STOP to opt out.",
+      "Hi Jane, this is FIT Beyond Therapy. Your next 8-visit package is scheduled to start on 09/21/2026. The amount due will be $375.00. Reply here if you have any questions.",
     );
   });
   it("renders the balance body exactly and generically", () => {
     const body = renderBalanceDueMessage({ firstName: "Jane", amount: 150 });
     expect(body).toBe(
-      "Hi Jane, this is FIT Beyond Therapy. Just a reminder that our records show a remaining balance of $150.00. Reply here if you have any questions. Reply STOP to opt out.",
+      "Hi Jane, this is FIT Beyond Therapy. Just a reminder that our records show a remaining balance of $150.00. Reply here if you have any questions.",
     );
     expect(body).not.toMatch(/current package|previous package/i);
   });
@@ -98,7 +98,7 @@ describe("blocking reasons", () => {
   });
   it("blocks missing consent", () => {
     expect(validateDraft({ ...base, sms_consent_at: null }, "balance_due", 100)).toContain(
-      "No recorded texting consent",
+      "Blocked — SMS consent not recorded",
     );
   });
   it("blocks a later opt-out", () => {

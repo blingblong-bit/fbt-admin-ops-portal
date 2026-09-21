@@ -18,10 +18,7 @@ function last10(s: string | null | undefined): string {
 }
 
 const STOP_WORDS = new Set(["stop", "unsubscribe", "cancel", "end", "quit", "stopall"]);
-const HELP_WORDS = new Set(["help", "info"]);
-
-const HELP_REPLY =
-  "FIT Beyond Therapy: we text about appointments, package renewals and balances due. Reply STOP to unsubscribe.";
+const START_WORDS = new Set(["start", "unstop", "yes"]);
 
 export const Route = createFileRoute("/api/public/sms/inbound")({
   server: {

@@ -37,7 +37,9 @@ Tile and page are admin/superadmin only, guarded both in the page and on the ser
 ## Technical notes
 
 - New server function `getDuesTextsBoard` in `src/lib/dues-messaging.functions.ts`: admin-asserted; loads `dues_messages` plus the referenced clients, and returns `{ ready, blocked, sent, closed, counts, readyTotal }`. Ready/blocked classification is recomputed from the live client via the existing `buildBalanceDraft` / `buildRenewalDraft` / `buildConsentConfirmationDraft` + `isSendable`, not trusted from the stored row. Each row carries client display context (name, package name, visits used/total, renewal start date, eligibility) so the page needs no second query.
-- A pure helper (new `src/lib/dues-texts-board.ts`) does the grouping, confirmation-gating and counting so it is unit-testable without the database; tests added to the existing Vitest suite.
+- "Recent" in Sent / Delivered means the last 7 days (by sent time, falling back to created time); older sends live only on the client's Messages tab.
+- `readyTotal` sums balance_due and renewal_due amounts only — opt-in confirmations carry no money and contribute $0.
+- A pure helper (new `src/lib/dues-texts-board.ts`) does the grouping, confirmation-gating, the 7-day window and the counting so it is unit-testable without the database; tests added to the existing Vitest suite, including: a confirmation draft appears in Ready but adds $0 to `readyTotal`, and a sent message older than 7 days is excluded from Sent / Delivered.
 - New route `src/routes/_authenticated/dues-texts.tsx` with `beforeLoad: requireAdmin`, its own `head()` metadata, reusing `AppShell`, `SmsEligibilityPill`, `SendingDisabledBanner`, and `sendDuesMessageNow` via `useServerFn`.
 - Dashboard: one new entry in `allTiles` in `src/routes/_authenticated/index.tsx` with `staffHidden: true` and `href: "/dues-texts"`, money passed through the existing `visibleTileMoney` path; a nav link added in `src/components/AppShell.tsx` under the admin group.
 - Existing "Send Dues Message" and "Messaging Preview" pages stay as they are; the new page links to them.

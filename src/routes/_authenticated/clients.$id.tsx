@@ -27,9 +27,20 @@ import {
   type ClientAppointment,
 } from "@/lib/schedule.functions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { listDuesMessages } from "@/lib/dues-messaging.functions";
-import { statusLabel } from "@/lib/dues-messaging";
-import { DuesMessageList } from "@/components/DuesMessageList";
+import {
+  listDuesMessages,
+  getMessagingFlag,
+  recordSmsConsent,
+  markSmsOptedOut,
+  sendDuesMessageNow,
+} from "@/lib/dues-messaging.functions";
+import { statusLabel, smsEligibility } from "@/lib/dues-messaging";
+import {
+  DuesMessageList,
+  SmsEligibilityPill,
+  SendingDisabledBanner,
+} from "@/components/DuesMessageList";
+import { useRole } from "@/hooks/useRole";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -408,7 +419,7 @@ function ClientDetailPage() {
 
 
 
-        <MessagesCard clientId={id} />
+        <MessagesCard clientId={id} client={c as never} />
 
         <Card className="lg:col-span-3">
           <CardHeader>
@@ -1213,23 +1224,101 @@ function BackLink() {
   );
 }
 
-function MessagesCard({ clientId }: { clientId: string }) {
+const CONSENT_SCRIPT =
+  "Can we text you about appointments, package renewals, and balances due?";
+
+function MessagesCard({
+  clientId,
+  client,
+}: {
+  clientId: string;
+  client: { phone: string | null; sms_consent_at: string | null; sms_opted_out_at: string | null };
+}) {
+  const qc = useQueryClient();
+  const { isAdmin } = useRole();
   const listFn = useServerFn(listDuesMessages);
+  const flagFn = useServerFn(getMessagingFlag);
+  const consentFn = useServerFn(recordSmsConsent);
+  const optOutFn = useServerFn(markSmsOptedOut);
+  const sendFn = useServerFn(sendDuesMessageNow);
+  const [confirmConsent, setConfirmConsent] = useState(false);
+  const [sendingId, setSendingId] = useState<string | null>(null);
+
   const q = useQuery({
     queryKey: ["dues-messages", clientId],
     queryFn: () => listFn({ data: { clientId } }),
   });
+  const flag = useQuery({ queryKey: ["messaging-flag"], queryFn: () => flagFn() });
   const messages = q.data?.messages ?? [];
   const lastDues = messages.find((m) => m.message_type === "balance_due");
   const lastRenewal = messages.find((m) => m.message_type === "renewal_due");
   const replied = messages.some((m) => m.status === "replied" || m.direction === "inbound");
+  const eligibility = smsEligibility(client);
+
+  const refresh = () => {
+    qc.invalidateQueries({ queryKey: ["dues-messages"] });
+    qc.invalidateQueries({ queryKey: ["client", clientId] });
+    qc.invalidateQueries({ queryKey: ["clients"] });
+  };
+
+  const consent = useMutation({
+    mutationFn: () => consentFn({ data: { clientId } }),
+    onSuccess: () => {
+      setConfirmConsent(false);
+      toast.success("SMS consent recorded. Opt-in confirmation drafted — nothing sent.");
+      refresh();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const optOut = useMutation({
+    mutationFn: () => optOutFn({ data: { clientId } }),
+    onSuccess: () => {
+      toast.success("Marked opted out. No further texts will go to this client.");
+      refresh();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const send = useMutation({
+    mutationFn: (messageId: string) => sendFn({ data: { messageId } }),
+    onSuccess: (r) => {
+      setSendingId(null);
+      if (r.sent) toast.success("Message sent.");
+      else toast.error(r.reason ?? "Message was not sent.");
+      refresh();
+    },
+    onError: (e: Error) => {
+      setSendingId(null);
+      toast.error(e.message);
+    },
+  });
 
   return (
     <Card className="lg:col-span-3">
-      <CardHeader>
+      <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2">
         <CardTitle>Messages</CardTitle>
+        <div className="flex flex-wrap items-center gap-2">
+          <SmsEligibilityPill eligibility={eligibility} />
+          {isAdmin && eligibility !== "consented" && (
+            <Button size="sm" variant="outline" onClick={() => setConfirmConsent(true)}>
+              Record SMS Consent
+            </Button>
+          )}
+          {isAdmin && eligibility === "consented" && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => optOut.mutate()}
+              disabled={optOut.isPending}
+            >
+              Mark opted out
+            </Button>
+          )}
+        </div>
       </CardHeader>
       <CardContent className="space-y-3">
+        <SendingDisabledBanner enabled={flag.data?.sendingEnabled ?? false} />
         <div className="grid gap-1 rounded-md bg-slate-50 p-3 text-xs text-slate-600 sm:grid-cols-3">
           <div>
             Last dues message:{" "}
@@ -1248,9 +1337,43 @@ function MessagesCard({ clientId }: { clientId: string }) {
         {q.isLoading ? (
           <p className="text-sm text-slate-500">Loading…</p>
         ) : (
-          <DuesMessageList messages={messages} />
+          <DuesMessageList
+            messages={messages}
+            sendingEnabled={(flag.data?.sendingEnabled ?? false) && isAdmin}
+            sendingId={sendingId}
+            onSend={
+              isAdmin
+                ? (m) => {
+                    setSendingId(m.id);
+                    send.mutate(m.id);
+                  }
+                : undefined
+            }
+          />
         )}
       </CardContent>
+
+      <Dialog open={confirmConsent} onOpenChange={setConfirmConsent}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Record SMS consent</DialogTitle>
+            <DialogDescription>Ask the client, out loud:</DialogDescription>
+          </DialogHeader>
+          <p className="rounded-md border bg-slate-50 p-3 text-sm">{CONSENT_SCRIPT}</p>
+          <p className="text-sm text-slate-600">
+            Only save this if the client said yes. Consent is never assumed from a purchase,
+            a phone number, a booking or a payment.
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmConsent(false)}>
+              Cancel
+            </Button>
+            <Button onClick={() => consent.mutate()} disabled={consent.isPending}>
+              {consent.isPending ? "Saving…" : "They said yes — record consent"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }

@@ -32,6 +32,8 @@ import { Route as AuthenticatedClientsNewRouteImport } from './routes/_authentic
 import { Route as AuthenticatedClientsDeletedRouteImport } from './routes/_authenticated/clients.deleted'
 import { Route as AuthenticatedClientsIdRouteImport } from './routes/_authenticated/clients.$id'
 import { Route as ApiPublicSquareWebhookRouteImport } from './routes/api/public/square.webhook'
+import { Route as ApiPublicSmsStatusRouteImport } from './routes/api/public/sms.status'
+import { Route as ApiPublicSmsInboundRouteImport } from './routes/api/public/sms.inbound'
 import { Route as ApiPublicRenewalWebhookRouteImport } from './routes/api/public/renewal.webhook'
 import { Route as ApiPublicRenewalTickRouteImport } from './routes/api/public/renewal.tick'
 
@@ -160,6 +162,16 @@ const ApiPublicSquareWebhookRoute = ApiPublicSquareWebhookRouteImport.update({
   path: '/api/public/square/webhook',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicSmsStatusRoute = ApiPublicSmsStatusRouteImport.update({
+  id: '/api/public/sms/status',
+  path: '/api/public/sms/status',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiPublicSmsInboundRoute = ApiPublicSmsInboundRouteImport.update({
+  id: '/api/public/sms/inbound',
+  path: '/api/public/sms/inbound',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicRenewalWebhookRoute = ApiPublicRenewalWebhookRouteImport.update({
   id: '/api/public/renewal/webhook',
   path: '/api/public/renewal/webhook',
@@ -195,6 +207,8 @@ export interface FileRoutesByFullPath {
   '/clients/': typeof AuthenticatedClientsIndexRoute
   '/api/public/renewal/tick': typeof ApiPublicRenewalTickRoute
   '/api/public/renewal/webhook': typeof ApiPublicRenewalWebhookRoute
+  '/api/public/sms/inbound': typeof ApiPublicSmsInboundRoute
+  '/api/public/sms/status': typeof ApiPublicSmsStatusRoute
   '/api/public/square/webhook': typeof ApiPublicSquareWebhookRoute
 }
 export interface FileRoutesByTo {
@@ -221,6 +235,8 @@ export interface FileRoutesByTo {
   '/clients': typeof AuthenticatedClientsIndexRoute
   '/api/public/renewal/tick': typeof ApiPublicRenewalTickRoute
   '/api/public/renewal/webhook': typeof ApiPublicRenewalWebhookRoute
+  '/api/public/sms/inbound': typeof ApiPublicSmsInboundRoute
+  '/api/public/sms/status': typeof ApiPublicSmsStatusRoute
   '/api/public/square/webhook': typeof ApiPublicSquareWebhookRoute
 }
 export interface FileRoutesById {
@@ -249,6 +265,8 @@ export interface FileRoutesById {
   '/_authenticated/clients/': typeof AuthenticatedClientsIndexRoute
   '/api/public/renewal/tick': typeof ApiPublicRenewalTickRoute
   '/api/public/renewal/webhook': typeof ApiPublicRenewalWebhookRoute
+  '/api/public/sms/inbound': typeof ApiPublicSmsInboundRoute
+  '/api/public/sms/status': typeof ApiPublicSmsStatusRoute
   '/api/public/square/webhook': typeof ApiPublicSquareWebhookRoute
 }
 export interface FileRouteTypes {
@@ -277,6 +295,8 @@ export interface FileRouteTypes {
     | '/clients/'
     | '/api/public/renewal/tick'
     | '/api/public/renewal/webhook'
+    | '/api/public/sms/inbound'
+    | '/api/public/sms/status'
     | '/api/public/square/webhook'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -303,6 +323,8 @@ export interface FileRouteTypes {
     | '/clients'
     | '/api/public/renewal/tick'
     | '/api/public/renewal/webhook'
+    | '/api/public/sms/inbound'
+    | '/api/public/sms/status'
     | '/api/public/square/webhook'
   id:
     | '__root__'
@@ -330,6 +352,8 @@ export interface FileRouteTypes {
     | '/_authenticated/clients/'
     | '/api/public/renewal/tick'
     | '/api/public/renewal/webhook'
+    | '/api/public/sms/inbound'
+    | '/api/public/sms/status'
     | '/api/public/square/webhook'
   fileRoutesById: FileRoutesById
 }
@@ -341,6 +365,8 @@ export interface RootRouteChildren {
   ApiPublicVisitDiffSweepTriggerRoute: typeof ApiPublicVisitDiffSweepTriggerRoute
   ApiPublicRenewalTickRoute: typeof ApiPublicRenewalTickRoute
   ApiPublicRenewalWebhookRoute: typeof ApiPublicRenewalWebhookRoute
+  ApiPublicSmsInboundRoute: typeof ApiPublicSmsInboundRoute
+  ApiPublicSmsStatusRoute: typeof ApiPublicSmsStatusRoute
   ApiPublicSquareWebhookRoute: typeof ApiPublicSquareWebhookRoute
 }
 
@@ -507,6 +533,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicSquareWebhookRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/sms/status': {
+      id: '/api/public/sms/status'
+      path: '/api/public/sms/status'
+      fullPath: '/api/public/sms/status'
+      preLoaderRoute: typeof ApiPublicSmsStatusRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/sms/inbound': {
+      id: '/api/public/sms/inbound'
+      path: '/api/public/sms/inbound'
+      fullPath: '/api/public/sms/inbound'
+      preLoaderRoute: typeof ApiPublicSmsInboundRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/renewal/webhook': {
       id: '/api/public/renewal/webhook'
       path: '/api/public/renewal/webhook'
@@ -575,6 +615,8 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicVisitDiffSweepTriggerRoute: ApiPublicVisitDiffSweepTriggerRoute,
   ApiPublicRenewalTickRoute: ApiPublicRenewalTickRoute,
   ApiPublicRenewalWebhookRoute: ApiPublicRenewalWebhookRoute,
+  ApiPublicSmsInboundRoute: ApiPublicSmsInboundRoute,
+  ApiPublicSmsStatusRoute: ApiPublicSmsStatusRoute,
   ApiPublicSquareWebhookRoute: ApiPublicSquareWebhookRoute,
 }
 export const routeTree = rootRouteImport

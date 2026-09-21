@@ -16,7 +16,7 @@ import {
   type Client,
 } from "@/lib/clients";
 
-export type DuesMessageType = "renewal_due" | "balance_due";
+export type DuesMessageType = "renewal_due" | "balance_due" | "consent_confirmation";
 export type DuesMessageStatus =
   | "ready_not_sent"
   | "sent"
@@ -40,6 +40,8 @@ export interface DuesMessage {
   validation_warnings: string[] | null;
   blocked: boolean;
   twilio_sid: string | null;
+  error_code?: string | null;
+  error_message?: string | null;
   request_key: string;
   sent_at: string | null;
   created_at: string;
@@ -134,12 +136,20 @@ export function renderRenewalDueMessage(input: {
   startDate: string;
   amount: number;
 }): string {
-  return `Hi ${input.firstName}, this is FIT Beyond Therapy. Your next ${input.totalVisits}-visit package is scheduled to start on ${formatDate(input.startDate)}. The amount due will be $${money(input.amount)}. Reply here if you have any questions. Reply STOP to opt out.`;
+  return `Hi ${input.firstName}, this is FIT Beyond Therapy. Your next ${input.totalVisits}-visit package is scheduled to start on ${formatDate(input.startDate)}. The amount due will be $${money(input.amount)}. Reply here if you have any questions.`;
 }
 
 export function renderBalanceDueMessage(input: { firstName: string; amount: number }): string {
   // Deliberately generic: the amount may combine previous and current package debt.
-  return `Hi ${input.firstName}, this is FIT Beyond Therapy. Just a reminder that our records show a remaining balance of $${money(input.amount)}. Reply here if you have any questions. Reply STOP to opt out.`;
+  return `Hi ${input.firstName}, this is FIT Beyond Therapy. Just a reminder that our records show a remaining balance of $${money(input.amount)}. Reply here if you have any questions.`;
+}
+
+/**
+ * One-time opt-in confirmation. This is the message that carries the full
+ * compliance wording, so dues bodies never need send-history logic.
+ */
+export function renderConsentConfirmationMessage(): string {
+  return "FIT Beyond Therapy: You're signed up for recurring customer-care texts about appointments, package renewals, and balances due. Message frequency varies. Msg & data rates may apply. Reply HELP for help or STOP to unsubscribe.";
 }
 
 /**
@@ -149,14 +159,20 @@ export function renderBalanceDueMessage(input: { firstName: string; amount: numb
  * A client has at most one prepared renewal at a time, so the renewal key is
  * the client alone — changing the prepared start date or price rewrites that
  * same unsent draft instead of leaving a stale one behind.
+ *
+ * The consent confirmation is keyed to the specific consent EVENT, not to the
+ * client forever: re-saving the same consent reuses one draft, but a genuine
+ * re-consent after an opt-out is a new obligation and gets its own message.
  */
 export function duesRequestKey(
   type: DuesMessageType,
   c: Pick<DuesClient, "id" | "pending_renewal_start_date" | "pending_renewal_price"> & {
     package_start_date?: string | null;
+    sms_consent_at?: string | null;
   },
 ): string {
   if (type === "renewal_due") return `renewal:${c.id}`;
+  if (type === "consent_confirmation") return `consent:${c.id}:${c.sms_consent_at ?? "none"}`;
   return `balance:${c.id}:${c.package_start_date ?? "none"}`;
 }
 
@@ -172,7 +188,13 @@ export interface DraftPlan {
   requestKey: string;
 }
 
-/** Blocking reasons that must all be clear before a draft could ever be sent. */
+/**
+ * Blocking reasons that must all be clear before a draft could ever be sent.
+ *
+ * Money and package checks apply to dues messages only — a consent
+ * confirmation must never depend on an amount owed, or a consented client who
+ * owes nothing would never receive their required confirmation.
+ */
 export function validateDraft(
   c: DuesClient,
   type: DuesMessageType,
@@ -183,9 +205,11 @@ export function validateDraft(
   if (!normalizePhone(c.phone)) warnings.push("No usable phone number on file");
   if (!hasSmsConsent(c)) {
     warnings.push(
-      c.sms_opted_out_at ? "Client opted out of texts" : "No recorded texting consent",
+      c.sms_opted_out_at ? "Client opted out of texts" : "Blocked — SMS consent not recorded",
     );
   }
+  if (type === "consent_confirmation") return warnings;
+
   if (packagePriceUnknown(c, dismissedFromPackageReview)) warnings.push("Package Info Needed");
   if (unexplainedOverpayment(c)) warnings.push("Payment Review — unexplained overpayment");
   if (!(amount > 0)) warnings.push("Amount due is $0 or less");
@@ -241,6 +265,65 @@ export function buildBalanceDraft(
     requestKey: duesRequestKey("balance_due", c),
   };
 }
+
+export function buildConsentConfirmationDraft(c: DuesClient): DraftPlan {
+  const warnings = validateDraft(c, "consent_confirmation", 0);
+  return {
+    clientId: c.id,
+    messageType: "consent_confirmation",
+    phone: normalizePhone(c.phone),
+    packageStartDate: null,
+    amountDue: 0,
+    body: renderConsentConfirmationMessage(),
+    warnings,
+    blocked: warnings.length > 0,
+    requestKey: duesRequestKey("consent_confirmation", c),
+  };
+}
+
+export type SmsEligibility = "consented" | "not_consented" | "opted_out" | "invalid_phone";
+
+/** One SMS status per client, for the client record and Dues Queue cards. */
+export function smsEligibility(
+  c: Pick<DuesClient, "phone" | "sms_consent_at" | "sms_opted_out_at">,
+): SmsEligibility {
+  if (!normalizePhone(c.phone)) return "invalid_phone";
+  if (hasSmsConsent(c)) return "consented";
+  if (c.sms_opted_out_at) return "opted_out";
+  return "not_consented";
+}
+
+export function smsEligibilityLabel(e: SmsEligibility): string {
+  switch (e) {
+    case "consented":
+      return "Consented";
+    case "opted_out":
+      return "Opted Out";
+    case "invalid_phone":
+      return "Invalid or Missing Phone";
+    default:
+      return "Not Consented";
+  }
+}
+
+export function messageTypeLabel(type: string): string {
+  switch (type) {
+    case "renewal_due":
+      return "Renewal due";
+    case "consent_confirmation":
+      return "Opt-in confirmation";
+    case "inbound_reply":
+      return "Client reply";
+    default:
+      return "Balance due";
+  }
+}
+
+/** Only dues messages reference money; the confirmation has no amount. */
+export function messageShowsAmount(type: string): boolean {
+  return type === "renewal_due" || type === "balance_due";
+}
+
 
 /** Does an existing unsent draft materially differ from a freshly built one? */
 export function draftChanged(

@@ -19,9 +19,10 @@ import {
   getDuesQueue,
   getMessagingFlag,
   generateDuesPreviews,
+  getSmsEligibilityCounts,
 } from "@/lib/dues-messaging.functions";
-import { buildBalanceDraft, statusLabel } from "@/lib/dues-messaging";
-import { SendingDisabledBanner } from "@/components/DuesMessageList";
+import { buildBalanceDraft, smsEligibility, statusLabel } from "@/lib/dues-messaging";
+import { SendingDisabledBanner, SmsEligibilityPill } from "@/components/DuesMessageList";
 
 export const Route = createFileRoute("/_authenticated/dues-queue")({
   beforeLoad: requireAdmin,
@@ -53,8 +54,10 @@ function DuesQueuePage() {
     null,
   );
 
+  const countsFn = useServerFn(getSmsEligibilityCounts);
   const flag = useQuery({ queryKey: ["messaging-flag"], queryFn: () => flagFn() });
   const queue = useQuery({ queryKey: ["dues-queue"], queryFn: () => queueFn() });
+  const counts = useQuery({ queryKey: ["sms-eligibility-counts"], queryFn: () => countsFn() });
 
   const generate = useMutation({
     mutationFn: () => genFn({ data: {} }),
@@ -84,6 +87,15 @@ function DuesQueuePage() {
           Messaging Preview
         </Link>
       </div>
+
+      {counts.data && (
+        <div className="mb-4 flex flex-wrap gap-4 rounded-md bg-slate-50 p-3 text-xs text-slate-600">
+          <span>Consented: {counts.data.consented}</span>
+          <span>Not consented: {counts.data.not_consented}</span>
+          <span>Opted out: {counts.data.opted_out}</span>
+          <span>Invalid or missing phone: {counts.data.invalid_phone}</span>
+        </div>
+      )}
 
       {queue.isLoading ? (
         <p className="text-sm text-slate-500">Loading…</p>
@@ -115,6 +127,9 @@ function DuesQueuePage() {
                   </div>
                   <div className="text-xs text-slate-500">
                     Last message: {last_message ? statusLabel(last_message) : "None"}
+                  </div>
+                  <div className="pt-1">
+                    <SmsEligibilityPill eligibility={smsEligibility(client as never)} />
                   </div>
                   <Button
                     variant="outline"

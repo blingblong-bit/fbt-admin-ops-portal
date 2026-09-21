@@ -21,7 +21,7 @@ async function assertAdmin(context: Ctx) {
 }
 
 const CLIENT_COLUMNS =
-  "id, first_name, last_name, phone, package_name, package_total_visits, package_price, package_start_date, visits_used, amount_paid, previous_package_owed, payment_model, status, deleted_at, pending_renewal_start_date, pending_renewal_price, pending_renewal_total_visits, pending_renewal_package_name, pending_renewal_paid, sms_consent_at, sms_consent_source, sms_opted_out_at";
+  "id, first_name, last_name, phone, package_name, package_total_visits, package_price, package_start_date, visits_used, amount_paid, previous_package_owed, payment_model, status, deleted_at, pending_renewal_start_date, pending_renewal_price, pending_renewal_total_visits, pending_renewal_package_name, pending_renewal_paid, sms_consent_at, sms_consent_source, sms_consent_recorded_by, sms_opted_out_at, sms_opt_out_source";
 
 /** Non-secret: lets the UI render the "sending disabled" banner. */
 export const getMessagingFlag = createServerFn({ method: "GET" })
@@ -172,7 +172,7 @@ export async function upsertDraft(
     await context.supabase.from("client_activities").insert({
       client_id: plan.clientId,
       activity_type: "dues_message_draft_created",
-      description: `Dues message drafted (${plan.messageType === "renewal_due" ? "renewal" : "balance"}) — not sent.`,
+      description: `Dues message drafted (${plan.messageType === "renewal_due" ? "renewal" : plan.messageType === "consent_confirmation" ? "opt-in confirmation" : "balance"}) — not sent.`,
       metadata: { request_key: requestKey, amount_due: plan.amountDue, blocked: plan.blocked },
     });
     return { created: true, changed: true };
@@ -295,6 +295,8 @@ export async function runGenerateDuesPreviews(
   >[]) {
     const c = byId.get(d.client_id);
     if (!c) continue;
+    // Opt-in confirmations carry no amount and are never retired by a payment.
+    if (d.message_type === "consent_confirmation") continue;
     const stillOwed =
       d.message_type === "renewal_due"
         ? Math.max(
@@ -332,3 +334,265 @@ export const generateDuesPreviews = createServerFn({ method: "POST" })
     await assertAdmin(ctx);
     return runGenerateDuesPreviews(ctx, { clientIds: data.clientIds });
   });
+
+/* ------------------------------------------------------------------ */
+/* Consent capture                                                      */
+/* ------------------------------------------------------------------ */
+
+async function loadClient(ctx: Ctx, clientId: string) {
+  const { data, error } = await ctx.supabase
+    .from("clients")
+    .select(CLIENT_COLUMNS)
+    .eq("id", clientId)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) throw new Error("Client not found");
+  return data as DuesClient & { package_start_date: string | null };
+}
+
+/**
+ * Staff/admin records affirmative verbal consent and the opt-in confirmation
+ * draft is created in the same step. Nothing is sent.
+ */
+export const recordSmsConsent = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { clientId: string }) => {
+    if (!d?.clientId) throw new Error("clientId is required");
+    return { clientId: d.clientId };
+  })
+  .handler(async ({ data, context }): Promise<{ consentAt: string }> => {
+    const ctx = context as unknown as Ctx;
+    const consentAt = new Date().toISOString();
+    const { error } = await ctx.supabase
+      .from("clients")
+      .update({
+        sms_consent_at: consentAt,
+        sms_consent_source: "in_person_verbal",
+        sms_consent_recorded_by: ctx.userId,
+        sms_opted_out_at: null,
+        sms_opt_out_source: null,
+      })
+      .eq("id", data.clientId);
+    if (error) throw error;
+
+    await ctx.supabase.from("client_activities").insert({
+      client_id: data.clientId,
+      activity_type: "sms_consent_recorded",
+      description: "SMS consent recorded (in person, verbal).",
+      metadata: { source: "in_person_verbal", recorded_by: ctx.userId, consent_at: consentAt },
+    });
+
+    const client = await loadClient(ctx, data.clientId);
+    const { buildConsentConfirmationDraft } = await import("@/lib/dues-messaging");
+    await upsertDraft(ctx, buildConsentConfirmationDraft(client), "consent_recorded");
+
+    return { consentAt };
+  });
+
+export const markSmsOptedOut = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { clientId: string; source?: string }) => {
+    if (!d?.clientId) throw new Error("clientId is required");
+    return { clientId: d.clientId, source: d.source ?? "staff_verbal" };
+  })
+  .handler(async ({ data, context }): Promise<{ optedOutAt: string }> => {
+    const ctx = context as unknown as Ctx;
+    const optedOutAt = new Date().toISOString();
+    const { error } = await ctx.supabase
+      .from("clients")
+      .update({ sms_opted_out_at: optedOutAt, sms_opt_out_source: data.source })
+      .eq("id", data.clientId);
+    if (error) throw error;
+    await ctx.supabase.from("client_activities").insert({
+      client_id: data.clientId,
+      activity_type: "sms_opted_out",
+      description: "Client opted out of text messages.",
+      metadata: { source: data.source, opted_out_at: optedOutAt },
+    });
+    // Any unsent draft for this client is now unsendable.
+    await ctx.supabase
+      .from("dues_messages")
+      .update({
+        blocked: true,
+        validation_warnings: ["Client opted out of texts"],
+      })
+      .eq("client_id", data.clientId)
+      .eq("status", "ready_not_sent");
+    return { optedOutAt };
+  });
+
+export type EligibilityCounts = {
+  consented: number;
+  not_consented: number;
+  opted_out: number;
+  invalid_phone: number;
+};
+
+export const getSmsEligibilityCounts = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }): Promise<EligibilityCounts> => {
+    const ctx = context as unknown as Ctx;
+    await assertAdmin(ctx);
+    const clients = await loadEligibleClients(ctx);
+    const { smsEligibility } = await import("@/lib/dues-messaging");
+    const counts: EligibilityCounts = {
+      consented: 0,
+      not_consented: 0,
+      opted_out: 0,
+      invalid_phone: 0,
+    };
+    for (const c of clients) {
+      if (c.status === "archived") continue;
+      counts[smsEligibility(c)]++;
+    }
+    return counts;
+  });
+
+/* ------------------------------------------------------------------ */
+/* Manual Send Now                                                      */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Re-validates everything from live records, then hands the draft to the only
+ * module allowed to talk to Twilio. Validation branches by message type: an
+ * opt-in confirmation never depends on an amount owed.
+ */
+export const sendDuesMessageNow = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { messageId: string }) => {
+    if (!d?.messageId) throw new Error("messageId is required");
+    return { messageId: d.messageId };
+  })
+  .handler(
+    async ({
+      data,
+      context,
+    }): Promise<{ sent: boolean; reason?: string; sid?: string }> => {
+      const ctx = context as unknown as Ctx;
+      await assertAdmin(ctx);
+
+      const { data: row, error } = await ctx.supabase
+        .from("dues_messages")
+        .select("*")
+        .eq("id", data.messageId)
+        .maybeSingle();
+      if (error) throw error;
+      if (!row) throw new Error("Message not found");
+      const draft = row as DuesMessage;
+
+      if (draft.status !== "ready_not_sent") {
+        return { sent: false, reason: `This message is already ${draft.status}.` };
+      }
+      if (draft.twilio_sid) {
+        return { sent: false, reason: "This message has already been sent." };
+      }
+
+      const client = await loadClient(ctx, draft.client_id);
+      const dismissed = await loadDismissedIds(ctx);
+      const {
+        buildBalanceDraft,
+        buildRenewalDraft,
+        buildConsentConfirmationDraft,
+        isSendable,
+      } = await import("@/lib/dues-messaging");
+      const isDismissed = dismissed.has(client.id);
+
+      const fresh =
+        draft.message_type === "renewal_due"
+          ? buildRenewalDraft(client, isDismissed)
+          : draft.message_type === "consent_confirmation"
+            ? buildConsentConfirmationDraft(client)
+            : buildBalanceDraft(client, isDismissed);
+
+      // Obligation settled before sending — close it instead.
+      if (fresh.messageType !== "consent_confirmation" && !(fresh.amountDue > 0)) {
+        await ctx.supabase
+          .from("dues_messages")
+          .update({ status: "payment_received" })
+          .eq("id", draft.id);
+        await ctx.supabase.from("client_activities").insert({
+          client_id: client.id,
+          activity_type: "dues_message_payment_received",
+          description: "Balance settled before the dues message was sent — draft closed.",
+          metadata: { request_key: draft.request_key },
+        });
+        return { sent: false, reason: "Nothing is owed any more — the draft was closed." };
+      }
+
+      // Amount or wording moved since the draft was reviewed: rewrite and ask again.
+      const amountChanged = Number(draft.amount_due) !== Number(fresh.amountDue);
+      if (amountChanged || draft.body !== fresh.body || draft.blocked !== fresh.blocked) {
+        await ctx.supabase
+          .from("dues_messages")
+          .update({
+            amount_due: fresh.amountDue,
+            body: fresh.body,
+            blocked: fresh.blocked,
+            validation_warnings: fresh.warnings,
+            phone: fresh.phone,
+          })
+          .eq("id", draft.id);
+        return {
+          sent: false,
+          reason: "The details changed since this was drafted — review the new text and confirm again.",
+        };
+      }
+
+      if (!isSendable({ status: draft.status, blocked: fresh.blocked })) {
+        return { sent: false, reason: fresh.warnings.join("; ") || "Message is blocked." };
+      }
+
+      // A consented client never receives a dues text before their confirmation.
+      if (draft.message_type !== "consent_confirmation") {
+        const { data: pendingConfirm } = await ctx.supabase
+          .from("dues_messages")
+          .select("id")
+          .eq("client_id", client.id)
+          .eq("message_type", "consent_confirmation")
+          .eq("status", "ready_not_sent")
+          .limit(1);
+        if ((pendingConfirm ?? []).length > 0) {
+          return {
+            sent: false,
+            reason:
+              "Send this client's opt-in confirmation first — it has not gone out yet.",
+          };
+        }
+      }
+
+      const { sendDuesMessage } = await import("@/lib/dues-sms.server");
+      try {
+        const result = await sendDuesMessage({
+          id: draft.id,
+          phone: fresh.phone,
+          body: fresh.body,
+          status: draft.status,
+          blocked: fresh.blocked,
+        });
+        await ctx.supabase
+          .from("dues_messages")
+          .update({
+            status: "sent",
+            twilio_sid: result.sid,
+            sent_at: new Date().toISOString(),
+            error_code: null,
+            error_message: null,
+          })
+          .eq("id", draft.id);
+        await ctx.supabase.from("client_activities").insert({
+          client_id: client.id,
+          activity_type: "dues_message_sent",
+          description: "Dues text message sent.",
+          metadata: { request_key: draft.request_key, twilio_sid: result.sid },
+        });
+        return { sent: true, sid: result.sid };
+      } catch (e) {
+        const message = e instanceof Error ? e.message : String(e);
+        await ctx.supabase
+          .from("dues_messages")
+          .update({ error_message: message.slice(0, 500) })
+          .eq("id", draft.id);
+        throw new Error(message);
+      }
+    },
+  );

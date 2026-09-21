@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   buildBalanceDraft,
+  buildConsentConfirmationDraft,
   buildRenewalDraft,
+  smsEligibility,
   draftChanged,
   duesRequestKey,
   hasSmsConsent,
@@ -207,5 +209,63 @@ describe("send path", () => {
   it("marks a paid-before-send draft as closed", () => {
     const paid = { ...base, amount_paid: 375 };
     expect(isDuesQueueEligible(paid)).toBe(false);
+  });
+});
+
+describe("consent confirmation", () => {
+  it("builds the approved opt-in wording with no amount", () => {
+    const d = buildConsentConfirmationDraft(base);
+    expect(d.messageType).toBe("consent_confirmation");
+    expect(d.amountDue).toBe(0);
+    expect(d.body).toContain("You're signed up for recurring customer-care texts");
+    expect(d.body).toContain("Reply HELP for help or STOP to unsubscribe.");
+    expect(d.blocked).toBe(false);
+  });
+
+  it("does not depend on money owed", () => {
+    const paid = { ...base, amount_paid: 375 };
+    expect(buildConsentConfirmationDraft(paid).blocked).toBe(false);
+    expect(validateDraft(paid, "consent_confirmation", 0)).toEqual([]);
+  });
+
+  it("is keyed per consent event, so re-consent is a new obligation", () => {
+    const first = duesRequestKey("consent_confirmation", base);
+    const reconsented = duesRequestKey("consent_confirmation", {
+      ...base,
+      sms_consent_at: "2026-06-01T00:00:00Z",
+    });
+    expect(first).not.toBe(reconsented);
+    expect(duesRequestKey("consent_confirmation", base)).toBe(first);
+  });
+
+  it("is blocked without consent or after an opt-out", () => {
+    expect(
+      buildConsentConfirmationDraft({ ...base, sms_consent_at: null }).blocked,
+    ).toBe(true);
+    expect(
+      buildConsentConfirmationDraft({
+        ...base,
+        sms_opted_out_at: "2026-02-01T00:00:00Z",
+      }).blocked,
+    ).toBe(true);
+  });
+});
+
+describe("dues message wording", () => {
+  it("names FIT Beyond Therapy and carries no send-history footer", () => {
+    const balance = renderBalanceDueMessage(base, 375);
+    expect(balance).toContain("FIT Beyond Therapy");
+    expect(balance).not.toContain("Reply STOP");
+  });
+});
+
+describe("sms eligibility", () => {
+  it("reports one status per client", () => {
+    expect(smsEligibility(base)).toBe("consented");
+    expect(smsEligibility({ ...base, sms_consent_at: null })).toBe("not_consented");
+    expect(
+      smsEligibility({ ...base, sms_opted_out_at: "2026-06-01T00:00:00Z" }),
+    ).toBe("opted_out");
+    expect(smsEligibility({ ...base, phone: null })).toBe("invalid_phone");
   });
 });

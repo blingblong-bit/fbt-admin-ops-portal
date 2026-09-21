@@ -76,7 +76,9 @@ export type Database = {
           phone: string | null
           previous_package_owed: number
           sms_consent_at: string | null
+          sms_consent_recorded_by: string | null
           sms_consent_source: string | null
+          sms_opt_out_source: string | null
           sms_opted_out_at: string | null
           square_customer_id: string | null
           square_visit_note: string | null
@@ -110,7 +112,9 @@ export type Database = {
           phone?: string | null
           previous_package_owed?: number
           sms_consent_at?: string | null
+          sms_consent_recorded_by?: string | null
           sms_consent_source?: string | null
+          sms_opt_out_source?: string | null
           sms_opted_out_at?: string | null
           square_customer_id?: string | null
           square_visit_note?: string | null
@@ -144,7 +148,9 @@ export type Database = {
           phone?: string | null
           previous_package_owed?: number
           sms_consent_at?: string | null
+          sms_consent_recorded_by?: string | null
           sms_consent_source?: string | null
+          sms_opt_out_source?: string | null
           sms_opted_out_at?: string | null
           square_customer_id?: string | null
           square_visit_note?: string | null
@@ -162,6 +168,8 @@ export type Database = {
           client_id: string
           created_at: string
           direction: string
+          error_code: string | null
+          error_message: string | null
           id: string
           message_type: string
           package_start_date: string | null
@@ -181,6 +189,8 @@ export type Database = {
           client_id: string
           created_at?: string
           direction?: string
+          error_code?: string | null
+          error_message?: string | null
           id?: string
           message_type: string
           package_start_date?: string | null
@@ -200,6 +210,8 @@ export type Database = {
           client_id?: string
           created_at?: string
           direction?: string
+          error_code?: string | null
+          error_message?: string | null
           id?: string
           message_type?: string
           package_start_date?: string | null

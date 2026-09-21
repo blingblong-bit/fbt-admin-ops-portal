@@ -34,9 +34,16 @@ Each client shows one SMS status: Consented / Not Consented / Opted Out / Invali
 
 ## 4. Texting service connection (sending still off)
 
-Connect Twilio using Lovable's supported secure server-side integration or project secrets. No Twilio credentials may be committed to source code or exposed to the browser. `src/lib/dues-sms.server.ts` remains the only application module allowed to invoke the Twilio API, and it refuses unless, checked fresh at send time: the server flag is exactly true, draft is `ready_not_sent` and not blocked, consent valid, no later opt-out, phone valid, amount still owed, and this request key has never been sent. Nothing is trusted from the stored draft.
+Connect Twilio using Lovable's supported secure server-side integration or project secrets. No Twilio credentials may be committed to source code or exposed to the browser. `src/lib/dues-sms.server.ts` remains the only application module allowed to invoke the Twilio API.
 
-In practice this means `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, and the sending number / Messaging Service SID are stored as project secrets and read inside the server handler only.
+Send-time validation is re-checked fresh from the database (nothing is trusted from the stored draft) and **branches by message type**:
+
+- All types: server flag is exactly true, draft is `ready_not_sent` and not blocked, consent recorded, no later opt-out, phone valid, and this request key has never been sent.
+- `consent_confirmation`: nothing further — it must never depend on an amount owed, so a consented client who owes nothing still receives their required confirmation.
+- `balance_due`: plus current balance still greater than $0.
+- `renewal_due`: plus the prepared renewal still valid and the remaining next-package amount still greater than $0.
+
+Messages go out through the **Messaging Service SID** tied to the approved A2P campaign (with the approved FIT Beyond Therapy number attached), rather than the raw phone number. `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, and `TWILIO_MESSAGING_SERVICE_SID` are stored as project secrets and read inside the server handler only.
 
 ## 5. Manual Send Now (disabled while the flag is off)
 

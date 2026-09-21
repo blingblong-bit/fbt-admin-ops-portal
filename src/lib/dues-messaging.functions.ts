@@ -391,6 +391,11 @@ export const recordSmsConsent = createServerFn({ method: "POST" })
     const { buildConsentConfirmationDraft } = await import("@/lib/dues-messaging");
     await upsertDraft(ctx, buildConsentConfirmationDraft(client), "consent_recorded");
 
+    // Drafts written before consent existed still carry
+    // "Blocked — SMS consent not recorded". Re-derive them from the client's
+    // current state so they become sendable without a queue rebuild.
+    await revalidateOpenDrafts(ctx, client);
+
     return { consentAt };
   });
 

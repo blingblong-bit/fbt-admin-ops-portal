@@ -127,7 +127,7 @@ function DuesTextsPage() {
     mutationFn: (messageId: string) => sendFn({ data: { messageId } }),
     onSuccess: (r) => {
       if (r.sent) toast.success("Message sent.");
-      else toast.warning(r.reason ?? "Nothing was sent.");
+      else toast.error(r.reason ?? "Nothing was sent.");
       refreshAll();
     },
     onError: (e: Error) => toast.error(e.message),

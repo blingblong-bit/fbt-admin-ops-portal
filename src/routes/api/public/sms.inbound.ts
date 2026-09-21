@@ -128,11 +128,18 @@ export const Route = createFileRoute("/api/public/sms/inbound")({
               .from("clients")
               .update({ sms_opted_out_at: null, sms_opt_out_source: null })
               .eq("id", client.id);
+            // Distinct from staff-recorded consent (sms_consent_recorded), so
+            // it is always clear whether the client or staff restored texting.
             await supabaseAdmin.from("client_activities").insert({
               client_id: client.id,
-              activity_type: "sms_opt_in_resumed",
-              description: "Client replied START — texts resumed.",
-              metadata: { source: optOutType ? "twilio_advanced_opt_out" : "sms_reply" },
+              activity_type: "sms_resubscribed_via_start",
+              description: "Client texted START — opt-out cleared by the client (Twilio resubscribe).",
+              metadata: {
+                source: optOutType ? "twilio_advanced_opt_out" : "sms_reply",
+                opt_out_type: optOutType || null,
+                keyword: word,
+                restored_by: "client",
+              },
             });
           }
           return twiml();

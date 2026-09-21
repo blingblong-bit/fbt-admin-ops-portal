@@ -601,3 +601,94 @@ export const sendDuesMessageNow = createServerFn({ method: "POST" })
       }
     },
   );
+
+/* ------------------------------------------------------------------ */
+/* Dues Texts operational board                                         */
+/* ------------------------------------------------------------------ */
+
+/**
+ * One admin view of everything actionable: ready, blocked, recently sent and
+ * closed-by-payment. Draft rows are re-derived from live client state so a
+ * stale stored row can never make something look sendable.
+ */
+export const getDuesTextsBoard = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }): Promise<DuesTextsBoard> => {
+    const ctx = context as unknown as Ctx;
+    await assertAdmin(ctx);
+
+    const { data: msgs, error } = await ctx.supabase
+      .from("dues_messages")
+      .select("*")
+      .eq("direction", "outbound")
+      .order("created_at", { ascending: false })
+      .limit(500);
+    if (error) throw error;
+    const rows = (msgs ?? []) as DuesMessage[];
+    if (rows.length === 0) return buildDuesTextsBoard([]);
+
+    const ids = [...new Set(rows.map((r) => r.client_id))];
+    const { data: clientRows } = await ctx.supabase
+      .from("clients")
+      .select(CLIENT_COLUMNS)
+      .in("id", ids);
+    const byId = new Map(
+      ((clientRows ?? []) as (DuesClient & { package_start_date: string | null })[]).map((c) => [
+        c.id,
+        c,
+      ]),
+    );
+    const dismissed = await loadDismissedIds(ctx);
+    const { smsEligibility, buildConsentConfirmationDraft } = await import(
+      "@/lib/dues-messaging"
+    );
+
+    const cards: BoardCard[] = rows.map((m) => {
+      const c = byId.get(m.client_id);
+      const isDraft = m.status === "ready_not_sent";
+      const fresh =
+        c && isDraft
+          ? m.message_type === "renewal_due"
+            ? buildRenewalDraft(c, dismissed.has(c.id))
+            : m.message_type === "consent_confirmation"
+              ? buildConsentConfirmationDraft(c)
+              : buildBalanceDraft(c, dismissed.has(c.id))
+          : null;
+
+      // A dues draft whose balance was settled is no longer sendable, even
+      // though the row has not been closed out yet.
+      const settled =
+        !!fresh && fresh.messageType !== "consent_confirmation" && !(fresh.amountDue > 0);
+      const warnings = fresh
+        ? settled && !fresh.warnings.includes("Amount due is $0 or less")
+          ? [...fresh.warnings, "Balance no longer due"]
+          : fresh.warnings
+        : (m.validation_warnings ?? []);
+
+      return {
+        id: m.id,
+        clientId: m.client_id,
+        clientName: c ? fullName(c as never) : "Unknown client",
+        messageType: m.message_type,
+        status: m.status,
+        body: fresh?.body ?? m.body,
+        amountDue: Number(fresh?.amountDue ?? m.amount_due ?? 0),
+        blocked: fresh ? fresh.blocked || settled : isDraft ? true : m.blocked,
+        warnings: warnings.length > 0 ? warnings : isDraft && !c ? ["Client record missing"] : warnings,
+        eligibility: c ? smsEligibility(c) : "invalid_phone",
+        packageName: c?.package_name ?? null,
+        visitsUsed: c?.visits_used ?? null,
+        visitsTotal: c?.package_total_visits ?? null,
+        renewalStartDate:
+          m.message_type === "renewal_due"
+            ? (c?.pending_renewal_start_date ?? m.package_start_date)
+            : null,
+        twilioSid: m.twilio_sid,
+        errorMessage: m.error_message ?? null,
+        sentAt: m.sent_at,
+        createdAt: m.created_at,
+      };
+    });
+
+    return buildDuesTextsBoard(cards);
+  });

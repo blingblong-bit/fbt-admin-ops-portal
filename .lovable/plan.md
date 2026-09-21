@@ -85,8 +85,9 @@ Ships with: automatic draft generation, consent required, admin review, manual S
 
 ## Technical notes
 
-- Existing `hasSmsConsent` / `validateDraft` consent and opt-out rules stay; the warning text becomes "Blocked — SMS consent not recorded".
+- Existing `hasSmsConsent` / `validateDraft` consent and opt-out rules stay; the warning text becomes "Blocked — SMS consent not recorded". `validateDraft` branches on message type: the "Amount due is $0 or less" and package-review checks apply to `balance_due` / `renewal_due` only, never to `consent_confirmation`.
 - `src/lib/dues-messaging.ts` gains `consent_confirmation` as a third `DuesMessageType` with `renderConsentConfirmationMessage()` and request key `consent:${clientId}` (idempotent — re-recording consent reuses the unsent draft). No `hasPriorSuccessfulSend` / send-history logic in any builder; existing dues bodies simply drop their "Reply STOP to opt out." tail.
+- `sendDuesMessage` applies the same per-type branch at send time, re-reading the client from the database rather than trusting the draft.
 - Migration: add `sms_consent_recorded_by uuid`, `sms_opt_out_source text` to `clients`; add `error_code`/`error_message` and a Twilio-SID index to `dues_messages`; allow `direction = 'inbound'` rows without a request key collision; allow `message_type = 'consent_confirmation'`. Staff read / admin write RLS retained; consent writes go through a dedicated server function, not direct table writes.
 - Server functions in `src/lib/dues-messaging.functions.ts` (record consent, mark opted out, send-now, eligibility counts) with the existing admin assertion for send.
 - Webhooks as TanStack routes under `src/routes/api/public/` (`sms.status.ts`, `sms.inbound.ts`) following the existing `square.webhook.ts` pattern, with Twilio signature validation.

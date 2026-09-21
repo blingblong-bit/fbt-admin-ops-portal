@@ -5,7 +5,7 @@
 // balances or packages.
 import { createFileRoute } from "@tanstack/react-router";
 
-const EMPTY = new Response("", { status: 204 });
+const EMPTY = () => new Response(null, { status: 204 });
 
 function mapStatus(s: string): "sent" | "delivered" | "failed" | null {
   switch (s) {

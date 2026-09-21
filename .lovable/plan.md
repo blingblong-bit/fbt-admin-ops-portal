@@ -10,21 +10,23 @@ Client detail gets a "Record SMS Consent" action for staff and admins. Staff ask
 
 > "Can we text you about appointments, package renewals, and balances due?"
 
-If the client says yes, staff presses Record SMS Consent. The record stores the consent time, source (`in_person_verbal`), and the staff member who recorded it, plus an activity entry. Staff can also mark a client opted out when asked verbally, storing the opt-out time and source. Nothing extra is texted to the client at consent time.
+If the client says yes, staff presses Record SMS Consent. The record stores the consent time, source (`in_person_verbal`), and the staff member who recorded it, plus an activity entry. Staff can also mark a client opted out when asked verbally, storing the opt-out time and source.
+
+Recording consent also creates a one-time `consent_confirmation` message for that client. While sending is OFF it exists as a draft only. Once sending is enabled, it is the first message that goes out to that client:
+
+> "FIT Beyond Therapy: You're signed up for recurring customer-care texts about appointments, package renewals, and balances due. Message frequency varies. Msg & data rates may apply. Reply HELP for help or STOP to unsubscribe."
 
 Consent is required before any draft becomes sendable. Drafts still generate without it, showing "Blocked — SMS consent not recorded".
 
-## 2. First-message rule and later wording
+## 2. Dues and renewal wording
 
-The first successfully **sent** outbound message to a client carries Twilio's required footer, verbatim: "Reply STOP to unsubscribe or HELP for help."
+Dues messages do not need to work out whether they are the first message — the consent confirmation carries the full compliance wording. Dues and renewal texts simply identify FIT Beyond Therapy by name:
 
-"First message" means the first outbound message successfully submitted through this Twilio workflow — status `sent`, `delivered`, or any equivalent successful submission counts. Drafts, blocked drafts, and failed/undelivered messages do not count, so a client whose only prior attempt failed still receives the footer on the next one.
+Balance: "Hi John, this is FIT Beyond Therapy. Just a reminder that our records show a remaining balance of $375. Reply here if you have any questions."
 
-First balance message: "Hi John, this is FIT Beyond Therapy. Our records show a remaining balance of $375. Reply here if you have any questions. Reply STOP to unsubscribe or HELP for help."
+Renewal: "Hi John, this is FIT Beyond Therapy. Your next 8-visit package is scheduled to start on September 16. The amount due will be $375. Reply here if you have any questions."
 
-First renewal message: "Hi John, this is FIT Beyond Therapy. Your next 8-visit package is scheduled to start on September 16. The amount due will be $375. Reply here if you have any questions. Reply STOP to unsubscribe or HELP for help."
-
-Later messages drop the footer: "Hi John, this is FIT Beyond Therapy. Just a reminder that our records show a remaining balance of $375. Reply here if you have any questions." — and the renewal equivalent. Every message still identifies FIT Beyond Therapy by name. STOP and HELP keep working regardless of whether the footer is printed. Because the footer depends on send history, the body is rebuilt at send time.
+STOP and HELP keep working at all times. The footer can optionally be appended to later texts, but it is not required per message. There is no send-history lookup in the message builders.
 
 ## 3. Eligibility visibility
 

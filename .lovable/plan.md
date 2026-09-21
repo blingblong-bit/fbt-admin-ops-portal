@@ -47,9 +47,11 @@ Messages go out through the **Messaging Service SID** tied to the approved A2P c
 
 ## 5. Manual Send Now (disabled while the flag is off)
 
-Admin/superadmin-only "Send Now" on Dues Queue and Messaging Preview. While sending is off the button is visibly disabled with the "SMS Sending Disabled" banner. When later enabled: confirmation modal showing client, phone, amount, message type and exact text; sends one message; idempotent by request key; stores the Twilio message ID, `sent_at`, status `sent`, and an activity entry. No bulk send.
+Admin/superadmin-only "Send Now" on Dues Queue and Messaging Preview. While sending is off the button is visibly disabled with the "SMS Sending Disabled" banner. When later enabled: confirmation modal showing client, phone, message type and exact text; sends one message; idempotent by request key; stores the Twilio message ID, `sent_at`, status `sent`, and an activity entry. No bulk send.
 
-If a client's `consent_confirmation` has not been sent yet, the send path sends that one first and the dues message goes out on the next action — a consented client never receives a dues text before their confirmation.
+The modal shows an amount only for `balance_due` and `renewal_due`; for `consent_confirmation` the amount field is omitted entirely rather than showing $0 or N/A.
+
+If a client's current `consent_confirmation` has not been sent yet, the send path sends that one first and the dues message goes out on the next action — a consented client never receives a dues text before their confirmation.
 
 ## 6. Delivery status webhook
 

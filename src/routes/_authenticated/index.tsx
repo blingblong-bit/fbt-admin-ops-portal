@@ -21,6 +21,7 @@ import {
   UserPlus,
   RefreshCw,
   HelpCircle,
+  MessageSquare,
 } from "lucide-react";
 
 import { useServerFn } from "@tanstack/react-start";
@@ -57,6 +58,7 @@ import {
 
   type RenewalForecastRow,
 } from "@/lib/schedule.functions";
+import { getDuesTextsBoard } from "@/lib/dues-messaging.functions";
 import type { ScheduleStatus } from "@/components/SmartClientCard";
 import { useRole } from "@/hooks/useRole";
 import { visibleTileMoney } from "@/lib/dashboard-tile-visibility";
@@ -703,6 +705,19 @@ function Dashboard() {
   const missedYesterday = missedQ.data?.yesterday_count ?? 0;
   const missedOlder = missedQ.data?.older_count ?? 0;
 
+  // Dues Texts tile — admin/superadmin only, so staff never trigger the query.
+  const fetchDuesBoard = useServerFn(getDuesTextsBoard);
+  const duesTextsQ = useQuery({
+    queryKey: ["dues-texts-counts"],
+    queryFn: () => fetchDuesBoard(),
+    enabled: !isStaff,
+    refetchInterval: 5 * 60_000,
+  });
+  const duesReady = duesTextsQ.data?.counts.ready ?? 0;
+  const duesBlocked = duesTextsQ.data?.counts.blocked ?? 0;
+  const duesClosed = duesTextsQ.data?.counts.closed ?? 0;
+  const duesReadyTotal = duesTextsQ.data?.readyTotal ?? 0;
+
 
 
   const allTiles: (TileDef & { staffHidden?: boolean })[] = [
@@ -877,6 +892,18 @@ function Dashboard() {
       staffHidden: true,
     },
     {
+      key: "dues_texts",
+      label: "Dues Texts",
+      sublabel: `${duesBlocked} blocked · ${duesClosed} payment received`,
+      icon: <MessageSquare className="h-5 w-5" />,
+      count: duesReady,
+      money: duesReadyTotal > 0 ? duesReadyTotal : undefined,
+      moneyLabel: "ready to send",
+      tone: duesReady > 0 ? "amber" : "slate",
+      href: "/dues-texts",
+      staffHidden: true,
+    },
+    {
       key: "all",
       label: "All Active",
       icon: <Users className="h-5 w-5" />,
@@ -907,6 +934,7 @@ function Dashboard() {
         "renewal_review",
         "renewal_manual",
         "new_clients",
+        "dues_texts",
       ]),
     [],
   );

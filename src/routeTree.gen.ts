@@ -22,6 +22,7 @@ import { Route as AuthenticatedMissedCheckInsRouteImport } from './routes/_authe
 import { Route as AuthenticatedMessagingPreviewRouteImport } from './routes/_authenticated/messaging-preview'
 import { Route as AuthenticatedMergeCenterRouteImport } from './routes/_authenticated/merge-center'
 import { Route as AuthenticatedImportRouteImport } from './routes/_authenticated/import'
+import { Route as AuthenticatedDuesTextsRouteImport } from './routes/_authenticated/dues-texts'
 import { Route as AuthenticatedDuesQueueRouteImport } from './routes/_authenticated/dues-queue'
 import { Route as AuthenticatedBackupRouteImport } from './routes/_authenticated/backup'
 import { Route as AuthenticatedClientsIndexRouteImport } from './routes/_authenticated/clients.index'
@@ -109,6 +110,11 @@ const AuthenticatedImportRoute = AuthenticatedImportRouteImport.update({
   path: '/import',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedDuesTextsRoute = AuthenticatedDuesTextsRouteImport.update({
+  id: '/dues-texts',
+  path: '/dues-texts',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedDuesQueueRoute = AuthenticatedDuesQueueRouteImport.update({
   id: '/dues-queue',
   path: '/dues-queue',
@@ -188,6 +194,7 @@ export interface FileRoutesByFullPath {
   '/auth': typeof AuthRoute
   '/backup': typeof AuthenticatedBackupRoute
   '/dues-queue': typeof AuthenticatedDuesQueueRoute
+  '/dues-texts': typeof AuthenticatedDuesTextsRoute
   '/import': typeof AuthenticatedImportRoute
   '/merge-center': typeof AuthenticatedMergeCenterRoute
   '/messaging-preview': typeof AuthenticatedMessagingPreviewRoute
@@ -215,6 +222,7 @@ export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
   '/backup': typeof AuthenticatedBackupRoute
   '/dues-queue': typeof AuthenticatedDuesQueueRoute
+  '/dues-texts': typeof AuthenticatedDuesTextsRoute
   '/import': typeof AuthenticatedImportRoute
   '/merge-center': typeof AuthenticatedMergeCenterRoute
   '/messaging-preview': typeof AuthenticatedMessagingPreviewRoute
@@ -245,6 +253,7 @@ export interface FileRoutesById {
   '/auth': typeof AuthRoute
   '/_authenticated/backup': typeof AuthenticatedBackupRoute
   '/_authenticated/dues-queue': typeof AuthenticatedDuesQueueRoute
+  '/_authenticated/dues-texts': typeof AuthenticatedDuesTextsRoute
   '/_authenticated/import': typeof AuthenticatedImportRoute
   '/_authenticated/merge-center': typeof AuthenticatedMergeCenterRoute
   '/_authenticated/messaging-preview': typeof AuthenticatedMessagingPreviewRoute
@@ -276,6 +285,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/backup'
     | '/dues-queue'
+    | '/dues-texts'
     | '/import'
     | '/merge-center'
     | '/messaging-preview'
@@ -303,6 +313,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/backup'
     | '/dues-queue'
+    | '/dues-texts'
     | '/import'
     | '/merge-center'
     | '/messaging-preview'
@@ -332,6 +343,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/_authenticated/backup'
     | '/_authenticated/dues-queue'
+    | '/_authenticated/dues-texts'
     | '/_authenticated/import'
     | '/_authenticated/merge-center'
     | '/_authenticated/messaging-preview'
@@ -463,6 +475,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedImportRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/dues-texts': {
+      id: '/_authenticated/dues-texts'
+      path: '/dues-texts'
+      fullPath: '/dues-texts'
+      preLoaderRoute: typeof AuthenticatedDuesTextsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/dues-queue': {
       id: '/_authenticated/dues-queue'
       path: '/dues-queue'
@@ -567,6 +586,7 @@ declare module '@tanstack/react-router' {
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedBackupRoute: typeof AuthenticatedBackupRoute
   AuthenticatedDuesQueueRoute: typeof AuthenticatedDuesQueueRoute
+  AuthenticatedDuesTextsRoute: typeof AuthenticatedDuesTextsRoute
   AuthenticatedImportRoute: typeof AuthenticatedImportRoute
   AuthenticatedMergeCenterRoute: typeof AuthenticatedMergeCenterRoute
   AuthenticatedMessagingPreviewRoute: typeof AuthenticatedMessagingPreviewRoute
@@ -587,6 +607,7 @@ interface AuthenticatedRouteRouteChildren {
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedBackupRoute: AuthenticatedBackupRoute,
   AuthenticatedDuesQueueRoute: AuthenticatedDuesQueueRoute,
+  AuthenticatedDuesTextsRoute: AuthenticatedDuesTextsRoute,
   AuthenticatedImportRoute: AuthenticatedImportRoute,
   AuthenticatedMergeCenterRoute: AuthenticatedMergeCenterRoute,
   AuthenticatedMessagingPreviewRoute: AuthenticatedMessagingPreviewRoute,

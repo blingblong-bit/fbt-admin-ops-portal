@@ -20,6 +20,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   ] as const;
 
   const adminNav = [
+    { to: "/dues-texts", label: "Dues Texts" },
     { to: "/dues-queue", label: "Send Dues Message" },
     { to: "/messaging-preview", label: "Messaging Preview" },
     { to: "/merge-center", label: "Merge Center" },

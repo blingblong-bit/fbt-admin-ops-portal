@@ -42,6 +42,8 @@ In practice this means `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, and the sendin
 
 Admin/superadmin-only "Send Now" on Dues Queue and Messaging Preview. While sending is off the button is visibly disabled with the "SMS Sending Disabled" banner. When later enabled: confirmation modal showing client, phone, amount, message type and exact text; sends one message; idempotent by request key; stores the Twilio message ID, `sent_at`, status `sent`, and an activity entry. No bulk send.
 
+If a client's `consent_confirmation` has not been sent yet, the send path sends that one first and the dues message goes out on the next action — a consented client never receives a dues text before their confirmation.
+
 ## 6. Delivery status webhook
 
 New public endpoint receiving Twilio status callbacks, verified by Twilio signature, matching the message by its Twilio ID: queued/sent → Sent, delivered → Delivered, failed/undelivered → Failed with the error detail stored. Repeated identical statuses write nothing new. Delivery callbacks never touch balances or packages.

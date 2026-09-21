@@ -892,6 +892,18 @@ function Dashboard() {
       staffHidden: true,
     },
     {
+      key: "dues_texts",
+      label: "Dues Texts",
+      sublabel: `${duesBlocked} blocked · ${duesClosed} payment received`,
+      icon: <MessageSquare className="h-5 w-5" />,
+      count: duesReady,
+      money: duesReadyTotal > 0 ? duesReadyTotal : undefined,
+      moneyLabel: "ready to send",
+      tone: duesReady > 0 ? "amber" : "slate",
+      href: "/dues-texts",
+      staffHidden: true,
+    },
+    {
       key: "all",
       label: "All Active",
       icon: <Users className="h-5 w-5" />,

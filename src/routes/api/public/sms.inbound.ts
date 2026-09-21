@@ -45,12 +45,24 @@ export const Route = createFileRoute("/api/public/sms/inbound")({
         if (!fromLast10) return twiml();
 
         const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-        const { data: candidates } = await supabaseAdmin
-          .from("clients")
-          .select("id, phone")
-          .not("phone", "is", null)
-          .is("deleted_at", null);
-        const client = (candidates ?? []).find((c) => last10(c.phone) === fromLast10);
+        // Phone numbers are stored in mixed formats, so match on the last ten
+        // digits. PostgREST caps a plain select at 1000 rows, which silently
+        // hid newer clients, so page through every candidate.
+        let client: { id: string; phone: string | null } | undefined;
+        const PAGE = 1000;
+        for (let page = 0; page < 50 && !client; page++) {
+          const { data: candidates, error } = await supabaseAdmin
+            .from("clients")
+            .select("id, phone")
+            .not("phone", "is", null)
+            .is("deleted_at", null)
+            .order("created_at", { ascending: true })
+            .range(page * PAGE, page * PAGE + PAGE - 1);
+          if (error) break;
+          if (!candidates || candidates.length === 0) break;
+          client = candidates.find((c) => last10(c.phone) === fromLast10);
+          if (candidates.length < PAGE) break;
+        }
         if (!client) return twiml();
 
         // Idempotent: one row per inbound Twilio message.

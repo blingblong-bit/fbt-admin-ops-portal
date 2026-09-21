@@ -34,9 +34,16 @@ Each client shows one SMS status: Consented / Not Consented / Opted Out / Invali
 
 ## 4. Texting service connection (sending still off)
 
-Connect Twilio using Lovable's supported secure server-side integration or project secrets. No Twilio credentials may be committed to source code or exposed to the browser. `src/lib/dues-sms.server.ts` remains the only application module allowed to invoke the Twilio API, and it refuses unless, checked fresh at send time: the server flag is exactly true, draft is `ready_not_sent` and not blocked, consent valid, no later opt-out, phone valid, amount still owed, and this request key has never been sent. Nothing is trusted from the stored draft.
+Connect Twilio using Lovable's supported secure server-side integration or project secrets. No Twilio credentials may be committed to source code or exposed to the browser. `src/lib/dues-sms.server.ts` remains the only application module allowed to invoke the Twilio API.
 
-In practice this means `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, and the sending number / Messaging Service SID are stored as project secrets and read inside the server handler only.
+Send-time validation is re-checked fresh from the database (nothing is trusted from the stored draft) and **branches by message type**:
+
+- All types: server flag is exactly true, draft is `ready_not_sent` and not blocked, consent recorded, no later opt-out, phone valid, and this request key has never been sent.
+- `consent_confirmation`: nothing further — it must never depend on an amount owed, so a consented client who owes nothing still receives their required confirmation.
+- `balance_due`: plus current balance still greater than $0.
+- `renewal_due`: plus the prepared renewal still valid and the remaining next-package amount still greater than $0.
+
+Messages go out through the **Messaging Service SID** tied to the approved A2P campaign (with the approved FIT Beyond Therapy number attached), rather than the raw phone number. `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, and `TWILIO_MESSAGING_SERVICE_SID` are stored as project secrets and read inside the server handler only.
 
 ## 5. Manual Send Now (disabled while the flag is off)
 
@@ -68,7 +75,7 @@ One dedicated test client with a phone you control, consent recorded, and a legi
 
 ## 11. Regression suite
 
-Automated tests covering: consent recorded → sendable and exactly one `consent_confirmation` draft created (repeat recording does not duplicate it); confirmation body matches the approved wording; dues bodies contain no send-history logic and always name FIT Beyond Therapy; no consent, later opt-out, invalid phone, Package Info Needed, Payment Review → blocked; unpaid balance eligible, fully paid not; prepaid renewal net amount; paid before send → payment_received, no send; retry sends one message only; duplicate webhook writes no duplicate activity; inbound reply stored once; STOP blocks the next send; staff read but cannot send; flag OFF → send refuses; blocked-but-ready refuses; no financial values change.
+Automated tests covering: consent recorded → sendable and exactly one `consent_confirmation` draft created (repeat recording does not duplicate it); confirmation body matches the approved wording; a consented client who owes $0 still has a sendable confirmation; dues bodies contain no send-history logic and always name FIT Beyond Therapy; no consent, later opt-out, invalid phone, Package Info Needed, Payment Review → blocked; unpaid balance eligible, fully paid not; prepaid renewal net amount; paid before send → payment_received, no send; retry sends one message only; duplicate webhook writes no duplicate activity; inbound reply stored once; STOP blocks the next send; staff read but cannot send; flag OFF → send refuses; blocked-but-ready refuses; no financial values change.
 
 ## 12. Launch state
 
@@ -78,8 +85,9 @@ Ships with: automatic draft generation, consent required, admin review, manual S
 
 ## Technical notes
 
-- Existing `hasSmsConsent` / `validateDraft` consent and opt-out rules stay; the warning text becomes "Blocked — SMS consent not recorded".
+- Existing `hasSmsConsent` / `validateDraft` consent and opt-out rules stay; the warning text becomes "Blocked — SMS consent not recorded". `validateDraft` branches on message type: the "Amount due is $0 or less" and package-review checks apply to `balance_due` / `renewal_due` only, never to `consent_confirmation`.
 - `src/lib/dues-messaging.ts` gains `consent_confirmation` as a third `DuesMessageType` with `renderConsentConfirmationMessage()` and request key `consent:${clientId}` (idempotent — re-recording consent reuses the unsent draft). No `hasPriorSuccessfulSend` / send-history logic in any builder; existing dues bodies simply drop their "Reply STOP to opt out." tail.
+- `sendDuesMessage` applies the same per-type branch at send time, re-reading the client from the database rather than trusting the draft.
 - Migration: add `sms_consent_recorded_by uuid`, `sms_opt_out_source text` to `clients`; add `error_code`/`error_message` and a Twilio-SID index to `dues_messages`; allow `direction = 'inbound'` rows without a request key collision; allow `message_type = 'consent_confirmation'`. Staff read / admin write RLS retained; consent writes go through a dedicated server function, not direct table writes.
 - Server functions in `src/lib/dues-messaging.functions.ts` (record consent, mark opted out, send-now, eligibility counts) with the existing admin assertion for send.
 - Webhooks as TanStack routes under `src/routes/api/public/` (`sms.status.ts`, `sms.inbound.ts`) following the existing `square.webhook.ts` pattern, with Twilio signature validation.
@@ -89,6 +97,8 @@ Ships with: automatic draft generation, consent required, admin review, manual S
 ## What I need from you
 
 - Your Twilio Account SID and Auth Token, saved through the secure secrets form (never pasted in chat).
-- The Twilio sending number or Messaging Service to use, and whether its Advanced Opt-Out already handles STOP/HELP.
+- The Messaging Service SID tied to the approved A2P campaign (with the FIT Beyond Therapy number attached), and whether its Advanced Opt-Out is enabled.
 - A phone number you control for the controlled live test.
 - Note: all 1,755 clients start as Not Consented, so staff will need to record consent before anyone can be texted.
+
+After the build I'll send the readiness report. Sending stays OFF until you review it.

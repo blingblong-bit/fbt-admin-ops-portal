@@ -21,6 +21,7 @@ import {
   UserPlus,
   RefreshCw,
   HelpCircle,
+  MessageSquare,
 } from "lucide-react";
 
 import { useServerFn } from "@tanstack/react-start";

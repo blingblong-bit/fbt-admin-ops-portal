@@ -8,7 +8,12 @@ import {
   type DuesClient,
   type DuesMessage,
 } from "@/lib/dues-messaging";
-import { totalOwed } from "@/lib/clients";
+import { fullName, totalOwed } from "@/lib/clients";
+import {
+  buildDuesTextsBoard,
+  type BoardCard,
+  type DuesTextsBoard,
+} from "@/lib/dues-texts-board";
 
 type Ctx = { supabase: any; userId: string };
 

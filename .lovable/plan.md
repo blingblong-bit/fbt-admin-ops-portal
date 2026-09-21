@@ -97,6 +97,8 @@ Ships with: automatic draft generation, consent required, admin review, manual S
 ## What I need from you
 
 - Your Twilio Account SID and Auth Token, saved through the secure secrets form (never pasted in chat).
-- The Twilio sending number or Messaging Service to use, and whether its Advanced Opt-Out already handles STOP/HELP.
+- The Messaging Service SID tied to the approved A2P campaign (with the FIT Beyond Therapy number attached), and whether its Advanced Opt-Out is enabled.
 - A phone number you control for the controlled live test.
 - Note: all 1,755 clients start as Not Consented, so staff will need to record consent before anyone can be texted.
+
+After the build I'll send the readiness report. Sending stays OFF until you review it.

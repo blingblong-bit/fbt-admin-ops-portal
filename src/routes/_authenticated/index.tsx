@@ -705,6 +705,19 @@ function Dashboard() {
   const missedYesterday = missedQ.data?.yesterday_count ?? 0;
   const missedOlder = missedQ.data?.older_count ?? 0;
 
+  // Dues Texts tile — admin/superadmin only, so staff never trigger the query.
+  const fetchDuesBoard = useServerFn(getDuesTextsBoard);
+  const duesTextsQ = useQuery({
+    queryKey: ["dues-texts-counts"],
+    queryFn: () => fetchDuesBoard(),
+    enabled: !isStaff,
+    refetchInterval: 5 * 60_000,
+  });
+  const duesReady = duesTextsQ.data?.counts.ready ?? 0;
+  const duesBlocked = duesTextsQ.data?.counts.blocked ?? 0;
+  const duesClosed = duesTextsQ.data?.counts.closed ?? 0;
+  const duesReadyTotal = duesTextsQ.data?.readyTotal ?? 0;
+
 
 
   const allTiles: (TileDef & { staffHidden?: boolean })[] = [

@@ -253,7 +253,7 @@ describe("consent confirmation", () => {
 
 describe("dues message wording", () => {
   it("names FIT Beyond Therapy and carries no send-history footer", () => {
-    const balance = renderBalanceDueMessage(base, 375);
+    const balance = renderBalanceDueMessage({ firstName: "Jane", amount: 375 });
     expect(balance).toContain("FIT Beyond Therapy");
     expect(balance).not.toContain("Reply STOP");
   });

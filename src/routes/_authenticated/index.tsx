@@ -58,6 +58,7 @@ import {
 
   type RenewalForecastRow,
 } from "@/lib/schedule.functions";
+import { getDuesTextsBoard } from "@/lib/dues-messaging.functions";
 import type { ScheduleStatus } from "@/components/SmartClientCard";
 import { useRole } from "@/hooks/useRole";
 import { visibleTileMoney } from "@/lib/dashboard-tile-visibility";

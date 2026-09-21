@@ -68,7 +68,7 @@ One dedicated test client with a phone you control, consent recorded, and a legi
 
 ## 11. Regression suite
 
-Automated tests covering: consent recorded → sendable; no consent, later opt-out, invalid phone, Package Info Needed, Payment Review → blocked; unpaid balance eligible, fully paid not; prepaid renewal net amount; paid before send → payment_received, no send; retry sends one message only; duplicate webhook writes no duplicate activity; inbound reply stored once; STOP blocks the next send; staff read but cannot send; flag OFF → send refuses; blocked-but-ready refuses; first message includes the STOP/HELP footer and the second does not; no financial values change.
+Automated tests covering: consent recorded → sendable and exactly one `consent_confirmation` draft created (repeat recording does not duplicate it); confirmation body matches the approved wording; dues bodies contain no send-history logic and always name FIT Beyond Therapy; no consent, later opt-out, invalid phone, Package Info Needed, Payment Review → blocked; unpaid balance eligible, fully paid not; prepaid renewal net amount; paid before send → payment_received, no send; retry sends one message only; duplicate webhook writes no duplicate activity; inbound reply stored once; STOP blocks the next send; staff read but cannot send; flag OFF → send refuses; blocked-but-ready refuses; no financial values change.
 
 ## 12. Launch state
 

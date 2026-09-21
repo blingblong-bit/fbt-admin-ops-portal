@@ -18,10 +18,7 @@ function last10(s: string | null | undefined): string {
 }
 
 const STOP_WORDS = new Set(["stop", "unsubscribe", "cancel", "end", "quit", "stopall"]);
-const HELP_WORDS = new Set(["help", "info"]);
-
-const HELP_REPLY =
-  "FIT Beyond Therapy: we text about appointments, package renewals and balances due. Reply STOP to unsubscribe.";
+const START_WORDS = new Set(["start", "unstop", "yes"]);
 
 export const Route = createFileRoute("/api/public/sms/inbound")({
   server: {
@@ -89,7 +86,7 @@ export const Route = createFileRoute("/api/public/sms/inbound")({
 
         const word = body.trim().toLowerCase().replace(/[^a-z]/g, "");
         const isStop = optOutType === "STOP" || STOP_WORDS.has(word);
-        const isHelp = optOutType === "HELP" || HELP_WORDS.has(word);
+        const isStart = optOutType === "START" || START_WORDS.has(word);
 
         if (isStop) {
           const { data: current } = await supabaseAdmin
@@ -117,18 +114,32 @@ export const Route = createFileRoute("/api/public/sms/inbound")({
               metadata: { source: optOutType ? "twilio_advanced_opt_out" : "sms_reply" },
             });
           }
-          // Twilio Advanced Opt-Out already answered the client; stay silent.
           return twiml();
         }
 
-        if (isHelp) {
-          // Only reply ourselves when Twilio did not (no OptOutType present).
-          if (optOutType) return twiml();
-          return twiml(
-            `<?xml version="1.0" encoding="UTF-8"?><Response><Message>${HELP_REPLY}</Message></Response>`,
-          );
+        if (isStart) {
+          const { data: current } = await supabaseAdmin
+            .from("clients")
+            .select("sms_opted_out_at")
+            .eq("id", client.id)
+            .maybeSingle();
+          if (current?.sms_opted_out_at) {
+            await supabaseAdmin
+              .from("clients")
+              .update({ sms_opted_out_at: null, sms_opt_out_source: null })
+              .eq("id", client.id);
+            await supabaseAdmin.from("client_activities").insert({
+              client_id: client.id,
+              activity_type: "sms_opt_in_resumed",
+              description: "Client replied START — texts resumed.",
+              metadata: { source: optOutType ? "twilio_advanced_opt_out" : "sms_reply" },
+            });
+          }
+          return twiml();
         }
 
+        // HELP and every other keyword: Twilio Advanced Opt-Out owns the
+        // automatic replies. The Hub only records the inbound event.
         return twiml();
       },
     },

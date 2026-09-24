@@ -28,7 +28,6 @@ import { Route as AuthenticatedBackupRouteImport } from './routes/_authenticated
 import { Route as AuthenticatedClientsIndexRouteImport } from './routes/_authenticated/clients.index'
 import { Route as ApiPublicVisitDiffSweepTriggerRouteImport } from './routes/api/public/visit-diff-sweep-trigger'
 import { Route as ApiPublicVisitDiffSweepRouteImport } from './routes/api/public/visit-diff-sweep'
-import { Route as ApiPublicSquareVisitAuditRouteImport } from './routes/api/public/square-visit-audit'
 import { Route as ApiPublicSquareDiagRouteImport } from './routes/api/public/square-diag'
 import { Route as AuthenticatedClientsNewRouteImport } from './routes/_authenticated/clients.new'
 import { Route as AuthenticatedClientsDeletedRouteImport } from './routes/_authenticated/clients.deleted'
@@ -143,12 +142,6 @@ const ApiPublicVisitDiffSweepRoute = ApiPublicVisitDiffSweepRouteImport.update({
   path: '/api/public/visit-diff-sweep',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiPublicSquareVisitAuditRoute =
-  ApiPublicSquareVisitAuditRouteImport.update({
-    id: '/api/public/square-visit-audit',
-    path: '/api/public/square-visit-audit',
-    getParentRoute: () => rootRouteImport,
-  } as any)
 const ApiPublicSquareDiagRoute = ApiPublicSquareDiagRouteImport.update({
   id: '/api/public/square-diag',
   path: '/api/public/square-diag',
@@ -216,7 +209,6 @@ export interface FileRoutesByFullPath {
   '/clients/deleted': typeof AuthenticatedClientsDeletedRoute
   '/clients/new': typeof AuthenticatedClientsNewRoute
   '/api/public/square-diag': typeof ApiPublicSquareDiagRoute
-  '/api/public/square-visit-audit': typeof ApiPublicSquareVisitAuditRoute
   '/api/public/visit-diff-sweep': typeof ApiPublicVisitDiffSweepRoute
   '/api/public/visit-diff-sweep-trigger': typeof ApiPublicVisitDiffSweepTriggerRoute
   '/clients/': typeof AuthenticatedClientsIndexRoute
@@ -246,7 +238,6 @@ export interface FileRoutesByTo {
   '/clients/deleted': typeof AuthenticatedClientsDeletedRoute
   '/clients/new': typeof AuthenticatedClientsNewRoute
   '/api/public/square-diag': typeof ApiPublicSquareDiagRoute
-  '/api/public/square-visit-audit': typeof ApiPublicSquareVisitAuditRoute
   '/api/public/visit-diff-sweep': typeof ApiPublicVisitDiffSweepRoute
   '/api/public/visit-diff-sweep-trigger': typeof ApiPublicVisitDiffSweepTriggerRoute
   '/clients': typeof AuthenticatedClientsIndexRoute
@@ -278,7 +269,6 @@ export interface FileRoutesById {
   '/_authenticated/clients/deleted': typeof AuthenticatedClientsDeletedRoute
   '/_authenticated/clients/new': typeof AuthenticatedClientsNewRoute
   '/api/public/square-diag': typeof ApiPublicSquareDiagRoute
-  '/api/public/square-visit-audit': typeof ApiPublicSquareVisitAuditRoute
   '/api/public/visit-diff-sweep': typeof ApiPublicVisitDiffSweepRoute
   '/api/public/visit-diff-sweep-trigger': typeof ApiPublicVisitDiffSweepTriggerRoute
   '/_authenticated/clients/': typeof AuthenticatedClientsIndexRoute
@@ -310,7 +300,6 @@ export interface FileRouteTypes {
     | '/clients/deleted'
     | '/clients/new'
     | '/api/public/square-diag'
-    | '/api/public/square-visit-audit'
     | '/api/public/visit-diff-sweep'
     | '/api/public/visit-diff-sweep-trigger'
     | '/clients/'
@@ -340,7 +329,6 @@ export interface FileRouteTypes {
     | '/clients/deleted'
     | '/clients/new'
     | '/api/public/square-diag'
-    | '/api/public/square-visit-audit'
     | '/api/public/visit-diff-sweep'
     | '/api/public/visit-diff-sweep-trigger'
     | '/clients'
@@ -371,7 +359,6 @@ export interface FileRouteTypes {
     | '/_authenticated/clients/deleted'
     | '/_authenticated/clients/new'
     | '/api/public/square-diag'
-    | '/api/public/square-visit-audit'
     | '/api/public/visit-diff-sweep'
     | '/api/public/visit-diff-sweep-trigger'
     | '/_authenticated/clients/'
@@ -386,7 +373,6 @@ export interface RootRouteChildren {
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRoute
   ApiPublicSquareDiagRoute: typeof ApiPublicSquareDiagRoute
-  ApiPublicSquareVisitAuditRoute: typeof ApiPublicSquareVisitAuditRoute
   ApiPublicVisitDiffSweepRoute: typeof ApiPublicVisitDiffSweepRoute
   ApiPublicVisitDiffSweepTriggerRoute: typeof ApiPublicVisitDiffSweepTriggerRoute
   ApiPublicRenewalTickRoute: typeof ApiPublicRenewalTickRoute
@@ -531,13 +517,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicVisitDiffSweepRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/public/square-visit-audit': {
-      id: '/api/public/square-visit-audit'
-      path: '/api/public/square-visit-audit'
-      fullPath: '/api/public/square-visit-audit'
-      preLoaderRoute: typeof ApiPublicSquareVisitAuditRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/api/public/square-diag': {
       id: '/api/public/square-diag'
       path: '/api/public/square-diag'
@@ -653,7 +632,6 @@ const rootRouteChildren: RootRouteChildren = {
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRoute,
   ApiPublicSquareDiagRoute: ApiPublicSquareDiagRoute,
-  ApiPublicSquareVisitAuditRoute: ApiPublicSquareVisitAuditRoute,
   ApiPublicVisitDiffSweepRoute: ApiPublicVisitDiffSweepRoute,
   ApiPublicVisitDiffSweepTriggerRoute: ApiPublicVisitDiffSweepTriggerRoute,
   ApiPublicRenewalTickRoute: ApiPublicRenewalTickRoute,

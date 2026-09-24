@@ -21,3 +21,5 @@
 - [x] Conversation-style Messages tab on the client record
 - [ ] Twilio secrets entered + webhook URLs configured (needs the owner)
 - [ ] Controlled live test on a dedicated test phone, then flag back OFF
+
+- [x] Visit Note Review tile + page (/visit-note-review, admin only, read-only from Square)

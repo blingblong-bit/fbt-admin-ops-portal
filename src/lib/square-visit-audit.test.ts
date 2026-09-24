@@ -41,3 +41,49 @@ describe("classifyClient", () => {
     expect(classifyClient(3, 8, parseBookings([b("1", "2026-09-20", "3/8")], now)).pattern).toBe("isolated_note");
   });
 });
+
+import { buildSequence, detectNoteIssues, type ReviewBooking } from "./square-visit-audit";
+
+const NOW = "2026-09-24T12:00:00Z";
+const rb = (id: string, d: string, note: string | null, status = "ACCEPTED"): ReviewBooking => ({
+  id, start_at: `${d}T15:00:00Z`, seller_note: note, status,
+});
+const kinds = (bs: ReviewBooking[]) => detectNoteIssues(buildSequence(bs, NOW)).map((i) => i.kind);
+
+describe("detectNoteIssues", () => {
+  it("clean 3/8 → 4/8 → 5/8 has no flag", () => {
+    expect(kinds([rb("1", "2026-09-10", "3/8"), rb("2", "2026-09-17", "4/8"), rb("3", "2026-09-28", "5/8")])).toEqual([]);
+  });
+  it("3/8 → 5/8 past is a skipped visit", () => {
+    expect(kinds([rb("1", "2026-09-10", "3/8"), rb("2", "2026-09-17", "5/8")])).toEqual(["skipped"]);
+  });
+  it("past 4/8, future 6/8 is stale future numbering", () => {
+    const i = detectNoteIssues(buildSequence([rb("1", "2026-09-17", "4/8"), rb("2", "2026-09-28", "6/8")], NOW));
+    expect(i[0].kind).toBe("stale_future");
+    expect(i[0].expected).toBe("5/8");
+  });
+  it("5/8 → 4/8 goes backward", () => {
+    expect(kinds([rb("1", "2026-09-10", "5/8"), rb("2", "2026-09-17", "4/8")])).toEqual(["backward"]);
+  });
+  it("8/8 → 1/8 is a valid renewal", () => {
+    expect(kinds([rb("1", "2026-09-10", "7/8"), rb("2", "2026-09-15", "8/8"), rb("3", "2026-09-17", "1/8"), rb("4", "2026-09-29", "2/8")])).toEqual([]);
+  });
+  it("renewal into a different package size is fine", () => {
+    expect(kinds([rb("1", "2026-09-10", "8/8"), rb("2", "2026-09-17", "1/10")])).toEqual([]);
+  });
+  it("conflicting same-day notes are flagged", () => {
+    expect(kinds([rb("1", "2026-09-17", "4/8"), rb("2", "2026-09-17", "6/8")])).toEqual(["same_day_conflict"]);
+  });
+  it("5/8 → 6/10 without renewal is a package-size flag", () => {
+    expect(kinds([rb("1", "2026-09-10", "5/8"), rb("2", "2026-09-17", "6/10")])).toEqual(["package_size"]);
+  });
+  it("no Square notes at all is not flagged", () => {
+    expect(kinds([rb("1", "2026-09-10", null), rb("2", "2026-09-17", "knee")])).toEqual([]);
+  });
+  it("missing note inside an otherwise clear sequence is flagged", () => {
+    expect(kinds([rb("1", "2026-09-10", "3/8"), rb("2", "2026-09-14", null), rb("3", "2026-09-17", "5/8")])).toEqual(["missing_note"]);
+  });
+  it("cancelled appointments are ignored", () => {
+    expect(kinds([rb("1", "2026-09-10", "3/8"), rb("2", "2026-09-14", "4/8", "CANCELLED_BY_SELLER"), rb("3", "2026-09-17", "4/8")])).toEqual([]);
+  });
+});

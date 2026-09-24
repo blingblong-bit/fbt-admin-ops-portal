@@ -124,3 +124,110 @@ export function classifyClient(
   if (f.n === expected) return { classification: "Square synced", reason: "Next Square visit follows Hub", pattern: "match_future", latest };
   return { classification: "Needs review", reason: `Next Square visit ${f.n}/${f.total}, Hub expects ${expected}`, pattern: "future_mismatch", latest };
 }
+
+// ---------------------------------------------------------------------------
+// Visit Note Review — detects internally inconsistent Square note sequences.
+// Square is the source of truth; Hub counts are never compared here.
+// ---------------------------------------------------------------------------
+
+export type ReviewBooking = {
+  id: string;
+  start_at: string;
+  status?: string | null;
+  seller_note?: string | null;
+  customer_note?: string | null;
+};
+
+export type NoteIssueKind =
+  | "skipped"
+  | "stale_future"
+  | "backward"
+  | "same_day_conflict"
+  | "package_size"
+  | "missing_note";
+
+export type NoteIssue = { kind: NoteIssueKind; reason: string; expected: string | null; date: string };
+
+export type SequenceEntry = {
+  booking_id: string;
+  date: string;
+  past: boolean;
+  note: ParsedNote | null;
+};
+
+export const ISSUE_LABELS: Record<NoteIssueKind, string> = {
+  skipped: "Skipped visit number",
+  stale_future: "Future numbering may be stale",
+  backward: "Sequence goes backward",
+  same_day_conflict: "Conflicting same-day notes",
+  package_size: "Package size changed",
+  missing_note: "Missing note in sequence",
+};
+
+const CANCELLED = /CANCELLED|CANCELED|DECLINED|NO_SHOW/i;
+const PAST_WINDOW = 6;
+
+export function buildSequence(bookings: ReviewBooking[], nowIso: string): SequenceEntry[] {
+  return bookings
+    .filter((b) => b.start_at && !CANCELLED.test(b.status ?? ""))
+    .map((b) => ({
+      booking_id: b.id,
+      date: b.start_at,
+      past: b.start_at < nowIso,
+      note: parseVisitNote(b.seller_note) ?? parseVisitNote(b.customer_note),
+    }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+}
+
+const fmt = (n: ParsedNote) => `${n.n}/${n.total}`;
+
+/** Returns issues found in the recent Square sequence (last 6 past noted visits + all future). */
+export function detectNoteIssues(seq: SequenceEntry[]): NoteIssue[] {
+  const notedIdx = seq.map((e, i) => (e.note ? i : -1)).filter((i) => i >= 0);
+  if (notedIdx.length < 2) return []; // no/isolated notes → Hub fallback, no flag
+  const pastNoted = notedIdx.filter((i) => seq[i].past);
+  const startIdx = pastNoted.length > PAST_WINDOW ? pastNoted[pastNoted.length - PAST_WINDOW] : notedIdx[0];
+  const window = notedIdx.filter((i) => i >= startIdx);
+
+  const issues: NoteIssue[] = [];
+  for (let k = 1; k < window.length; k++) {
+    const ai = window[k - 1];
+    const bi = window[k];
+    const A = seq[ai];
+    const B = seq[bi];
+    const a = A.note!;
+    const b = B.note!;
+    const date = B.date;
+    const sameDay = A.date.slice(0, 10) === B.date.slice(0, 10);
+    const renewal = a.n === a.total && b.n === 1;
+    const next = b.total === a.total && b.n === a.n + 1;
+
+    if (sameDay && !next && !renewal) {
+      issues.push({ kind: "same_day_conflict", reason: `Conflicting visit numbers on same day: ${fmt(a)} and ${fmt(b)}`, expected: null, date });
+      continue;
+    }
+    if (next || renewal) continue;
+
+    if (b.total !== a.total) {
+      issues.push({ kind: "package_size", reason: `Package size changed unexpectedly: ${fmt(a)} → ${fmt(b)}`, expected: `${a.n + 1}/${a.total}`, date });
+      continue;
+    }
+    const expected = `${a.n + 1}/${a.total}`;
+    if (b.n <= a.n) {
+      issues.push({ kind: "backward", reason: `Visit sequence goes backward: ${fmt(a)} → ${fmt(b)}`, expected, date });
+      continue;
+    }
+    // Forward gap. Were there un-noted appointments in between?
+    const gap = b.n - a.n - 1;
+    const unnoted = seq.slice(ai + 1, bi).filter((e) => !e.note).length;
+    if (unnoted > 0 && unnoted >= gap) {
+      issues.push({ kind: "missing_note", reason: `Missing visit note inside package sequence: ${fmt(a)} → [no note] → ${fmt(b)}`, expected, date });
+    } else if (A.past && !B.past) {
+      issues.push({ kind: "stale_future", reason: `Future visit numbering may be stale — last past ${fmt(a)}, next ${fmt(b)}`, expected, date });
+    } else {
+      issues.push({ kind: "skipped", reason: `Possible skipped visit number: ${fmt(a)} → ${fmt(b)}`, expected, date });
+    }
+  }
+  // A missing note inside an otherwise clear sequence (n → [none] → n+1 would be fine only if numbers skip).
+  return issues;
+}

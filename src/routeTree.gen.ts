@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/index'
+import { Route as AuthenticatedVisitNoteReviewRouteImport } from './routes/_authenticated/visit-note-review'
 import { Route as AuthenticatedSyncLogRouteImport } from './routes/_authenticated/sync-log'
 import { Route as AuthenticatedSquareDiagnosticRouteImport } from './routes/_authenticated/square-diagnostic'
 import { Route as AuthenticatedScheduleCheckRouteImport } from './routes/_authenticated/schedule-check'
@@ -52,6 +53,12 @@ const AuthenticatedIndexRoute = AuthenticatedIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedVisitNoteReviewRoute =
+  AuthenticatedVisitNoteReviewRouteImport.update({
+    id: '/visit-note-review',
+    path: '/visit-note-review',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedSyncLogRoute = AuthenticatedSyncLogRouteImport.update({
   id: '/sync-log',
   path: '/sync-log',
@@ -205,6 +212,7 @@ export interface FileRoutesByFullPath {
   '/schedule-check': typeof AuthenticatedScheduleCheckRoute
   '/square-diagnostic': typeof AuthenticatedSquareDiagnosticRoute
   '/sync-log': typeof AuthenticatedSyncLogRoute
+  '/visit-note-review': typeof AuthenticatedVisitNoteReviewRoute
   '/clients/$id': typeof AuthenticatedClientsIdRoute
   '/clients/deleted': typeof AuthenticatedClientsDeletedRoute
   '/clients/new': typeof AuthenticatedClientsNewRoute
@@ -233,6 +241,7 @@ export interface FileRoutesByTo {
   '/schedule-check': typeof AuthenticatedScheduleCheckRoute
   '/square-diagnostic': typeof AuthenticatedSquareDiagnosticRoute
   '/sync-log': typeof AuthenticatedSyncLogRoute
+  '/visit-note-review': typeof AuthenticatedVisitNoteReviewRoute
   '/': typeof AuthenticatedIndexRoute
   '/clients/$id': typeof AuthenticatedClientsIdRoute
   '/clients/deleted': typeof AuthenticatedClientsDeletedRoute
@@ -264,6 +273,7 @@ export interface FileRoutesById {
   '/_authenticated/schedule-check': typeof AuthenticatedScheduleCheckRoute
   '/_authenticated/square-diagnostic': typeof AuthenticatedSquareDiagnosticRoute
   '/_authenticated/sync-log': typeof AuthenticatedSyncLogRoute
+  '/_authenticated/visit-note-review': typeof AuthenticatedVisitNoteReviewRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
   '/_authenticated/clients/$id': typeof AuthenticatedClientsIdRoute
   '/_authenticated/clients/deleted': typeof AuthenticatedClientsDeletedRoute
@@ -296,6 +306,7 @@ export interface FileRouteTypes {
     | '/schedule-check'
     | '/square-diagnostic'
     | '/sync-log'
+    | '/visit-note-review'
     | '/clients/$id'
     | '/clients/deleted'
     | '/clients/new'
@@ -324,6 +335,7 @@ export interface FileRouteTypes {
     | '/schedule-check'
     | '/square-diagnostic'
     | '/sync-log'
+    | '/visit-note-review'
     | '/'
     | '/clients/$id'
     | '/clients/deleted'
@@ -354,6 +366,7 @@ export interface FileRouteTypes {
     | '/_authenticated/schedule-check'
     | '/_authenticated/square-diagnostic'
     | '/_authenticated/sync-log'
+    | '/_authenticated/visit-note-review'
     | '/_authenticated/'
     | '/_authenticated/clients/$id'
     | '/_authenticated/clients/deleted'
@@ -403,6 +416,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof AuthenticatedIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/visit-note-review': {
+      id: '/_authenticated/visit-note-review'
+      path: '/visit-note-review'
+      fullPath: '/visit-note-review'
+      preLoaderRoute: typeof AuthenticatedVisitNoteReviewRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/sync-log': {
@@ -597,6 +617,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedScheduleCheckRoute: typeof AuthenticatedScheduleCheckRoute
   AuthenticatedSquareDiagnosticRoute: typeof AuthenticatedSquareDiagnosticRoute
   AuthenticatedSyncLogRoute: typeof AuthenticatedSyncLogRoute
+  AuthenticatedVisitNoteReviewRoute: typeof AuthenticatedVisitNoteReviewRoute
   AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
   AuthenticatedClientsIdRoute: typeof AuthenticatedClientsIdRoute
   AuthenticatedClientsDeletedRoute: typeof AuthenticatedClientsDeletedRoute
@@ -618,6 +639,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedScheduleCheckRoute: AuthenticatedScheduleCheckRoute,
   AuthenticatedSquareDiagnosticRoute: AuthenticatedSquareDiagnosticRoute,
   AuthenticatedSyncLogRoute: AuthenticatedSyncLogRoute,
+  AuthenticatedVisitNoteReviewRoute: AuthenticatedVisitNoteReviewRoute,
   AuthenticatedIndexRoute: AuthenticatedIndexRoute,
   AuthenticatedClientsIdRoute: AuthenticatedClientsIdRoute,
   AuthenticatedClientsDeletedRoute: AuthenticatedClientsDeletedRoute,

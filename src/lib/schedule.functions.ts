@@ -13,7 +13,9 @@ type SquareBookingSegment = {
   team_member_id?: string | null;
 };
 
-type SquareBooking = {
+export type SquareBooking = {
+  seller_note?: string | null;
+  customer_note?: string | null;
   id: string;
   status?: string | null;
   start_at?: string | null;
@@ -163,7 +165,7 @@ function workWeekStartFromYmd(ymd: string): string {
 const WORK_WEEK_DAYS = 4; // Mon + 4 = Fri
 
 
-async function fetchSquareBookings(
+export async function fetchSquareBookings(
   token: string,
   startIso: string,
   endIso: string,

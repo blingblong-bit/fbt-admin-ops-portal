@@ -59,6 +59,7 @@ import {
   type RenewalForecastRow,
 } from "@/lib/schedule.functions";
 import { getDuesTextsBoard } from "@/lib/dues-messaging.functions";
+import { getVisitNoteReview } from "@/lib/visit-note-review.functions";
 import type { ScheduleStatus } from "@/components/SmartClientCard";
 import { useRole } from "@/hooks/useRole";
 import { visibleTileMoney } from "@/lib/dashboard-tile-visibility";
@@ -718,6 +719,22 @@ function Dashboard() {
   const duesClosed = duesTextsQ.data?.counts.closed ?? 0;
   const duesReadyTotal = duesTextsQ.data?.readyTotal ?? 0;
 
+  // Visit Note Review tile — admin only, derived live from Square (read-only).
+  const fetchNoteReview = useServerFn(getVisitNoteReview);
+  const noteReviewQ = useQuery({
+    queryKey: ["visit-note-review"],
+    queryFn: () => fetchNoteReview(),
+    enabled: !isStaff,
+    staleTime: 10 * 60_000,
+  });
+  const nr = noteReviewQ.data;
+  const noteReviewCount = nr?.cards.length ?? 0;
+  const noteReviewSub = nr
+    ? nr.error
+      ? "couldn't read Square"
+      : `${nr.counts.skipped + nr.counts.stale_future + nr.counts.missing_note} sequence · ${nr.counts.same_day_conflict} conflicting · ${nr.counts.package_size} size`
+    : "checking Square…";
+
 
 
   const allTiles: (TileDef & { staffHidden?: boolean })[] = [
@@ -904,6 +921,16 @@ function Dashboard() {
       staffHidden: true,
     },
     {
+      key: "visit_note_review",
+      label: "Visit Note Review",
+      sublabel: noteReviewSub,
+      icon: <ClipboardList className="h-5 w-5" />,
+      count: noteReviewCount,
+      tone: noteReviewCount > 0 ? "amber" : "slate",
+      href: "/visit-note-review",
+      staffHidden: true,
+    },
+    {
       key: "all",
       label: "All Active",
       icon: <Users className="h-5 w-5" />,
@@ -935,6 +962,7 @@ function Dashboard() {
         "renewal_manual",
         "new_clients",
         "dues_texts",
+        "visit_note_review",
       ]),
     [],
   );

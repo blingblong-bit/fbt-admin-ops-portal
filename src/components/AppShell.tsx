@@ -23,6 +23,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     { to: "/dues-texts", label: "Dues Texts" },
     { to: "/dues-queue", label: "Send Dues Message" },
     { to: "/messaging-preview", label: "Messaging Preview" },
+    { to: "/visit-note-review", label: "Visit Note Review" },
     { to: "/merge-center", label: "Merge Center" },
     { to: "/import", label: "Import" },
     { to: "/notes-ledger", label: "Notes Ledger" },

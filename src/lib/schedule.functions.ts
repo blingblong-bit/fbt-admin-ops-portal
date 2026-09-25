@@ -138,9 +138,8 @@ function ymdLocalToInstant(s: string): Date {
 
 // Weekday (0=Sun..6=Sat) for a calendar date string. Purely calendar math —
 // no timezone needed since the date is already specified in local terms.
-import { addDaysYmd, workWeekStartFromYmd, ymdWeekday } from "@/lib/work-week";
+import { addDaysYmd, workWeekStartFromYmd } from "@/lib/work-week";
 export { addDaysYmd, workWeekStartFromYmd };
-void ymdWeekday;
 const WORK_WEEK_DAYS = 4; // Mon + 4 = Fri
 
 

@@ -79,9 +79,8 @@ export const getVisitAutomationReview = createServerFn({ method: "GET" })
     if (!token) return empty("Square access token is not configured");
 
     const { loadSquareBookingIndex, effectiveStateFor, upcomingStarts } = await import("@/lib/effective-visit-state.server");
-    const { forecastRenewal, drivingCounts, resolveEffectiveVisitState } = await import("@/lib/effective-visit-state");
+    const { forecastRenewal, drivingCounts } = await import("@/lib/effective-visit-state");
     const { ymdInTz, workWeekStartFromYmd, addDaysYmd } = await import("@/lib/schedule.functions");
-    void resolveEffectiveVisitState;
 
     const index = await loadSquareBookingIndex(token, 180, 90);
     if (index.error) return empty(index.error);
@@ -108,12 +107,6 @@ export const getVisitAutomationReview = createServerFn({ method: "GET" })
 
       // Today's behaviour (stored Hub count) vs Square-derived behaviour.
       const before = forecastRenewal({ upcomingStarts: starts, visitsUsed: hubUsed, totalVisits: hubTotal, nextPackageStart: null });
-      const squareCounts = state.source === "review_required"
-        ? null
-        : { used: state.visitsUsed, total: state.totalVisits, nextPackageStart: state.nextPackageStart };
-      const afterSquare = squareCounts
-        ? forecastRenewal({ upcomingStarts: starts, visitsUsed: squareCounts.used, totalVisits: squareCounts.total, nextPackageStart: squareCounts.nextPackageStart })
-        : null;
       const drive = drivingCounts(state);
       const after = forecastRenewal({ upcomingStarts: starts, visitsUsed: drive.used, totalVisits: drive.total, nextPackageStart: drive.nextPackageStart });
 
@@ -157,10 +150,7 @@ export const getVisitAutomationReview = createServerFn({ method: "GET" })
 
       // Review required: show what Square would have changed, but hold it.
       if (state.source === "review_required") {
-        const held: string[] = [];
-        if (afterSquare) held.push("renewal");
-        const hubVsNotes = state.recent.length > 0;
-        if (hubVsNotes || actions.length > 0) {
+        {
           impact.held_for_review++;
           actions.unshift("Held — Square numbering needs review; keeping current Hub behaviour");
         }

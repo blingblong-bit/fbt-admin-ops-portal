@@ -59,11 +59,37 @@ describe("resolveEffectiveVisitState", () => {
     expect(s.visitsUsed).toBe(3);
   });
 
-  it("inconsistent Square sequence routes to review and is suppressed", () => {
+  it("skipped number is flagged but Square still drives", () => {
     const s = resolveEffectiveVisitState(hub(3), [b("1", "2026-09-03", "3/8"), b("2", "2026-09-17", "5/8")], now);
-    expect(s.source).toBe("review_required");
+    expect(s.source).toBe("square");
+    expect(s.reviewStatus).toBe("needs_review");
+    expect(s.automationUsable).toBe(true);
+    expect(drivingCounts(s).used).toBe(5);
+  });
+
+  it("old historical skip, clear latest position → Square drives, flagged", () => {
+    const s = resolveEffectiveVisitState(hub(1), [
+      b("1", "2026-08-01", "2/8"), b("2", "2026-08-08", "4/8"), b("3", "2026-08-15", "5/8"), b("4", "2026-09-20", "6/8"),
+    ], now);
+    expect(s.source).toBe("square");
+    expect(s.reviewStatus).toBe("needs_review");
+    expect(s.visitsUsed).toBe(6);
+  });
+
+  it("conflicting numbers on the latest date → Hub fallback, automation held", () => {
+    const s = resolveEffectiveVisitState(hub(3), [
+      b("1", "2026-09-10", "4/8"), { id: "2", start_at: "2026-09-17T14:00:00Z", seller_note: "5/8", status: "ACCEPTED" },
+      { id: "3", start_at: "2026-09-17T16:00:00Z", seller_note: "2/8", status: "ACCEPTED" },
+    ], now);
+    expect(s.source).toBe("hub_fallback");
+    expect(s.automationUsable).toBe(false);
     expect(s.suppressed).toBe(true);
     expect(drivingCounts(s)).toEqual({ used: 3, total: 8, nextPackageStart: null });
+  });
+
+  it("latest visit goes backward with no renewal → held", () => {
+    const s = resolveEffectiveVisitState(hub(3), [b("1", "2026-09-10", "5/8"), b("2", "2026-09-17", "4/8")], now);
+    expect(s.automationUsable).toBe(false);
   });
 
   it("cancelled numbered visit stays in the sequence", () => {

@@ -23,10 +23,10 @@ describe("decideRenewalText", () => {
     const s = resolveEffectiveVisitState(c, [b("1", "2026-09-10", "7/8"), b("2", "2026-09-17", "8/8"), b("3", "2026-09-30", "1/8")], now);
     expect(decideRenewalText(c, s, ["2026-09-30T15:00:00Z", "2026-10-07T15:00:00Z"], false).eligible).toBe(false);
   });
-  it("review_required → suppressed", () => {
+  it("unreadable current position → suppressed", () => {
     const c = client();
     const s = resolveEffectiveVisitState(c, [b("1", "2026-09-03", "3/8"), b("2", "2026-09-10", "5/8"), b("3", "2026-09-17", "4/8")], now);
-    expect(s.source).toBe("review_required");
+    expect(s.automationUsable).toBe(false);
     const d = decideRenewalText(c, s, [], false);
     expect(d.suppressed).toBe(true);
     expect(d.eligible).toBe(false);
@@ -48,7 +48,7 @@ describe("decideRenewalText", () => {
     expect(d.eligible).toBe(true);
     expect(d.lastVisitDate).toBe("2026-09-30T15:00:00Z");
   });
-  it("review_required campaigns are never auto-cleared", () => {
+  it("held campaigns are never auto-cleared", () => {
     const c = client();
     const s = resolveEffectiveVisitState(c, [b("1", "2026-09-03", "3/8"), b("2", "2026-09-10", "5/8"), b("3", "2026-09-17", "4/8")], now);
     expect(campaignShouldAutoClear(s, { package_start_date: null, package_total_visits: 8, visits_used: 0 },

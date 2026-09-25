@@ -5,6 +5,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import { ChevronLeft, ChevronRight, CalendarDays } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
+import { VisitSourceLine } from "@/components/VisitSourceLine";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -85,6 +86,7 @@ const STATE_META: Record<
   cancelled: { label: "Cancelled", className: "bg-slate-200 text-slate-600 border-slate-300" },
   no_show: { label: "No-Show", className: "bg-amber-100 text-amber-800 border-amber-200" },
   unmatched: { label: "No Client Match", className: "bg-amber-100 text-amber-800 border-amber-200" },
+  square_tracked: { label: "Tracked by Square", className: "bg-emerald-50 text-emerald-800 border-emerald-200" },
 };
 
 function MissedCheckInsPage() {
@@ -302,10 +304,14 @@ function MissedCheckInsPage() {
                           {timeLabel(r.start_at)}
                           {r.team_member_name ? ` · ${r.team_member_name}` : ""}
                         </div>
-                        <div className="text-xs text-muted-foreground">
-                          {progress}
-                          {c?.package_name ? ` · ${c.package_name}` : ""}
-                        </div>
+                        {c?.visit ? (
+                          <VisitSourceLine visit={c.visit} compact={r.check_state !== "square_tracked"} />
+                        ) : (
+                          <div className="text-xs text-muted-foreground">
+                            {progress}
+                            {c?.package_name ? ` · ${c.package_name}` : ""}
+                          </div>
+                        )}
                       </div>
                       <span
                         className={`shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-semibold ${meta.className}`}

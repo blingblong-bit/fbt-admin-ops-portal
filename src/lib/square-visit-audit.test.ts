@@ -122,7 +122,6 @@ describe("cancelled visit is not hidden by an older package", () => {
   });
 });
 
-import { buildSequence, detectNoteIssues } from "./square-visit-audit";
 describe("future numbering after the latest past visit", () => {
   const run = (notes: [string, string][]) =>
     detectNoteIssues(buildSequence(notes.map(([d, n], i) => ({ id: String(i), start_at: `${d}T15:00:00Z`, seller_note: n })), now)).map((i) => i.kind);

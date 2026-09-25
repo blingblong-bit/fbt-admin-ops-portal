@@ -21,6 +21,7 @@ On Schedule Check, Missed Check-Ins and the client page:
 ## 3. Rerun the acceptance test
 - Remove "expected failure" marks from the 3 prepaid checks; add: $150 prepaid shows $250, fully prepaid shows $0, activation keeps the total, Dues Text amount matches.
 - Rerun every earlier check (same-week 8/8 to 1/8, no double counting, Square vs Hub fallback, Needs review keeps Square, held clients stay held, no duplicate money rows).
+- Missed Check-Ins check: a live read-only count confirming 0 Square synced clients (clean or Needs review) appear as needing action, and that every client listed is Hub fallback or held. Plus a test for the same rule.
 - Safety proof: row counts, content checksums and latest update times before and after for clients, payments, client activity, dues messages, renewal campaigns, renewal messages; 0 messages, 0 campaigns; both texting switches OFF. Temporary check removed afterward.
 - Full test suite and typecheck, then stop and report.
 

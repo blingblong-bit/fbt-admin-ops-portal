@@ -49,9 +49,8 @@ function runChain(c: Client, bookings: B[]) {
     const pendingPrice = (c as any).pending_renewal_price == null ? null : Number((c as any).pending_renewal_price);
     const override = (c as any).next_package_price == null ? null : Number((c as any).next_package_price);
     const nextFull = pendingPrice ?? override ?? Number(c.package_price);
-    // Payment Due shows only what is still owed on the next package.
-    const nextNet = pending ? Math.max(0, nextFull - Number((c as any).pending_renewal_paid ?? 0)) : nextFull;
-    forecast = { client_id: c.id, week_bucket: week, next_package_price: nextNet, pre_renewed: !!pending, first_uncovered_ymd: firstYmd, pending_start_ymd: pending };
+    // Same value getRenewalForecast puts on the row today.
+    forecast = { client_id: c.id, week_bucket: week, next_package_price: nextFull, pre_renewed: !!pending, first_uncovered_ymd: firstYmd, pending_start_ymd: pending };
   }
   const status = paymentStatus(c as never);
   const excluded = status === "package_info_needed" || status === "payment_review";

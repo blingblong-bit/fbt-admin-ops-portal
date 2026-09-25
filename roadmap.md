@@ -31,5 +31,8 @@
 - [x] Visit Automation Review page + tile
 - [x] Read-only impact report (incl. dues gained vs removed/moved) — stop before publishing
 - [x] Renewal reminder texts job on effective state + consent/opt-out guards + kill switch (OFF) + dry-run report
+- [x] Split visit source / review status (review flag no longer freezes Square)
+- [x] Final read-only acceptance test (16 cases + reconciliation + checksums)
+- [ ] Payment Due ignores money already prepaid toward a prepared renewal — fix waits on your go-ahead
 - [ ] Turn on RENEWAL_AUTO_TEXT_ENABLED — only after you review the report, post-publish
 - [ ] Publish — waiting on your go/no-go

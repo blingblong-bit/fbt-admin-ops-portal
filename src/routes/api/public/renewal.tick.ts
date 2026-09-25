@@ -255,7 +255,7 @@ export const Route = createFileRoute("/api/public/renewal/tick")({
               continue;
             }
             if (renewalConsentBlock(cli)) { summary.blocked_consent++; continue; }
-            if (effectiveStateFor(index, cli).source === "review_required") { summary.held_review_required++; continue; }
+            if (!effectiveStateFor(index, cli).automationUsable) { summary.held_review_required++; continue; }
             const to = normalizePhone(cli.phone);
             const body = nextSeq === 2
               ? `Hi ${cli.first_name} — just checking in! Today's your last visit on your current package. Reply YES to renew.`

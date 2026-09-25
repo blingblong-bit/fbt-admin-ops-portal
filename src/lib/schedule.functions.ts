@@ -138,30 +138,8 @@ function ymdLocalToInstant(s: string): Date {
 
 // Weekday (0=Sun..6=Sat) for a calendar date string. Purely calendar math —
 // no timezone needed since the date is already specified in local terms.
-function ymdWeekday(s: string): number {
-  const [y, m, d] = s.split("-").map(Number);
-  return new Date(Date.UTC(y, m - 1, d)).getUTCDay();
-}
-
-export function addDaysYmd(s: string, n: number): string {
-  const [y, m, d] = s.split("-").map(Number);
-  const dt = new Date(Date.UTC(y, m - 1, d));
-  dt.setUTCDate(dt.getUTCDate() + n);
-  const yy = dt.getUTCFullYear();
-  const mm = String(dt.getUTCMonth() + 1).padStart(2, "0");
-  const dd = String(dt.getUTCDate()).padStart(2, "0");
-  return `${yy}-${mm}-${dd}`;
-}
-
-// Business week is Monday–Friday (5 days). Saturday and Sunday roll FORWARD
-// into the upcoming work week: on Sat/Sun, `workWeekStartFromYmd` returns
-// the next Monday, so weekend appointments/payments count toward next week.
-// On Mon–Fri, it returns the Monday of the current work week.
-export function workWeekStartFromYmd(ymd: string): string {
-  const dow = ymdWeekday(ymd); // 0=Sun..6=Sat
-  const offset = dow === 0 ? 1 : dow === 6 ? 2 : -(dow - 1);
-  return addDaysYmd(ymd, offset);
-}
+import { addDaysYmd, workWeekStartFromYmd } from "@/lib/work-week";
+export { addDaysYmd, workWeekStartFromYmd };
 const WORK_WEEK_DAYS = 4; // Mon + 4 = Fri
 
 
@@ -1704,7 +1682,9 @@ export type RenewalForecastRow = {
    */
   no_upcoming: boolean;
   /** Where the visit position came from (Square synced / Hub fallback / Review required). */
-  visit_source: "square" | "hub_fallback" | "review_required";
+  visit_source: "square" | "hub_fallback";
+  review_status?: "clean" | "needs_review";
+  automation_usable?: boolean;
   hub_visits_used: number | null;
 };
 
@@ -1817,6 +1797,8 @@ export const getRenewalForecast = createServerFn({ method: "GET" })
         first_uncovered_index: fc.firstUncoveredIndex,
         first_uncovered_ymd: firstUncoveredYmd,
         visit_source: state.source,
+        review_status: state.reviewStatus,
+        automation_usable: state.automationUsable,
         hub_visits_used: r.visits_used ?? null,
         week_bucket,
         package_price: basePrice,

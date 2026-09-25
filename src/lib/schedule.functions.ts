@@ -42,6 +42,8 @@ export type ScheduleClientLite = {
   payment_model?: string | null;
   /** Prepared next package — lets a fully-used client still be checked in. */
   pending_renewal_start_date?: string | null;
+  /** Square-vs-Hub check-in presentation; absent = Hub tracks (manual check-in). */
+  visit?: import("@/lib/effective-visit-state").VisitTracking | null;
 };
 
 export type ProductionCustomerInfo = {

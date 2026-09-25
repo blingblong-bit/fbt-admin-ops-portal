@@ -5,6 +5,8 @@ import {
   resolveEffectiveVisitState,
   type EffectiveVisitState,
   type HubVisitClient,
+  type VisitTracking,
+  visitTrackingFrom,
 } from "@/lib/effective-visit-state";
 
 const DAY = 86_400_000;
@@ -72,4 +74,19 @@ export function upcomingStarts(index: SquareBookingIndex, customerId: string | n
     .filter((b) => b.start_at && b.start_at >= index.nowIso && !/CANCEL|DECLINE|NO_SHOW/i.test(b.status ?? ""))
     .map((b) => b.start_at!)
     .sort();
+}
+
+/**
+ * Attach check-in presentation to each client (mutates `visit` only on the
+ * in-memory objects). If Square can't be loaded, nothing is attached and every
+ * client keeps today's manual check-in behavior.
+ */
+export async function attachVisitTracking<
+  T extends HubVisitClient & { square_customer_id: string | null; visit?: VisitTracking | null },
+>(token: string, clients: T[]): Promise<void> {
+  const linked = clients.filter((c) => c.square_customer_id && Number(c.package_total_visits ?? 0) > 0);
+  if (linked.length === 0) return;
+  const index = await loadSquareBookingIndex(token, 180, 60);
+  if (index.error) return;
+  for (const c of linked) c.visit = visitTrackingFrom(effectiveStateFor(index, c));
 }

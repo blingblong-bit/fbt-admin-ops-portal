@@ -33,6 +33,8 @@
 - [x] Renewal reminder texts job on effective state + consent/opt-out guards + kill switch (OFF) + dry-run report
 - [x] Split visit source / review status (review flag no longer freezes Square)
 - [x] Final read-only acceptance test (16 cases + reconciliation + checksums)
-- [ ] Payment Due ignores money already prepaid toward a prepared renewal — fix waits on your go-ahead
+- [x] Payment Due nets money already prepaid toward a prepared renewal
+- [x] Check-in screens follow Square (manual check-in only for Hub fallback / unclear position); Missed Check-Ins excludes Square-synced clients
+- [x] Acceptance rerun after prepaid + check-in changes
 - [ ] Turn on RENEWAL_AUTO_TEXT_ENABLED — only after you review the report, post-publish
 - [ ] Publish — waiting on your go/no-go

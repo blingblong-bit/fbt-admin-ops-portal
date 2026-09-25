@@ -88,7 +88,6 @@ describe("detectNoteIssues", () => {
   });
 });
 
-import { buildSequence, detectNoteIssues } from "./square-visit-audit";
 describe("cancelled bookings stay in the sequence", () => {
   const rb = (id: string, d: string, note: string, status = "ACCEPTED") => ({ id, start_at: `${d}T15:00:00Z`, seller_note: note, status });
   const issues = (xs: ReturnType<typeof rb>[]) => detectNoteIssues(buildSequence(xs, now)).map((i) => i.kind);

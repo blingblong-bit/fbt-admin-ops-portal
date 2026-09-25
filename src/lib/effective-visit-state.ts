@@ -10,12 +10,16 @@ import {
   type SequenceEntry,
 } from "@/lib/square-visit-audit";
 
-export type VisitSource = "square" | "hub_fallback" | "review_required";
+export type VisitSource = "square" | "hub_fallback";
+export type ReviewStatus = "clean" | "needs_review";
 
 export const SOURCE_LABELS: Record<VisitSource, string> = {
-  square: "Square synced",
+  square: "Square",
   hub_fallback: "Hub fallback",
-  review_required: "Review required",
+};
+export const REVIEW_LABELS: Record<ReviewStatus, string> = {
+  clean: "Clean",
+  needs_review: "Needs review",
 };
 
 export type UpcomingVisit = {
@@ -42,7 +46,11 @@ export type EffectiveVisitState = {
   recent: UpcomingVisit[];
   /** ISO start of the first future 1/N (not cancelled) after a completed package, when Square shows it. */
   nextPackageStart: string | null;
-  /** Review required: downstream must keep current known state and hold new decisions. */
+  /** Warning only — Square numbering has an anomaly worth a look. Never overrides Square. */
+  reviewStatus: ReviewStatus;
+  /** False only when Square's current position genuinely can't be worked out. */
+  automationUsable: boolean;
+  /** Alias of !automationUsable: downstream must keep current known state and hold new decisions. */
   suppressed: boolean;
   issues: NoteIssue[];
   hubVisitsUsed: number | null;
@@ -53,6 +61,22 @@ export type HubVisitClient = {
   visits_used: number | null;
   package_total_visits: number | null;
 };
+
+/**
+ * True only when the latest past numbered visit itself is contradictory:
+ * conflicting numbers on that date, or it goes backward / changes size with
+ * no N/N → 1/N renewal to explain it. Older anomalies are warnings only.
+ */
+export function currentPositionUnreadable(seq: SequenceEntry[], issues: NoteIssue[]): boolean {
+  const pastNoted = seq.filter((e) => e.past && e.note && !e.cancelled);
+  const latest = pastNoted[pastNoted.length - 1];
+  if (!latest) return false;
+  const day = latest.date.slice(0, 10);
+  return issues.some((i) => {
+    if (i.date.slice(0, 10) !== day) return false;
+    return i.kind === "same_day_conflict" || i.kind === "backward" || i.kind === "package_size";
+  });
+}
 
 const fmt = (e: SequenceEntry) => (e.note ? `${e.note.n}/${e.note.total}` : null);
 const toVisit = (e: SequenceEntry): UpcomingVisit => ({
@@ -85,7 +109,8 @@ export function resolveEffectiveVisitState(
     hubTotalVisits: hubTotal,
   };
 
-  const hubState = (source: VisitSource, reason: string): EffectiveVisitState => {
+  const reviewStatus: ReviewStatus = issues.length > 0 ? "needs_review" : "clean";
+  const hubState = (source: VisitSource, reason: string, usable = true): EffectiveVisitState => {
     const used = Number(hubUsed ?? 0);
     return {
       ...base,
@@ -99,17 +124,20 @@ export function resolveEffectiveVisitState(
       remainingVisits: Math.max(0, hubTotal - used),
       reason,
       nextPackageStart: null,
-      suppressed: source === "review_required",
+      reviewStatus,
+      automationUsable: usable,
+      suppressed: !usable,
     };
   };
 
-  if (issues.length > 0) {
-    return hubState("review_required", issues.map((i) => i.reason).join("; "));
+  if (currentPositionUnreadable(seq, issues)) {
+    return hubState("hub_fallback", `Current Square position unreadable — ${issues.map((i) => i.reason).join("; ")}`, false);
   }
   if (noted.length === 0) return hubState("hub_fallback", "No usable Square visit notes");
   if (noted.length === 1) return hubState("hub_fallback", "Only one isolated Square note");
 
-  const latest = pastNoted[pastNoted.length - 1] ?? null;
+  const livePastNoted = pastNoted.filter((e) => !e.cancelled);
+  const latest = livePastNoted[livePastNoted.length - 1] ?? pastNoted[pastNoted.length - 1] ?? null;
   let used: number;
   let total: number;
   let reason: string;
@@ -117,6 +145,7 @@ export function resolveEffectiveVisitState(
     used = latest.note!.n;
     total = latest.note!.total;
     reason = `Latest past Square visit ${fmt(latest)}`;
+    if (issues.length > 0) reason += ` (flagged: ${issues.map((i) => i.reason).join("; ")})`;
   } else {
     // Only future notes: the first future note is the next visit.
     const first = noted[0].note!;
@@ -155,6 +184,8 @@ export function resolveEffectiveVisitState(
     remainingVisits: Math.max(0, total - used),
     reason,
     nextPackageStart,
+    reviewStatus,
+    automationUsable: true,
     suppressed: false,
     issues,
   };
@@ -205,8 +236,8 @@ export function forecastRenewal(i: ForecastInput): ForecastResult {
 
 /**
  * Chooses the state that drives downstream decisions.
- * Square → Square state. Hub fallback → Hub. Review required → Hub (current
- * known behaviour) with suppressed=true so any Square-implied change is held.
+ * Square (clean or flagged) → Square state. Hub fallback → Hub; when the
+ * fallback was forced by an unreadable Square position, suppressed=true holds new decisions.
  */
 export function drivingCounts(s: EffectiveVisitState): { used: number; total: number; nextPackageStart: string | null } {
   if (s.source === "square") return { used: s.visitsUsed, total: s.totalVisits, nextPackageStart: s.nextPackageStart };

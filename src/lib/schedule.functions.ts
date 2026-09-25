@@ -87,7 +87,7 @@ export type ScheduleCheckResult = {
 const CLINIC_TZ = "America/Chicago";
 
 // Format an instant as YYYY-MM-DD in the clinic's local timezone.
-function ymdInTz(d: Date): string {
+export function ymdInTz(d: Date): string {
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: CLINIC_TZ,
     year: "numeric",
@@ -143,7 +143,7 @@ function ymdWeekday(s: string): number {
   return new Date(Date.UTC(y, m - 1, d)).getUTCDay();
 }
 
-function addDaysYmd(s: string, n: number): string {
+export function addDaysYmd(s: string, n: number): string {
   const [y, m, d] = s.split("-").map(Number);
   const dt = new Date(Date.UTC(y, m - 1, d));
   dt.setUTCDate(dt.getUTCDate() + n);
@@ -157,7 +157,7 @@ function addDaysYmd(s: string, n: number): string {
 // into the upcoming work week: on Sat/Sun, `workWeekStartFromYmd` returns
 // the next Monday, so weekend appointments/payments count toward next week.
 // On Mon–Fri, it returns the Monday of the current work week.
-function workWeekStartFromYmd(ymd: string): string {
+export function workWeekStartFromYmd(ymd: string): string {
   const dow = ymdWeekday(ymd); // 0=Sun..6=Sat
   const offset = dow === 0 ? 1 : dow === 6 ? 2 : -(dow - 1);
   return addDaysYmd(ymd, offset);

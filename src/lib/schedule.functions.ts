@@ -2376,3 +2376,27 @@ export const getMissedCheckInSummary = createServerFn({ method: "GET" })
 export const getClinicToday = createServerFn({ method: "GET" }).handler(async () => ({
   today: ymdInTz(new Date()),
 }));
+
+/** Read-only: Square-vs-Hub visit tracking for one client (client page). */
+export const getClientVisitTracking = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { clientId: string }) => {
+    if (!d || typeof d.clientId !== "string") throw new Error("Invalid client");
+    return d;
+  })
+  .handler(async ({ data, context }) => {
+    const token = process.env.SQUARE_PRODUCTION_ACCESS_TOKEN;
+    if (!token) return { visit: null };
+    const { data: c, error } = await context.supabase
+      .from("clients")
+      .select("id, visits_used, package_total_visits, square_customer_id")
+      .eq("id", data.clientId)
+      .maybeSingle();
+    if (error) throw error;
+    if (!c || !c.square_customer_id || Number(c.package_total_visits ?? 0) <= 0) return { visit: null };
+    const { loadSquareBookingIndex, effectiveStateFor } = await import("@/lib/effective-visit-state.server");
+    const { visitTrackingFrom } = await import("@/lib/effective-visit-state");
+    const index = await loadSquareBookingIndex(token, 180, 60);
+    if (index.error) return { visit: null };
+    return { visit: visitTrackingFrom(effectiveStateFor(index, c)) };
+  });

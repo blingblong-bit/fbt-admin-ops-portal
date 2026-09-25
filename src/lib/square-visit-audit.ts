@@ -152,6 +152,8 @@ export type SequenceEntry = {
   booking_id: string;
   date: string;
   past: boolean;
+  status?: string | null;
+  cancelled?: boolean;
   note: ParsedNote | null;
 };
 
@@ -167,16 +169,29 @@ export const ISSUE_LABELS: Record<NoteIssueKind, string> = {
 const CANCELLED = /CANCELLED|CANCELED|DECLINED|NO_SHOW/i;
 const PAST_WINDOW = 6;
 
+/** Keeps every Square booking (cancelled/no-show included) so visit numbers stay visible. */
 export function buildSequence(bookings: ReviewBooking[], nowIso: string): SequenceEntry[] {
   return bookings
-    .filter((b) => b.start_at && !CANCELLED.test(b.status ?? ""))
+    .filter((b) => b.start_at)
     .map((b) => ({
       booking_id: b.id,
       date: b.start_at,
       past: b.start_at < nowIso,
+      status: b.status ?? null,
+      cancelled: CANCELLED.test(b.status ?? ""),
       note: parseVisitNote(b.seller_note) ?? parseVisitNote(b.customer_note),
     }))
     .sort((a, b) => a.date.localeCompare(b.date));
+}
+
+export function statusLabel(status: string | null | undefined): string | null {
+  switch ((status ?? "").toUpperCase()) {
+    case "CANCELLED_BY_SELLER": return "Cancelled by seller";
+    case "CANCELLED_BY_CUSTOMER": return "Cancelled by client";
+    case "DECLINED": return "Declined";
+    case "NO_SHOW": return "No show";
+    default: return status && CANCELLED.test(status) ? "Cancelled" : null;
+  }
 }
 
 const fmt = (n: ParsedNote) => `${n.n}/${n.total}`;
@@ -219,7 +234,7 @@ export function detectNoteIssues(seq: SequenceEntry[]): NoteIssue[] {
     }
     // Forward gap. Were there un-noted appointments in between?
     const gap = b.n - a.n - 1;
-    const unnoted = seq.slice(ai + 1, bi).filter((e) => !e.note).length;
+    const unnoted = seq.slice(ai + 1, bi).filter((e) => !e.note && !e.cancelled).length;
     if (unnoted > 0 && unnoted >= gap) {
       issues.push({ kind: "missing_note", reason: `Missing visit note inside package sequence: ${fmt(a)} → [no note] → ${fmt(b)}`, expected, date });
     } else if (A.past && !B.past) {

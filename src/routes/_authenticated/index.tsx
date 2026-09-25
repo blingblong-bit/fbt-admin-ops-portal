@@ -733,7 +733,7 @@ function Dashboard() {
   const noteReviewSub = nr
     ? nr.error
       ? "couldn't read Square"
-      : `${nr.counts.skipped + nr.counts.stale_future + nr.counts.missing_note} sequence · ${nr.counts.same_day_conflict} conflicting · ${nr.counts.package_size} size`
+      : `${nr.counts.skipped + nr.counts.stale_future + nr.counts.future_after_complete + nr.counts.missing_note} sequence · ${nr.counts.same_day_conflict} conflicting · ${nr.counts.package_size} size`
     : "checking Square…";
 
   const fetchAutomation = useServerFn(getVisitAutomationReview);

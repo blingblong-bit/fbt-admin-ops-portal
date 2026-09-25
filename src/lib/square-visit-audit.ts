@@ -141,6 +141,7 @@ export type ReviewBooking = {
 export type NoteIssueKind =
   | "skipped"
   | "stale_future"
+  | "future_after_complete"
   | "backward"
   | "same_day_conflict"
   | "package_size"
@@ -159,7 +160,8 @@ export type SequenceEntry = {
 
 export const ISSUE_LABELS: Record<NoteIssueKind, string> = {
   skipped: "Skipped visit number",
-  stale_future: "Future numbering may be stale",
+  stale_future: "Future numbering jumps ahead",
+  future_after_complete: "Future doesn't continue after completed package",
   backward: "Sequence goes backward",
   same_day_conflict: "Conflicting same-day notes",
   package_size: "Package size changed",
@@ -240,6 +242,10 @@ export function detectNoteIssues(seq: SequenceEntry[]): NoteIssue[] {
       continue;
     }
     const expected = `${a.n + 1}/${a.total}`;
+    if (A.past && !B.past && a.n === a.total) {
+      issues.push({ kind: "future_after_complete", reason: `Future visit numbering does not continue after completed package — last past ${fmt(a)}, next ${fmt(b)}`, expected: `1/${a.total}`, date });
+      continue;
+    }
     if (b.n <= a.n) {
       issues.push({ kind: "backward", reason: `Visit sequence goes backward: ${fmt(a)} → ${fmt(b)}`, expected, date });
       continue;
@@ -250,7 +256,7 @@ export function detectNoteIssues(seq: SequenceEntry[]): NoteIssue[] {
     if (unnoted > 0 && unnoted >= gap) {
       issues.push({ kind: "missing_note", reason: `Missing visit note inside package sequence: ${fmt(a)} → [no note] → ${fmt(b)}`, expected, date });
     } else if (A.past && !B.past) {
-      issues.push({ kind: "stale_future", reason: `Future visit numbering may be stale — last past ${fmt(a)}, next ${fmt(b)}`, expected, date });
+      issues.push({ kind: "stale_future", reason: `Future visit numbering jumps ahead unexpectedly — last past ${fmt(a)}, next ${fmt(b)}`, expected, date });
     } else {
       issues.push({ kind: "skipped", reason: `Possible skipped visit number: ${fmt(a)} → ${fmt(b)}`, expected, date });
     }

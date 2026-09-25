@@ -31,7 +31,6 @@ import { Route as AuthenticatedClientsIndexRouteImport } from './routes/_authent
 import { Route as ApiPublicVisitDiffSweepTriggerRouteImport } from './routes/api/public/visit-diff-sweep-trigger'
 import { Route as ApiPublicVisitDiffSweepRouteImport } from './routes/api/public/visit-diff-sweep'
 import { Route as ApiPublicSquareDiagRouteImport } from './routes/api/public/square-diag'
-import { Route as ApiPublicRenewalDryrunTmpRouteImport } from './routes/api/public/renewal-dryrun-tmp'
 import { Route as AuthenticatedClientsNewRouteImport } from './routes/_authenticated/clients.new'
 import { Route as AuthenticatedClientsDeletedRouteImport } from './routes/_authenticated/clients.deleted'
 import { Route as AuthenticatedClientsIdRouteImport } from './routes/_authenticated/clients.$id'
@@ -162,12 +161,6 @@ const ApiPublicSquareDiagRoute = ApiPublicSquareDiagRouteImport.update({
   path: '/api/public/square-diag',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiPublicRenewalDryrunTmpRoute =
-  ApiPublicRenewalDryrunTmpRouteImport.update({
-    id: '/api/public/renewal-dryrun-tmp',
-    path: '/api/public/renewal-dryrun-tmp',
-    getParentRoute: () => rootRouteImport,
-  } as any)
 const AuthenticatedClientsNewRoute = AuthenticatedClientsNewRouteImport.update({
   id: '/clients/new',
   path: '/clients/new',
@@ -231,7 +224,6 @@ export interface FileRoutesByFullPath {
   '/clients/$id': typeof AuthenticatedClientsIdRoute
   '/clients/deleted': typeof AuthenticatedClientsDeletedRoute
   '/clients/new': typeof AuthenticatedClientsNewRoute
-  '/api/public/renewal-dryrun-tmp': typeof ApiPublicRenewalDryrunTmpRoute
   '/api/public/square-diag': typeof ApiPublicSquareDiagRoute
   '/api/public/visit-diff-sweep': typeof ApiPublicVisitDiffSweepRoute
   '/api/public/visit-diff-sweep-trigger': typeof ApiPublicVisitDiffSweepTriggerRoute
@@ -263,7 +255,6 @@ export interface FileRoutesByTo {
   '/clients/$id': typeof AuthenticatedClientsIdRoute
   '/clients/deleted': typeof AuthenticatedClientsDeletedRoute
   '/clients/new': typeof AuthenticatedClientsNewRoute
-  '/api/public/renewal-dryrun-tmp': typeof ApiPublicRenewalDryrunTmpRoute
   '/api/public/square-diag': typeof ApiPublicSquareDiagRoute
   '/api/public/visit-diff-sweep': typeof ApiPublicVisitDiffSweepRoute
   '/api/public/visit-diff-sweep-trigger': typeof ApiPublicVisitDiffSweepTriggerRoute
@@ -297,7 +288,6 @@ export interface FileRoutesById {
   '/_authenticated/clients/$id': typeof AuthenticatedClientsIdRoute
   '/_authenticated/clients/deleted': typeof AuthenticatedClientsDeletedRoute
   '/_authenticated/clients/new': typeof AuthenticatedClientsNewRoute
-  '/api/public/renewal-dryrun-tmp': typeof ApiPublicRenewalDryrunTmpRoute
   '/api/public/square-diag': typeof ApiPublicSquareDiagRoute
   '/api/public/visit-diff-sweep': typeof ApiPublicVisitDiffSweepRoute
   '/api/public/visit-diff-sweep-trigger': typeof ApiPublicVisitDiffSweepTriggerRoute
@@ -331,7 +321,6 @@ export interface FileRouteTypes {
     | '/clients/$id'
     | '/clients/deleted'
     | '/clients/new'
-    | '/api/public/renewal-dryrun-tmp'
     | '/api/public/square-diag'
     | '/api/public/visit-diff-sweep'
     | '/api/public/visit-diff-sweep-trigger'
@@ -363,7 +352,6 @@ export interface FileRouteTypes {
     | '/clients/$id'
     | '/clients/deleted'
     | '/clients/new'
-    | '/api/public/renewal-dryrun-tmp'
     | '/api/public/square-diag'
     | '/api/public/visit-diff-sweep'
     | '/api/public/visit-diff-sweep-trigger'
@@ -396,7 +384,6 @@ export interface FileRouteTypes {
     | '/_authenticated/clients/$id'
     | '/_authenticated/clients/deleted'
     | '/_authenticated/clients/new'
-    | '/api/public/renewal-dryrun-tmp'
     | '/api/public/square-diag'
     | '/api/public/visit-diff-sweep'
     | '/api/public/visit-diff-sweep-trigger'
@@ -411,7 +398,6 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRoute
-  ApiPublicRenewalDryrunTmpRoute: typeof ApiPublicRenewalDryrunTmpRoute
   ApiPublicSquareDiagRoute: typeof ApiPublicSquareDiagRoute
   ApiPublicVisitDiffSweepRoute: typeof ApiPublicVisitDiffSweepRoute
   ApiPublicVisitDiffSweepTriggerRoute: typeof ApiPublicVisitDiffSweepTriggerRoute
@@ -578,13 +564,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicSquareDiagRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/public/renewal-dryrun-tmp': {
-      id: '/api/public/renewal-dryrun-tmp'
-      path: '/api/public/renewal-dryrun-tmp'
-      fullPath: '/api/public/renewal-dryrun-tmp'
-      preLoaderRoute: typeof ApiPublicRenewalDryrunTmpRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/_authenticated/clients/new': {
       id: '/_authenticated/clients/new'
       path: '/clients/new'
@@ -697,7 +676,6 @@ const AuthenticatedRouteRouteWithChildren =
 const rootRouteChildren: RootRouteChildren = {
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRoute,
-  ApiPublicRenewalDryrunTmpRoute: ApiPublicRenewalDryrunTmpRoute,
   ApiPublicSquareDiagRoute: ApiPublicSquareDiagRoute,
   ApiPublicVisitDiffSweepRoute: ApiPublicVisitDiffSweepRoute,
   ApiPublicVisitDiffSweepTriggerRoute: ApiPublicVisitDiffSweepTriggerRoute,

@@ -23,3 +23,10 @@
 - [ ] Controlled live test on a dedicated test phone, then flag back OFF
 
 - [x] Visit Note Review tile + page (/visit-note-review, admin only, read-only from Square)
+
+## Square-driven effective visit state
+- [ ] Resolver + tests (effective-visit-state.ts)
+- [ ] Nightly sweep report-only (no visits_used writes)
+- [ ] Wire renewal forecast / Needs Renewal / Payment Due / Dues drafts to effective state (review_required suppressed)
+- [ ] Visit Automation Review page + tile
+- [ ] Read-only impact report (incl. dues gained vs removed/moved) — stop before publishing

@@ -1819,6 +1819,8 @@ export const getRenewalForecast = createServerFn({ method: "GET" })
         first_uncovered_index: fc.firstUncoveredIndex,
         first_uncovered_ymd: firstUncoveredYmd,
         visit_source: state.source,
+        review_status: state.reviewStatus,
+        automation_usable: state.automationUsable,
         hub_visits_used: r.visits_used ?? null,
         week_bucket,
         package_price: basePrice,

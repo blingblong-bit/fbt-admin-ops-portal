@@ -24,7 +24,8 @@ export type AutomationImpact = {
   checked: number;
   square: number;
   hub_fallback: number;
-  review_required: number;
+  needs_review: number;
+  square_needs_review: number;
   count_differs: number;
   renewal_date_moves: number;
   payment_week_moves: number;
@@ -53,7 +54,7 @@ export const getVisitAutomationReview = createServerFn({ method: "GET" })
     if (!isAdmin && !isSuper) throw new Error("Forbidden — admin access required");
 
     const impact: AutomationImpact = {
-      checked: 0, square: 0, hub_fallback: 0, review_required: 0, count_differs: 0,
+      checked: 0, square: 0, hub_fallback: 0, needs_review: 0, square_needs_review: 0, count_differs: 0,
       renewal_date_moves: 0, payment_week_moves: 0, dues_changes: 0,
       dues_newly_gain: 0, dues_removed_or_moved: 0, held_for_review: 0,
     };
@@ -101,6 +102,7 @@ export const getVisitAutomationReview = createServerFn({ method: "GET" })
       impact.checked++;
       const state = effectiveStateFor(index, c);
       impact[state.source]++;
+      if (state.reviewStatus === "needs_review") { impact.needs_review++; if (state.source === "square") impact.square_needs_review++; }
       const starts = upcomingStarts(index, c.square_customer_id);
       const hubUsed = Number(c.visits_used ?? 0);
       const hubTotal = Number(c.package_total_visits ?? 0);
@@ -148,12 +150,11 @@ export const getVisitAutomationReview = createServerFn({ method: "GET" })
         if (sq !== pending) actions.push(`Prepared renewal ${pending} differs from Square ${sq}`);
       }
 
-      // Review required: show what Square would have changed, but hold it.
-      if (state.source === "review_required") {
-        {
-          impact.held_for_review++;
-          actions.unshift("Held — Square numbering needs review; keeping current Hub behaviour");
-        }
+      if (!state.automationUsable) {
+        impact.held_for_review++;
+        actions.unshift("Held — current Square position unreadable; keeping current Hub behaviour");
+      } else if (state.reviewStatus === "needs_review") {
+        actions.push("Needs review — Square still drives");
       }
 
       if (actions.length === 0) continue;
@@ -162,6 +163,8 @@ export const getVisitAutomationReview = createServerFn({ method: "GET" })
         client_id: c.id,
         name: `${c.first_name} ${c.last_name}`.trim(),
         source: state.source,
+        review_status: state.reviewStatus,
+        automation_usable: state.automationUsable,
         reason: state.reason,
         hub: `${hubUsed}/${hubTotal}`,
         square: state.source === "square" ? `${state.visitsUsed}/${state.totalVisits}` : null,
@@ -174,7 +177,7 @@ export const getVisitAutomationReview = createServerFn({ method: "GET" })
         actions,
       });
     }
-    const order: Record<VisitSource, number> = { review_required: 0, square: 1, hub_fallback: 2 };
-    cards.sort((a, b) => order[a.source] - order[b.source] || a.name.localeCompare(b.name));
+    const rank = (c: AutomationCard) => (!c.automation_usable ? 0 : c.review_status === "needs_review" ? 1 : c.source === "square" ? 2 : 3);
+    cards.sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name));
     return { generated_at: nowIso, impact, cards, error: null };
   });

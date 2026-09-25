@@ -42,7 +42,9 @@ Only clients with a meaningful difference or action are listed.
    - have a different visit count
    - have a renewal date that moves
    - have a Payment Due week that moves
-   - have a Dues Text classification that changes
+   - have a Dues Text classification that changes, split into:
+     - newly gain a dues draft
+     - have an existing draft removed or moved
    - land in Review required
 6. Run the full test suite and typecheck. Stop and wait for your go-ahead before publishing.
 

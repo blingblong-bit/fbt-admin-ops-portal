@@ -25,8 +25,10 @@
 - [x] Visit Note Review tile + page (/visit-note-review, admin only, read-only from Square)
 
 ## Square-driven effective visit state
-- [ ] Resolver + tests (effective-visit-state.ts)
-- [ ] Nightly sweep report-only (no visits_used writes)
-- [ ] Wire renewal forecast / Needs Renewal / Payment Due / Dues drafts to effective state (review_required suppressed)
-- [ ] Visit Automation Review page + tile
-- [ ] Read-only impact report (incl. dues gained vs removed/moved) — stop before publishing
+- [x] Resolver + tests (effective-visit-state.ts)
+- [x] Nightly sweep report-only (no visits_used writes)
+- [x] Wire renewal forecast / Needs Renewal / Payment Due / Dues drafts to effective state (review_required suppressed)
+- [x] Visit Automation Review page + tile
+- [x] Read-only impact report (incl. dues gained vs removed/moved) — stop before publishing
+- [ ] Renewal reminder texts job (last-visit auto-text) still reads stored Hub count — switch only after go-ahead
+- [ ] Publish — waiting on your go/no-go

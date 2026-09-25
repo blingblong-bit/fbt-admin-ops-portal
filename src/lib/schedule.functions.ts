@@ -787,7 +787,7 @@ export const getCompletedVisitBookingIds = createServerFn({ method: "POST" })
  * have a completed "visit" activity. Used by Schedule Check and by the
  * Missed Check-Ins review so both agree on what "checked in" means.
  */
-async function resolveCheckedInBookingIds(
+export async function resolveCheckedInBookingIds(
   supabase: { from: (t: string) => any },
   appts: CheckedInProbe[],
 ): Promise<string[]> {
@@ -2071,7 +2071,7 @@ type RawDayAppt = {
 };
 
 /** Load Square bookings for a clinic-local date range and match them to clients. */
-async function loadAppointmentsForRange(
+export async function loadAppointmentsForRange(
   supabase: { from: (t: string) => any },
   token: string,
   startYmd: string,
@@ -2151,10 +2151,10 @@ async function loadAppointmentsForRange(
   return { appts, error };
 }
 
-function isCancelledStatus(s: string) {
+export function isCancelledStatus(s: string) {
   return /(CANCELLED|CANCELED|DECLINED)/i.test(s);
 }
-function isNoShowStatus(s: string) {
+export function isNoShowStatus(s: string) {
   return /NO_SHOW/i.test(s);
 }
 
@@ -2163,7 +2163,7 @@ function isNoShowStatus(s: string) {
  * Dismissal never touches packages or visit counts — it only clears the row
  * from the exception list so the tile can return to zero.
  */
-async function resolveDismissedBookingIds(
+export async function resolveDismissedBookingIds(
   supabase: { from: (t: string) => any },
   bookingIds: string[],
 ): Promise<Set<string>> {

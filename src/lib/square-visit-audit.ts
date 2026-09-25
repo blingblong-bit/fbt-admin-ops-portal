@@ -200,8 +200,16 @@ const fmt = (n: ParsedNote) => `${n.n}/${n.total}`;
 export function detectNoteIssues(seq: SequenceEntry[]): NoteIssue[] {
   // A cancelled booking whose number was rebooked on a live appointment is
   // superseded (e.g. 7/8 cancelled → 7/8 rebooked): not a numbering problem.
-  const live = new Set(seq.filter((e) => e.note && !e.cancelled).map((e) => `${e.note!.n}/${e.note!.total}`));
-  const superseded = (e: SequenceEntry) => !!e.cancelled && !!e.note && live.has(`${e.note.n}/${e.note.total}`);
+  // Only the neighbouring live numbered appointments count, so a cancelled
+  // 7/8 isn't hidden by a live 7/8 from an earlier package.
+  const key = (e: SequenceEntry) => `${e.note!.n}/${e.note!.total}`;
+  const superseded = (e: SequenceEntry) => {
+    if (!e.cancelled || !e.note) return false;
+    const i = seq.indexOf(e);
+    const prev = [...seq.slice(0, i)].reverse().find((x) => x.note && !x.cancelled);
+    const next = seq.slice(i + 1).find((x) => x.note && !x.cancelled);
+    return (!!prev && key(prev) === key(e)) || (!!next && key(next) === key(e));
+  };
   const notedIdx = seq.map((e, i) => (e.note && !superseded(e) ? i : -1)).filter((i) => i >= 0);
   if (notedIdx.length < 2) return []; // no/isolated notes → Hub fallback, no flag
   const pastNoted = notedIdx.filter((i) => seq[i].past);

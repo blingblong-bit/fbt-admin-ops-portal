@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { renewalAmountDue } from "@/lib/dues-messaging";
+import { countsAsMissedCheckIn } from "@/lib/effective-visit-state";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { matchLooseVisitBookingIds } from "@/lib/check-in-matching";
 
@@ -436,6 +437,10 @@ export const getScheduleCheck = createServerFn({ method: "GET" })
         `${clients.filter((c) => c.square_customer_id).length} with square_customer_id)`,
     );
 
+    {
+      const { attachVisitTracking } = await import("@/lib/effective-visit-state.server");
+      await attachVisitTracking(token, clients);
+    }
     // Match bookings to clients by Square customer ID.
     const byCustomerId = new Map<string, ScheduleClientLite>();
     for (const c of (clients ?? []) as ScheduleClientLite[]) {
@@ -2042,7 +2047,9 @@ export type DayReviewRow = {
     | "upcoming"
     | "cancelled"
     | "no_show"
-    | "unmatched";
+    | "unmatched"
+    /** Past, no Hub check-in, but Square notes track this client — no action needed. */
+    | "square_tracked";
 
 };
 
@@ -2095,6 +2102,10 @@ async function loadAppointmentsForRange(
       if (page.length < pageSize) break;
       from += pageSize;
     }
+  }
+  {
+    const { attachVisitTracking } = await import("@/lib/effective-visit-state.server");
+    await attachVisitTracking(token, clients);
   }
   const byCustomerId = new Map<string, ScheduleClientLite>();
   for (const c of clients) if (c.square_customer_id) byCustomerId.set(c.square_customer_id, c);
@@ -2252,6 +2263,7 @@ export const getDayReview = createServerFn({ method: "GET" })
       else if (checkedIn.has(a.booking_id)) state = "checked_in";
       else if (new Date(a.start_at).getTime() > now) state = "upcoming";
       else if (dismissed.has(a.booking_id)) state = "dismissed";
+      else if (!countsAsMissedCheckIn(a.client.visit)) state = "square_tracked";
       else state = "missed";
 
       return {
@@ -2333,7 +2345,10 @@ export const getMissedCheckInSummary = createServerFn({ method: "GET" })
       candidates.map((a) => a.booking_id),
     );
     const missed = candidates.filter(
-      (a) => !checkedIn.has(a.booking_id) && !dismissed.has(a.booking_id),
+      (a) =>
+        !checkedIn.has(a.booking_id) &&
+        !dismissed.has(a.booking_id) &&
+        countsAsMissedCheckIn(a.client!.visit),
     );
 
     let yesterdayCount = 0;

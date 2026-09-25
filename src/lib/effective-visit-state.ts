@@ -68,7 +68,7 @@ export type HubVisitClient = {
  * no N/N → 1/N renewal to explain it. Older anomalies are warnings only.
  */
 export function currentPositionUnreadable(seq: SequenceEntry[], issues: NoteIssue[]): boolean {
-  const pastNoted = seq.filter((e) => e.past && e.note && !e.cancelled);
+  const pastNoted = seq.filter((e) => e.past && e.note);
   const latest = pastNoted[pastNoted.length - 1];
   if (!latest) return false;
   const day = latest.date.slice(0, 10);
@@ -136,8 +136,7 @@ export function resolveEffectiveVisitState(
   if (noted.length === 0) return hubState("hub_fallback", "No usable Square visit notes");
   if (noted.length === 1) return hubState("hub_fallback", "Only one isolated Square note");
 
-  const livePastNoted = pastNoted.filter((e) => !e.cancelled);
-  const latest = livePastNoted[livePastNoted.length - 1] ?? pastNoted[pastNoted.length - 1] ?? null;
+  const latest = pastNoted[pastNoted.length - 1] ?? null;
   let used: number;
   let total: number;
   let reason: string;

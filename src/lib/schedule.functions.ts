@@ -1704,7 +1704,9 @@ export type RenewalForecastRow = {
    */
   no_upcoming: boolean;
   /** Where the visit position came from (Square synced / Hub fallback / Review required). */
-  visit_source: "square" | "hub_fallback" | "review_required";
+  visit_source: "square" | "hub_fallback";
+  review_status?: "clean" | "needs_review";
+  automation_usable?: boolean;
   hub_visits_used: number | null;
 };
 

@@ -55,8 +55,8 @@ export function decideRenewalText(
   hasOpenCampaign: boolean,
 ): RenewalDecision {
   const base = { suppressed: false, consentBlocked: null as RenewalDecision["consentBlocked"] };
-  if (state.source === "review_required") {
-    return { ...base, eligible: false, suppressed: true, reason: "held — Square numbering needs review", basis: `Review required (${state.reason})`, lastVisitDate: null };
+  if (!state.automationUsable) {
+    return { ...base, eligible: false, suppressed: true, reason: "held — current Square position unreadable", basis: `Held (${state.reason})`, lastVisitDate: null };
   }
   let basis: string;
   let lastVisitDate: string | null = null;
@@ -95,7 +95,7 @@ export function campaignShouldAutoClear(
   cli: { package_start_date: string | null; package_total_visits: number; visits_used: number | null },
   camp: { package_start_date_snapshot: string | null; package_total_visits_snapshot: number },
 ): boolean | null {
-  if (state.source === "review_required") return null; // held
+  if (!state.automationUsable) return null; // held
   const used = state.source === "square" ? state.visitsUsed : (cli.visits_used ?? 0);
   const startedNewPkg = !!cli.package_start_date &&
     (!camp.package_start_date_snapshot || cli.package_start_date > camp.package_start_date_snapshot);

@@ -748,7 +748,7 @@ function Dashboard() {
   const automationSub = au
     ? au.error
       ? "couldn't read Square"
-      : `${au.impact.square} Square · ${au.impact.hub_fallback} Hub · ${au.impact.review_required} review`
+      : `${au.impact.square} Square · ${au.impact.hub_fallback} Hub · ${au.impact.needs_review} flagged · ${au.impact.held_for_review} held`
     : "checking Square…";
 
 

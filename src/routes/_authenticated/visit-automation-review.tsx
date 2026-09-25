@@ -32,7 +32,6 @@ export const Route = createFileRoute("/_authenticated/visit-automation-review")(
 const SOURCE_STYLE: Record<VisitSource, string> = {
   square: "bg-emerald-50 text-emerald-800 border-emerald-200",
   hub_fallback: "bg-slate-50 text-slate-700 border-slate-200",
-  review_required: "bg-amber-50 text-amber-900 border-amber-200",
 };
 
 export function SourceLabel({ source }: { source: VisitSource }) {
@@ -40,6 +39,19 @@ export function SourceLabel({ source }: { source: VisitSource }) {
     <span className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${SOURCE_STYLE[source]}`}>
       {SOURCE_LABELS[source]}
     </span>
+  );
+}
+
+export function ReviewLabels({ reviewStatus, usable }: { reviewStatus: "clean" | "needs_review"; usable: boolean }) {
+  return (
+    <>
+      {reviewStatus === "needs_review" && (
+        <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-900">Needs review</span>
+      )}
+      {!usable && (
+        <span className="rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-[11px] font-medium text-red-800">Automation held</span>
+      )}
+    </>
   );
 }
 
@@ -74,7 +86,8 @@ function VisitAutomationReviewPage() {
           <h1 className="text-2xl font-semibold tracking-tight">Visit Automation Review</h1>
           <p className="mt-1 max-w-2xl text-sm text-slate-600">
             What the Hub worked out from Square visit notes and what it does because of it. Stored Hub visit counts are
-            never changed here. Clients whose Square numbering needs review keep their current behaviour until Square is fixed.
+            never changed here. A review flag is a warning only — Square still drives. Automation is held only when a client's
+            current Square visit can't be worked out.
           </p>
         </div>
         <Button onClick={() => q.refetch()} disabled={q.isFetching}>
@@ -91,16 +104,17 @@ function VisitAutomationReviewPage() {
         <>
           <div className="mb-4 grid gap-2 text-sm sm:grid-cols-3 lg:grid-cols-5">
             {[
-              ["Square synced", i.square],
+              ["Square", i.square],
               ["Hub fallback", i.hub_fallback],
-              ["Review required", i.review_required],
+              ["Needs review (warning)", i.needs_review],
+              ["· Square + needs review", i.square_needs_review],
               ["Count differs from Hub", i.count_differs],
               ["Renewal date moves", i.renewal_date_moves],
               ["Payment Due week moves", i.payment_week_moves],
               ["Dues changes", i.dues_changes],
               ["· newly gain dues", i.dues_newly_gain],
               ["· dues removed/moved", i.dues_removed_or_moved],
-              ["Held for review", i.held_for_review],
+              ["Automation held", i.held_for_review],
             ].map(([label, n]) => (
               <div key={label as string} className="rounded-md border border-slate-200 p-2">
                 <div className="text-xs text-slate-500">{label}</div>
@@ -119,7 +133,7 @@ function VisitAutomationReviewPage() {
                   <div className="flex items-start justify-between gap-2">
                     <div>
                       <div className="flex items-center gap-2 font-semibold">
-                        {c.name} <SourceLabel source={c.source} />
+                        {c.name} <SourceLabel source={c.source} /> <ReviewLabels reviewStatus={c.review_status} usable={c.automation_usable} />
                       </div>
                       <div className="text-xs text-slate-500">
                         Hub {c.hub} · Square {c.square ?? "—"} · Effective <span className="font-medium text-slate-700">{c.effective}</span>

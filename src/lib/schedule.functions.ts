@@ -1703,6 +1703,9 @@ export type RenewalForecastRow = {
    * from the weekly payment totals.
    */
   no_upcoming: boolean;
+  /** Where the visit position came from (Square synced / Hub fallback / Review required). */
+  visit_source: "square" | "hub_fallback" | "review_required";
+  hub_visits_used: number | null;
 };
 
 export type RenewalForecastResult = {
@@ -1730,32 +1733,18 @@ export const getRenewalForecast = createServerFn({ method: "GET" })
     const token = process.env.SQUARE_PRODUCTION_ACCESS_TOKEN;
     if (!token) return { ...empty, error: "SQUARE_PRODUCTION_ACCESS_TOKEN is not configured" };
 
-    // Square caps a bookings query at 31 days — page through in 30-day windows.
-    const now = new Date();
-    const bookings: SquareBooking[] = [];
-    for (let i = 0; i < Math.ceil(FORECAST_DAYS / 30); i++) {
-      const start = new Date(now.getTime() + i * 30 * MS_PER_DAY);
-      const end = new Date(now.getTime() + (i + 1) * 30 * MS_PER_DAY);
-      const { bookings: page, error } = await fetchSquareBookings(
-        token,
-        start.toISOString(),
-        end.toISOString(),
-      );
-      if (error) return { ...empty, error };
-      bookings.push(...page);
-    }
-
-    // Upcoming, non-cancelled bookings grouped by Square customer.
-    const nowIso = now.toISOString();
+    // Past + upcoming Square bookings: past notes decide the effective visit
+    // position, upcoming non-cancelled appointments drive the forecast.
+    const { loadSquareBookingIndex, effectiveStateFor, upcomingStarts } = await import(
+      "@/lib/effective-visit-state.server"
+    );
+    const { drivingCounts, forecastRenewal } = await import("@/lib/effective-visit-state");
+    const index = await loadSquareBookingIndex(token, 180, FORECAST_DAYS);
+    if (index.error) return { ...empty, error: index.error };
     const byCustomer = new Map<string, string[]>();
-    for (const b of bookings) {
-      const status = (b.status ?? "").toString().toUpperCase();
-      if (/CANCEL|DECLINE|NO_SHOW/.test(status)) continue;
-      if (!b.start_at || !b.customer_id) continue;
-      if (b.start_at < nowIso) continue;
-      const list = byCustomer.get(b.customer_id) ?? [];
-      list.push(b.start_at);
-      byCustomer.set(b.customer_id, list);
+    for (const cid of index.byCustomer.keys()) {
+      const list = upcomingStarts(index, cid);
+      if (list.length > 0) byCustomer.set(cid, list);
     }
     // No early return when there are zero bookings: prepared renewals with no
     // upcoming appointment must still be listed further down.
@@ -1790,13 +1779,21 @@ export const getRenewalForecast = createServerFn({ method: "GET" })
     }>) {
       const starts = [...(byCustomer.get(r.square_customer_id ?? "") ?? [])].sort();
       if (starts.length === 0) continue;
-      const used = Number(r.visits_used ?? 0);
-      const total = Number(r.package_total_visits ?? 0);
-      const remaining = Math.max(0, total - used);
-      if (starts.length <= remaining) continue;
+      const state = effectiveStateFor(index, r);
+      const drive = drivingCounts(state);
+      const used = drive.used;
+      const total = drive.total;
+      const fc = forecastRenewal({
+        upcomingStarts: starts,
+        visitsUsed: used,
+        totalVisits: total,
+        nextPackageStart: drive.nextPackageStart,
+      });
+      if (!fc.needsRenewal || !fc.firstUncoveredStart) continue;
+      const remaining = fc.remaining;
 
       const ymds = starts.map((s) => ymdInTz(new Date(s)));
-      const firstUncoveredYmd = ymds[remaining];
+      const firstUncoveredYmd = ymdInTz(new Date(fc.firstUncoveredStart));
       const pendingStart = r.pending_renewal_start_date;
       // Once staff pre-renews, the prepared start date drives the weekly
       // bucket (they may have adjusted it); otherwise use the forecast.
@@ -1817,8 +1814,10 @@ export const getRenewalForecast = createServerFn({ method: "GET" })
         remaining,
         upcoming_count: starts.length,
         appointment_ymds: ymds,
-        first_uncovered_index: remaining,
+        first_uncovered_index: fc.firstUncoveredIndex,
         first_uncovered_ymd: firstUncoveredYmd,
+        visit_source: state.source,
+        hub_visits_used: r.visits_used ?? null,
         week_bucket,
         package_price: basePrice,
         next_package_price: pendingPrice ?? override ?? basePrice,
@@ -1871,6 +1870,8 @@ export const getRenewalForecast = createServerFn({ method: "GET" })
         appointment_ymds: [],
         first_uncovered_index: 0,
         first_uncovered_ymd: r.pending_renewal_start_date ?? "",
+        visit_source: "hub_fallback",
+        hub_visits_used: r.visits_used ?? null,
         // Never counted in This Week / Next Week without a real appointment.
         week_bucket: "later",
         package_price: basePrice,

@@ -16,9 +16,12 @@ The auto-clear step, which closes an open campaign once a client has renewed, al
 
 Balance owed must be 0; a phone number and a linked Square customer are required; there is no duplicate campaign for the same package; follow-ups #2 and #3 go out only in the 10am–noon clinic window, once per day, and never after a reply; the message wording and sending number stay the same.
 
-## Gap found (needs your decision)
+## New mandatory guards (approved)
 
-This job does **not** check SMS consent or opt-out today. It sends even if the client texted STOP. I plan to add both: consent is required, and any opt-out blocks the text. This applies to new campaigns and follow-ups, using the same consent and opt-out fields the Dues Texts page uses. The impact report will count how many clients this blocks.
+- A valid SMS consent is required before any automatic renewal text.
+- Any opt-out blocks both new campaigns and follow-ups.
+- Review required blocks the entire automatic renewal-text path for that client: no new campaign, no follow-ups, no auto-clear.
+- Kill switch: automatic renewal texts stay OFF unless explicitly turned on, including for the first publish. You turn them on yourself after reviewing the report.
 
 ## Read-only impact report (runs before publishing)
 

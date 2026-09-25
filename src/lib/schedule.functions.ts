@@ -644,7 +644,7 @@ export const completeVisitForClient = createServerFn({ method: "POST" })
     const { data: c0, error } = await context.supabase
       .from("clients")
       .select(
-        "visits_used, package_total_visits, package_name, package_price, amount_paid, previous_package_owed, payment_model, pending_renewal_start_date, pending_renewal_price, pending_renewal_total_visits, pending_renewal_package_name",
+        "visits_used, package_total_visits, package_name, package_price, amount_paid, previous_package_owed, payment_model, pending_renewal_start_date, pending_renewal_price, pending_renewal_paid, pending_renewal_total_visits, pending_renewal_package_name",
       )
       .eq("id", data.clientId)
       .single();
@@ -659,6 +659,7 @@ export const completeVisitForClient = createServerFn({ method: "POST" })
       payment_model: string | null;
       pending_renewal_start_date: string | null;
       pending_renewal_price: number | string | null;
+      pending_renewal_paid?: number | string | null;
       pending_renewal_total_visits: number | null;
       pending_renewal_package_name: string | null;
     } | null;
@@ -1733,7 +1734,7 @@ export const getRenewalForecast = createServerFn({ method: "GET" })
       const { data, error: cErr } = await context.supabase
         .from("clients")
         .select(
-          "id, square_customer_id, visits_used, package_total_visits, package_price, next_package_price, status, pending_renewal_start_date, pending_renewal_price, pending_renewal_total_visits, pending_renewal_package_name",
+          "id, square_customer_id, visits_used, package_total_visits, package_price, next_package_price, status, pending_renewal_start_date, pending_renewal_price, pending_renewal_paid, pending_renewal_total_visits, pending_renewal_package_name",
         )
         .is("deleted_at", null)
         .neq("status", "archived")
@@ -1754,6 +1755,7 @@ export const getRenewalForecast = createServerFn({ method: "GET" })
       next_package_price: number | string | null;
       pending_renewal_start_date: string | null;
       pending_renewal_price: number | string | null;
+      pending_renewal_paid?: number | string | null;
       pending_renewal_total_visits: number | null;
       pending_renewal_package_name: string | null;
     }>) {
@@ -1802,7 +1804,10 @@ export const getRenewalForecast = createServerFn({ method: "GET" })
         hub_visits_used: r.visits_used ?? null,
         week_bucket,
         package_price: basePrice,
-        next_package_price: pendingPrice ?? override ?? basePrice,
+        next_package_price:
+          pendingPrice !== null
+            ? Math.max(0, pendingPrice - Number(r.pending_renewal_paid ?? 0))
+            : (override ?? basePrice),
         pre_renewed: !!pendingStart,
         pending_start_ymd: pendingStart,
         pending_total_visits: r.pending_renewal_total_visits ?? null,
@@ -1817,7 +1822,7 @@ export const getRenewalForecast = createServerFn({ method: "GET" })
     const { data: pendingRows, error: pErr } = await context.supabase
       .from("clients")
       .select(
-        "id, visits_used, package_total_visits, package_price, next_package_price, pending_renewal_start_date, pending_renewal_price, pending_renewal_total_visits, pending_renewal_package_name",
+        "id, visits_used, package_total_visits, package_price, next_package_price, pending_renewal_start_date, pending_renewal_price, pending_renewal_paid, pending_renewal_total_visits, pending_renewal_package_name",
       )
       .is("deleted_at", null)
       .neq("status", "archived")
@@ -1831,6 +1836,7 @@ export const getRenewalForecast = createServerFn({ method: "GET" })
       next_package_price: number | string | null;
       pending_renewal_start_date: string | null;
       pending_renewal_price: number | string | null;
+      pending_renewal_paid?: number | string | null;
       pending_renewal_total_visits: number | null;
       pending_renewal_package_name: string | null;
     }>) {
@@ -1857,7 +1863,10 @@ export const getRenewalForecast = createServerFn({ method: "GET" })
         // Never counted in This Week / Next Week without a real appointment.
         week_bucket: "later",
         package_price: basePrice,
-        next_package_price: pendingPrice ?? override ?? basePrice,
+        next_package_price:
+          pendingPrice !== null
+            ? Math.max(0, pendingPrice - Number(r.pending_renewal_paid ?? 0))
+            : (override ?? basePrice),
         pre_renewed: true,
         pending_start_ymd: r.pending_renewal_start_date,
         pending_total_visits: r.pending_renewal_total_visits ?? null,

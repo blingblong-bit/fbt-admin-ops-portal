@@ -13,6 +13,7 @@ import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/index'
 import { Route as AuthenticatedVisitNoteReviewRouteImport } from './routes/_authenticated/visit-note-review'
+import { Route as AuthenticatedVisitAutomationReviewRouteImport } from './routes/_authenticated/visit-automation-review'
 import { Route as AuthenticatedSyncLogRouteImport } from './routes/_authenticated/sync-log'
 import { Route as AuthenticatedSquareDiagnosticRouteImport } from './routes/_authenticated/square-diagnostic'
 import { Route as AuthenticatedScheduleCheckRouteImport } from './routes/_authenticated/schedule-check'
@@ -57,6 +58,12 @@ const AuthenticatedVisitNoteReviewRoute =
   AuthenticatedVisitNoteReviewRouteImport.update({
     id: '/visit-note-review',
     path: '/visit-note-review',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedVisitAutomationReviewRoute =
+  AuthenticatedVisitAutomationReviewRouteImport.update({
+    id: '/visit-automation-review',
+    path: '/visit-automation-review',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
 const AuthenticatedSyncLogRoute = AuthenticatedSyncLogRouteImport.update({
@@ -212,6 +219,7 @@ export interface FileRoutesByFullPath {
   '/schedule-check': typeof AuthenticatedScheduleCheckRoute
   '/square-diagnostic': typeof AuthenticatedSquareDiagnosticRoute
   '/sync-log': typeof AuthenticatedSyncLogRoute
+  '/visit-automation-review': typeof AuthenticatedVisitAutomationReviewRoute
   '/visit-note-review': typeof AuthenticatedVisitNoteReviewRoute
   '/clients/$id': typeof AuthenticatedClientsIdRoute
   '/clients/deleted': typeof AuthenticatedClientsDeletedRoute
@@ -241,6 +249,7 @@ export interface FileRoutesByTo {
   '/schedule-check': typeof AuthenticatedScheduleCheckRoute
   '/square-diagnostic': typeof AuthenticatedSquareDiagnosticRoute
   '/sync-log': typeof AuthenticatedSyncLogRoute
+  '/visit-automation-review': typeof AuthenticatedVisitAutomationReviewRoute
   '/visit-note-review': typeof AuthenticatedVisitNoteReviewRoute
   '/': typeof AuthenticatedIndexRoute
   '/clients/$id': typeof AuthenticatedClientsIdRoute
@@ -273,6 +282,7 @@ export interface FileRoutesById {
   '/_authenticated/schedule-check': typeof AuthenticatedScheduleCheckRoute
   '/_authenticated/square-diagnostic': typeof AuthenticatedSquareDiagnosticRoute
   '/_authenticated/sync-log': typeof AuthenticatedSyncLogRoute
+  '/_authenticated/visit-automation-review': typeof AuthenticatedVisitAutomationReviewRoute
   '/_authenticated/visit-note-review': typeof AuthenticatedVisitNoteReviewRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
   '/_authenticated/clients/$id': typeof AuthenticatedClientsIdRoute
@@ -306,6 +316,7 @@ export interface FileRouteTypes {
     | '/schedule-check'
     | '/square-diagnostic'
     | '/sync-log'
+    | '/visit-automation-review'
     | '/visit-note-review'
     | '/clients/$id'
     | '/clients/deleted'
@@ -335,6 +346,7 @@ export interface FileRouteTypes {
     | '/schedule-check'
     | '/square-diagnostic'
     | '/sync-log'
+    | '/visit-automation-review'
     | '/visit-note-review'
     | '/'
     | '/clients/$id'
@@ -366,6 +378,7 @@ export interface FileRouteTypes {
     | '/_authenticated/schedule-check'
     | '/_authenticated/square-diagnostic'
     | '/_authenticated/sync-log'
+    | '/_authenticated/visit-automation-review'
     | '/_authenticated/visit-note-review'
     | '/_authenticated/'
     | '/_authenticated/clients/$id'
@@ -423,6 +436,13 @@ declare module '@tanstack/react-router' {
       path: '/visit-note-review'
       fullPath: '/visit-note-review'
       preLoaderRoute: typeof AuthenticatedVisitNoteReviewRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/visit-automation-review': {
+      id: '/_authenticated/visit-automation-review'
+      path: '/visit-automation-review'
+      fullPath: '/visit-automation-review'
+      preLoaderRoute: typeof AuthenticatedVisitAutomationReviewRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/sync-log': {
@@ -617,6 +637,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedScheduleCheckRoute: typeof AuthenticatedScheduleCheckRoute
   AuthenticatedSquareDiagnosticRoute: typeof AuthenticatedSquareDiagnosticRoute
   AuthenticatedSyncLogRoute: typeof AuthenticatedSyncLogRoute
+  AuthenticatedVisitAutomationReviewRoute: typeof AuthenticatedVisitAutomationReviewRoute
   AuthenticatedVisitNoteReviewRoute: typeof AuthenticatedVisitNoteReviewRoute
   AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
   AuthenticatedClientsIdRoute: typeof AuthenticatedClientsIdRoute
@@ -639,6 +660,8 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedScheduleCheckRoute: AuthenticatedScheduleCheckRoute,
   AuthenticatedSquareDiagnosticRoute: AuthenticatedSquareDiagnosticRoute,
   AuthenticatedSyncLogRoute: AuthenticatedSyncLogRoute,
+  AuthenticatedVisitAutomationReviewRoute:
+    AuthenticatedVisitAutomationReviewRoute,
   AuthenticatedVisitNoteReviewRoute: AuthenticatedVisitNoteReviewRoute,
   AuthenticatedIndexRoute: AuthenticatedIndexRoute,
   AuthenticatedClientsIdRoute: AuthenticatedClientsIdRoute,

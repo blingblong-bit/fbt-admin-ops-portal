@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import { renewalAmountDue } from "@/lib/dues-messaging";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { matchLooseVisitBookingIds } from "@/lib/check-in-matching";
 
@@ -1806,7 +1807,7 @@ export const getRenewalForecast = createServerFn({ method: "GET" })
         package_price: basePrice,
         next_package_price:
           pendingPrice !== null
-            ? Math.max(0, pendingPrice - Number(r.pending_renewal_paid ?? 0))
+            ? renewalAmountDue({ pending_renewal_price: pendingPrice, pending_renewal_paid: r.pending_renewal_paid ?? 0 } as never)
             : (override ?? basePrice),
         pre_renewed: !!pendingStart,
         pending_start_ymd: pendingStart,
@@ -1865,7 +1866,7 @@ export const getRenewalForecast = createServerFn({ method: "GET" })
         package_price: basePrice,
         next_package_price:
           pendingPrice !== null
-            ? Math.max(0, pendingPrice - Number(r.pending_renewal_paid ?? 0))
+            ? renewalAmountDue({ pending_renewal_price: pendingPrice, pending_renewal_paid: r.pending_renewal_paid ?? 0 } as never)
             : (override ?? basePrice),
         pre_renewed: true,
         pending_start_ymd: r.pending_renewal_start_date,

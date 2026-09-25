@@ -48,7 +48,7 @@ function runChain(c: Client, bookings: B[]) {
     week = ws === THIS_WEEK ? "this" : ws === NEXT_WEEK ? "next" : "later";
     const pendingPrice = (c as any).pending_renewal_price == null ? null : Number((c as any).pending_renewal_price);
     const override = (c as any).next_package_price == null ? null : Number((c as any).next_package_price);
-    const nextFull = pendingPrice ?? override ?? Number(c.package_price);
+    const nextFull = pendingPrice !== null ? renewalAmountDue(c as never) : (override ?? Number(c.package_price));
     // Same value getRenewalForecast puts on the row today.
     forecast = { client_id: c.id, week_bucket: week, next_package_price: nextFull, pre_renewed: !!pending, first_uncovered_ymd: firstYmd, pending_start_ymd: pending };
   }
@@ -136,18 +136,14 @@ describe("acceptance: money categories", () => {
     record("6 Current balance + next-package obligation", c, r, pass, "previous $100 is carried in the balance text, not the weekly current column");
     expect(pass).toBe(true);
   });
-  // KNOWN GAP (reported, not fixed without go-ahead): Payment Due uses the full
-  // prepared price and ignores money already prepaid toward it.
-  it.fails("7 prepared renewal partially prepaid → only the remainder", () => {
+  it("7 prepared renewal partially prepaid → only the remainder", () => {
     const c = done("partial", { pending_renewal_start_date: "2026-09-24", pending_renewal_price: 400, pending_renewal_total_visits: 8, pending_renewal_paid: 150 } as never);
     const r = runChain(c, [b("a", "2026-09-17", "7/8"), b("b", "2026-09-21", "8/8"), b("c", "2026-09-24", "1/8")]);
     const pass = r.groups.renewalScheduled.length === 1 && r.groups.totals.nextPackage === 250 && renewalAmountDue(c as never) === 250 && r.renewalDraft;
     record("7 Prepared renewal partially prepaid", c, r, pass);
     expect(pass).toBe(true);
   });
-  // KNOWN GAP (reported, not fixed without go-ahead): Payment Due uses the full
-  // prepared price and ignores money already prepaid toward it.
-  it.fails("8 prepared renewal fully prepaid → $0 and no renewal dues text", () => {
+  it("8 prepared renewal fully prepaid → $0 and no renewal dues text", () => {
     const c = done("full", { pending_renewal_start_date: "2026-09-24", pending_renewal_price: 400, pending_renewal_total_visits: 8, pending_renewal_paid: 400 } as never);
     const r = runChain(c, [b("a", "2026-09-17", "7/8"), b("b", "2026-09-21", "8/8"), b("c", "2026-09-24", "1/8")]);
     const pass = r.groups.totals.nextPackage === 0 && !r.renewalDraft;
@@ -242,9 +238,7 @@ describe("acceptance: reconciliation", () => {
     expect(g.totals.nextPackage).toBe(g.totals.renewalScheduled + g.totals.needsRenewal);
     report.push({ case: "Reconcile: unique buckets + totals", pass: true, note: `combined ${g.totals.combined}` });
   });
-  // KNOWN GAP (reported, not fixed without go-ahead): Payment Due uses the full
-  // prepared price and ignores money already prepaid toward it.
-  it.fails("activating a prepared renewal moves money between buckets only", () => {
+  it("activating a prepared renewal moves money between buckets only", () => {
     const pre = done("act", { pending_renewal_start_date: "2026-09-24", pending_renewal_price: 400, pending_renewal_total_visits: 8, pending_renewal_paid: 150 } as never);
     const bk = [b("a", "2026-09-17", "7/8"), b("b", "2026-09-21", "8/8"), b("c", "2026-09-24", "1/8")];
     const before = runChain(pre, bk).groups.totals.combined;

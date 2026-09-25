@@ -1,4 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
+import { renewalAmountDue } from "@/lib/dues-messaging";
+import { countsAsMissedCheckIn } from "@/lib/effective-visit-state";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { matchLooseVisitBookingIds } from "@/lib/check-in-matching";
 
@@ -41,6 +43,8 @@ export type ScheduleClientLite = {
   payment_model?: string | null;
   /** Prepared next package — lets a fully-used client still be checked in. */
   pending_renewal_start_date?: string | null;
+  /** Square-vs-Hub check-in presentation; absent = Hub tracks (manual check-in). */
+  visit?: import("@/lib/effective-visit-state").VisitTracking | null;
 };
 
 export type ProductionCustomerInfo = {
@@ -433,6 +437,10 @@ export const getScheduleCheck = createServerFn({ method: "GET" })
         `${clients.filter((c) => c.square_customer_id).length} with square_customer_id)`,
     );
 
+    {
+      const { attachVisitTracking } = await import("@/lib/effective-visit-state.server");
+      await attachVisitTracking(token, clients);
+    }
     // Match bookings to clients by Square customer ID.
     const byCustomerId = new Map<string, ScheduleClientLite>();
     for (const c of (clients ?? []) as ScheduleClientLite[]) {
@@ -644,7 +652,7 @@ export const completeVisitForClient = createServerFn({ method: "POST" })
     const { data: c0, error } = await context.supabase
       .from("clients")
       .select(
-        "visits_used, package_total_visits, package_name, package_price, amount_paid, previous_package_owed, payment_model, pending_renewal_start_date, pending_renewal_price, pending_renewal_total_visits, pending_renewal_package_name",
+        "visits_used, package_total_visits, package_name, package_price, amount_paid, previous_package_owed, payment_model, pending_renewal_start_date, pending_renewal_price, pending_renewal_paid, pending_renewal_total_visits, pending_renewal_package_name",
       )
       .eq("id", data.clientId)
       .single();
@@ -659,6 +667,7 @@ export const completeVisitForClient = createServerFn({ method: "POST" })
       payment_model: string | null;
       pending_renewal_start_date: string | null;
       pending_renewal_price: number | string | null;
+      pending_renewal_paid?: number | string | null;
       pending_renewal_total_visits: number | null;
       pending_renewal_package_name: string | null;
     } | null;
@@ -1733,7 +1742,7 @@ export const getRenewalForecast = createServerFn({ method: "GET" })
       const { data, error: cErr } = await context.supabase
         .from("clients")
         .select(
-          "id, square_customer_id, visits_used, package_total_visits, package_price, next_package_price, status, pending_renewal_start_date, pending_renewal_price, pending_renewal_total_visits, pending_renewal_package_name",
+          "id, square_customer_id, visits_used, package_total_visits, package_price, next_package_price, status, pending_renewal_start_date, pending_renewal_price, pending_renewal_paid, pending_renewal_total_visits, pending_renewal_package_name",
         )
         .is("deleted_at", null)
         .neq("status", "archived")
@@ -1754,6 +1763,7 @@ export const getRenewalForecast = createServerFn({ method: "GET" })
       next_package_price: number | string | null;
       pending_renewal_start_date: string | null;
       pending_renewal_price: number | string | null;
+      pending_renewal_paid?: number | string | null;
       pending_renewal_total_visits: number | null;
       pending_renewal_package_name: string | null;
     }>) {
@@ -1802,7 +1812,10 @@ export const getRenewalForecast = createServerFn({ method: "GET" })
         hub_visits_used: r.visits_used ?? null,
         week_bucket,
         package_price: basePrice,
-        next_package_price: pendingPrice ?? override ?? basePrice,
+        next_package_price:
+          pendingPrice !== null
+            ? renewalAmountDue({ pending_renewal_price: pendingPrice, pending_renewal_paid: r.pending_renewal_paid ?? 0 } as never)
+            : (override ?? basePrice),
         pre_renewed: !!pendingStart,
         pending_start_ymd: pendingStart,
         pending_total_visits: r.pending_renewal_total_visits ?? null,
@@ -1817,7 +1830,7 @@ export const getRenewalForecast = createServerFn({ method: "GET" })
     const { data: pendingRows, error: pErr } = await context.supabase
       .from("clients")
       .select(
-        "id, visits_used, package_total_visits, package_price, next_package_price, pending_renewal_start_date, pending_renewal_price, pending_renewal_total_visits, pending_renewal_package_name",
+        "id, visits_used, package_total_visits, package_price, next_package_price, pending_renewal_start_date, pending_renewal_price, pending_renewal_paid, pending_renewal_total_visits, pending_renewal_package_name",
       )
       .is("deleted_at", null)
       .neq("status", "archived")
@@ -1831,6 +1844,7 @@ export const getRenewalForecast = createServerFn({ method: "GET" })
       next_package_price: number | string | null;
       pending_renewal_start_date: string | null;
       pending_renewal_price: number | string | null;
+      pending_renewal_paid?: number | string | null;
       pending_renewal_total_visits: number | null;
       pending_renewal_package_name: string | null;
     }>) {
@@ -1857,7 +1871,10 @@ export const getRenewalForecast = createServerFn({ method: "GET" })
         // Never counted in This Week / Next Week without a real appointment.
         week_bucket: "later",
         package_price: basePrice,
-        next_package_price: pendingPrice ?? override ?? basePrice,
+        next_package_price:
+          pendingPrice !== null
+            ? renewalAmountDue({ pending_renewal_price: pendingPrice, pending_renewal_paid: r.pending_renewal_paid ?? 0 } as never)
+            : (override ?? basePrice),
         pre_renewed: true,
         pending_start_ymd: r.pending_renewal_start_date,
         pending_total_visits: r.pending_renewal_total_visits ?? null,
@@ -2030,7 +2047,9 @@ export type DayReviewRow = {
     | "upcoming"
     | "cancelled"
     | "no_show"
-    | "unmatched";
+    | "unmatched"
+    /** Past, no Hub check-in, but Square notes track this client — no action needed. */
+    | "square_tracked";
 
 };
 
@@ -2083,6 +2102,10 @@ async function loadAppointmentsForRange(
       if (page.length < pageSize) break;
       from += pageSize;
     }
+  }
+  {
+    const { attachVisitTracking } = await import("@/lib/effective-visit-state.server");
+    await attachVisitTracking(token, clients);
   }
   const byCustomerId = new Map<string, ScheduleClientLite>();
   for (const c of clients) if (c.square_customer_id) byCustomerId.set(c.square_customer_id, c);
@@ -2240,6 +2263,7 @@ export const getDayReview = createServerFn({ method: "GET" })
       else if (checkedIn.has(a.booking_id)) state = "checked_in";
       else if (new Date(a.start_at).getTime() > now) state = "upcoming";
       else if (dismissed.has(a.booking_id)) state = "dismissed";
+      else if (!countsAsMissedCheckIn(a.client.visit)) state = "square_tracked";
       else state = "missed";
 
       return {
@@ -2321,7 +2345,10 @@ export const getMissedCheckInSummary = createServerFn({ method: "GET" })
       candidates.map((a) => a.booking_id),
     );
     const missed = candidates.filter(
-      (a) => !checkedIn.has(a.booking_id) && !dismissed.has(a.booking_id),
+      (a) =>
+        !checkedIn.has(a.booking_id) &&
+        !dismissed.has(a.booking_id) &&
+        countsAsMissedCheckIn(a.client!.visit),
     );
 
     let yesterdayCount = 0;
@@ -2349,3 +2376,27 @@ export const getMissedCheckInSummary = createServerFn({ method: "GET" })
 export const getClinicToday = createServerFn({ method: "GET" }).handler(async () => ({
   today: ymdInTz(new Date()),
 }));
+
+/** Read-only: Square-vs-Hub visit tracking for one client (client page). */
+export const getClientVisitTracking = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { clientId: string }) => {
+    if (!d || typeof d.clientId !== "string") throw new Error("Invalid client");
+    return d;
+  })
+  .handler(async ({ data, context }) => {
+    const token = process.env.SQUARE_PRODUCTION_ACCESS_TOKEN;
+    if (!token) return { visit: null };
+    const { data: c, error } = await context.supabase
+      .from("clients")
+      .select("id, visits_used, package_total_visits, square_customer_id")
+      .eq("id", data.clientId)
+      .maybeSingle();
+    if (error) throw error;
+    if (!c || !c.square_customer_id || Number(c.package_total_visits ?? 0) <= 0) return { visit: null };
+    const { loadSquareBookingIndex, effectiveStateFor } = await import("@/lib/effective-visit-state.server");
+    const { visitTrackingFrom } = await import("@/lib/effective-visit-state");
+    const index = await loadSquareBookingIndex(token, 180, 60);
+    if (index.error) return { visit: null };
+    return { visit: visitTrackingFrom(effectiveStateFor(index, c)) };
+  });

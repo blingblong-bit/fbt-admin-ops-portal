@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "@/components/ui/sonner";
 import { ChevronDown, MessageSquare, Phone } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
+import { VisitSourceLine } from "@/components/VisitSourceLine";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -877,9 +878,13 @@ function AppointmentMobileCard({
       </div>
       {a.client && (
         <div className="mt-2 flex flex-wrap gap-1.5 text-[11px] font-medium">
-          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-slate-700">
-            {hasPackage ? `${used}/${total} visits` : "No visit package"}
-          </span>
+          {a.client.visit ? (
+            <VisitSourceLine visit={a.client.visit} />
+          ) : (
+            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-slate-700">
+              {hasPackage ? `${used}/${total} visits` : "No visit package"}
+            </span>
+          )}
           {owed > 0 && (
             <span className="rounded-full bg-red-100 px-2 py-0.5 text-red-800">
               {hideOwed ? "OWES" : `Owes ${formatCurrency(owed)}`}
@@ -905,7 +910,16 @@ function AppointmentMobileCard({
                 View
               </Link>
             </Button>
-            {showCheckIn && onCheckIn && !blockCheckIn ? (
+            {showCheckIn && onCheckIn && !blockCheckIn && !isCheckedIn && a.client.visit && !a.client.visit.manualCheckInNeeded ? (
+              <button
+                type="button"
+                className="h-11 text-xs text-slate-500 underline-offset-2 hover:underline"
+                disabled={busy}
+                onClick={() => onCheckIn(a.client!.id, a.booking_id, a.start_at)}
+              >
+                {busy ? "…" : "Manual check-in"}
+              </button>
+            ) : showCheckIn && onCheckIn && !blockCheckIn ? (
               <Button
                 size="lg"
                 className="h-11"
@@ -1006,9 +1020,13 @@ function AppointmentDesktopRow({
                 </span>
               )}
             </div>
-            <div className="text-xs text-slate-500">
-              {hasPackage ? `${used}/${total} visits` : "No visit package"}
-            </div>
+            {a.client.visit ? (
+              <VisitSourceLine visit={a.client.visit} compact />
+            ) : (
+              <div className="text-xs text-slate-500">
+                {hasPackage ? `${used}/${total} visits` : "No visit package"}
+              </div>
+            )}
           </div>
         ) : (
           <button
@@ -1050,7 +1068,16 @@ function AppointmentDesktopRow({
                   View Client
                 </Link>
               </Button>
-              {showCheckIn && onCheckIn && !blockCheckIn && (
+              {showCheckIn && onCheckIn && !blockCheckIn && !isCheckedIn && a.client.visit && !a.client.visit.manualCheckInNeeded ? (
+                <button
+                  type="button"
+                  className="self-center text-xs text-slate-500 hover:underline"
+                  disabled={busy}
+                  onClick={() => onCheckIn(a.client!.id, a.booking_id, a.start_at)}
+                >
+                  {busy ? "Recording…" : "Manual check-in"}
+                </button>
+              ) : showCheckIn && onCheckIn && !blockCheckIn && (
                 <Button
                   size="sm"
                   disabled={busy || isCheckedIn}

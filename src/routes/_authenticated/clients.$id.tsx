@@ -9,6 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { recordManualPayment } from "@/lib/payments.functions";
 import { renewPackage } from "@/lib/renewal.functions";
 import { AppShell } from "@/components/AppShell";
+import { VisitSourceLine } from "@/components/VisitSourceLine";
 import { StatusBadge } from "@/components/StatusBadge";
 import { RenewalFlagBadge, useIsRenewalFlagged } from "@/components/RenewalFlagBadge";
 import {
@@ -24,6 +25,7 @@ import {
   getClientAppointments,
   getUncheckedRecentAppointments,
   completeVisitForClient,
+  getClientVisitTracking,
   type ClientAppointment,
 } from "@/lib/schedule.functions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -142,6 +144,14 @@ function ClientDetailPage() {
   const fetchUnchecked = useServerFn(getUncheckedRecentAppointments);
 
   const [visitPickerOpen, setVisitPickerOpen] = useState(false);
+  const fetchTracking = useServerFn(getClientVisitTracking);
+  const trackingQ = useQuery({
+    queryKey: ["visit-tracking", id],
+    queryFn: () => fetchTracking({ data: { clientId: id } }),
+    staleTime: 60_000,
+  });
+  const visitTracking = trackingQ.data?.visit ?? null;
+  const squareTracks = !!visitTracking && !visitTracking.manualCheckInNeeded;
   const uncheckedQ = useQuery({
     queryKey: ["unchecked-appointments", id],
     queryFn: () => fetchUnchecked({ data: { clientId: id } }),
@@ -256,15 +266,24 @@ function ClientDetailPage() {
           </p>
         </div>
         <div className="flex flex-col items-end gap-1">
+          {visitTracking && <VisitSourceLine visit={visitTracking} />}
           <div className="flex flex-wrap gap-2">
 
             {(c.package_total_visits ?? 0) > 0 &&
               (remaining !== 0 || !!c.pending_renewal_start_date) && (
               <Button
+                variant={squareTracks ? "ghost" : "default"}
+                size={squareTracks ? "sm" : "default"}
                 onClick={() => setVisitPickerOpen(true)}
-                title={!hasVisitData ? "Visits unknown — verify before completing." : undefined}
+                title={
+                  squareTracks
+                    ? "Square notes track this client's visits — only use for corrections."
+                    : !hasVisitData
+                      ? "Visits unknown — verify before completing."
+                      : undefined
+                }
               >
-                Complete Visit
+                {squareTracks ? "Manual check-in" : "Complete Visit"}
               </Button>
             )}
             <Button variant="outline" onClick={() => setPaymentOpen(true)} disabled={totalOwed(c) === 0}>

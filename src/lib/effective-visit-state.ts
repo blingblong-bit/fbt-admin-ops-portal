@@ -242,3 +242,48 @@ export function drivingCounts(s: EffectiveVisitState): { used: number; total: nu
   if (s.source === "square") return { used: s.visitsUsed, total: s.totalVisits, nextPackageStart: s.nextPackageStart };
   return { used: Number(s.hubVisitsUsed ?? 0), total: s.hubTotalVisits, nextPackageStart: null };
 }
+
+// ---------------------------------------------------------------------------
+// Check-in presentation (pure): does Hub need a manual check-in for this client?
+// ---------------------------------------------------------------------------
+
+export type VisitTrackingMode = "square" | "square_review" | "hub_fallback" | "held";
+
+export type VisitTracking = {
+  mode: VisitTrackingMode;
+  used: number;
+  total: number;
+  lastVisitDate: string | null;
+  nextNote: string | null;
+  nextDate: string | null;
+  /** True only when Hub genuinely has to track visits itself. */
+  manualCheckInNeeded: boolean;
+  reason: string;
+};
+
+export function visitTrackingFrom(s: EffectiveVisitState): VisitTracking {
+  const mode: VisitTrackingMode = !s.automationUsable
+    ? "held"
+    : s.source === "hub_fallback"
+      ? "hub_fallback"
+      : s.reviewStatus === "needs_review"
+        ? "square_review"
+        : "square";
+  const next = s.upcoming.find((u) => u.note && !u.cancelled) ?? null;
+  const d = drivingCounts(s);
+  return {
+    mode,
+    used: d.used,
+    total: d.total,
+    lastVisitDate: s.latestVisitDate,
+    nextNote: next?.note ?? null,
+    nextDate: next?.date ?? null,
+    manualCheckInNeeded: mode === "hub_fallback" || mode === "held",
+    reason: s.reason,
+  };
+}
+
+/** A past, unrecorded appointment counts as a missed Hub check-in only when Hub tracks this client. */
+export function countsAsMissedCheckIn(v: VisitTracking | null | undefined): boolean {
+  return !v || v.manualCheckInNeeded;
+}

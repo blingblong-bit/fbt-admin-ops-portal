@@ -83,8 +83,8 @@ describe("detectNoteIssues", () => {
   it("missing note inside an otherwise clear sequence is flagged", () => {
     expect(kinds([rb("1", "2026-09-10", "3/8"), rb("2", "2026-09-14", null), rb("3", "2026-09-17", "5/8")])).toEqual(["missing_note"]);
   });
-  it("a cancelled 4/8 followed by another 4/8 is a repeated number", () => {
-    expect(kinds([rb("1", "2026-09-10", "3/8"), rb("2", "2026-09-14", "4/8", "CANCELLED_BY_SELLER"), rb("3", "2026-09-17", "4/8")])).toEqual(["backward"]);
+  it("a cancelled 4/8 rebooked as 4/8 is not flagged", () => {
+    expect(kinds([rb("1", "2026-09-10", "3/8"), rb("2", "2026-09-14", "4/8", "CANCELLED_BY_SELLER"), rb("3", "2026-09-17", "4/8")])).toEqual([]);
   });
 });
 
@@ -105,5 +105,19 @@ describe("cancelled bookings stay in the sequence", () => {
   });
   it("cancelled un-noted booking is not a missing note", () => {
     expect(issues([rb("a", "2026-09-01", "6/8"), rb("b", "2026-09-08", "", "NO_SHOW"), rb("c", "2026-09-15", "8/8")])).toEqual(["skipped"]);
+  });
+});
+
+describe("rebooked cancelled visits", () => {
+  const rb = (id: string, d: string, note: string, status = "ACCEPTED") => ({ id, start_at: `${d}T15:00:00Z`, seller_note: note, status });
+  it("7/8 cancelled then 7/8 rebooked is not flagged", () => {
+    expect(detectNoteIssues(buildSequence([rb("a", "2026-09-01", "6/8"), rb("b", "2026-09-08", "7/8", "CANCELLED_BY_SELLER"), rb("c", "2026-09-10", "7/8"), rb("d", "2026-09-15", "8/8")], now))).toEqual([]);
+  });
+});
+
+describe("cancelled visit is not hidden by an older package", () => {
+  const rb = (id: string, d: string, note: string, status = "ACCEPTED") => ({ id, start_at: `${d}T15:00:00Z`, seller_note: note, status });
+  it("older live 7/8 does not supersede a new cancelled 7/8", () => {
+    expect(detectNoteIssues(buildSequence([rb("o", "2026-06-01", "7/8"), rb("p", "2026-06-08", "8/8"), rb("q", "2026-06-15", "1/8"), rb("r", "2026-07-01", "2/8"), rb("s", "2026-07-10", "3/8"), rb("t", "2026-07-20", "4/8"), rb("u", "2026-08-01", "5/8"), rb("a", "2026-09-01", "6/8"), rb("b", "2026-09-08", "7/8", "CANCELLED_BY_SELLER"), rb("d", "2026-09-15", "8/8")], now))).toEqual([]);
   });
 });

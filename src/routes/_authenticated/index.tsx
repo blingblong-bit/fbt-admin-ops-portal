@@ -60,6 +60,7 @@ import {
 } from "@/lib/schedule.functions";
 import { getDuesTextsBoard } from "@/lib/dues-messaging.functions";
 import { getVisitNoteReview } from "@/lib/visit-note-review.functions";
+import { getVisitAutomationReview } from "@/lib/visit-automation-review.functions";
 import type { ScheduleStatus } from "@/components/SmartClientCard";
 import { useRole } from "@/hooks/useRole";
 import { visibleTileMoney } from "@/lib/dashboard-tile-visibility";
@@ -735,6 +736,21 @@ function Dashboard() {
       : `${nr.counts.skipped + nr.counts.stale_future + nr.counts.missing_note} sequence · ${nr.counts.same_day_conflict} conflicting · ${nr.counts.package_size} size`
     : "checking Square…";
 
+  const fetchAutomation = useServerFn(getVisitAutomationReview);
+  const automationQ = useQuery({
+    queryKey: ["visit-automation-review"],
+    queryFn: () => fetchAutomation(),
+    enabled: !isStaff,
+    staleTime: 10 * 60_000,
+  });
+  const au = automationQ.data;
+  const automationCount = au?.cards.length ?? 0;
+  const automationSub = au
+    ? au.error
+      ? "couldn't read Square"
+      : `${au.impact.square} Square · ${au.impact.hub_fallback} Hub · ${au.impact.review_required} review`
+    : "checking Square…";
+
 
 
   const allTiles: (TileDef & { staffHidden?: boolean })[] = [
@@ -931,6 +947,16 @@ function Dashboard() {
       staffHidden: true,
     },
     {
+      key: "visit_automation_review",
+      label: "Visit Automation Review",
+      sublabel: automationSub,
+      icon: <ClipboardList className="h-5 w-5" />,
+      count: automationCount,
+      tone: "slate",
+      href: "/visit-automation-review",
+      staffHidden: true,
+    },
+    {
       key: "all",
       label: "All Active",
       icon: <Users className="h-5 w-5" />,
@@ -963,6 +989,7 @@ function Dashboard() {
         "new_clients",
         "dues_texts",
         "visit_note_review",
+        "visit_automation_review",
       ]),
     [],
   );

@@ -30,5 +30,6 @@
 - [x] Wire renewal forecast / Needs Renewal / Payment Due / Dues drafts to effective state (review_required suppressed)
 - [x] Visit Automation Review page + tile
 - [x] Read-only impact report (incl. dues gained vs removed/moved) — stop before publishing
-- [ ] Renewal reminder texts job (last-visit auto-text) still reads stored Hub count — switch only after go-ahead
+- [x] Renewal reminder texts job on effective state + consent/opt-out guards + kill switch (OFF) + dry-run report
+- [ ] Turn on RENEWAL_AUTO_TEXT_ENABLED — only after you review the report, post-publish
 - [ ] Publish — waiting on your go/no-go

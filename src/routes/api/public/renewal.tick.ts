@@ -16,6 +16,12 @@
 //   - SQUARE_PRODUCTION_ACCESS_TOKEN     (already configured)
 
 import { createFileRoute } from "@tanstack/react-router";
+import {
+  campaignShouldAutoClear,
+  decideRenewalText,
+  renewalAutoTextEnabled,
+  renewalConsentBlock,
+} from "@/lib/renewal-text-eligibility";
 
 const SQUARE_BASE = "https://connect.squareup.com";
 const SQUARE_VERSION = "2024-10-17";
@@ -69,6 +75,8 @@ type Client = {
   package_start_date: string | null;
   payment_model: string | null;
   deleted_at: string | null;
+  sms_consent_at: string | null;
+  sms_opted_out_at: string | null;
 };
 type Campaign = {
   id: string; client_id: string;
@@ -141,7 +149,7 @@ export const Route = createFileRoute("/api/public/renewal/tick")({
     handlers: {
       GET: async () => {
         // Version probe so we can confirm deploys.
-        return Response.json({ version: "renewal-tick-v1" });
+        return Response.json({ version: "renewal-tick-v2-effective" });
       },
       POST: async () => {
         const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -153,6 +161,25 @@ export const Route = createFileRoute("/api/public/renewal/tick")({
         if (!squareToken) {
           return Response.json({ ok: false, error: "SQUARE_PRODUCTION_ACCESS_TOKEN missing" }, { status: 500 });
         }
+
+        // Kill switch: OFF unless explicitly "true". When off, nothing is sent,
+        // created or updated.
+        if (!renewalAutoTextEnabled(process.env.RENEWAL_AUTO_TEXT_ENABLED)) {
+          return Response.json({ ok: true, disabled: true, reason: "RENEWAL_AUTO_TEXT_ENABLED is not \"true\"" });
+        }
+        const { loadSquareBookingIndex, effectiveStateFor } = await import("@/lib/effective-visit-state.server");
+        const index = await loadSquareBookingIndex(squareToken);
+        if (index.error) {
+          // Fail closed: without Square we cannot tell who is on their last visit.
+          return Response.json({ ok: false, error: `Square bookings unavailable: ${index.error}` }, { status: 502 });
+        }
+        const acceptedUpcoming = (customerId: string | null) =>
+          customerId
+            ? (index.byCustomer.get(customerId) ?? [])
+                .filter((b) => b.start_at && b.start_at >= index.nowIso && (b.status ?? "").toUpperCase() === "ACCEPTED")
+                .map((b) => b.start_at!)
+                .sort()
+            : [];
 
         const now = new Date();
         const todayLocal = ymdInTz(now);
@@ -166,6 +193,8 @@ export const Route = createFileRoute("/api/public/renewal/tick")({
           followups_sent: 0,
           moved_to_manual: 0,
           auto_renewed: 0,
+          held_review_required: 0,
+          blocked_consent: 0,
           send_window: inSendWindow,
           local_hour: localHour,
           errors: [] as string[],
@@ -180,15 +209,13 @@ export const Route = createFileRoute("/api/public/renewal/tick")({
           for (const c of (openCampaigns ?? []) as Campaign[]) {
             const { data: cli } = await supabaseAdmin
               .from("clients")
-              .select("package_start_date, package_total_visits, visits_used")
+              .select("package_start_date, package_total_visits, visits_used, square_customer_id")
               .eq("id", c.client_id)
               .maybeSingle();
             if (!cli) continue;
-            const startedNewPkg = cli.package_start_date &&
-              (!c.package_start_date_snapshot || cli.package_start_date > c.package_start_date_snapshot);
-            const packageChanged = cli.package_total_visits !== c.package_total_visits_snapshot;
-            const visitsReset = (cli.visits_used ?? 0) < c.package_total_visits_snapshot - 1;
-            if (startedNewPkg || packageChanged || visitsReset) {
+            const clear = campaignShouldAutoClear(effectiveStateFor(index, cli), cli, c);
+            if (clear === null) { summary.held_review_required++; continue; }
+            if (clear) {
               await supabaseAdmin.from("renewal_campaigns")
                 .update({ status: "renewed" }).eq("id", c.id);
               summary.auto_renewed++;
@@ -220,13 +247,15 @@ export const Route = createFileRoute("/api/public/renewal/tick")({
             // pull client for phone + name
             const { data: cli } = await supabaseAdmin
               .from("clients")
-              .select("first_name, last_name, phone")
+              .select("first_name, last_name, phone, square_customer_id, visits_used, package_total_visits, sms_consent_at, sms_opted_out_at")
               .eq("id", c.client_id)
               .maybeSingle();
             if (!cli || !cli.phone) {
               summary.errors.push(`campaign ${c.id}: missing client/phone`);
               continue;
             }
+            if (renewalConsentBlock(cli)) { summary.blocked_consent++; continue; }
+            if (effectiveStateFor(index, cli).source === "review_required") { summary.held_review_required++; continue; }
             const to = normalizePhone(cli.phone);
             const body = nextSeq === 2
               ? `Hi ${cli.first_name} — just checking in! Today's your last visit on your current package. Reply YES to renew.`
@@ -260,22 +289,13 @@ export const Route = createFileRoute("/api/public/renewal/tick")({
         // Pull all non-archived, non-pay-per-visit clients on their last visit.
         const { data: allCandidates } = await supabaseAdmin
           .from("clients")
-          .select("id, first_name, last_name, phone, square_customer_id, package_total_visits, visits_used, package_price, amount_paid, package_start_date, payment_model, deleted_at")
+          .select("id, first_name, last_name, phone, square_customer_id, package_total_visits, visits_used, package_price, amount_paid, package_start_date, payment_model, deleted_at, sms_consent_at, sms_opted_out_at")
           .is("deleted_at", null)
           .neq("payment_model", "pay_per_visit")
           .gt("package_total_visits", 0);
 
         for (const cli of (allCandidates ?? []) as Client[]) {
           summary.checked_clients++;
-          const used = cli.visits_used ?? 0;
-          if (used !== cli.package_total_visits - 1) continue;
-          const owed = Number(cli.package_price ?? 0) - Number(cli.amount_paid ?? 0);
-          if (owed > 0.001) continue;
-          if (!cli.phone) continue;
-          if (!cli.square_customer_id) continue;
-          summary.candidates++;
-
-          // Skip if we already have any non-terminal campaign for this snapshot.
           const { data: existing } = await supabaseAdmin
             .from("renewal_campaigns")
             .select("id, status")
@@ -283,15 +303,16 @@ export const Route = createFileRoute("/api/public/renewal/tick")({
             .eq("package_total_visits_snapshot", cli.package_total_visits)
             .order("created_at", { ascending: false })
             .limit(1);
-          if (existing && existing.length > 0) {
-            const s = existing[0].status;
-            if (s !== "renewed" && s !== "cancelled") continue;
-          }
-
-          // Need at least 2 upcoming bookings: the "last visit" AND a further one.
-          const bookings = await fetchUpcomingBookings(squareToken, cli.square_customer_id);
-          if (bookings.length < 2) continue;
-          const lastVisitYmd = ymdInTz(new Date(bookings[0].start_at));
+          const hasOpen = !!existing && existing.length > 0 &&
+            existing[0].status !== "renewed" && existing[0].status !== "cancelled";
+          const decision = decideRenewalText(
+            cli, effectiveStateFor(index, cli), acceptedUpcoming(cli.square_customer_id), hasOpen,
+          );
+          if (decision.suppressed) { summary.held_review_required++; continue; }
+          if (decision.consentBlocked) { summary.blocked_consent++; continue; }
+          if (!decision.eligible || !decision.lastVisitDate || !cli.phone) continue;
+          summary.candidates++;
+          const lastVisitYmd = ymdInTz(new Date(decision.lastVisitDate));
 
           const to = normalizePhone(cli.phone);
           const body = `Hi ${cli.first_name} — looks like ${prettyDate(lastVisitYmd)} is your last visit on your current package! Reply YES if you'd like to renew.`;

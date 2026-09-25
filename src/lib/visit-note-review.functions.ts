@@ -45,7 +45,7 @@ export const getVisitNoteReview = createServerFn({ method: "GET" })
     if (!isAdmin && !isSuper) throw new Error("Forbidden — admin access required");
 
     const counts: Record<NoteIssueKind, number> = {
-      skipped: 0, stale_future: 0, backward: 0, same_day_conflict: 0, package_size: 0, missing_note: 0,
+      skipped: 0, stale_future: 0, future_after_complete: 0, backward: 0, same_day_conflict: 0, package_size: 0, missing_note: 0,
     };
     const nowMs = Date.now();
     const nowIso = new Date(nowMs).toISOString();

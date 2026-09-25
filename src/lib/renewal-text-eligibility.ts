@@ -62,7 +62,10 @@ export function decideRenewalText(
   let lastVisitDate: string | null = null;
   if (state.source === "square") {
     const { visitsUsed: used, totalVisits: total } = state;
-    const finalVisit = state.upcoming.find((u) => !u.cancelled && u.note === `${total}/${total}`);
+    // Only the very next numbered live appointment can be this package's final
+    // visit — a later N/N belongs to the next package.
+    const nextNoted = state.upcoming.find((u) => !u.cancelled && u.note);
+    const finalVisit = nextNoted?.note === `${total}/${total}` ? nextNoted : undefined;
     basis = `Square ${used}/${total}${finalVisit ? ` with future ${total}/${total}` : ""}`;
     const no = (reason: string): RenewalDecision => ({ ...base, eligible: false, reason, basis, lastVisitDate: null });
     if (total <= 0 || used !== total - 1) return no("not on last visit");

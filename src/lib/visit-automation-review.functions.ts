@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import type { UpcomingVisit, VisitSource } from "@/lib/effective-visit-state";
+import type { ReviewStatus, UpcomingVisit, VisitSource } from "@/lib/effective-visit-state";
 
 type Ctx = { supabase: any; userId: string };
 
@@ -8,6 +8,8 @@ export type AutomationCard = {
   client_id: string;
   name: string;
   source: VisitSource;
+  review_status: ReviewStatus;
+  automation_usable: boolean;
   reason: string;
   hub: string;
   square: string | null;

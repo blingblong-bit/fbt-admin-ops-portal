@@ -83,8 +83,8 @@ describe("detectNoteIssues", () => {
   it("missing note inside an otherwise clear sequence is flagged", () => {
     expect(kinds([rb("1", "2026-09-10", "3/8"), rb("2", "2026-09-14", null), rb("3", "2026-09-17", "5/8")])).toEqual(["missing_note"]);
   });
-  it("a cancelled 4/8 followed by another 4/8 is a repeated number", () => {
-    expect(kinds([rb("1", "2026-09-10", "3/8"), rb("2", "2026-09-14", "4/8", "CANCELLED_BY_SELLER"), rb("3", "2026-09-17", "4/8")])).toEqual(["backward"]);
+  it("a cancelled 4/8 rebooked as 4/8 is not flagged", () => {
+    expect(kinds([rb("1", "2026-09-10", "3/8"), rb("2", "2026-09-14", "4/8", "CANCELLED_BY_SELLER"), rb("3", "2026-09-17", "4/8")])).toEqual([]);
   });
 });
 

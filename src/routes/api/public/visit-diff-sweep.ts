@@ -182,7 +182,6 @@ export const Route = createFileRoute("/api/public/visit-diff-sweep")({
         // Stored visits_used is never written by this sweep.
         const applied: unknown[] = [];
         const applyErrors: unknown[] = [];
-        void supabaseAdmin;
 
         return new Response(
           JSON.stringify(

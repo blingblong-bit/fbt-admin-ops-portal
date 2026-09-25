@@ -198,7 +198,11 @@ const fmt = (n: ParsedNote) => `${n.n}/${n.total}`;
 
 /** Returns issues found in the recent Square sequence (last 6 past noted visits + all future). */
 export function detectNoteIssues(seq: SequenceEntry[]): NoteIssue[] {
-  const notedIdx = seq.map((e, i) => (e.note ? i : -1)).filter((i) => i >= 0);
+  // A cancelled booking whose number was rebooked on a live appointment is
+  // superseded (e.g. 7/8 cancelled → 7/8 rebooked): not a numbering problem.
+  const live = new Set(seq.filter((e) => e.note && !e.cancelled).map((e) => `${e.note!.n}/${e.note!.total}`));
+  const superseded = (e: SequenceEntry) => !!e.cancelled && !!e.note && live.has(`${e.note.n}/${e.note.total}`);
+  const notedIdx = seq.map((e, i) => (e.note && !superseded(e) ? i : -1)).filter((i) => i >= 0);
   if (notedIdx.length < 2) return []; // no/isolated notes → Hub fallback, no flag
   const pastNoted = notedIdx.filter((i) => seq[i].past);
   const startIdx = pastNoted.length > PAST_WINDOW ? pastNoted[pastNoted.length - PAST_WINDOW] : notedIdx[0];

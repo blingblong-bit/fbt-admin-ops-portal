@@ -107,3 +107,10 @@ describe("cancelled bookings stay in the sequence", () => {
     expect(issues([rb("a", "2026-09-01", "6/8"), rb("b", "2026-09-08", "", "NO_SHOW"), rb("c", "2026-09-15", "8/8")])).toEqual(["skipped"]);
   });
 });
+
+describe("rebooked cancelled visits", () => {
+  const rb = (id: string, d: string, note: string, status = "ACCEPTED") => ({ id, start_at: `${d}T15:00:00Z`, seller_note: note, status });
+  it("7/8 cancelled then 7/8 rebooked is not flagged", () => {
+    expect(detectNoteIssues(buildSequence([rb("a", "2026-09-01", "6/8"), rb("b", "2026-09-08", "7/8", "CANCELLED_BY_SELLER"), rb("c", "2026-09-10", "7/8"), rb("d", "2026-09-15", "8/8")], now))).toEqual([]);
+  });
+});

@@ -83,7 +83,27 @@ describe("detectNoteIssues", () => {
   it("missing note inside an otherwise clear sequence is flagged", () => {
     expect(kinds([rb("1", "2026-09-10", "3/8"), rb("2", "2026-09-14", null), rb("3", "2026-09-17", "5/8")])).toEqual(["missing_note"]);
   });
-  it("cancelled appointments are ignored", () => {
-    expect(kinds([rb("1", "2026-09-10", "3/8"), rb("2", "2026-09-14", "4/8", "CANCELLED_BY_SELLER"), rb("3", "2026-09-17", "4/8")])).toEqual([]);
+  it("a cancelled 4/8 followed by another 4/8 is a repeated number", () => {
+    expect(kinds([rb("1", "2026-09-10", "3/8"), rb("2", "2026-09-14", "4/8", "CANCELLED_BY_SELLER"), rb("3", "2026-09-17", "4/8")])).toEqual(["backward"]);
+  });
+});
+
+describe("cancelled bookings stay in the sequence", () => {
+  const rb = (id: string, d: string, note: string, status = "ACCEPTED") => ({ id, start_at: `${d}T15:00:00Z`, seller_note: note, status });
+  const issues = (xs: ReturnType<typeof rb>[]) => detectNoteIssues(buildSequence(xs, now)).map((i) => i.kind);
+  it("6/8 → 7/8 cancelled → 8/8 is valid", () => {
+    expect(issues([rb("a", "2026-09-01", "6/8"), rb("b", "2026-09-08", "7/8", "CANCELLED_BY_SELLER"), rb("c", "2026-09-15", "8/8")])).toEqual([]);
+  });
+  it("6/8 → 8/8 with no 7/8 is skipped", () => {
+    expect(issues([rb("a", "2026-09-01", "6/8"), rb("c", "2026-09-15", "8/8")])).toEqual(["skipped"]);
+  });
+  it("5/8 → 4/8 is backward", () => {
+    expect(issues([rb("a", "2026-09-01", "5/8"), rb("c", "2026-09-15", "4/8")])).toEqual(["backward"]);
+  });
+  it("8/8 → 1/8 is a renewal", () => {
+    expect(issues([rb("a", "2026-09-01", "8/8"), rb("c", "2026-09-15", "1/8")])).toEqual([]);
+  });
+  it("cancelled un-noted booking is not a missing note", () => {
+    expect(issues([rb("a", "2026-09-01", "6/8"), rb("b", "2026-09-08", "", "NO_SHOW"), rb("c", "2026-09-15", "8/8")])).toEqual(["skipped"]);
   });
 });

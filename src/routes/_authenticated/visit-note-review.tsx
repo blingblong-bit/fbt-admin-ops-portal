@@ -33,8 +33,12 @@ function Chips({ items }: { items: NoteChip[] }) {
   return (
     <div className="flex flex-wrap gap-1.5">
       {items.map((c, i) => (
-        <span key={i} className="rounded border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs">
-          <span className="font-semibold">{c.label ?? "no note"}</span>{" "}
+        <span
+          key={i}
+          className={`rounded border px-2 py-0.5 text-xs ${c.status ? "border-dashed border-slate-300 bg-white text-slate-500" : "border-slate-200 bg-slate-50"}`}
+        >
+          <span className="font-semibold">{c.label ?? "no note"}</span>
+          {c.status && <span className="italic"> · {c.status}</span>}{" "}
           <span className="text-slate-500">{formatDate(c.date.slice(0, 10))}</span>
         </span>
       ))}

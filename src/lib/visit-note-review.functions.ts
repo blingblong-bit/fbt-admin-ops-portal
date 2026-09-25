@@ -4,13 +4,14 @@ import { fetchSquareBookings, type SquareBooking } from "@/lib/schedule.function
 import {
   buildSequence,
   detectNoteIssues,
+  statusLabel,
   type NoteIssue,
   type NoteIssueKind,
 } from "@/lib/square-visit-audit";
 
 type Ctx = { supabase: any; userId: string };
 
-export type NoteChip = { date: string; label: string | null };
+export type NoteChip = { date: string; label: string | null; status: string | null };
 
 export type VisitNoteReviewCard = {
   client_id: string;
@@ -107,7 +108,7 @@ export const getVisitNoteReview = createServerFn({ method: "GET" })
       if (issues.length === 0) continue;
       for (const k of new Set(issues.map((i) => i.kind))) counts[k]++;
       const chip = (e: (typeof seq)[number]): NoteChip => ({
-        date: e.date, label: e.note ? `${e.note.n}/${e.note.total}` : null,
+        date: e.date, label: e.note ? `${e.note.n}/${e.note.total}` : null, status: statusLabel(e.status),
       });
       cards.push({
         client_id: c.id,

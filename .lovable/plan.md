@@ -13,8 +13,11 @@
 Square numbered sequence (cancelled/no-show numbered visits included)
   coherent, 2+ notes  -> source Square: position = latest PAST numbered visit
   no notes / only 1   -> source Hub fallback: stored Hub count, exactly as today
-  Visit Note Review issue -> source Review required: keep using Hub state, no new decisions
+  Visit Note Review issue -> source Review required: keep current known state, no new decisions
 ```
+- **Square synced:** the state worked out from Square drives everything.
+- **Hub fallback:** today's Hub workflow drives everything, unchanged.
+- **Review required:** the current known state is kept. Any new automatic renewal or dues decision that depends on the questionable numbering is held back. That covers a new Needs Renewal flag, a renewal date moving, a Payment Due week moving, and a new or changed dues text draft. Each held decision shows on Visit Automation Review with its reason until Square is fixed.
 - Future appointments are only used to forecast. They never count as done.
 - 8/8 in the past followed by 1/8 in the future means the current package is complete, and the next package starts on the date of that 1/8.
 - Next package start: if a future 1/N note exists, use its date. Otherwise, count the remaining visits forward through upcoming appointments.
@@ -34,11 +37,17 @@ Only clients with a meaningful difference or action are listed.
 2. Add one server helper that fetches Square bookings once per request and returns every client's effective state. It uses the same 30-day chunked fetch that Visit Note Review already uses.
 3. Connect it to the renewal forecast and Needs Renewal, Renewal Scheduled, Payment Due, and Dues Texts drafts.
 4. Build the Visit Automation Review page, its tile and a menu link. Add source labels where the visit count already shows.
-5. Run a read-only impact comparison on active clients and report: how many use Square, how many use Hub fallback, how many are held for review, how many have a different count, how many have different renewal timing, and how many have a different dues classification. Nothing is written.
+5. Run a read-only impact comparison on active clients (nothing is written). It reports how many clients:
+   - switch to state worked out from Square
+   - have a different visit count
+   - have a renewal date that moves
+   - have a Payment Due week that moves
+   - have a Dues Text classification that changes
+   - land in Review required
 6. Run the full test suite and typecheck. Stop and wait for your go-ahead before publishing.
 
-## One thing to decide
-The existing **nightly visit sweep** already **overwrites the stored Hub count** from Square notes. That breaks your "keep stored state separate" rule. I plan to switch its write step off and leave it report-only. The new effective state makes it unnecessary. Tell me if you'd rather keep it running.
+## Nightly visit sweep
+The sweep becomes report-only. It keeps finding, logging and reporting differences between the Hub and Square, but it never changes stored visit counts. Existing stored counts are not migrated.
 
 ## Technical details
 - New `src/lib/effective-visit-state.ts` (pure): `resolveEffectiveVisitState(client, bookings, nowIso)` returns `{ source, visitsUsed, totalVisits, latestVisitBookingId, latestVisitDate, latestVisitNote, nextVisitNumber, remainingVisits, reason, upcoming[], nextPackageStart }`. It reuses `buildSequence` and `detectNoteIssues` from `square-visit-audit.ts`.
@@ -47,4 +56,5 @@ The existing **nightly visit sweep** already **overwrites the stored Hub count**
 - The check-in increment path (`schedule.functions.ts` around line 744) and `apply_square_payment` stay unchanged.
 - `visit-diff-sweep.ts`: remove the `visits_used` update and keep the diff logging.
 - New route `/_authenticated/visit-automation-review` (admin, `requireAdmin`), server function `getVisitAutomationReview` (admin role check, read-only), dashboard tile `visit_automation_review` (staffHidden).
-- Tests go in `effective-visit-state.test.ts`, plus downstream cases for Needs Renewal and dues timing.
+- Tests go in `effective-visit-state.test.ts`, plus downstream cases for Needs Renewal and dues timing. Another test checks that Review required holds back new renewal and dues decisions.
+- Review-required handling: downstream callers get `{ state, suppressed: boolean }`. When suppressed, they keep the existing stored and prepared values and skip creating new flags or drafts. The held decision is recorded in the automation review output.

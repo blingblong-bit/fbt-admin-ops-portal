@@ -170,10 +170,26 @@ function RootComponent() {
   }, []);
 
   useEffect(() => {
-    const { data: sub } = supabase.auth.onAuthStateChange((event) => {
-      if (event !== "SIGNED_IN" && event !== "SIGNED_OUT" && event !== "USER_UPDATED") return;
-      router.invalidate();
-      if (event !== "SIGNED_OUT") queryClient.invalidateQueries();
+    // Supabase re-emits SIGNED_IN when the app regains focus / recovers its
+    // session. Only reload everything when the actual user changes; for a
+    // same-user renewal just retry queries that failed while it was renewing.
+    let currentUserId: string | null | undefined = undefined;
+    supabase.auth.getSession().then(({ data }) => {
+      if (currentUserId === undefined) currentUserId = data.session?.user.id ?? null;
+    });
+    const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
+      const nextId = session?.user.id ?? null;
+      const userChanged = currentUserId !== undefined && nextId !== currentUserId;
+      const firstKnown = currentUserId === undefined;
+      currentUserId = nextId;
+      if (event === "SIGNED_OUT" || (userChanged && !firstKnown)) {
+        router.invalidate();
+        if (nextId) queryClient.invalidateQueries();
+        return;
+      }
+      if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED" || event === "USER_UPDATED") {
+        queryClient.invalidateQueries({ predicate: (q) => q.state.status === "error" });
+      }
     });
     return () => sub.subscription.unsubscribe();
   }, [router, queryClient]);

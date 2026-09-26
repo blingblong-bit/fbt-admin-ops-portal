@@ -80,6 +80,10 @@ function useClients() {
   return useQuery({
     queryKey: ["clients"],
     queryFn: async () => {
+      // Without a session RLS returns an empty list instead of an error,
+      // which would silently zero the tiles. Fail so it retries instead.
+      const { data: sess } = await supabase.auth.getSession();
+      if (!sess.session) throw new Error("Session not ready");
       // PostgREST caps a single response at 1000 rows. Page through with
       // .range() so dashboard tiles (Payment Due, etc.) see every client,
       // not just the most recently updated 1000.

@@ -7,12 +7,15 @@ export const Route = createFileRoute("/_authenticated")({
   // the browser's first render (avoids React hydration mismatch #418).
   pendingComponent: () => null,
   beforeLoad: async ({ location }) => {
-
-    const { data, error } = await supabase.auth.getUser();
-    if (error || !data.user) {
+    // Use the locally stored session (instant) instead of getUser(), which
+    // makes a network round trip on every navigation — including Back — and
+    // leaves the screen blank while it waits. RLS still enforces access
+    // server-side on every query, so this gate is only about UX.
+    const { data } = await supabase.auth.getSession();
+    if (!data.session) {
       throw redirect({ to: "/auth", search: { redirect: location.href } });
     }
-    return { user: data.user };
+    return { user: data.session.user };
   },
   component: () => <Outlet />,
 });

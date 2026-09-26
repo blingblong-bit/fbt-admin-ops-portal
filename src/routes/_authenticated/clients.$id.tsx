@@ -1,4 +1,4 @@
-import { createFileRoute, Link, useNavigate, useRouter } from "@tanstack/react-router";
+import { createFileRoute, Link, useCanGoBack, useNavigate, useRouter } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { z } from "zod";
@@ -1224,7 +1224,10 @@ function AppointmentsCard({ clientId }: { clientId: string }) {
 
 function BackLink() {
   const router = useRouter();
-  const canGoBack = router.history.length > 1;
+  // useCanGoBack tracks the router's own in-app history, unlike
+  // window.history.length which also counts pages visited before the app —
+  // pressing Back then would leave the app or force a full reload.
+  const canGoBack = useCanGoBack();
   if (!canGoBack) {
     return (
       <Link to="/clients" className="text-sm text-slate-500 hover:underline">

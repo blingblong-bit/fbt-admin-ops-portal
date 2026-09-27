@@ -40,13 +40,15 @@ export function usePackageReviewDismissedIds() {
   });
 }
 
-export function PackageReviewBadge({ className = "" }: { className?: string }) {
+export function PackageReviewBadge({ className = "", priceNeeded = false }: { className?: string; priceNeeded?: boolean }) {
   return (
     <span
-      title="First visit was an assessment only — no package info on file. Set a real package or mark as not needed."
+      title={priceNeeded
+        ? "Package was auto-created from Square visit notes — set the package price to finish."
+        : "First visit was an assessment only — no package info on file. Set a real package or mark as not needed."}
       className={`inline-flex items-center gap-1 rounded-full border border-amber-300 bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-900 ${className}`}
     >
-      📝 Needs Package Review
+      {priceNeeded ? "💲 Price Needed" : "📝 Needs Package Review"}
     </span>
   );
 }

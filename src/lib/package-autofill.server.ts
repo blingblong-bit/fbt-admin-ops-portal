@@ -94,7 +94,7 @@ export async function runPackageAutofill(
     const { error: upErr } = await supabase
       .from("clients")
       .update({
-        package_name: fill.packageName,
+        package_name: (c.package_name ?? "").trim() || fill.packageName,
         package_total_visits: fill.totalVisits,
         visits_used: fill.visitsUsed,
         package_start_date: fill.startDate,

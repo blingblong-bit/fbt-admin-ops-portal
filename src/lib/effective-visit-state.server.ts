@@ -22,10 +22,16 @@ export type SquareBookingIndex = {
 const CACHE_MS = 60_000;
 const indexCache = new Map<string, { at: number; p: Promise<SquareBookingIndex> }>();
 
-export function loadSquareBookingIndex(token: string, pastDays = 180, futureDays = 90): Promise<SquareBookingIndex> {
+export function loadSquareBookingIndex(
+  token: string,
+  pastDays = 180,
+  futureDays = 90,
+  opts: { fresh?: boolean } = {},
+): Promise<SquareBookingIndex> {
   const key = `${pastDays}:${futureDays}`;
   const hit = indexCache.get(key);
-  if (hit && Date.now() - hit.at < CACHE_MS) return hit.p;
+  // `fresh` skips the shared copy (user pressed Refresh after editing Square).
+  if (!opts.fresh && hit && Date.now() - hit.at < CACHE_MS) return hit.p;
   const p = loadIndexUncached(token, pastDays, futureDays).then((idx) => {
     if (idx.error) indexCache.delete(key); // never cache failures
     return idx;

@@ -65,6 +65,20 @@ describe("detectNoteIssues", () => {
   it("5/8 → 4/8 goes backward", () => {
     expect(kinds([rb("1", "2026-09-10", "5/8"), rb("2", "2026-09-17", "4/8")])).toEqual(["backward"]);
   });
+  it("renumbered cancellations then rebooked (Charles Parish) has no flag", () => {
+    expect(kinds([
+      rb("1", "2026-09-01", "1/8"), rb("2", "2026-09-03", "2/8"),
+      rb("3", "2026-09-08", "3/8", "CANCELLED_BY_SELLER"), rb("4", "2026-09-10", "4/8", "CANCELLED_BY_SELLER"),
+      rb("5", "2026-09-22", "3/8", "CANCELLED_BY_SELLER"), rb("6", "2026-09-23", "4/8"),
+      rb("7", "2026-09-29", null), rb("8", "2026-10-01", null),
+    ])).toEqual([]);
+  });
+  it("un-noted visit before a new 1/8 (Bob Hayes) has no flag", () => {
+    expect(kinds([rb("0", "2026-09-11", null), rb("1", "2026-09-15", "1/8"), rb("2", "2026-09-17", "2/8"), rb("3", "2026-09-22", "3/8"), rb("4", "2026-09-29", "5/8".replace("5", "4"))])).toEqual([]);
+  });
+  it("cancelled 5/8 not reused still counts: 4/8 → c5/8 → 6/8 clean", () => {
+    expect(kinds([rb("1", "2026-09-10", "4/8"), rb("2", "2026-09-15", "5/8", "CANCELLED_BY_CUSTOMER"), rb("3", "2026-09-17", "6/8")])).toEqual([]);
+  });
   it("8/8 → 1/8 is a valid renewal", () => {
     expect(kinds([rb("1", "2026-09-10", "7/8"), rb("2", "2026-09-15", "8/8"), rb("3", "2026-09-17", "1/8"), rb("4", "2026-09-29", "2/8")])).toEqual([]);
   });

@@ -47,7 +47,8 @@ export type VisitAutomationReview = {
 /** Read-only: compares stored Hub behaviour with Square-derived behaviour. Writes nothing. */
 export const getVisitAutomationReview = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .handler(async ({ context }): Promise<VisitAutomationReview> => {
+  .inputValidator((d: { fresh?: boolean } | undefined) => ({ fresh: !!d?.fresh }))
+  .handler(async ({ context, data: input }): Promise<VisitAutomationReview> => {
     const ctx = context as unknown as Ctx;
     const [{ data: isAdmin }, { data: isSuper }] = await Promise.all([
       ctx.supabase.rpc("has_role", { _user_id: ctx.userId, _role: "admin" }),
@@ -85,7 +86,7 @@ export const getVisitAutomationReview = createServerFn({ method: "GET" })
     const { forecastRenewal, drivingCounts } = await import("@/lib/effective-visit-state");
     const { ymdInTz, workWeekStartFromYmd, addDaysYmd } = await import("@/lib/schedule.functions");
 
-    const index = await loadSquareBookingIndex(token, 180, 90);
+    const index = await loadSquareBookingIndex(token, 180, 90, { fresh: input.fresh });
     if (index.error) return empty(index.error);
 
     const todayYmd = ymdInTz(new Date());

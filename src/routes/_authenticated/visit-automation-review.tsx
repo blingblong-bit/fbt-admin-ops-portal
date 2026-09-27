@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { RefreshCw } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
@@ -75,9 +76,26 @@ function Chips({ items }: { items: UpcomingVisit[] }) {
 
 function VisitAutomationReviewPage() {
   const fetchReview = useServerFn(getVisitAutomationReview);
-  const q = useQuery({ queryKey: ["visit-automation-review"], queryFn: () => fetchReview(), staleTime: 10 * 60_000 });
+  const qc = useQueryClient();
+  const q = useQuery({
+    queryKey: ["visit-automation-review"],
+    queryFn: () => fetchReview({ data: {} }),
+    staleTime: 60_000,
+    refetchOnWindowFocus: true,
+  });
   const d = q.data;
   const i = d?.impact;
+  const [fresh, setFresh] = useState(false);
+  const refresh = async () => {
+    setFresh(true);
+    try {
+      const r = await fetchReview({ data: { fresh: true } });
+      qc.setQueryData(["visit-automation-review"], r);
+      qc.invalidateQueries({ queryKey: ["visit-note-review"] });
+    } finally {
+      setFresh(false);
+    }
+  };
 
   return (
     <AppShell>
@@ -90,7 +108,7 @@ function VisitAutomationReviewPage() {
             current Square visit can't be worked out.
           </p>
         </div>
-        <Button onClick={() => q.refetch()} disabled={q.isFetching}>
+        <Button onClick={refresh} disabled={q.isFetching || fresh}>
           <RefreshCw className={`mr-2 h-4 w-4 ${q.isFetching ? "animate-spin" : ""}`} />
           Refresh
         </Button>

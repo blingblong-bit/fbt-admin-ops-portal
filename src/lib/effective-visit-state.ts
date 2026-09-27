@@ -335,20 +335,20 @@ export type PackageAutofill = {
  * always left for staff to fill in.
  */
 export function packageAutofillFromBookings(
-  bookings: EffectiveBookingInput[],
+  bookings: ReviewBooking[],
   nowIso: string,
 ): PackageAutofill | null {
-  const state = resolveEffectiveVisitState(bookings, nowIso);
+  const state = resolveEffectiveVisitState({ visits_used: null, package_total_visits: 0 }, bookings, nowIso);
   if (state.source !== "square" || !state.automationUsable || state.totalVisits <= 0) return null;
 
-  const seq = buildSequence(bookings);
-  const noted = seq.filter((e) => e.note !== null && !isSupersededCancellation(e, seq));
+  const seq = buildSequence(bookings, nowIso);
+  const noted = seq.filter((e) => e.note !== null && !isSupersededCancellation(seq, e));
   if (noted.length === 0) return null;
 
-  const pastNoted = noted.filter((e) => ymdOf(e.booking.start_at) <= state.todayYmd);
-  const futureNoted = noted.filter((e) => ymdOf(e.booking.start_at) > state.todayYmd);
+  const pastNoted = noted.filter((e) => e.past);
+  const futureNoted = noted.filter((e) => !e.past);
 
-  let startEntry: (typeof noted)[number] | undefined;
+  let startEntry: SequenceEntry | undefined;
   if (pastNoted.length > 0) {
     // Most recent package opener (1/N) at or before the latest past visit.
     for (let i = pastNoted.length - 1; i >= 0; i--) {
@@ -366,7 +366,7 @@ export function packageAutofillFromBookings(
   return {
     totalVisits: state.totalVisits,
     visitsUsed: state.visitsUsed,
-    startDate: ymdOf(startEntry.booking.start_at),
+    startDate: startEntry.date.slice(0, 10),
     packageName: `${state.totalVisits}-Visit Package`,
   };
 }

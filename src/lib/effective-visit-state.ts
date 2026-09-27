@@ -340,12 +340,31 @@ export function packageAutofillFromBookings(
   bookings: ReviewBooking[],
   nowIso: string,
 ): PackageAutofill | null {
-  const state = resolveEffectiveVisitState({ visits_used: null, package_total_visits: 0 }, bookings, nowIso);
-  if (state.source !== "square" || !state.automationUsable || state.totalVisits <= 0) return null;
-
   const seq = buildSequence(bookings, nowIso);
   const noted = seq.filter((e) => e.note !== null && !isSupersededCancellation(seq, e));
   if (noted.length === 0) return null;
+
+  // Only current packages: a numbered visit in the last 60 days or upcoming.
+  const cutoff = new Date(new Date(nowIso).getTime() - 60 * 864e5).toISOString();
+  if (!noted.some((e) => !e.past || e.date >= cutoff)) return null;
+
+  const state = resolveEffectiveVisitState({ visits_used: null, package_total_visits: 0 }, bookings, nowIso);
+  if (state.source !== "square" || !state.automationUsable || state.totalVisits <= 0) {
+    // Lone clear "n of N" note: the resolver treats it as isolated, but for a
+    // client with NO package it's still the best evidence we have.
+    if (noted.length !== 1 || state.issues.length > 0) return null;
+    const only = noted[0];
+    const { n, total } = only.note!;
+    if (!(total > 0 && n >= 1 && n <= total)) return null;
+    return {
+      totalVisits: total,
+      visitsUsed: only.past ? n : n - 1,
+      startDate: only.date.slice(0, 10),
+      packageName: `${total}-Visit Package`,
+      startEstimated: n !== 1,
+    };
+  }
+
 
   const pastNoted = noted.filter((e) => e.past);
   const futureNoted = noted.filter((e) => !e.past);

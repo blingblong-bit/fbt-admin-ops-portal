@@ -54,7 +54,7 @@ export async function runPackageAutofill(
     (c) =>
       c.payment_model !== "pay_per_visit" &&
       c.status !== "archived" &&
-      !(c.package_name ?? "").trim(),
+      (!(c.package_name ?? "").trim() || (c.package_name ?? "").trim().toLowerCase() === "custom package"),
   );
   if (eligible.length === 0) return report;
 

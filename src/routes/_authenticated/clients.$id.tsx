@@ -223,14 +223,16 @@ function ClientDetailPage() {
     );
   }
 
-  const remaining = visitsRemaining(c);
   const owed = amountOwed(c);
   const priceUnknown = packagePriceUnknown(c, isDismissedFromReview);
-  const hasVisitData = c.visits_used !== null && c.visits_used !== undefined;
-  const pct =
-    hasVisitData && c.package_total_visits > 0
-      ? ((c.visits_used as number) / c.package_total_visits) * 100
-      : 0;
+  // Square-driven clients show the Square position; stored Hub count is never changed.
+  const sqShown = squareTracks && visitTracking ? visitTracking : null;
+  const shownUsed = sqShown ? sqShown.used : c.visits_used;
+  const shownTotal = sqShown ? sqShown.total : c.package_total_visits;
+  const hasVisitData = shownUsed !== null && shownUsed !== undefined;
+  const remaining = sqShown ? Math.max(0, sqShown.total - sqShown.used) : visitsRemaining(c);
+  const pct = hasVisitData && shownTotal > 0 ? ((shownUsed as number) / shownTotal) * 100 : 0;
+  const hubDiffers = !!sqShown && (c.visits_used !== sqShown.used || c.package_total_visits !== sqShown.total);
 
   return (
     <AppShell>
@@ -338,10 +340,17 @@ function ClientDetailPage() {
             {hasVisitData ? (
               <>
                 <div className="mb-2 flex items-end justify-between">
-                  <div className="text-4xl font-semibold tracking-tight">{progress(c)}</div>
+                  <div className="text-4xl font-semibold tracking-tight">
+                    {sqShown ? `${sqShown.used} / ${sqShown.total}` : progress(c)}
+                  </div>
                   <div className="text-sm text-slate-500">{remaining} remaining</div>
                 </div>
                 <Progress value={pct} className="h-3" />
+                {sqShown && (
+                  <p className="mt-2 text-xs text-slate-500">
+                    From Square visit notes{hubDiffers ? ` · Hub stored ${c.visits_used ?? "—"}/${c.package_total_visits}` : ""}
+                  </p>
+                )}
               </>
             ) : (
               <div className="space-y-2">
@@ -416,7 +425,7 @@ function ClientDetailPage() {
             <Row label="Name" value={c.package_name ?? "—"} />
             <Row label="Start Date" value={formatDate(c.package_start_date)} />
             <Row label="Total Visits" value={c.package_total_visits} />
-            <Row label="Visits Used" value={hasVisitData ? c.visits_used : "—"} />
+            <Row label="Visits Used" value={hasVisitData ? (sqShown ? `${shownUsed} (Square)` : c.visits_used) : "—"} />
             
           </CardContent>
         </Card>

@@ -172,3 +172,15 @@ describe("rebooked cancellations", () => {
     expect(s.visitsUsed).toBe(7);
   });
 });
+
+import { currentPackageAlreadyCovers } from "./effective-visit-state";
+describe("currentPackageAlreadyCovers", () => {
+  it("early-renewed package starting on the uncovered date covers it (Abby/Kristin)", () => {
+    expect(currentPackageAlreadyCovers("2026-09-30", 0, "2026-09-30")).toBe(true);
+  });
+  it("package already in use does not cover", () => {
+    expect(currentPackageAlreadyCovers("2026-09-01", 3, "2026-09-30")).toBe(false);
+    expect(currentPackageAlreadyCovers("2026-09-30", 1, "2026-09-30")).toBe(false);
+    expect(currentPackageAlreadyCovers(null, 0, "2026-09-30")).toBe(false);
+  });
+});

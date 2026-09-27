@@ -1,0 +1,2 @@
+UPDATE public.clients SET package_name='8 Visit Package', package_total_visits=8, package_price=375, package_start_date='2026-09-23', visits_used=2, amount_paid=0, status='active', needs_review=false WHERE id='af9a7bd6-bd38-4022-9546-3f66ed396617';
+INSERT INTO public.client_activities (client_id, activity_type, description, metadata) VALUES ('af9a7bd6-bd38-4022-9546-3f66ed396617','correction','Package set from Square: 8 visits, $375, started 9/23 (1 of 8). 2 of 8 used (9/23, 9/26). $0 paid — owner confirmed.','{"source":"owner_confirmed_square_audit"}'::jsonb);

@@ -5,6 +5,7 @@
 import {
   buildSequence,
   detectNoteIssues,
+  isSupersededCancellation,
   type NoteIssue,
   type ReviewBooking,
   type SequenceEntry,

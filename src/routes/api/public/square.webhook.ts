@@ -234,13 +234,60 @@ async function handleCustomerEvent(supabaseAdmin: SupabaseClient<Database>, even
     return;
   }
 
+  // Square merges give the same person a NEW customer ID. Before creating a
+  // client, look for an existing one with the same name + phone and relink.
+  const digits = (p: string | null | undefined) => (p ?? "").replace(/\D/g, "").slice(-10);
+  const phoneKey = digits(phone);
+  let phoneOnlyMatchIds: string[] = [];
+  if (phoneKey.length === 10) {
+    const { data: cands } = await supabaseAdmin
+      .from("clients")
+      .select("id, first_name, last_name, phone, status")
+      .is("deleted_at", null)
+      .ilike("phone", `%${phoneKey.slice(-4)}%`);
+    const phoneMatches = (cands ?? []).filter((c) => digits(c.phone) === phoneKey);
+    const norm = (s: string | null | undefined) => (s ?? "").trim().toLowerCase();
+    const nameMatches = hasName
+      ? phoneMatches.filter((c) => norm(c.first_name) === norm(firstName) && norm(c.last_name) === norm(lastName))
+      : [];
+    if (nameMatches.length === 1) {
+      const m = nameMatches[0];
+      const { error: relinkErr } = await supabaseAdmin
+        .from("clients")
+        .update({
+          square_customer_id: squareCustomerId,
+          email,
+          ...(m.status === "archived" ? { status: "assessment" } : {}),
+        })
+        .eq("id", m.id);
+      if (relinkErr) throw relinkErr;
+      await supabaseAdmin.from("client_activities").insert({
+        client_id: m.id,
+        activity_type: "square_relinked",
+        description: `Square gave this client a new customer ID (likely a Square merge); relinked instead of creating a duplicate.${m.status === "archived" ? " Restored from archive." : ""}`,
+        metadata: { new_square_customer_id: squareCustomerId },
+      });
+      await supabaseAdmin.from("square_sync_log").insert({
+        event_type: eventType,
+        square_customer_id: squareCustomerId,
+        client_id: m.id,
+        status: "success",
+        action: "relinked_merged_customer",
+        message: "Relinked existing client (same name + phone) to new Square customer ID",
+        raw_event: event as unknown as never,
+      });
+      return;
+    }
+    phoneOnlyMatchIds = (nameMatches.length > 1 ? nameMatches : phoneMatches).map((c) => c.id);
+  }
+
   const insertRow = {
     first_name: hasName ? firstName || "(no first name)" : "Unnamed",
     last_name: hasName ? lastName || "" : "Square Customer",
     email,
     phone,
     square_customer_id: squareCustomerId,
-    needs_review: !hasName,
+    needs_review: !hasName || phoneOnlyMatchIds.length > 0,
   };
 
   const { data: created, error: insertErr } = await supabaseAdmin
@@ -249,6 +296,15 @@ async function handleCustomerEvent(supabaseAdmin: SupabaseClient<Database>, even
     .select("id")
     .single();
   if (insertErr) throw insertErr;
+
+  for (const otherId of phoneOnlyMatchIds) {
+    await supabaseAdmin.from("duplicate_client_reviews").insert({
+      client_a_id: otherId,
+      client_b_id: created.id,
+      status: "pending",
+      reason: "New Square customer shares a phone number with an existing client",
+    });
+  }
 
   await supabaseAdmin.from("square_sync_log").insert({
     event_type: eventType,

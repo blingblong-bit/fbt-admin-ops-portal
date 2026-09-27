@@ -323,6 +323,8 @@ export type PackageAutofill = {
   visitsUsed: number;
   startDate: string; // YYYY-MM-DD of the package opener (1/N)
   packageName: string;
+  /** True when Square history starts mid-package (no 1/N seen). */
+  startEstimated: boolean;
 };
 
 /**
@@ -368,5 +370,6 @@ export function packageAutofillFromBookings(
     visitsUsed: state.visitsUsed,
     startDate: startEntry.date.slice(0, 10),
     packageName: `${state.totalVisits}-Visit Package`,
+    startEstimated: startEntry.note!.n !== 1,
   };
 }

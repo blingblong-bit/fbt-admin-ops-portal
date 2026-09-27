@@ -457,7 +457,7 @@ function Dashboard() {
   useEffect(() => {
     if (!isStaff || autofillRan.current) return;
     autofillRan.current = true;
-    autofillPackagesFromSquare({ data: {} })
+    autofillPackagesFromSquare()
       .then((r) => {
         if (r?.ok && (r.filled?.length ?? 0) > 0) {
           queryClient.invalidateQueries({ queryKey: ["clients"] });

@@ -290,3 +290,16 @@ export function visitTrackingFrom(s: EffectiveVisitState): VisitTracking {
 export function countsAsMissedCheckIn(v: VisitTracking | null | undefined): boolean {
   return !v || v.manualCheckInNeeded;
 }
+
+/**
+ * True when the Hub's current package was already renewed ahead of time: it
+ * starts on/after the first uncovered appointment and has no visits used yet.
+ * That package already covers those appointments, so no next package is due.
+ */
+export function currentPackageAlreadyCovers(
+  packageStartYmd: string | null | undefined,
+  hubVisitsUsed: number | null | undefined,
+  firstUncoveredYmd: string,
+): boolean {
+  return !!packageStartYmd && Number(hubVisitsUsed ?? 0) === 0 && packageStartYmd >= firstUncoveredYmd;
+}

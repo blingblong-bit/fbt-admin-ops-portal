@@ -1,23 +1,28 @@
-# Why Square fixes don't show up in Hub after refresh
+# Visit Note Review: stale results, Bob Hayes, Charles Parish, and a "This is correct" button
 
-## What's likely happening (to confirm first)
-Hub holds on to Square appointment data in three layers, so a fix made in Square can stay hidden for a while:
-- Pages keep what they last read for up to 10 minutes (Visit Note Review, Visit Automation Review, the Square-based dashboard tiles) and only re-read if you press their own Refresh button.
-- The server keeps a shared copy of Square appointments for 60 seconds, so pressing Refresh right after a Square edit can return the old copy.
-- Square itself can take a short while after an edit before its search shows the new note.
+## What Square shows now (read live, nothing changed)
+**Bob Hayes**: 9/11 (no note), 9/15 1/8 (you edited it at 11:19 PM), 9/17 2/8, 9/22 3/8, 9/24 4/8, then 9/29 5/8 and 10/1 6/8 coming up.
+- Your fix worked. The numbers now run 1 to 6 with nothing skipped.
+- He is probably still listed because the **9/11 appointment has no visit number**. That triggers "missing note". If 9/11 was an assessment or the last visit of an old package, the numbers are right. A "This is correct" button would clear him.
+- Part of it was also the delay: you refreshed within minutes of editing, and Hub can hold old Square data for up to about a minute (plus 10 minutes on the page unless you press Refresh).
 
-## Steps
-1. Bret Smith dropped off after a while, which fits the delay described above. Bob Hayes has not dropped off. Do a read-only check of Bob's current Square appointments and run them through the same review logic. This shows whether Square still has a numbering problem (for example a note on a cancelled appointment, a missing number, or a note in the wrong field) or whether Square is clean and Hub is wrong. Report the exact appointment and note behind his flag.
-2. If Square is clean but Hub isn't:
-   - Refresh buttons ask the server for a fresh Square read (skip the 60-second shared copy).
-   - Shorten page hold times for Square-based screens to 1 minute and re-read when you come back to the app/tab.
-   - After refreshing Visit Note Review, also refresh the client page, dashboard tiles and Visit Automation Review so they all agree.
-   - Show "Square read at 10:52 PM" on the review pages so it's clear how fresh the data is.
-3. If Square still shows the old notes: report exactly which appointment and note is still wrong for each client. No code change.
+**Charles Parish**: 9/1 1/8, 9/3 2/8, then 9/8 3/8 cancelled, 9/10 4/8 cancelled, 9/22 3/8 cancelled, 9/24 4/8. His 9/29 and 10/1 appointments have **no number yet**.
+- The review reads cancelled 4/8 (9/10) then cancelled 3/8 (9/22) as numbers going backward. The cancelled bookings were just renumbered and rebooked, so this is a false flag.
+- The 9/29 and 10/1 appointments with no number add a "missing note" flag. Adding 5/8 and 6/8 in Square would clear it.
+- He also has a second Hub record with no Square link (a separate issue, not changed here).
 
-Nothing is written to client records, payments or texts. Texting stays off; nothing is published.
+## Changes
+1. **Rebooked cancellations don't cause flags.** When a cancelled number is later rebooked, or replaced by a lower number, it no longer counts as "going backward" or "skipped". This uses the same rule the visit counts already use. Late cancels that were never rebooked still count, like now.
+2. **"This is correct" button** on each review card, with an optional short reason. The client leaves the list and the card records who confirmed it and when. If any of that client's Square appointments or notes change later, the confirmation expires and they come back if still flagged. A "Show confirmed" toggle lets you see or undo them.
+   - This only hides the card from the review list. It does not change visit counts, renewals, dues or texts.
+3. **Fresher data on Refresh.** Refresh always reads Square fresh instead of using Hub's one-minute shared copy. Square-based pages hold data for 1 minute instead of 10 and re-check when you return to the app. The "Checked at" time stays visible.
+4. Re-run the review and report whether Bob and Charles drop off, and how many flags cleared overall.
+
+Nothing is written to Square, client visit counts, payments or texts. Texting stays off; nothing is published.
 
 ## Technical details
-- `effective-visit-state.server.ts`: `loadSquareBookingIndex(token, past, future, { fresh })` bypasses/replaces `indexCache` entry.
-- `visit-note-review.functions.ts` / `visit-automation-review.functions.ts`: accept `{ fresh: boolean }`; Visit Note Review switches to the shared index loader (also removes its 9 unthrottled parallel Square calls, a 429 risk).
-- Query staleTime 10m -> 60s on Square-backed queries; `refetchOnWindowFocus` on; Refresh invalidates `visit-note-review`, `visit-automation-review`, dashboard Square tiles, client-detail visit queries.
+- `square-visit-audit.ts` `detectNoteIssues`: skip `backward`/`skipped` comparisons involving entries where `isSupersededCancellation(seq, e)` or a cancelled entry is followed by a live booking with number less than or equal to its number. Add tests for Charles's pattern.
+- New table `visit_note_confirmations(client_id uuid pk -> clients, fingerprint text, reason text, confirmed_by uuid, confirmed_at timestamptz)`. GRANTs for authenticated and service_role; RLS set to admin/superadmin via `has_role` for all operations.
+- Fingerprint = hash of the sorted `booking_id|status|note` for the client's bookings in the review window. `getVisitNoteReview` hides cards whose confirmation fingerprint matches and returns `confirmed[]` separately. New server fns `confirmVisitNotes({client_id, fingerprint, reason})` and `unconfirmVisitNotes({client_id})`, both admin-checked.
+- `loadSquareBookingIndex(..., { fresh })`; Visit Note Review uses the shared throttled loader (instead of 9 parallel calls). Refresh passes `fresh: true`. staleTime 60s plus `refetchOnWindowFocus` on the visit-note/automation review queries.
+- Also add a roadmap.md entry for the "This is correct" button.

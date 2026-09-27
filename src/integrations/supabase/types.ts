@@ -677,6 +677,38 @@ export type Database = {
         }
         Relationships: []
       }
+      visit_note_confirmations: {
+        Row: {
+          client_id: string
+          confirmed_at: string
+          confirmed_by: string | null
+          fingerprint: string
+          reason: string | null
+        }
+        Insert: {
+          client_id: string
+          confirmed_at?: string
+          confirmed_by?: string | null
+          fingerprint: string
+          reason?: string | null
+        }
+        Update: {
+          client_id?: string
+          confirmed_at?: string
+          confirmed_by?: string | null
+          fingerprint?: string
+          reason?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "visit_note_confirmations_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: true
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never

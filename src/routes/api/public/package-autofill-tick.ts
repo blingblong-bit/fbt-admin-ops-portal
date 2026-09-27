@@ -30,7 +30,6 @@ export const Route = createFileRoute("/api/public/package-autofill-tick")({
           filled: report.filled.map((f) => `${f.name} ${f.visitsUsed}/${f.totalVisits}`),
           flagged: report.flaggedOnly.map((f) => f.name),
           skippedNoNotes: report.skippedNoNotes,
-          debug: (report as any).debug,
           errors: report.errors,
         });
       },

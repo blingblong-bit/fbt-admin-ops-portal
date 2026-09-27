@@ -56,6 +56,7 @@ export async function runPackageAutofill(
       c.status !== "archived" &&
       (!(c.package_name ?? "").trim() || (c.package_name ?? "").trim().toLowerCase() === "custom package"),
   );
+  (report as any).debug = { fetched: clients?.length, eligible: eligible.length };
   if (eligible.length === 0) return report;
 
   // Staff-dismissed clients ("No package needed") are excluded; latest of

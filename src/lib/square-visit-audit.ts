@@ -217,9 +217,23 @@ export function isSupersededCancellation(seq: SequenceEntry[], e: SequenceEntry)
   return opensPackage && !!next && next.note!.n === 1;
 }
 
+/**
+ * A cancelled booking whose number was later reused (the next numbered booking
+ * in the same package has the same or a lower number) was renumbered and
+ * rebooked, e.g. cancelled 3/8 → cancelled 4/8 → cancelled 3/8 → 4/8.
+ */
+export function isReplacedCancellation(seq: SequenceEntry[], e: SequenceEntry): boolean {
+  if (!e.cancelled || !e.note || e.note.n === e.note.total) return false;
+  const i = seq.indexOf(e);
+  const next = seq
+    .slice(i + 1)
+    .find((x) => x.note && x.note.total === e.note!.total && !isSupersededCancellation(seq, x));
+  return !!next && next.note!.n <= e.note.n;
+}
+
 /** Returns issues found in the recent Square sequence (last 6 past noted visits + all future). */
 export function detectNoteIssues(seq: SequenceEntry[]): NoteIssue[] {
-  const superseded = (e: SequenceEntry) => isSupersededCancellation(seq, e);
+  const superseded = (e: SequenceEntry) => isSupersededCancellation(seq, e) || isReplacedCancellation(seq, e);
   const notedIdx = seq.map((e, i) => (e.note && !superseded(e) ? i : -1)).filter((i) => i >= 0);
   if (notedIdx.length < 2) return []; // no/isolated notes → Hub fallback, no flag
   const pastNoted = notedIdx.filter((i) => seq[i].past);

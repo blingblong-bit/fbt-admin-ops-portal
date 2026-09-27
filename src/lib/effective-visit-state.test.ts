@@ -231,9 +231,9 @@ describe("packageAutofillFromBookings", () => {
     });
   });
 
-  it("single isolated note → null (never guessed)", async () => {
+  it("single mid-package note → filled with estimated start", async () => {
     const { packageAutofillFromBookings } = await import("./effective-visit-state");
-    expect(packageAutofillFromBookings([b("1", "2026-09-16", "3 of 8")], now)).toBeNull();
+    expect(packageAutofillFromBookings([b("1", "2026-09-16", "3 of 8")], now)).toMatchObject({ visitsUsed: 3, totalVisits: 8, startEstimated: true });
   });
 
   it("contradictory same-day notes → null", async () => {

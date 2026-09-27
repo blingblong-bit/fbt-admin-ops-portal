@@ -44,7 +44,7 @@ export async function runPackageAutofill(
 
   const { data: clients, error } = await supabase
     .from("clients")
-    .select("id, first_name, last_name, square_customer_id, payment_model, status, deleted_at, package_total_visits, package_name")
+    .select("id, first_name, last_name, square_customer_id, payment_model, status, deleted_at, package_total_visits, package_name, package_price")
     .is("deleted_at", null)
     .not("square_customer_id", "is", null)
     .or("package_total_visits.is.null,package_total_visits.eq.0");
@@ -90,6 +90,7 @@ export async function runPackageAutofill(
       continue;
     }
 
+    const priceNeeded = !(Number(c.package_price ?? 0) > 0);
     const { error: upErr } = await supabase
       .from("clients")
       .update({
@@ -97,7 +98,8 @@ export async function runPackageAutofill(
         package_total_visits: fill.totalVisits,
         visits_used: fill.visitsUsed,
         package_start_date: fill.startDate,
-        needs_review: true,
+        needs_review: priceNeeded || fill.startEstimated,
+        ...(c.status === "assessment" ? { status: "active" } : {}),
       })
       .eq("id", c.id)
       // Guard against racing a staff edit that already set a package.
@@ -110,14 +112,16 @@ export async function runPackageAutofill(
     await supabase.from("client_activities").insert({
       client_id: c.id,
       activity_type: AUTOFILL_ACTIVITY,
-      description: `Package auto-created from Square visit notes: "${fill.packageName}" starting ${fill.startDate} (${fill.visitsUsed}/${fill.totalVisits} used). Price still needed.`,
+      description: `Package auto-created from Square visit notes: "${fill.packageName}" starting ${fill.startDate}${fill.startEstimated ? " (start date estimated)" : ""} (${fill.visitsUsed}/${fill.totalVisits} used).${priceNeeded ? " Price still needed." : ""}`,
       metadata: {
         source: "square_notes",
         package_name: fill.packageName,
         package_total_visits: fill.totalVisits,
         visits_used: fill.visitsUsed,
         package_start_date: fill.startDate,
-        price_needed: true,
+        start_estimated: fill.startEstimated,
+        price_needed: priceNeeded,
+        previous_status: c.status,
       },
     });
 

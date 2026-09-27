@@ -303,3 +303,17 @@ export function currentPackageAlreadyCovers(
 ): boolean {
   return !!packageStartYmd && Number(hubVisitsUsed ?? 0) === 0 && packageStartYmd >= firstUncoveredYmd;
 }
+
+/**
+ * Start a prepared package on this check-in? The date must have been reached,
+ * and when Square numbers the appointment it must be 1/N. No readable Square
+ * note falls back to the date rule.
+ */
+export function shouldActivatePreparedPackage(
+  visitYmd: string,
+  preparedStartYmd: string,
+  squareNote: { n: number; total: number } | null,
+): boolean {
+  if (visitYmd < preparedStartYmd) return false;
+  return !squareNote || squareNote.n === 1;
+}

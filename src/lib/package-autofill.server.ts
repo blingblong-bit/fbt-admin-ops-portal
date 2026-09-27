@@ -42,31 +42,51 @@ export async function runPackageAutofill(
 ): Promise<AutofillReport> {
   const report: AutofillReport = { ok: true, filled: [], flaggedOnly: [], skippedNoNotes: 0, errors: [] };
 
-  const { data: clients, error } = await supabase
-    .from("clients")
-    .select("id, first_name, last_name, square_customer_id, payment_model, status, deleted_at, package_total_visits, package_name, package_price")
-    .is("deleted_at", null)
-    .not("square_customer_id", "is", null)
-    .or("package_total_visits.is.null,package_total_visits.eq.0");
-  if (error) return { ...report, ok: false, error: error.message };
+  // Page through results: the API caps each response at 1000 rows, and
+  // archived clients alone can exceed that.
+  type Row = {
+    id: string; first_name: string; last_name: string; square_customer_id: string | null;
+    payment_model: string; status: string; deleted_at: string | null;
+    package_total_visits: number; package_name: string | null; package_price: number;
+  };
+  const clients: Row[] = [];
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await supabase
+      .from("clients")
+      .select("id, first_name, last_name, square_customer_id, payment_model, status, deleted_at, package_total_visits, package_name, package_price")
+      .is("deleted_at", null)
+      .not("square_customer_id", "is", null)
+      .neq("status", "archived")
+      .neq("payment_model", "pay_per_visit")
+      .or("package_total_visits.is.null,package_total_visits.eq.0")
+      .order("id")
+      .range(from, from + 999);
+    if (error) return { ...report, ok: false, error: error.message };
+    clients.push(...((data ?? []) as Row[]));
+    if (!data || data.length < 1000) break;
+  }
 
-  const eligible = (clients ?? []).filter(
+  const eligible = clients.filter(
     (c) =>
       c.payment_model !== "pay_per_visit" &&
       c.status !== "archived" &&
-      !(c.package_name ?? "").trim(),
+      (!(c.package_name ?? "").trim() || (c.package_name ?? "").trim().toLowerCase() === "custom package"),
   );
   if (eligible.length === 0) return report;
 
   // Staff-dismissed clients ("No package needed") are excluded; latest of
   // dismissed/redo wins.
-  const { data: acts } = await supabase
-    .from("client_activities")
-    .select("client_id, activity_type, created_at")
-    .in("activity_type", [DISMISS_ACTIVITY, UNDISMISS_ACTIVITY])
-    .order("created_at", { ascending: true });
   const latest = new Map<string, string>();
-  for (const a of acts ?? []) latest.set(a.client_id as string, a.activity_type as string);
+  for (let from = 0; ; from += 1000) {
+    const { data: acts } = await supabase
+      .from("client_activities")
+      .select("client_id, activity_type, created_at")
+      .in("activity_type", [DISMISS_ACTIVITY, UNDISMISS_ACTIVITY])
+      .order("created_at", { ascending: true })
+      .range(from, from + 999);
+    for (const a of acts ?? []) latest.set(a.client_id as string, a.activity_type as string);
+    if (!acts || acts.length < 1000) break;
+  }
   const dismissed = new Set<string>();
   for (const [id, type] of latest) if (type === DISMISS_ACTIVITY) dismissed.add(id);
 
@@ -94,7 +114,7 @@ export async function runPackageAutofill(
     const { error: upErr } = await supabase
       .from("clients")
       .update({
-        package_name: fill.packageName,
+        package_name: (c.package_name ?? "").trim() || fill.packageName,
         package_total_visits: fill.totalVisits,
         visits_used: fill.visitsUsed,
         package_start_date: fill.startDate,

@@ -231,9 +231,9 @@ describe("packageAutofillFromBookings", () => {
     });
   });
 
-  it("single isolated note → null (never guessed)", async () => {
+  it("single mid-package note → filled with estimated start", async () => {
     const { packageAutofillFromBookings } = await import("./effective-visit-state");
-    expect(packageAutofillFromBookings([b("1", "2026-09-16", "3 of 8")], now)).toBeNull();
+    expect(packageAutofillFromBookings([b("1", "2026-09-16", "3 of 8")], now)).toMatchObject({ visitsUsed: 3, totalVisits: 8, startEstimated: true });
   });
 
   it("contradictory same-day notes → null", async () => {
@@ -276,5 +276,19 @@ describe("packageAutofillFromBookings mid-package", () => {
     const b = [["a","2026-09-20T15:00:00Z","5 of 8"],["b","2026-09-24T15:00:00Z","6 of 12"]]
       .map(([id, start_at, seller_note]) => ({ id, start_at, seller_note, status: "ACCEPTED" }));
     expect(__paf(b, "2026-09-27T16:00:00Z")).toBeNull();
+  });
+});
+
+describe("packageAutofillFromBookings lone notes + recency", () => {
+  const mk = (rows: string[][]) => rows.map(([id, start_at, seller_note, status]) => ({ id, start_at, seller_note, status: status ?? "ACCEPTED" }));
+  const now = "2026-09-27T16:00:00Z";
+  it("single past 1/8 → 1 used", () => {
+    expect(__paf(mk([["a", "2026-09-08T15:00:00Z", "1 of 8"]]), now)).toMatchObject({ totalVisits: 8, visitsUsed: 1, startDate: "2026-09-08", startEstimated: false });
+  });
+  it("single future 1/8 → 0 used", () => {
+    expect(__paf(mk([["a", "2026-10-01T15:00:00Z", "1 of 8"]]), now)).toMatchObject({ totalVisits: 8, visitsUsed: 0, startDate: "2026-10-01" });
+  });
+  it("stale sequence (>60 days) → null", () => {
+    expect(__paf(mk([["a", "2026-06-16T15:00:00Z", "1 of 3"], ["b", "2026-06-17T15:00:00Z", "2 of 3"], ["c", "2026-06-18T15:00:00Z", "3 of 3"]]), now)).toBeNull();
   });
 });

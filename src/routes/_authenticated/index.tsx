@@ -455,7 +455,8 @@ function Dashboard() {
   const queryClient = useQueryClient();
   const autofillRan = useRef(false);
   useEffect(() => {
-    if (!isStaff || autofillRan.current) return;
+    // Runs for every signed-in role (staff, admin, owner).
+    if (autofillRan.current) return;
     autofillRan.current = true;
     autofillPackagesFromSquare()
       .then((r) => {

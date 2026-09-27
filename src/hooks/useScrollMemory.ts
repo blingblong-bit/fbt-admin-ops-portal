@@ -1,52 +1,73 @@
 import { useEffect } from "react";
-import { useLocation } from "@tanstack/react-router";
+import { useLocation, useRouter } from "@tanstack/react-router";
 
-// Remembers the scroll position of every screen and restores it when you come
-// back. Lists load asynchronously, so restoring keeps retrying until the page
-// is tall enough (up to ~4s) or the user scrolls themselves.
+// Remembers each screen's scroll position and restores it on return (Back).
+// The position is captured the moment you navigate away, then saving is frozen
+// so the briefly-empty page during the transition can't overwrite it with 0.
+// Restoring waits for async lists to render (up to ~6s) and only gives up if
+// the user actually scrolls (wheel / finger drag), not on a simple tap.
 export function useScrollMemory() {
   const location = useLocation();
+  const router = useRouter();
   const key = `scroll:${location.pathname}${location.searchStr ?? ""}`;
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const saved = Number(window.sessionStorage.getItem(key) ?? "");
+    let frozen = false;
     let cancelled = false;
     let timer: number | undefined;
-    const stop = () => {
+
+    const save = () => {
+      if (!frozen) window.sessionStorage.setItem(key, String(Math.round(window.scrollY)));
+    };
+    const cancelRestore = () => {
+      if (!cancelled && timer) frozen = false; // user took over mid-restore
       cancelled = true;
       if (timer) window.clearTimeout(timer);
     };
+
+    const saved = Number(window.sessionStorage.getItem(key) ?? "");
     if (saved > 0) {
+      // Don't let our own restore attempts save intermediate positions.
+      frozen = true;
       const started = Date.now();
       const tryRestore = () => {
-        if (cancelled) return;
-        const max = document.documentElement.scrollHeight - window.innerHeight;
-        if (max >= saved - 5) {
-          window.scrollTo(0, saved);
+        if (cancelled) {
+          frozen = false;
           return;
         }
-        if (Date.now() - started > 4000) {
-          window.scrollTo(0, Math.max(0, max));
+        const max = document.documentElement.scrollHeight - window.innerHeight;
+        if (max >= saved - 5 || Date.now() - started > 6000) {
+          window.scrollTo(0, Math.min(saved, Math.max(0, max)));
+          frozen = false;
           return;
         }
         timer = window.setTimeout(tryRestore, 100);
       };
       tryRestore();
-      window.addEventListener("wheel", stop, { once: true, passive: true });
-      window.addEventListener("touchstart", stop, { once: true, passive: true });
     } else {
       window.scrollTo(0, 0);
     }
-    const onScroll = () => {
-      window.sessionStorage.setItem(key, String(Math.round(window.scrollY)));
-    };
-    window.addEventListener("scroll", onScroll, { passive: true });
+
+    const unsub = router.subscribe("onBeforeNavigate", () => {
+      cancelRestore();
+      frozen = false;
+      save();
+      frozen = true;
+    });
+
+    window.addEventListener("scroll", save, { passive: true });
+    window.addEventListener("wheel", cancelRestore, { passive: true });
+    window.addEventListener("touchmove", cancelRestore, { passive: true });
     return () => {
-      stop();
-      window.removeEventListener("scroll", onScroll);
-      window.removeEventListener("wheel", stop);
-      window.removeEventListener("touchstart", stop);
+      // Capture on unmount too (e.g. phone back button), unless already frozen.
+      cancelRestore();
+      save();
+      frozen = true;
+      unsub();
+      window.removeEventListener("scroll", save);
+      window.removeEventListener("wheel", cancelRestore);
+      window.removeEventListener("touchmove", cancelRestore);
     };
-  }, [key]);
+  }, [key, router]);
 }

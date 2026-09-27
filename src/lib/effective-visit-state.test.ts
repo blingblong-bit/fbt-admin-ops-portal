@@ -122,3 +122,28 @@ describe("downstream uses effective state", () => {
     expect(f.firstUncoveredIndex).toBe(0);
   });
 });
+
+describe("rebooked cancellations", () => {
+  const n = "2026-09-27T02:50:00Z";
+  it("Jenny English pattern: cancelled 7/8 rebooked later → 6/8, 9/30 covered", () => {
+    const s = resolveEffectiveVisitState(hub(6), [
+      b("1", "2026-09-14", "5 of 8"),
+      b("2", "2026-09-16", "6 of 8"),
+      b("3", "2026-09-21", "7 of 8", "CANCELLED_BY_SELLER"),
+      b("4", "2026-09-23", "7 of 8", "CANCELLED_BY_SELLER"),
+      b("5", "2026-09-28", "7 of 8"),
+      b("6", "2026-09-30", "8 of 8"),
+    ], n);
+    expect(s.visitsUsed).toBe(6);
+    const f = forecastRenewal({ upcomingStarts: ["2026-09-28T15:00:00Z", "2026-09-30T15:00:00Z"], visitsUsed: 6, totalVisits: 8, nextPackageStart: s.nextPackageStart });
+    expect(f.needsRenewal).toBe(false);
+  });
+  it("late cancel not rebooked still counts", () => {
+    const s = resolveEffectiveVisitState(hub(6), [
+      b("1", "2026-09-16", "6 of 8"),
+      b("2", "2026-09-21", "7 of 8", "CANCELLED_BY_CUSTOMER"),
+      b("3", "2026-09-28", "8 of 8"),
+    ], n);
+    expect(s.visitsUsed).toBe(7);
+  });
+});

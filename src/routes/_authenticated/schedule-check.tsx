@@ -24,7 +24,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { formatCurrency, formatDate, formatDateTimeLocal, needsPackageReview } from "@/lib/clients";
+import { formatCurrency, formatDate, formatDateTimeLocal, needsPackageReview, packagePriceNeeded } from "@/lib/clients";
 import { useRole } from "@/hooks/useRole";
 import { RenewalFlagBadge, useRenewalFlaggedClientIds } from "@/components/RenewalFlagBadge";
 import { PackageReviewBadge, usePackageReviewDismissedIds } from "@/components/PackageReviewBadge";
@@ -1670,7 +1670,7 @@ function AppointmentsCard({
                         <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px] font-medium">
                           {renewalFlags?.has(a.client.id) && <RenewalFlagBadge />}
                           {needsPackageReview(a.client, packageReviewDismissed, a.client.id) && (
-                            <PackageReviewBadge />
+                            <PackageReviewBadge priceNeeded={packagePriceNeeded(a.client)} />
                           )}
 
                           <span className="rounded-full bg-slate-100 px-2 py-0.5 text-slate-700">

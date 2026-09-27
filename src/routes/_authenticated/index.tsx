@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -61,6 +61,7 @@ import {
 import { getDuesTextsBoard } from "@/lib/dues-messaging.functions";
 import { getVisitNoteReview } from "@/lib/visit-note-review.functions";
 import { getVisitAutomationReview } from "@/lib/visit-automation-review.functions";
+import { autofillPackagesFromSquare } from "@/lib/package-autofill.functions";
 import type { ScheduleStatus } from "@/components/SmartClientCard";
 import { useRole } from "@/hooks/useRole";
 import { visibleTileMoney } from "@/lib/dashboard-tile-visibility";
@@ -447,6 +448,24 @@ function Dashboard() {
   };
 
   const dismissedIds = usePackageReviewDismissedIds().data ?? null;
+
+  // Auto-create package shells from Square visit notes for clients with no
+  // package info (price left blank, flagged for review). Runs once per
+  // dashboard visit for staff; idempotent on the server.
+  const queryClient = useQueryClient();
+  const autofillRan = useRef(false);
+  useEffect(() => {
+    if (!isStaff || autofillRan.current) return;
+    autofillRan.current = true;
+    autofillPackagesFromSquare()
+      .then((r) => {
+        if (r?.ok && (r.filled?.length ?? 0) > 0) {
+          queryClient.invalidateQueries({ queryKey: ["clients"] });
+          queryClient.invalidateQueries({ queryKey: ["package_review_dismissals"] });
+        }
+      })
+      .catch(() => {});
+  }, [isStaff, queryClient]);
 
 
 

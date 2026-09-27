@@ -317,3 +317,56 @@ export function shouldActivatePreparedPackage(
   if (visitYmd < preparedStartYmd) return false;
   return !squareNote || squareNote.n === 1;
 }
+
+export type PackageAutofill = {
+  totalVisits: number;
+  visitsUsed: number;
+  startDate: string; // YYYY-MM-DD of the package opener (1/N)
+  packageName: string;
+};
+
+/**
+ * Derive package details for a client whose Hub record has NO package info,
+ * from their Square booking notes alone. Returns null unless Square shows a
+ * coherent, review-clean numbered sequence — isolated or contradictory notes
+ * are never guessed into a package.
+ *
+ * Used to auto-create the package shell (visits + start date); the price is
+ * always left for staff to fill in.
+ */
+export function packageAutofillFromBookings(
+  bookings: ReviewBooking[],
+  nowIso: string,
+): PackageAutofill | null {
+  const state = resolveEffectiveVisitState({ visits_used: null, package_total_visits: 0 }, bookings, nowIso);
+  if (state.source !== "square" || !state.automationUsable || state.totalVisits <= 0) return null;
+
+  const seq = buildSequence(bookings, nowIso);
+  const noted = seq.filter((e) => e.note !== null && !isSupersededCancellation(seq, e));
+  if (noted.length === 0) return null;
+
+  const pastNoted = noted.filter((e) => e.past);
+  const futureNoted = noted.filter((e) => !e.past);
+
+  let startEntry: SequenceEntry | undefined;
+  if (pastNoted.length > 0) {
+    // Most recent package opener (1/N) at or before the latest past visit.
+    for (let i = pastNoted.length - 1; i >= 0; i--) {
+      if (pastNoted[i].note!.n === 1) { startEntry = pastNoted[i]; break; }
+    }
+    // No opener found (history starts mid-package): anchor on the earliest
+    // known visit rather than guessing an earlier date.
+    if (!startEntry) startEntry = pastNoted[0];
+  } else {
+    // Package hasn't started yet: use the upcoming 1/N.
+    startEntry = futureNoted.find((e) => e.note!.n === 1) ?? futureNoted[0];
+  }
+  if (!startEntry) return null;
+
+  return {
+    totalVisits: state.totalVisits,
+    visitsUsed: state.visitsUsed,
+    startDate: startEntry.date.slice(0, 10),
+    packageName: `${state.totalVisits}-Visit Package`,
+  };
+}

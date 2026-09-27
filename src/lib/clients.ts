@@ -78,14 +78,34 @@ export function isPayPerVisit(c: Partial<Pick<Client, "payment_model">>): boolea
 }
 
 /**
+ * True when a package exists but has no price — e.g. auto-created from Square
+ * visit notes. Staff must set the price before the client leaves review.
+ */
+export function packagePriceNeeded(
+  c: Pick<Client, "package_total_visits"> & {
+    package_price?: number | null;
+    status?: string | null;
+    deleted_at?: string | null;
+    payment_model?: string | null;
+  },
+): boolean {
+  if (c.deleted_at) return false;
+  if (c.status === "archived") return false;
+  if (c.payment_model === "pay_per_visit") return false;
+  return (c.package_total_visits ?? 0) > 0 && Number(c.package_price ?? 0) <= 0;
+}
+
+/**
  * "First Visit — No Package Info, Needs Review": an active client whose first
- * visit was just an assessment, so no real package was ever set up.
+ * visit was just an assessment, so no real package was ever set up — or whose
+ * package was auto-created from Square notes and still has no price.
  * Excludes archived/deleted records, deliberate pay-per-visit clients, and
  * anyone staff has dismissed with "No package needed".
  */
 export function needsPackageReview(
   c: Pick<Client, "package_total_visits"> & {
     package_name?: string | null;
+    package_price?: number | null;
     status?: string | null;
     deleted_at?: string | null;
     payment_model?: string | null;
@@ -97,9 +117,9 @@ export function needsPackageReview(
   if (c.deleted_at) return false;
   if (c.status === "archived") return false;
   if (c.payment_model === "pay_per_visit") return false;
-  if ((c.package_total_visits ?? 0) > 0) return false;
-  if ((c.package_name ?? "").trim().length > 0) return false;
   if (clientId && dismissed?.has(clientId)) return false;
+  if ((c.package_total_visits ?? 0) > 0) return packagePriceNeeded(c);
+  if ((c.package_name ?? "").trim().length > 0) return false;
   return true;
 }
 

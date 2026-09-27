@@ -7,7 +7,7 @@ Hub holds on to Square appointment data in three layers, so a fix made in Square
 - Square itself can take a short while after an edit before its search shows the new note.
 
 ## Steps
-1. Read-only check of Bret Smith and Bob Hayes: pull their current Square appointments and run them through the same review logic. This tells us whether Square now looks clean (Hub problem) or still shows the old note/numbering (Square not saved or not yet updated).
+1. Bret Smith dropped off after a while, which fits the delay described above. Bob Hayes has not dropped off. Do a read-only check of Bob's current Square appointments and run them through the same review logic. This shows whether Square still has a numbering problem (for example a note on a cancelled appointment, a missing number, or a note in the wrong field) or whether Square is clean and Hub is wrong. Report the exact appointment and note behind his flag.
 2. If Square is clean but Hub isn't:
    - Refresh buttons ask the server for a fresh Square read (skip the 60-second shared copy).
    - Shorten page hold times for Square-based screens to 1 minute and re-read when you come back to the app/tab.

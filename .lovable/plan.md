@@ -23,3 +23,4 @@ Texting stays OFF and nothing gets published.
 ## Technical details
 - For Abby and Kristin, clear `pending_renewal_*` and set `pending_renewal_paid` to 0 (it's already 0). Delete their `ready_not_sent` `renewal_due` dues_messages. Log a `pre_renewal_cancelled` activity with the reason "duplicate of current package". This is a data update, done once.
 - Add the guard in the pre-renew server action and the renewal forecast (`schedule.functions.ts`): skip when `package_start_date >= uncoveredStart` and `visits_used` (effective) is 0. Add tests.
+- Keri: set `package_name='4 Sessions'`, `package_total_visits=4`, `package_price=200`, `amount_paid=200`, `package_start_date=2026-09-14`, `visits_used=4`. Set `pending_renewal_price=200` and `pending_renewal_total_visits=4`. Update her `ready_not_sent` renewal draft to $200, or delete it and regenerate. Log an `edit` activity.

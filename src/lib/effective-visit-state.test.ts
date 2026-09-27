@@ -212,7 +212,7 @@ describe("packageAutofillFromBookings", () => {
       totalVisits: 8,
       visitsUsed: 3,
       startDate: "2026-09-02",
-      packageName: "8-Visit Package",
+      packageName: "8-Visit Package", startEstimated: false,
     });
   });
 
@@ -226,7 +226,7 @@ describe("packageAutofillFromBookings", () => {
       totalVisits: 8,
       visitsUsed: 0,
       startDate: "2026-09-28",
-      packageName: "8-Visit Package",
+      packageName: "8-Visit Package", startEstimated: false,
     });
   });
 
@@ -260,5 +260,20 @@ describe("packageAutofillFromBookings", () => {
   it("no numbered notes at all → null", async () => {
     const { packageAutofillFromBookings } = await import("./effective-visit-state");
     expect(packageAutofillFromBookings([b("1", "2026-09-16", ""), b("2", "2026-09-23", "assessment")], now)).toBeNull();
+  });
+});
+
+describe("packageAutofillFromBookings mid-package", () => {
+  it("5,6,7 of 8 with no opener → estimated start, 5 used", () => {
+    const b = [["a","2026-09-24T23:00:00Z","5 of 8"],["b","2026-09-29T20:45:00Z","6 of 8"],["c","2026-10-01T20:45:00Z","7 of 8"]]
+      .map(([id, start_at, seller_note]) => ({ id, start_at, seller_note, status: "ACCEPTED" }));
+    expect(packageAutofillFromBookings(b, "2026-09-27T16:00:00Z")).toEqual({
+      totalVisits: 8, visitsUsed: 5, startDate: "2026-09-24", packageName: "8-Visit Package", startEstimated: true,
+    });
+  });
+  it("mixed package sizes → null", () => {
+    const b = [["a","2026-09-20T15:00:00Z","5 of 8"],["b","2026-09-24T15:00:00Z","6 of 12"]]
+      .map(([id, start_at, seller_note]) => ({ id, start_at, seller_note, status: "ACCEPTED" }));
+    expect(packageAutofillFromBookings(b, "2026-09-27T16:00:00Z")).toBeNull();
   });
 });

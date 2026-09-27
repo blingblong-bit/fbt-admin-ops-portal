@@ -17,11 +17,24 @@ export type SquareBookingIndex = {
   error: string | null;
 };
 
-export async function loadSquareBookingIndex(
-  token: string,
-  pastDays = 180,
-  futureDays = 90,
-): Promise<SquareBookingIndex> {
+// Several tiles load this at once. Share one in-flight/recent load per window
+// so we don't fire dozens of parallel Square calls (which triggers 429s).
+const CACHE_MS = 60_000;
+const indexCache = new Map<string, { at: number; p: Promise<SquareBookingIndex> }>();
+
+export function loadSquareBookingIndex(token: string, pastDays = 180, futureDays = 90): Promise<SquareBookingIndex> {
+  const key = `${pastDays}:${futureDays}`;
+  const hit = indexCache.get(key);
+  if (hit && Date.now() - hit.at < CACHE_MS) return hit.p;
+  const p = loadIndexUncached(token, pastDays, futureDays).then((idx) => {
+    if (idx.error) indexCache.delete(key); // never cache failures
+    return idx;
+  });
+  indexCache.set(key, { at: Date.now(), p });
+  return p;
+}
+
+async function loadIndexUncached(token: string, pastDays: number, futureDays: number): Promise<SquareBookingIndex> {
   const nowMs = Date.now();
   const nowIso = new Date(nowMs).toISOString();
   const start = nowMs - pastDays * DAY;
@@ -30,7 +43,11 @@ export async function loadSquareBookingIndex(
   for (let s = start; s < end; s += 30 * DAY) {
     chunks.push([new Date(s).toISOString(), new Date(Math.min(s + 30 * DAY, end)).toISOString()]);
   }
-  const results = await Promise.all(chunks.map(([a, b]) => fetchSquareBookings(token, a, b)));
+  // Limited concurrency (3 at a time) keeps us under Square's burst limit.
+  const results: Awaited<ReturnType<typeof fetchSquareBookings>>[] = [];
+  for (let i = 0; i < chunks.length; i += 3) {
+    results.push(...(await Promise.all(chunks.slice(i, i + 3).map(([a, b]) => fetchSquareBookings(token, a, b)))));
+  }
   const failed = results.find((r) => r.error);
   const byCustomer = new Map<string, SquareBooking[]>();
   if (failed) return { nowIso, byCustomer, error: failed.error };

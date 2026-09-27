@@ -177,14 +177,24 @@ export async function fetchSquareBookings(
       url.searchParams.set("start_at_min", startIso);
       url.searchParams.set("start_at_max", endIso);
       if (cursor) url.searchParams.set("cursor", cursor);
-      const res = await fetch(url.toString(), {
-        headers: {
-          Authorization: `Bearer ${cleanToken}`,
-          "Square-Version": SQUARE_VERSION,
-          "Content-Type": "application/json",
-        },
-        signal: AbortSignal.timeout(5000),
-      });
+      let res: Response;
+      // Square rate-limits bursts (429). Back off and retry instead of failing
+      // the whole tile.
+      for (let attempt = 0; ; attempt++) {
+        res = await fetch(url.toString(), {
+          headers: {
+            Authorization: `Bearer ${cleanToken}`,
+            "Square-Version": SQUARE_VERSION,
+            "Content-Type": "application/json",
+          },
+          signal: AbortSignal.timeout(8000),
+        });
+        if (res.status !== 429 || attempt >= 4) break;
+        const ra = Number(res.headers.get("retry-after"));
+        const wait = ra > 0 ? Math.min(ra * 1000, 5000) : 500 * 2 ** attempt + Math.random() * 300;
+        await res.text().catch(() => "");
+        await new Promise((r) => setTimeout(r, wait));
+      }
       if (!res.ok) {
         const body = await res.text();
         let friendly = `Square ${res.status}: ${body.slice(0, 300)}`;

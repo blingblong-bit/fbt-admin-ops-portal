@@ -24,7 +24,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { formatCurrency, formatDate, formatDateTimeLocal, needsPackageReview } from "@/lib/clients";
+import { formatCurrency, formatDate, formatDateTimeLocal, needsPackageReview, packagePriceNeeded } from "@/lib/clients";
 import { useRole } from "@/hooks/useRole";
 import { RenewalFlagBadge, useRenewalFlaggedClientIds } from "@/components/RenewalFlagBadge";
 import { PackageReviewBadge, usePackageReviewDismissedIds } from "@/components/PackageReviewBadge";

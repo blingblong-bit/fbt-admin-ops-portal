@@ -66,6 +66,7 @@ import {
   formatDate,
   fullName,
   needsPackageReview,
+  packagePriceNeeded,
 
   progress,
   visitsRemaining,

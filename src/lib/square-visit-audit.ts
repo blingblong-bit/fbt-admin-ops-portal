@@ -210,7 +210,11 @@ export function isSupersededCancellation(seq: SequenceEntry[], e: SequenceEntry)
   const i = seq.indexOf(e);
   const prev = [...seq.slice(0, i)].reverse().find((x) => x.note && !x.cancelled);
   const next = seq.slice(i + 1).find((x) => x.note && !x.cancelled);
-  return (!!prev && key(prev) === key(e)) || (!!next && key(next) === key(e));
+  if ((!!prev && key(prev) === key(e)) || (!!next && key(next) === key(e))) return true;
+  // A cancelled package opener (1/N, or any number right after a finished N/N)
+  // rebooked as a live 1/M — any size — was never used (e.g. cancelled 1/9 → 1/8).
+  const opensPackage = e.note.n === 1 || (!!prev && prev.note!.n === prev.note!.total);
+  return opensPackage && !!next && next.note!.n === 1;
 }
 
 /** Returns issues found in the recent Square sequence (last 6 past noted visits + all future). */

@@ -5,6 +5,7 @@
 import {
   buildSequence,
   detectNoteIssues,
+  isSupersededCancellation,
   type NoteIssue,
   type ReviewBooking,
   type SequenceEntry,
@@ -97,7 +98,9 @@ export function resolveEffectiveVisitState(
   const noted = seq.filter((e) => e.note);
   const past = seq.filter((e) => e.past);
   const future = seq.filter((e) => !e.past);
-  const pastNoted = past.filter((e) => e.note);
+  // A cancelled number that was rebooked on a live appointment was never used,
+  // so it can't set the current position (e.g. cancelled 7/8 → rebooked 7/8).
+  const pastNoted = past.filter((e) => e.note && !isSupersededCancellation(seq, e));
   const hubUsed = client.visits_used ?? null;
   const hubTotal = Number(client.package_total_visits ?? 0);
 

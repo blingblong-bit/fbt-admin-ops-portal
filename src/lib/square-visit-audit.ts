@@ -198,20 +198,24 @@ export function statusLabel(status: string | null | undefined): string | null {
 
 const fmt = (n: ParsedNote) => `${n.n}/${n.total}`;
 
+/**
+ * A cancelled booking whose number was rebooked on a live appointment is
+ * superseded (e.g. 7/8 cancelled → 7/8 rebooked). Only the neighbouring live
+ * numbered appointments count, so a cancelled 7/8 isn't hidden by a live 7/8
+ * from an earlier package.
+ */
+export function isSupersededCancellation(seq: SequenceEntry[], e: SequenceEntry): boolean {
+  if (!e.cancelled || !e.note) return false;
+  const key = (x: SequenceEntry) => `${x.note!.n}/${x.note!.total}`;
+  const i = seq.indexOf(e);
+  const prev = [...seq.slice(0, i)].reverse().find((x) => x.note && !x.cancelled);
+  const next = seq.slice(i + 1).find((x) => x.note && !x.cancelled);
+  return (!!prev && key(prev) === key(e)) || (!!next && key(next) === key(e));
+}
+
 /** Returns issues found in the recent Square sequence (last 6 past noted visits + all future). */
 export function detectNoteIssues(seq: SequenceEntry[]): NoteIssue[] {
-  // A cancelled booking whose number was rebooked on a live appointment is
-  // superseded (e.g. 7/8 cancelled → 7/8 rebooked): not a numbering problem.
-  // Only the neighbouring live numbered appointments count, so a cancelled
-  // 7/8 isn't hidden by a live 7/8 from an earlier package.
-  const key = (e: SequenceEntry) => `${e.note!.n}/${e.note!.total}`;
-  const superseded = (e: SequenceEntry) => {
-    if (!e.cancelled || !e.note) return false;
-    const i = seq.indexOf(e);
-    const prev = [...seq.slice(0, i)].reverse().find((x) => x.note && !x.cancelled);
-    const next = seq.slice(i + 1).find((x) => x.note && !x.cancelled);
-    return (!!prev && key(prev) === key(e)) || (!!next && key(next) === key(e));
-  };
+  const superseded = (e: SequenceEntry) => isSupersededCancellation(seq, e);
   const notedIdx = seq.map((e, i) => (e.note && !superseded(e) ? i : -1)).filter((i) => i >= 0);
   if (notedIdx.length < 2) return []; // no/isolated notes → Hub fallback, no flag
   const pastNoted = notedIdx.filter((i) => seq[i].past);

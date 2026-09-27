@@ -21,6 +21,7 @@ export function useScrollMemory() {
       if (!frozen) window.sessionStorage.setItem(key, String(Math.round(window.scrollY)));
     };
     const cancelRestore = () => {
+      if (!cancelled && timer) frozen = false; // user took over mid-restore
       cancelled = true;
       if (timer) window.clearTimeout(timer);
     };
@@ -49,10 +50,10 @@ export function useScrollMemory() {
     }
 
     const unsub = router.subscribe("onBeforeNavigate", () => {
+      cancelRestore();
       frozen = false;
       save();
       frozen = true;
-      cancelRestore();
     });
 
     window.addEventListener("scroll", save, { passive: true });
@@ -60,9 +61,9 @@ export function useScrollMemory() {
     window.addEventListener("touchmove", cancelRestore, { passive: true });
     return () => {
       // Capture on unmount too (e.g. phone back button), unless already frozen.
+      cancelRestore();
       save();
       frozen = true;
-      cancelRestore();
       unsub();
       window.removeEventListener("scroll", save);
       window.removeEventListener("wheel", cancelRestore);

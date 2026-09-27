@@ -184,3 +184,17 @@ describe("currentPackageAlreadyCovers", () => {
     expect(currentPackageAlreadyCovers(null, 0, "2026-09-30")).toBe(false);
   });
 });
+
+import { shouldActivatePreparedPackage as act } from "./effective-visit-state";
+describe("shouldActivatePreparedPackage", () => {
+  it("Angela Bell: 8/8 on the prepared date does not start the new package", () => {
+    expect(act("2026-09-16", "2026-09-16", { n: 8, total: 8 })).toBe(false);
+  });
+  it("1/8 on/after the date starts it", () => {
+    expect(act("2026-09-30", "2026-09-16", { n: 1, total: 8 })).toBe(true);
+  });
+  it("no Square note falls back to the date", () => {
+    expect(act("2026-09-16", "2026-09-16", null)).toBe(true);
+    expect(act("2026-09-15", "2026-09-16", null)).toBe(false);
+  });
+});

@@ -143,6 +143,25 @@ function ymdLocalToInstant(s: string): Date {
 // Weekday (0=Sun..6=Sat) for a calendar date string. Purely calendar math —
 // no timezone needed since the date is already specified in local terms.
 import { addDaysYmd, workWeekStartFromYmd } from "@/lib/work-week";
+import { parseVisitNote } from "@/lib/square-visit-audit";
+import { shouldActivatePreparedPackage } from "@/lib/effective-visit-state";
+
+/** Server-only: the visit number Square shows on one booking, or null if unreadable. */
+async function squareNoteForBooking(bookingId: string): Promise<{ n: number; total: number } | null> {
+  const token = process.env.SQUARE_PRODUCTION_ACCESS_TOKEN;
+  if (!token) return null;
+  try {
+    const r = await fetch(`https://connect.squareup.com/v2/bookings/${encodeURIComponent(bookingId)}`, {
+      headers: { Authorization: `Bearer ${token}`, "Square-Version": "2024-10-17" },
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!r.ok) return null;
+    const j = (await r.json()) as { booking?: { seller_note?: string; customer_note?: string } };
+    return parseVisitNote(j.booking?.seller_note) ?? parseVisitNote(j.booking?.customer_note);
+  } catch {
+    return null;
+  }
+}
 export { addDaysYmd, workWeekStartFromYmd };
 const WORK_WEEK_DAYS = 4; // Mon + 4 = Fri
 
@@ -713,7 +732,13 @@ export const completeVisitForClient = createServerFn({ method: "POST" })
       const visitYmd = ymdInTz(
         data.appointmentStartAt ? new Date(data.appointmentStartAt) : new Date(),
       );
-      if (visitYmd >= c.pending_renewal_start_date) {
+      // Square decides: if this appointment is numbered in Square, only a 1/N
+      // starts the new package (e.g. a late 8/8 still belongs to the old one).
+      let squareNote: { n: number; total: number } | null = null;
+      if (visitYmd >= c.pending_renewal_start_date && data.bookingId) {
+        squareNote = await squareNoteForBooking(data.bookingId);
+      }
+      if (shouldActivatePreparedPackage(visitYmd, c.pending_renewal_start_date, squareNote)) {
         const newTotal = Number(c.pending_renewal_total_visits ?? c.package_total_visits ?? 0);
         const newPrice = Number(c.pending_renewal_price ?? c.package_price ?? 0);
         const newName = c.pending_renewal_package_name ?? c.package_name ?? null;

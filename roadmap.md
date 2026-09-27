@@ -38,3 +38,8 @@
 - [x] Acceptance rerun after prepaid + check-in changes
 - [ ] Turn on RENEWAL_AUTO_TEXT_ENABLED — only after you review the report, post-publish
 - [ ] Publish — waiting on your go/no-go
+
+## Visit Note Review follow-ups
+- [x] Rebooked/renumbered cancellations no longer flag (Charles Parish)
+- [x] "This is correct" button (expires when Square bookings change) + Show confirmed / Undo
+- [x] Refresh reads Square fresh; review pages hold data 1 minute

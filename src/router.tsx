@@ -17,7 +17,8 @@ export const getRouter = () => {
   const router = createRouter({
     routeTree,
     context: { queryClient },
-    scrollRestoration: true,
+    // Scroll is remembered per screen by useScrollMemory (waits for lists to load).
+    scrollRestoration: false,
     defaultPreloadStaleTime: 0,
   });
 

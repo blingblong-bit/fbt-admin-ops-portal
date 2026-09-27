@@ -1,3 +1,4 @@
+import { usePersistentState } from "@/hooks/usePersistentState";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
@@ -67,7 +68,7 @@ function matchesStatusFilter(eff: LifecycleStatus, f: StatusFilter): boolean {
 function ClientsListPage() {
   const { isStaff } = useRole();
   const dismissedIds = usePackageReviewDismissedIds().data ?? null;
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = usePersistentState("clients:search", "");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("active_assessment");
   const fetchScheduledIds = useServerFn(getScheduledClientIds);
   const scheduledQuery = useQuery({

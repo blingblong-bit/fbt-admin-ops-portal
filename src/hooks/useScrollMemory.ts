@@ -35,6 +35,8 @@ export function useScrollMemory() {
       tryRestore();
       window.addEventListener("wheel", stop, { once: true, passive: true });
       window.addEventListener("touchstart", stop, { once: true, passive: true });
+    } else {
+      window.scrollTo(0, 0);
     }
     const onScroll = () => {
       window.sessionStorage.setItem(key, String(Math.round(window.scrollY)));

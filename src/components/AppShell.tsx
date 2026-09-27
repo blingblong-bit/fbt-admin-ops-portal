@@ -4,6 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Menu, X, ChevronDown } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useRole } from "@/hooks/useRole";
+import { useScrollMemory } from "@/hooks/useScrollMemory";
 import {
   Collapsible,
   CollapsibleTrigger,
@@ -39,6 +40,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [adminOpen, setAdminOpen] = useState(false);
 
   const { isAdmin } = useRole();
+  useScrollMemory();
   const primaryNav = primaryNavAll.filter((n) => isAdmin || !("adminOnly" in n && n.adminOnly));
 
   useEffect(() => {

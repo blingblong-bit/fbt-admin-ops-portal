@@ -15,14 +15,12 @@ On 9/23 their package was **renewed early**. The new package, with its future st
 ## Fix
 1. **Abby and Kristin:** cancel the duplicate prepared next package. Their current package stays as it is: $200 owed from 9/30 for Abby, $345 owed from 9/28 for Kristin. Remove the unsent renewal text draft that asked for the duplicate amount. Each change gets a note in the client's history.
 2. **Prevent it happening again:** don't allow preparing a next package (or show a Needs Renewal flag) when the current package starts on or after that same date and has no visits used yet. The current package already covers those appointments.
-3. **Keri Evans:** I need your answer below before I change anything.
-4. Re-run the check afterwards so the list is empty, except for Keri if she's still waiting on your answer.
+3. **Keri Evans (per your answer):** set her current package to the 4-visit, $200 package she's already paid, so she owes $0 now. Change her next package from 4 visits for $325 to **4 visits for $200**, still starting 9/28. Replace her unsent renewal text draft so it asks for $200. Her $200 payment stays exactly as recorded. The change gets a note in her history.
+4. Re-run the check afterwards. The list should be empty.
 
 Texting stays OFF and nothing gets published.
-
-## Question for you about Keri
-Was her 9/14 to 9/23 "4 of 4" package paid? Should her package starting 9/28 be 4 visits for $325? If you tell me what she actually bought and paid, I'll set her current and next packages to match.
 
 ## Technical details
 - For Abby and Kristin, clear `pending_renewal_*` and set `pending_renewal_paid` to 0 (it's already 0). Delete their `ready_not_sent` `renewal_due` dues_messages. Log a `pre_renewal_cancelled` activity with the reason "duplicate of current package". This is a data update, done once.
 - Add the guard in the pre-renew server action and the renewal forecast (`schedule.functions.ts`): skip when `package_start_date >= uncoveredStart` and `visits_used` (effective) is 0. Add tests.
+- Keri: set `package_name='4 Sessions'`, `package_total_visits=4`, `package_price=200`, `amount_paid=200`, `package_start_date=2026-09-14`, `visits_used=4`. Set `pending_renewal_price=200` and `pending_renewal_total_visits=4`. Update her `ready_not_sent` renewal draft to $200, or delete it and regenerate. Log an `edit` activity.

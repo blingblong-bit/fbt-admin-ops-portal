@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { usePersistentState } from "@/hooks/usePersistentState";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -472,14 +473,14 @@ function Dashboard() {
 
 
 
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = usePersistentState("dash:search", "");
   // Staff never see the payment-due (aggregate) list — default to "all" instead.
-  const [filter, setFilter] = useState<FilterKey>(isStaff ? "all" : "payment_due");
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("active_assessment");
+  const [filter, setFilter] = usePersistentState<FilterKey>("dash:filter", isStaff ? "all" : "payment_due");
+  const [statusFilter, setStatusFilter] = usePersistentState<StatusFilter>("dash:status", "active_assessment");
 
   // New-clients-per-month view state. Activated by the "New Clients" tile.
-  const [newClientsActive, setNewClientsActive] = useState(false);
-  const [newClientsMonth, setNewClientsMonth] = useState<string>(currentClinicMonth());
+  const [newClientsActive, setNewClientsActive] = usePersistentState("dash:newClients", false);
+  const [newClientsMonth, setNewClientsMonth] = usePersistentState<string>("dash:newClientsMonth", currentClinicMonth());
 
   // Role can resolve after first render; force off payment-due filters for staff.
   useEffect(() => {
@@ -1036,7 +1037,7 @@ function Dashboard() {
       );
     } catch { /* ignore */ }
   }, [hiddenTiles]);
-  const [showAllTiles, setShowAllTiles] = useState(false);
+  const [showAllTiles, setShowAllTiles] = usePersistentState("dash:showAll", false);
 
   const toggleTileHidden = (key: string) => {
     setHiddenTiles((prev) => {

@@ -345,7 +345,7 @@ function Dashboard() {
   const fetchScheduledIds = useServerFn(getScheduledClientIds);
   const scheduledQuery = useQuery({
     queryKey: ["scheduled-client-ids"],
-    queryFn: () => fetchScheduledIds({ data: { days: 30 } }),
+    queryFn: () => orThrow(fetchScheduledIds({ data: { days: 30 } })),
     staleTime: 60_000,
   });
   const scheduledSet = useMemo(
@@ -357,7 +357,7 @@ function Dashboard() {
   const fetchThisWeekIds = useServerFn(getThisWeekScheduledClientIds);
   const thisWeekQuery = useQuery({
     queryKey: ["scheduled-this-week-client-ids"],
-    queryFn: () => fetchThisWeekIds(),
+    queryFn: () => orThrow(fetchThisWeekIds()),
     staleTime: 60_000,
   });
   const thisWeekSet = useMemo(
@@ -369,7 +369,7 @@ function Dashboard() {
   const fetchNextWeekIds = useServerFn(getNextWeekScheduledClientIds);
   const nextWeekQuery = useQuery({
     queryKey: ["scheduled-next-week-client-ids"],
-    queryFn: () => fetchNextWeekIds(),
+    queryFn: () => orThrow(fetchNextWeekIds()),
     staleTime: 60_000,
   });
   const nextWeekSet = useMemo(
@@ -383,7 +383,7 @@ function Dashboard() {
   const fetchRenewalForecast = useServerFn(getRenewalForecast);
   const renewalQuery = useQuery({
     queryKey: ["renewal-forecast"],
-    queryFn: () => fetchRenewalForecast(),
+    queryFn: () => orThrow(fetchRenewalForecast()),
     staleTime: 60_000,
   });
   const renewalMap = useMemo(() => {
@@ -396,7 +396,7 @@ function Dashboard() {
   const fetchPriorScheduled = useServerFn(getPriorWeeksScheduledClientLastDates);
   const priorScheduledQuery = useQuery({
     queryKey: ["scheduled-prior-weeks-last-dates"],
-    queryFn: () => fetchPriorScheduled({ data: { weeks_back: 8 } }),
+    queryFn: () => orThrow(fetchPriorScheduled({ data: { weeks_back: 8 } })),
     staleTime: 60_000,
   });
   const priorScheduledMap = useMemo(() => {
@@ -728,7 +728,7 @@ function Dashboard() {
   const fetchNoteReview = useServerFn(getVisitNoteReview);
   const noteReviewQ = useQuery({
     queryKey: ["visit-note-review"],
-    queryFn: () => fetchNoteReview(),
+    queryFn: () => orThrow(fetchNoteReview()),
     enabled: !isStaff,
     staleTime: 10 * 60_000,
   });
@@ -743,7 +743,7 @@ function Dashboard() {
   const fetchAutomation = useServerFn(getVisitAutomationReview);
   const automationQ = useQuery({
     queryKey: ["visit-automation-review"],
-    queryFn: () => fetchAutomation(),
+    queryFn: () => orThrow(fetchAutomation()),
     enabled: !isStaff,
     staleTime: 10 * 60_000,
   });
@@ -1715,4 +1715,14 @@ function formatYmd(ymd: string): string {
     year: "numeric",
     timeZone: "UTC",
   }).format(new Date(Date.UTC(y, m - 1, d)));
+}
+
+// Server lookups report Square problems (e.g. rate limits) as `error` in the
+// result. Throw so React Query retries and keeps the last good numbers on the
+// tile instead of caching an empty result for minutes.
+async function orThrow<T>(p: Promise<T>): Promise<T> {
+  const r = await p;
+  const err = (r as { error?: string | null } | null)?.error;
+  if (err) throw new Error(err);
+  return r;
 }

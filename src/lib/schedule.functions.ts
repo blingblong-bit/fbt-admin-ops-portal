@@ -1737,7 +1737,7 @@ export const getRenewalForecast = createServerFn({ method: "GET" })
     const { loadSquareBookingIndex, effectiveStateFor, upcomingStarts } = await import(
       "@/lib/effective-visit-state.server"
     );
-    const { drivingCounts, forecastRenewal } = await import("@/lib/effective-visit-state");
+    const { drivingCounts, forecastRenewal, currentPackageAlreadyCovers } = await import("@/lib/effective-visit-state");
     const index = await loadSquareBookingIndex(token, 180, FORECAST_DAYS);
     if (index.error) return { ...empty, error: index.error };
     const byCustomer = new Map<string, string[]>();
@@ -1752,7 +1752,7 @@ export const getRenewalForecast = createServerFn({ method: "GET" })
       const { data, error: cErr } = await context.supabase
         .from("clients")
         .select(
-          "id, square_customer_id, visits_used, package_total_visits, package_price, next_package_price, status, pending_renewal_start_date, pending_renewal_price, pending_renewal_paid, pending_renewal_total_visits, pending_renewal_package_name",
+          "id, square_customer_id, visits_used, package_total_visits, package_price, package_start_date, next_package_price, status, pending_renewal_start_date, pending_renewal_price, pending_renewal_paid, pending_renewal_total_visits, pending_renewal_package_name",
         )
         .is("deleted_at", null)
         .neq("status", "archived")
@@ -1795,6 +1795,9 @@ export const getRenewalForecast = createServerFn({ method: "GET" })
       const ymds = starts.map((s) => ymdInTz(new Date(s)));
       const firstUncoveredYmd = ymdInTz(new Date(fc.firstUncoveredStart));
       const pendingStart = r.pending_renewal_start_date;
+      // Hub already renewed ahead of time (current package starts then, unused):
+      // no separate next package is due, unless one was explicitly prepared.
+      if (!pendingStart && currentPackageAlreadyCovers((r as { package_start_date?: string | null }).package_start_date, r.visits_used, firstUncoveredYmd)) continue;
       // Once staff pre-renews, the prepared start date drives the weekly
       // bucket (they may have adjusted it); otherwise use the forecast.
       const bucketStart = workWeekStartFromYmd(pendingStart ?? firstUncoveredYmd);
@@ -1950,10 +1953,19 @@ export const preRenewNextPackage = createServerFn({ method: "POST" })
   .handler(async ({ data, context }): Promise<{ ok: true }> => {
     const { data: existing, error: rErr } = await context.supabase
       .from("clients")
-      .select("package_name, pending_renewal_start_date")
+      .select("package_name, pending_renewal_start_date, package_start_date, visits_used")
       .eq("id", data.clientId)
       .single();
     if (rErr) throw rErr;
+    {
+      const { currentPackageAlreadyCovers } = await import("@/lib/effective-visit-state");
+      const ex = existing as { package_start_date: string | null; visits_used: number | null } | null;
+      if (currentPackageAlreadyCovers(ex?.package_start_date, ex?.visits_used, data.startYmd)) {
+        throw new Error(
+          `The current package already starts ${ex?.package_start_date} with no visits used, so it covers this date. No next package is needed.`,
+        );
+      }
+    }
     const wasPending = !!(existing as { pending_renewal_start_date: string | null } | null)
       ?.pending_renewal_start_date;
     const name =

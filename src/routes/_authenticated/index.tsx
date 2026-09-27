@@ -728,9 +728,9 @@ function Dashboard() {
   const fetchNoteReview = useServerFn(getVisitNoteReview);
   const noteReviewQ = useQuery({
     queryKey: ["visit-note-review"],
-    queryFn: () => orThrow(fetchNoteReview()),
+    queryFn: () => orThrow(fetchNoteReview({ data: {} })),
     enabled: !isStaff,
-    staleTime: 10 * 60_000,
+    staleTime: 60_000,
   });
   const nr = noteReviewQ.data;
   const noteReviewCount = nr?.cards.length ?? 0;
@@ -743,9 +743,9 @@ function Dashboard() {
   const fetchAutomation = useServerFn(getVisitAutomationReview);
   const automationQ = useQuery({
     queryKey: ["visit-automation-review"],
-    queryFn: () => orThrow(fetchAutomation()),
+    queryFn: () => orThrow(fetchAutomation({ data: {} })),
     enabled: !isStaff,
-    staleTime: 10 * 60_000,
+    staleTime: 60_000,
   });
   const au = automationQ.data;
   const automationCount = au?.cards.length ?? 0;

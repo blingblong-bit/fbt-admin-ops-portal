@@ -183,6 +183,14 @@ export const Route = createFileRoute("/api/public/visit-diff-sweep")({
         const applied: unknown[] = [];
         const applyErrors: unknown[] = [];
 
+        // Separate concern (approved behavior): auto-create package shells for
+        // clients with NO package info at all, from coherent Square notes.
+        // Price stays blank and the row is flagged for staff review. This never
+        // touches stored counts on clients that already have a package.
+        const { runPackageAutofill } = await import("@/lib/package-autofill.server");
+        const packageAutofill = await runPackageAutofill(supabaseAdmin, token)
+          .catch((e) => ({ ok: false, error: String(e) }));
+
         return new Response(
           JSON.stringify(
             {
@@ -194,6 +202,7 @@ export const Route = createFileRoute("/api/public/visit-diff-sweep")({
               no_booking: noBooking,
               disagreement_count: disagreements.length,
               disagreements,
+              package_autofill: packageAutofill,
               applied_count: applied.length,
               applied,
               apply_errors: applyErrors,

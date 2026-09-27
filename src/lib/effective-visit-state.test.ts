@@ -198,3 +198,67 @@ describe("shouldActivatePreparedPackage", () => {
     expect(act("2026-09-15", "2026-09-16", null)).toBe(false);
   });
 });
+
+describe("packageAutofillFromBookings", () => {
+  it("coherent sequence with a 1/8 opener → package shell with opener date", async () => {
+    const { packageAutofillFromBookings } = await import("./effective-visit-state");
+    const fill = packageAutofillFromBookings([
+      b("1", "2026-09-02", "1 of 8"),
+      b("2", "2026-09-09", "2 of 8"),
+      b("3", "2026-09-16", "3 of 8"),
+      b("4", "2026-09-30", "4 of 8"),
+    ], now);
+    expect(fill).toEqual({
+      totalVisits: 8,
+      visitsUsed: 3,
+      startDate: "2026-09-02",
+      packageName: "8-Visit Package",
+    });
+  });
+
+  it("future-only 1/8 → package not started yet, 0 used", async () => {
+    const { packageAutofillFromBookings } = await import("./effective-visit-state");
+    const fill = packageAutofillFromBookings([
+      b("1", "2026-09-28", "1 of 8"),
+      b("2", "2026-10-05", "2 of 8"),
+    ], now);
+    expect(fill).toEqual({
+      totalVisits: 8,
+      visitsUsed: 0,
+      startDate: "2026-09-28",
+      packageName: "8-Visit Package",
+    });
+  });
+
+  it("single isolated note → null (never guessed)", async () => {
+    const { packageAutofillFromBookings } = await import("./effective-visit-state");
+    expect(packageAutofillFromBookings([b("1", "2026-09-16", "3 of 8")], now)).toBeNull();
+  });
+
+  it("contradictory same-day notes → null", async () => {
+    const { packageAutofillFromBookings } = await import("./effective-visit-state");
+    const fill = packageAutofillFromBookings([
+      b("1", "2026-09-02", "1 of 8"),
+      b("2", "2026-09-09", "2 of 8"),
+      b("3", "2026-09-16", "3 of 8"),
+      b("4", "2026-09-16", "5 of 8"),
+    ], now);
+    expect(fill).toBeNull();
+  });
+
+  it("superseded cancelled opener is ignored; rebooked 1/8 wins", async () => {
+    const { packageAutofillFromBookings } = await import("./effective-visit-state");
+    const fill = packageAutofillFromBookings([
+      b("1", "2026-09-02", "1 of 8", "CANCELLED_BY_SELLER"),
+      b("2", "2026-09-04", "1 of 8"),
+      b("3", "2026-09-11", "2 of 8"),
+    ], now);
+    expect(fill?.startDate).toBe("2026-09-04");
+    expect(fill?.visitsUsed).toBe(2);
+  });
+
+  it("no numbered notes at all → null", async () => {
+    const { packageAutofillFromBookings } = await import("./effective-visit-state");
+    expect(packageAutofillFromBookings([b("1", "2026-09-16", ""), b("2", "2026-09-23", "assessment")], now)).toBeNull();
+  });
+});

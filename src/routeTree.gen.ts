@@ -28,6 +28,7 @@ import { Route as AuthenticatedDuesTextsRouteImport } from './routes/_authentica
 import { Route as AuthenticatedDuesQueueRouteImport } from './routes/_authenticated/dues-queue'
 import { Route as AuthenticatedBackupRouteImport } from './routes/_authenticated/backup'
 import { Route as AuthenticatedClientsIndexRouteImport } from './routes/_authenticated/clients.index'
+import { Route as ApiPublicWeekDiagRouteImport } from './routes/api/public/week-diag'
 import { Route as ApiPublicVisitDiffSweepTriggerRouteImport } from './routes/api/public/visit-diff-sweep-trigger'
 import { Route as ApiPublicVisitDiffSweepRouteImport } from './routes/api/public/visit-diff-sweep'
 import { Route as ApiPublicSquareDiagRouteImport } from './routes/api/public/square-diag'
@@ -145,6 +146,11 @@ const AuthenticatedClientsIndexRoute =
     path: '/clients/',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const ApiPublicWeekDiagRoute = ApiPublicWeekDiagRouteImport.update({
+  id: '/api/public/week-diag',
+  path: '/api/public/week-diag',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicVisitDiffSweepTriggerRoute =
   ApiPublicVisitDiffSweepTriggerRouteImport.update({
     id: '/api/public/visit-diff-sweep-trigger',
@@ -227,6 +233,7 @@ export interface FileRoutesByFullPath {
   '/api/public/square-diag': typeof ApiPublicSquareDiagRoute
   '/api/public/visit-diff-sweep': typeof ApiPublicVisitDiffSweepRoute
   '/api/public/visit-diff-sweep-trigger': typeof ApiPublicVisitDiffSweepTriggerRoute
+  '/api/public/week-diag': typeof ApiPublicWeekDiagRoute
   '/clients/': typeof AuthenticatedClientsIndexRoute
   '/api/public/renewal/tick': typeof ApiPublicRenewalTickRoute
   '/api/public/renewal/webhook': typeof ApiPublicRenewalWebhookRoute
@@ -258,6 +265,7 @@ export interface FileRoutesByTo {
   '/api/public/square-diag': typeof ApiPublicSquareDiagRoute
   '/api/public/visit-diff-sweep': typeof ApiPublicVisitDiffSweepRoute
   '/api/public/visit-diff-sweep-trigger': typeof ApiPublicVisitDiffSweepTriggerRoute
+  '/api/public/week-diag': typeof ApiPublicWeekDiagRoute
   '/clients': typeof AuthenticatedClientsIndexRoute
   '/api/public/renewal/tick': typeof ApiPublicRenewalTickRoute
   '/api/public/renewal/webhook': typeof ApiPublicRenewalWebhookRoute
@@ -291,6 +299,7 @@ export interface FileRoutesById {
   '/api/public/square-diag': typeof ApiPublicSquareDiagRoute
   '/api/public/visit-diff-sweep': typeof ApiPublicVisitDiffSweepRoute
   '/api/public/visit-diff-sweep-trigger': typeof ApiPublicVisitDiffSweepTriggerRoute
+  '/api/public/week-diag': typeof ApiPublicWeekDiagRoute
   '/_authenticated/clients/': typeof AuthenticatedClientsIndexRoute
   '/api/public/renewal/tick': typeof ApiPublicRenewalTickRoute
   '/api/public/renewal/webhook': typeof ApiPublicRenewalWebhookRoute
@@ -324,6 +333,7 @@ export interface FileRouteTypes {
     | '/api/public/square-diag'
     | '/api/public/visit-diff-sweep'
     | '/api/public/visit-diff-sweep-trigger'
+    | '/api/public/week-diag'
     | '/clients/'
     | '/api/public/renewal/tick'
     | '/api/public/renewal/webhook'
@@ -355,6 +365,7 @@ export interface FileRouteTypes {
     | '/api/public/square-diag'
     | '/api/public/visit-diff-sweep'
     | '/api/public/visit-diff-sweep-trigger'
+    | '/api/public/week-diag'
     | '/clients'
     | '/api/public/renewal/tick'
     | '/api/public/renewal/webhook'
@@ -387,6 +398,7 @@ export interface FileRouteTypes {
     | '/api/public/square-diag'
     | '/api/public/visit-diff-sweep'
     | '/api/public/visit-diff-sweep-trigger'
+    | '/api/public/week-diag'
     | '/_authenticated/clients/'
     | '/api/public/renewal/tick'
     | '/api/public/renewal/webhook'
@@ -401,6 +413,7 @@ export interface RootRouteChildren {
   ApiPublicSquareDiagRoute: typeof ApiPublicSquareDiagRoute
   ApiPublicVisitDiffSweepRoute: typeof ApiPublicVisitDiffSweepRoute
   ApiPublicVisitDiffSweepTriggerRoute: typeof ApiPublicVisitDiffSweepTriggerRoute
+  ApiPublicWeekDiagRoute: typeof ApiPublicWeekDiagRoute
   ApiPublicRenewalTickRoute: typeof ApiPublicRenewalTickRoute
   ApiPublicRenewalWebhookRoute: typeof ApiPublicRenewalWebhookRoute
   ApiPublicSmsInboundRoute: typeof ApiPublicSmsInboundRoute
@@ -543,6 +556,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedClientsIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/api/public/week-diag': {
+      id: '/api/public/week-diag'
+      path: '/api/public/week-diag'
+      fullPath: '/api/public/week-diag'
+      preLoaderRoute: typeof ApiPublicWeekDiagRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/visit-diff-sweep-trigger': {
       id: '/api/public/visit-diff-sweep-trigger'
       path: '/api/public/visit-diff-sweep-trigger'
@@ -679,6 +699,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicSquareDiagRoute: ApiPublicSquareDiagRoute,
   ApiPublicVisitDiffSweepRoute: ApiPublicVisitDiffSweepRoute,
   ApiPublicVisitDiffSweepTriggerRoute: ApiPublicVisitDiffSweepTriggerRoute,
+  ApiPublicWeekDiagRoute: ApiPublicWeekDiagRoute,
   ApiPublicRenewalTickRoute: ApiPublicRenewalTickRoute,
   ApiPublicRenewalWebhookRoute: ApiPublicRenewalWebhookRoute,
   ApiPublicSmsInboundRoute: ApiPublicSmsInboundRoute,

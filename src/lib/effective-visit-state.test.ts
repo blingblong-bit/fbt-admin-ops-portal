@@ -11,6 +11,31 @@ const b = (id: string, d: string, note: string, status = "ACCEPTED") => ({
 const hub = (used: number | null, total = 8) => ({ visits_used: used, package_total_visits: total });
 
 describe("resolveEffectiveVisitState", () => {
+  it("Katie: cancelled 1/9 rebooked as future 1/8 is ignored → 9/9 complete, next package 10/1", () => {
+    const s = resolveEffectiveVisitState(hub(0), [
+      b("1", "2026-09-15", "8 of 9"),
+      b("2", "2026-09-16", "9 of 9"),
+      b("3", "2026-09-17", "1 of 9", "CANCELLED_BY_SELLER"),
+      b("4", "2026-10-01", "1 of 8"),
+      b("5", "2026-10-02", "2 of 8"),
+    ], now);
+    expect(s.source).toBe("square");
+    expect(s.automationUsable).toBe(true);
+    expect(s.visitsUsed).toBe(9);
+    expect(s.totalVisits).toBe(9);
+    expect(s.nextPackageStart).toBe("2026-10-01T15:00:00Z");
+    expect(s.issues).toEqual([]);
+  });
+
+  it("late cancel not rebooked still counts", () => {
+    const s = resolveEffectiveVisitState(hub(0), [
+      b("1", "2026-09-10", "5/8"),
+      b("2", "2026-09-17", "6/8", "CANCELLED_BY_CUSTOMER"),
+      b("3", "2026-09-30", "7/8"),
+    ], now);
+    expect(s.visitsUsed).toBe(6);
+  });
+
   it("coherent Square sequence drives state; future never counts", () => {
     const s = resolveEffectiveVisitState(hub(4), [
       b("1", "2026-09-01", "4/8"),

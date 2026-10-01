@@ -738,7 +738,15 @@ export const completeVisitForClient = createServerFn({ method: "POST" })
       if (visitYmd >= c.pending_renewal_start_date && data.bookingId) {
         squareNote = await squareNoteForBooking(data.bookingId);
       }
-      if (shouldActivatePreparedPackage(visitYmd, c.pending_renewal_start_date, squareNote)) {
+      // If the old package has no visits left, this visit can only belong to
+      // the prepared package — start it even when Square numbering is off.
+      const oldPackageFull =
+        Number(c.package_total_visits ?? 0) > 0 &&
+        Number(c.visits_used ?? 0) >= Number(c.package_total_visits ?? 0);
+      if (
+        shouldActivatePreparedPackage(visitYmd, c.pending_renewal_start_date, squareNote) ||
+        (oldPackageFull && visitYmd >= c.pending_renewal_start_date)
+      ) {
         const newTotal = Number(c.pending_renewal_total_visits ?? c.package_total_visits ?? 0);
         const newPrice = Number(c.pending_renewal_price ?? c.package_price ?? 0);
         const newName = c.pending_renewal_package_name ?? c.package_name ?? null;

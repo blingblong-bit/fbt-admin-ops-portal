@@ -98,8 +98,8 @@ export async function runPackageAutofill(
     if (dismissed.has(c.id)) continue;
     const bookings = (index.byCustomer.get(c.square_customer_id as string) ?? [])
       .filter((b) => !!b.start_at)
-      .map((b) => ({ id: b.id, start_at: b.start_at as string, seller_note: b.seller_note ?? null, status: b.status ?? null }));
-    const hasNumberedNote = bookings.some((b) => (b.seller_note ?? "").trim().length > 0);
+      .map((b) => ({ id: b.id, start_at: b.start_at as string, seller_note: b.seller_note ?? null, customer_note: b.customer_note ?? null, status: b.status ?? null }));
+    const hasNumberedNote = bookings.some((b) => `${b.seller_note ?? ""}${b.customer_note ?? ""}`.trim().length > 0);
     const fill = packageAutofillFromBookings(bookings, index.nowIso);
     if (!fill) {
       if (hasNumberedNote) {

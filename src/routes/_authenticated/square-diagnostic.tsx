@@ -20,7 +20,7 @@ export const Route = createFileRoute("/_authenticated/square-diagnostic")({
     return (
       <div className="p-6 space-y-3">
         <div className="text-destructive font-semibold">Diagnostic error</div>
-        <div className="text-sm">{error.message}</div>
+        <div className="text-sm">{(error as Error).message}</div>
         <Button
           onClick={() => {
             reset();

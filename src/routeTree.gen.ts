@@ -9,45 +9,45 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
+import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/index'
-import { Route as AuthenticatedVisitNoteReviewRouteImport } from './routes/_authenticated/visit-note-review'
-import { Route as AuthenticatedVisitAutomationReviewRouteImport } from './routes/_authenticated/visit-automation-review'
-import { Route as AuthenticatedSyncLogRouteImport } from './routes/_authenticated/sync-log'
-import { Route as AuthenticatedSquareDiagnosticRouteImport } from './routes/_authenticated/square-diagnostic'
-import { Route as AuthenticatedScheduleCheckRouteImport } from './routes/_authenticated/schedule-check'
-import { Route as AuthenticatedRenewalReviewRouteImport } from './routes/_authenticated/renewal-review'
-import { Route as AuthenticatedPaymentHistoryRouteImport } from './routes/_authenticated/payment-history'
-import { Route as AuthenticatedNotesLedgerRouteImport } from './routes/_authenticated/notes-ledger'
-import { Route as AuthenticatedMissedCheckInsRouteImport } from './routes/_authenticated/missed-check-ins'
-import { Route as AuthenticatedMessagingPreviewRouteImport } from './routes/_authenticated/messaging-preview'
-import { Route as AuthenticatedMergeCenterRouteImport } from './routes/_authenticated/merge-center'
-import { Route as AuthenticatedImportRouteImport } from './routes/_authenticated/import'
-import { Route as AuthenticatedDuesTextsRouteImport } from './routes/_authenticated/dues-texts'
-import { Route as AuthenticatedDuesQueueRouteImport } from './routes/_authenticated/dues-queue'
 import { Route as AuthenticatedBackupRouteImport } from './routes/_authenticated/backup'
+import { Route as AuthenticatedDuesQueueRouteImport } from './routes/_authenticated/dues-queue'
+import { Route as AuthenticatedDuesTextsRouteImport } from './routes/_authenticated/dues-texts'
+import { Route as AuthenticatedImportRouteImport } from './routes/_authenticated/import'
+import { Route as AuthenticatedMergeCenterRouteImport } from './routes/_authenticated/merge-center'
+import { Route as AuthenticatedMessagingPreviewRouteImport } from './routes/_authenticated/messaging-preview'
+import { Route as AuthenticatedMissedCheckInsRouteImport } from './routes/_authenticated/missed-check-ins'
+import { Route as AuthenticatedNotesLedgerRouteImport } from './routes/_authenticated/notes-ledger'
+import { Route as AuthenticatedPaymentHistoryRouteImport } from './routes/_authenticated/payment-history'
+import { Route as AuthenticatedRenewalReviewRouteImport } from './routes/_authenticated/renewal-review'
+import { Route as AuthenticatedScheduleCheckRouteImport } from './routes/_authenticated/schedule-check'
+import { Route as AuthenticatedSquareDiagnosticRouteImport } from './routes/_authenticated/square-diagnostic'
+import { Route as AuthenticatedSyncLogRouteImport } from './routes/_authenticated/sync-log'
+import { Route as AuthenticatedVisitAutomationReviewRouteImport } from './routes/_authenticated/visit-automation-review'
+import { Route as AuthenticatedVisitNoteReviewRouteImport } from './routes/_authenticated/visit-note-review'
 import { Route as AuthenticatedClientsIndexRouteImport } from './routes/_authenticated/clients.index'
-import { Route as ApiPublicVisitDiffSweepTriggerRouteImport } from './routes/api/public/visit-diff-sweep-trigger'
-import { Route as ApiPublicVisitDiffSweepRouteImport } from './routes/api/public/visit-diff-sweep'
-import { Route as ApiPublicSquareDiagRouteImport } from './routes/api/public/square-diag'
-import { Route as ApiPublicPackageAutofillTickRouteImport } from './routes/api/public/package-autofill-tick'
-import { Route as AuthenticatedClientsNewRouteImport } from './routes/_authenticated/clients.new'
-import { Route as AuthenticatedClientsDeletedRouteImport } from './routes/_authenticated/clients.deleted'
 import { Route as AuthenticatedClientsIdRouteImport } from './routes/_authenticated/clients.$id'
-import { Route as ApiPublicSquareWebhookRouteImport } from './routes/api/public/square.webhook'
-import { Route as ApiPublicSmsStatusRouteImport } from './routes/api/public/sms.status'
-import { Route as ApiPublicSmsInboundRouteImport } from './routes/api/public/sms.inbound'
-import { Route as ApiPublicRenewalWebhookRouteImport } from './routes/api/public/renewal.webhook'
+import { Route as AuthenticatedClientsDeletedRouteImport } from './routes/_authenticated/clients.deleted'
+import { Route as AuthenticatedClientsNewRouteImport } from './routes/_authenticated/clients.new'
+import { Route as ApiPublicPackageAutofillTickRouteImport } from './routes/api/public/package-autofill-tick'
+import { Route as ApiPublicSquareDiagRouteImport } from './routes/api/public/square-diag'
+import { Route as ApiPublicVisitDiffSweepRouteImport } from './routes/api/public/visit-diff-sweep'
+import { Route as ApiPublicVisitDiffSweepTriggerRouteImport } from './routes/api/public/visit-diff-sweep-trigger'
 import { Route as ApiPublicRenewalTickRouteImport } from './routes/api/public/renewal.tick'
+import { Route as ApiPublicRenewalWebhookRouteImport } from './routes/api/public/renewal.webhook'
+import { Route as ApiPublicSmsInboundRouteImport } from './routes/api/public/sms.inbound'
+import { Route as ApiPublicSmsStatusRouteImport } from './routes/api/public/sms.status'
+import { Route as ApiPublicSquareWebhookRouteImport } from './routes/api/public/square.webhook'
 
+const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
+  id: '/_authenticated',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
   path: '/auth',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
-  id: '/_authenticated',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthenticatedIndexRoute = AuthenticatedIndexRouteImport.update({
@@ -55,57 +55,30 @@ const AuthenticatedIndexRoute = AuthenticatedIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
-const AuthenticatedVisitNoteReviewRoute =
-  AuthenticatedVisitNoteReviewRouteImport.update({
-    id: '/visit-note-review',
-    path: '/visit-note-review',
-    getParentRoute: () => AuthenticatedRouteRoute,
-  } as any)
-const AuthenticatedVisitAutomationReviewRoute =
-  AuthenticatedVisitAutomationReviewRouteImport.update({
-    id: '/visit-automation-review',
-    path: '/visit-automation-review',
-    getParentRoute: () => AuthenticatedRouteRoute,
-  } as any)
-const AuthenticatedSyncLogRoute = AuthenticatedSyncLogRouteImport.update({
-  id: '/sync-log',
-  path: '/sync-log',
+const AuthenticatedBackupRoute = AuthenticatedBackupRouteImport.update({
+  id: '/backup',
+  path: '/backup',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
-const AuthenticatedSquareDiagnosticRoute =
-  AuthenticatedSquareDiagnosticRouteImport.update({
-    id: '/square-diagnostic',
-    path: '/square-diagnostic',
-    getParentRoute: () => AuthenticatedRouteRoute,
-  } as any)
-const AuthenticatedScheduleCheckRoute =
-  AuthenticatedScheduleCheckRouteImport.update({
-    id: '/schedule-check',
-    path: '/schedule-check',
-    getParentRoute: () => AuthenticatedRouteRoute,
-  } as any)
-const AuthenticatedRenewalReviewRoute =
-  AuthenticatedRenewalReviewRouteImport.update({
-    id: '/renewal-review',
-    path: '/renewal-review',
-    getParentRoute: () => AuthenticatedRouteRoute,
-  } as any)
-const AuthenticatedPaymentHistoryRoute =
-  AuthenticatedPaymentHistoryRouteImport.update({
-    id: '/payment-history',
-    path: '/payment-history',
-    getParentRoute: () => AuthenticatedRouteRoute,
-  } as any)
-const AuthenticatedNotesLedgerRoute =
-  AuthenticatedNotesLedgerRouteImport.update({
-    id: '/notes-ledger',
-    path: '/notes-ledger',
-    getParentRoute: () => AuthenticatedRouteRoute,
-  } as any)
-const AuthenticatedMissedCheckInsRoute =
-  AuthenticatedMissedCheckInsRouteImport.update({
-    id: '/missed-check-ins',
-    path: '/missed-check-ins',
+const AuthenticatedDuesQueueRoute = AuthenticatedDuesQueueRouteImport.update({
+  id: '/dues-queue',
+  path: '/dues-queue',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedDuesTextsRoute = AuthenticatedDuesTextsRouteImport.update({
+  id: '/dues-texts',
+  path: '/dues-texts',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedImportRoute = AuthenticatedImportRouteImport.update({
+  id: '/import',
+  path: '/import',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedMergeCenterRoute =
+  AuthenticatedMergeCenterRouteImport.update({
+    id: '/merge-center',
+    path: '/merge-center',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
 const AuthenticatedMessagingPreviewRoute =
@@ -114,63 +87,68 @@ const AuthenticatedMessagingPreviewRoute =
     path: '/messaging-preview',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
-const AuthenticatedMergeCenterRoute =
-  AuthenticatedMergeCenterRouteImport.update({
-    id: '/merge-center',
-    path: '/merge-center',
+const AuthenticatedMissedCheckInsRoute =
+  AuthenticatedMissedCheckInsRouteImport.update({
+    id: '/missed-check-ins',
+    path: '/missed-check-ins',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
-const AuthenticatedImportRoute = AuthenticatedImportRouteImport.update({
-  id: '/import',
-  path: '/import',
+const AuthenticatedNotesLedgerRoute =
+  AuthenticatedNotesLedgerRouteImport.update({
+    id: '/notes-ledger',
+    path: '/notes-ledger',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedPaymentHistoryRoute =
+  AuthenticatedPaymentHistoryRouteImport.update({
+    id: '/payment-history',
+    path: '/payment-history',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedRenewalReviewRoute =
+  AuthenticatedRenewalReviewRouteImport.update({
+    id: '/renewal-review',
+    path: '/renewal-review',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedScheduleCheckRoute =
+  AuthenticatedScheduleCheckRouteImport.update({
+    id: '/schedule-check',
+    path: '/schedule-check',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedSquareDiagnosticRoute =
+  AuthenticatedSquareDiagnosticRouteImport.update({
+    id: '/square-diagnostic',
+    path: '/square-diagnostic',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedSyncLogRoute = AuthenticatedSyncLogRouteImport.update({
+  id: '/sync-log',
+  path: '/sync-log',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
-const AuthenticatedDuesTextsRoute = AuthenticatedDuesTextsRouteImport.update({
-  id: '/dues-texts',
-  path: '/dues-texts',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedDuesQueueRoute = AuthenticatedDuesQueueRouteImport.update({
-  id: '/dues-queue',
-  path: '/dues-queue',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedBackupRoute = AuthenticatedBackupRouteImport.update({
-  id: '/backup',
-  path: '/backup',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
+const AuthenticatedVisitAutomationReviewRoute =
+  AuthenticatedVisitAutomationReviewRouteImport.update({
+    id: '/visit-automation-review',
+    path: '/visit-automation-review',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedVisitNoteReviewRoute =
+  AuthenticatedVisitNoteReviewRouteImport.update({
+    id: '/visit-note-review',
+    path: '/visit-note-review',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedClientsIndexRoute =
   AuthenticatedClientsIndexRouteImport.update({
     id: '/clients/',
     path: '/clients/',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
-const ApiPublicVisitDiffSweepTriggerRoute =
-  ApiPublicVisitDiffSweepTriggerRouteImport.update({
-    id: '/api/public/visit-diff-sweep-trigger',
-    path: '/api/public/visit-diff-sweep-trigger',
-    getParentRoute: () => rootRouteImport,
-  } as any)
-const ApiPublicVisitDiffSweepRoute = ApiPublicVisitDiffSweepRouteImport.update({
-  id: '/api/public/visit-diff-sweep',
-  path: '/api/public/visit-diff-sweep',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiPublicSquareDiagRoute = ApiPublicSquareDiagRouteImport.update({
-  id: '/api/public/square-diag',
-  path: '/api/public/square-diag',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiPublicPackageAutofillTickRoute =
-  ApiPublicPackageAutofillTickRouteImport.update({
-    id: '/api/public/package-autofill-tick',
-    path: '/api/public/package-autofill-tick',
-    getParentRoute: () => rootRouteImport,
-  } as any)
-const AuthenticatedClientsNewRoute = AuthenticatedClientsNewRouteImport.update({
-  id: '/clients/new',
-  path: '/clients/new',
+const AuthenticatedClientsIdRoute = AuthenticatedClientsIdRouteImport.update({
+  id: '/clients/$id',
+  path: '/clients/$id',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedClientsDeletedRoute =
@@ -179,24 +157,36 @@ const AuthenticatedClientsDeletedRoute =
     path: '/clients/deleted',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
-const AuthenticatedClientsIdRoute = AuthenticatedClientsIdRouteImport.update({
-  id: '/clients/$id',
-  path: '/clients/$id',
+const AuthenticatedClientsNewRoute = AuthenticatedClientsNewRouteImport.update({
+  id: '/clients/new',
+  path: '/clients/new',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
-const ApiPublicSquareWebhookRoute = ApiPublicSquareWebhookRouteImport.update({
-  id: '/api/public/square/webhook',
-  path: '/api/public/square/webhook',
+const ApiPublicPackageAutofillTickRoute =
+  ApiPublicPackageAutofillTickRouteImport.update({
+    id: '/api/public/package-autofill-tick',
+    path: '/api/public/package-autofill-tick',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiPublicSquareDiagRoute = ApiPublicSquareDiagRouteImport.update({
+  id: '/api/public/square-diag',
+  path: '/api/public/square-diag',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiPublicSmsStatusRoute = ApiPublicSmsStatusRouteImport.update({
-  id: '/api/public/sms/status',
-  path: '/api/public/sms/status',
+const ApiPublicVisitDiffSweepRoute = ApiPublicVisitDiffSweepRouteImport.update({
+  id: '/api/public/visit-diff-sweep',
+  path: '/api/public/visit-diff-sweep',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiPublicSmsInboundRoute = ApiPublicSmsInboundRouteImport.update({
-  id: '/api/public/sms/inbound',
-  path: '/api/public/sms/inbound',
+const ApiPublicVisitDiffSweepTriggerRoute =
+  ApiPublicVisitDiffSweepTriggerRouteImport.update({
+    id: '/api/public/visit-diff-sweep-trigger',
+    path: '/api/public/visit-diff-sweep-trigger',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiPublicRenewalTickRoute = ApiPublicRenewalTickRouteImport.update({
+  id: '/api/public/renewal/tick',
+  path: '/api/public/renewal/tick',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiPublicRenewalWebhookRoute = ApiPublicRenewalWebhookRouteImport.update({
@@ -204,9 +194,19 @@ const ApiPublicRenewalWebhookRoute = ApiPublicRenewalWebhookRouteImport.update({
   path: '/api/public/renewal/webhook',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiPublicRenewalTickRoute = ApiPublicRenewalTickRouteImport.update({
-  id: '/api/public/renewal/tick',
-  path: '/api/public/renewal/tick',
+const ApiPublicSmsInboundRoute = ApiPublicSmsInboundRouteImport.update({
+  id: '/api/public/sms/inbound',
+  path: '/api/public/sms/inbound',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiPublicSmsStatusRoute = ApiPublicSmsStatusRouteImport.update({
+  id: '/api/public/sms/status',
+  path: '/api/public/sms/status',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiPublicSquareWebhookRoute = ApiPublicSquareWebhookRouteImport.update({
+  id: '/api/public/square/webhook',
+  path: '/api/public/square/webhook',
   getParentRoute: () => rootRouteImport,
 } as any)
 
@@ -424,18 +424,18 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/auth': {
-      id: '/auth'
-      path: '/auth'
-      fullPath: '/auth'
-      preLoaderRoute: typeof AuthRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/_authenticated': {
       id: '/_authenticated'
       path: ''
       fullPath: '/'
       preLoaderRoute: typeof AuthenticatedRouteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/auth': {
+      id: '/auth'
+      path: '/auth'
+      fullPath: '/auth'
+      preLoaderRoute: typeof AuthRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated/': {
@@ -445,95 +445,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/_authenticated/visit-note-review': {
-      id: '/_authenticated/visit-note-review'
-      path: '/visit-note-review'
-      fullPath: '/visit-note-review'
-      preLoaderRoute: typeof AuthenticatedVisitNoteReviewRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/visit-automation-review': {
-      id: '/_authenticated/visit-automation-review'
-      path: '/visit-automation-review'
-      fullPath: '/visit-automation-review'
-      preLoaderRoute: typeof AuthenticatedVisitAutomationReviewRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/sync-log': {
-      id: '/_authenticated/sync-log'
-      path: '/sync-log'
-      fullPath: '/sync-log'
-      preLoaderRoute: typeof AuthenticatedSyncLogRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/square-diagnostic': {
-      id: '/_authenticated/square-diagnostic'
-      path: '/square-diagnostic'
-      fullPath: '/square-diagnostic'
-      preLoaderRoute: typeof AuthenticatedSquareDiagnosticRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/schedule-check': {
-      id: '/_authenticated/schedule-check'
-      path: '/schedule-check'
-      fullPath: '/schedule-check'
-      preLoaderRoute: typeof AuthenticatedScheduleCheckRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/renewal-review': {
-      id: '/_authenticated/renewal-review'
-      path: '/renewal-review'
-      fullPath: '/renewal-review'
-      preLoaderRoute: typeof AuthenticatedRenewalReviewRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/payment-history': {
-      id: '/_authenticated/payment-history'
-      path: '/payment-history'
-      fullPath: '/payment-history'
-      preLoaderRoute: typeof AuthenticatedPaymentHistoryRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/notes-ledger': {
-      id: '/_authenticated/notes-ledger'
-      path: '/notes-ledger'
-      fullPath: '/notes-ledger'
-      preLoaderRoute: typeof AuthenticatedNotesLedgerRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/missed-check-ins': {
-      id: '/_authenticated/missed-check-ins'
-      path: '/missed-check-ins'
-      fullPath: '/missed-check-ins'
-      preLoaderRoute: typeof AuthenticatedMissedCheckInsRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/messaging-preview': {
-      id: '/_authenticated/messaging-preview'
-      path: '/messaging-preview'
-      fullPath: '/messaging-preview'
-      preLoaderRoute: typeof AuthenticatedMessagingPreviewRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/merge-center': {
-      id: '/_authenticated/merge-center'
-      path: '/merge-center'
-      fullPath: '/merge-center'
-      preLoaderRoute: typeof AuthenticatedMergeCenterRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/import': {
-      id: '/_authenticated/import'
-      path: '/import'
-      fullPath: '/import'
-      preLoaderRoute: typeof AuthenticatedImportRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/dues-texts': {
-      id: '/_authenticated/dues-texts'
-      path: '/dues-texts'
-      fullPath: '/dues-texts'
-      preLoaderRoute: typeof AuthenticatedDuesTextsRouteImport
+    '/_authenticated/backup': {
+      id: '/_authenticated/backup'
+      path: '/backup'
+      fullPath: '/backup'
+      preLoaderRoute: typeof AuthenticatedBackupRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/dues-queue': {
@@ -543,11 +459,95 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedDuesQueueRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/_authenticated/backup': {
-      id: '/_authenticated/backup'
-      path: '/backup'
-      fullPath: '/backup'
-      preLoaderRoute: typeof AuthenticatedBackupRouteImport
+    '/_authenticated/dues-texts': {
+      id: '/_authenticated/dues-texts'
+      path: '/dues-texts'
+      fullPath: '/dues-texts'
+      preLoaderRoute: typeof AuthenticatedDuesTextsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/import': {
+      id: '/_authenticated/import'
+      path: '/import'
+      fullPath: '/import'
+      preLoaderRoute: typeof AuthenticatedImportRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/merge-center': {
+      id: '/_authenticated/merge-center'
+      path: '/merge-center'
+      fullPath: '/merge-center'
+      preLoaderRoute: typeof AuthenticatedMergeCenterRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/messaging-preview': {
+      id: '/_authenticated/messaging-preview'
+      path: '/messaging-preview'
+      fullPath: '/messaging-preview'
+      preLoaderRoute: typeof AuthenticatedMessagingPreviewRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/missed-check-ins': {
+      id: '/_authenticated/missed-check-ins'
+      path: '/missed-check-ins'
+      fullPath: '/missed-check-ins'
+      preLoaderRoute: typeof AuthenticatedMissedCheckInsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/notes-ledger': {
+      id: '/_authenticated/notes-ledger'
+      path: '/notes-ledger'
+      fullPath: '/notes-ledger'
+      preLoaderRoute: typeof AuthenticatedNotesLedgerRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/payment-history': {
+      id: '/_authenticated/payment-history'
+      path: '/payment-history'
+      fullPath: '/payment-history'
+      preLoaderRoute: typeof AuthenticatedPaymentHistoryRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/renewal-review': {
+      id: '/_authenticated/renewal-review'
+      path: '/renewal-review'
+      fullPath: '/renewal-review'
+      preLoaderRoute: typeof AuthenticatedRenewalReviewRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/schedule-check': {
+      id: '/_authenticated/schedule-check'
+      path: '/schedule-check'
+      fullPath: '/schedule-check'
+      preLoaderRoute: typeof AuthenticatedScheduleCheckRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/square-diagnostic': {
+      id: '/_authenticated/square-diagnostic'
+      path: '/square-diagnostic'
+      fullPath: '/square-diagnostic'
+      preLoaderRoute: typeof AuthenticatedSquareDiagnosticRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/sync-log': {
+      id: '/_authenticated/sync-log'
+      path: '/sync-log'
+      fullPath: '/sync-log'
+      preLoaderRoute: typeof AuthenticatedSyncLogRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/visit-automation-review': {
+      id: '/_authenticated/visit-automation-review'
+      path: '/visit-automation-review'
+      fullPath: '/visit-automation-review'
+      preLoaderRoute: typeof AuthenticatedVisitAutomationReviewRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/visit-note-review': {
+      id: '/_authenticated/visit-note-review'
+      path: '/visit-note-review'
+      fullPath: '/visit-note-review'
+      preLoaderRoute: typeof AuthenticatedVisitNoteReviewRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/clients/': {
@@ -557,39 +557,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedClientsIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/api/public/visit-diff-sweep-trigger': {
-      id: '/api/public/visit-diff-sweep-trigger'
-      path: '/api/public/visit-diff-sweep-trigger'
-      fullPath: '/api/public/visit-diff-sweep-trigger'
-      preLoaderRoute: typeof ApiPublicVisitDiffSweepTriggerRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/public/visit-diff-sweep': {
-      id: '/api/public/visit-diff-sweep'
-      path: '/api/public/visit-diff-sweep'
-      fullPath: '/api/public/visit-diff-sweep'
-      preLoaderRoute: typeof ApiPublicVisitDiffSweepRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/public/square-diag': {
-      id: '/api/public/square-diag'
-      path: '/api/public/square-diag'
-      fullPath: '/api/public/square-diag'
-      preLoaderRoute: typeof ApiPublicSquareDiagRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/public/package-autofill-tick': {
-      id: '/api/public/package-autofill-tick'
-      path: '/api/public/package-autofill-tick'
-      fullPath: '/api/public/package-autofill-tick'
-      preLoaderRoute: typeof ApiPublicPackageAutofillTickRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/_authenticated/clients/new': {
-      id: '/_authenticated/clients/new'
-      path: '/clients/new'
-      fullPath: '/clients/new'
-      preLoaderRoute: typeof AuthenticatedClientsNewRouteImport
+    '/_authenticated/clients/$id': {
+      id: '/_authenticated/clients/$id'
+      path: '/clients/$id'
+      fullPath: '/clients/$id'
+      preLoaderRoute: typeof AuthenticatedClientsIdRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/clients/deleted': {
@@ -599,32 +571,46 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedClientsDeletedRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/_authenticated/clients/$id': {
-      id: '/_authenticated/clients/$id'
-      path: '/clients/$id'
-      fullPath: '/clients/$id'
-      preLoaderRoute: typeof AuthenticatedClientsIdRouteImport
+    '/_authenticated/clients/new': {
+      id: '/_authenticated/clients/new'
+      path: '/clients/new'
+      fullPath: '/clients/new'
+      preLoaderRoute: typeof AuthenticatedClientsNewRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/api/public/square/webhook': {
-      id: '/api/public/square/webhook'
-      path: '/api/public/square/webhook'
-      fullPath: '/api/public/square/webhook'
-      preLoaderRoute: typeof ApiPublicSquareWebhookRouteImport
+    '/api/public/package-autofill-tick': {
+      id: '/api/public/package-autofill-tick'
+      path: '/api/public/package-autofill-tick'
+      fullPath: '/api/public/package-autofill-tick'
+      preLoaderRoute: typeof ApiPublicPackageAutofillTickRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/public/sms/status': {
-      id: '/api/public/sms/status'
-      path: '/api/public/sms/status'
-      fullPath: '/api/public/sms/status'
-      preLoaderRoute: typeof ApiPublicSmsStatusRouteImport
+    '/api/public/square-diag': {
+      id: '/api/public/square-diag'
+      path: '/api/public/square-diag'
+      fullPath: '/api/public/square-diag'
+      preLoaderRoute: typeof ApiPublicSquareDiagRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/public/sms/inbound': {
-      id: '/api/public/sms/inbound'
-      path: '/api/public/sms/inbound'
-      fullPath: '/api/public/sms/inbound'
-      preLoaderRoute: typeof ApiPublicSmsInboundRouteImport
+    '/api/public/visit-diff-sweep': {
+      id: '/api/public/visit-diff-sweep'
+      path: '/api/public/visit-diff-sweep'
+      fullPath: '/api/public/visit-diff-sweep'
+      preLoaderRoute: typeof ApiPublicVisitDiffSweepRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/visit-diff-sweep-trigger': {
+      id: '/api/public/visit-diff-sweep-trigger'
+      path: '/api/public/visit-diff-sweep-trigger'
+      fullPath: '/api/public/visit-diff-sweep-trigger'
+      preLoaderRoute: typeof ApiPublicVisitDiffSweepTriggerRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/renewal/tick': {
+      id: '/api/public/renewal/tick'
+      path: '/api/public/renewal/tick'
+      fullPath: '/api/public/renewal/tick'
+      preLoaderRoute: typeof ApiPublicRenewalTickRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/public/renewal/webhook': {
@@ -634,11 +620,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicRenewalWebhookRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/public/renewal/tick': {
-      id: '/api/public/renewal/tick'
-      path: '/api/public/renewal/tick'
-      fullPath: '/api/public/renewal/tick'
-      preLoaderRoute: typeof ApiPublicRenewalTickRouteImport
+    '/api/public/sms/inbound': {
+      id: '/api/public/sms/inbound'
+      path: '/api/public/sms/inbound'
+      fullPath: '/api/public/sms/inbound'
+      preLoaderRoute: typeof ApiPublicSmsInboundRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/sms/status': {
+      id: '/api/public/sms/status'
+      path: '/api/public/sms/status'
+      fullPath: '/api/public/sms/status'
+      preLoaderRoute: typeof ApiPublicSmsStatusRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/square/webhook': {
+      id: '/api/public/square/webhook'
+      path: '/api/public/square/webhook'
+      fullPath: '/api/public/square/webhook'
+      preLoaderRoute: typeof ApiPublicSquareWebhookRouteImport
       parentRoute: typeof rootRouteImport
     }
   }

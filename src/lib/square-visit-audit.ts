@@ -223,12 +223,17 @@ export function isSupersededCancellation(seq: SequenceEntry[], e: SequenceEntry)
  * rebooked, e.g. cancelled 3/8 → cancelled 4/8 → cancelled 3/8 → 4/8.
  */
 export function isReplacedCancellation(seq: SequenceEntry[], e: SequenceEntry): boolean {
-  if (!e.cancelled || !e.note || e.note.n === e.note.total) return false;
+  if (!e.cancelled || !e.note) return false;
   const i = seq.indexOf(e);
   const next = seq
     .slice(i + 1)
     .find((x) => x.note && x.note.total === e.note!.total && !isSupersededCancellation(seq, x));
-  return !!next && next.note!.n <= e.note.n;
+  if (!next) return false;
+  // A cancelled final visit (N/N) followed by 1/N is a normal renewal, not a
+  // rebooking. Followed by a lower mid-package number (e.g. cancelled 8/8 →
+  // 7/8), it was renumbered and rebooked.
+  if (e.note.n === e.note.total) return next.note!.n > 1 && next.note!.n < e.note.n;
+  return next.note!.n <= e.note.n;
 }
 
 /** Returns issues found in the recent Square sequence (last 6 past noted visits + all future). */

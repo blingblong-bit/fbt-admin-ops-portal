@@ -1,0 +1,1 @@
+ALTER TABLE public.clients ADD COLUMN IF NOT EXISTS visit_tracking_mode text NOT NULL DEFAULT 'auto' CHECK (visit_tracking_mode IN ('auto','square','hub'));

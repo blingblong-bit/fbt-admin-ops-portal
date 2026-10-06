@@ -949,7 +949,7 @@ export const listLinkableClients = createServerFn({ method: "GET" })
       const { data, error } = await context.supabase
         .from("clients")
         .select(
-          "id, first_name, last_name, phone, email, square_customer_id, status, package_total_visits, visits_used, package_price, amount_paid",
+          "id, first_name, last_name, phone, email, square_customer_id, visit_tracking_mode, status, package_total_visits, visits_used, package_price, amount_paid",
         )
         .is("deleted_at", null)
         .order("first_name", { ascending: true })
@@ -1784,7 +1784,7 @@ export const getRenewalForecast = createServerFn({ method: "GET" })
       const { data, error: cErr } = await context.supabase
         .from("clients")
         .select(
-          "id, square_customer_id, visits_used, package_total_visits, package_price, package_start_date, next_package_price, status, pending_renewal_start_date, pending_renewal_price, pending_renewal_paid, pending_renewal_total_visits, pending_renewal_package_name",
+          "id, square_customer_id, visit_tracking_mode, visits_used, package_total_visits, package_price, package_start_date, next_package_price, status, pending_renewal_start_date, pending_renewal_price, pending_renewal_paid, pending_renewal_total_visits, pending_renewal_package_name",
         )
         .is("deleted_at", null)
         .neq("status", "archived")

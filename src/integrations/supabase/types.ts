@@ -84,6 +84,7 @@ export type Database = {
           square_visit_note: string | null
           status: string
           updated_at: string
+          visit_tracking_mode: string
           visits_used: number | null
         }
         Insert: {
@@ -120,6 +121,7 @@ export type Database = {
           square_visit_note?: string | null
           status?: string
           updated_at?: string
+          visit_tracking_mode?: string
           visits_used?: number | null
         }
         Update: {
@@ -156,6 +158,7 @@ export type Database = {
           square_visit_note?: string | null
           status?: string
           updated_at?: string
+          visit_tracking_mode?: string
           visits_used?: number | null
         }
         Relationships: []

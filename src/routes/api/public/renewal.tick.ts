@@ -209,7 +209,7 @@ export const Route = createFileRoute("/api/public/renewal/tick")({
           for (const c of (openCampaigns ?? []) as Campaign[]) {
             const { data: cli } = await supabaseAdmin
               .from("clients")
-              .select("package_start_date, package_total_visits, visits_used, square_customer_id")
+              .select("package_start_date, package_total_visits, visits_used, square_customer_id, visit_tracking_mode")
               .eq("id", c.client_id)
               .maybeSingle();
             if (!cli) continue;
@@ -247,7 +247,7 @@ export const Route = createFileRoute("/api/public/renewal/tick")({
             // pull client for phone + name
             const { data: cli } = await supabaseAdmin
               .from("clients")
-              .select("first_name, last_name, phone, square_customer_id, visits_used, package_total_visits, sms_consent_at, sms_opted_out_at")
+              .select("first_name, last_name, phone, square_customer_id, visit_tracking_mode, visits_used, package_total_visits, sms_consent_at, sms_opted_out_at")
               .eq("id", c.client_id)
               .maybeSingle();
             if (!cli || !cli.phone) {
@@ -289,7 +289,7 @@ export const Route = createFileRoute("/api/public/renewal/tick")({
         // Pull all non-archived, non-pay-per-visit clients on their last visit.
         const { data: allCandidates } = await supabaseAdmin
           .from("clients")
-          .select("id, first_name, last_name, phone, square_customer_id, package_total_visits, visits_used, package_price, amount_paid, package_start_date, payment_model, deleted_at, sms_consent_at, sms_opted_out_at")
+          .select("id, first_name, last_name, phone, square_customer_id, visit_tracking_mode, package_total_visits, visits_used, package_price, amount_paid, package_start_date, payment_model, deleted_at, sms_consent_at, sms_opted_out_at")
           .is("deleted_at", null)
           .neq("payment_model", "pay_per_visit")
           .gt("package_total_visits", 0);

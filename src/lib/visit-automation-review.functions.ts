@@ -68,7 +68,7 @@ export const getVisitAutomationReview = createServerFn({ method: "GET" })
     for (let from = 0; ; from += 1000) {
       const { data, error } = await ctx.supabase
         .from("clients")
-        .select("id, first_name, last_name, square_customer_id, visits_used, package_total_visits, payment_model, pending_renewal_start_date, pending_renewal_price, pending_renewal_paid, package_price, next_package_price")
+        .select("id, first_name, last_name, square_customer_id, visit_tracking_mode, visits_used, package_total_visits, payment_model, pending_renewal_start_date, pending_renewal_price, pending_renewal_paid, package_price, next_package_price")
         .eq("status", "active")
         .is("deleted_at", null)
         .not("square_customer_id", "is", null)

@@ -61,6 +61,8 @@ export type EffectiveVisitState = {
 export type HubVisitClient = {
   visits_used: number | null;
   package_total_visits: number | null;
+  /** Staff override: "auto" (default), "square" (trust Square notes), "hub" (manual check-ins). */
+  visit_tracking_mode?: string | null;
 };
 
 /**
@@ -133,11 +135,18 @@ export function resolveEffectiveVisitState(
     };
   };
 
+  const override = client.visit_tracking_mode ?? "auto";
+  if (override === "hub") return hubState("hub_fallback", "Staff chose Hub manual check-ins for this client");
+  const forceSquare = override === "square";
+
   if (currentPositionUnreadable(seq, issues)) {
     return hubState("hub_fallback", `Current Square position unreadable — ${issues.map((i) => i.reason).join("; ")}`, false);
   }
   if (noted.length === 0) return hubState("hub_fallback", "No usable Square visit notes");
-  if (noted.length === 1) return hubState("hub_fallback", "Only one isolated Square note");
+  // A lone "1 of N" is a clear package start; staff can also force Square.
+  if (noted.length === 1 && !forceSquare && noted[0].note!.n !== 1) {
+    return hubState("hub_fallback", "Only one isolated Square note");
+  }
 
   const latest = pastNoted[pastNoted.length - 1] ?? null;
   let used: number;

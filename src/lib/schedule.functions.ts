@@ -449,7 +449,8 @@ export const getScheduleCheck = createServerFn({ method: "GET" })
       for (let i = 0; i < 100; i++) {
         const { data: page, error: cErr } = await context.supabase
           .from("clients")
-          .square_customer_id, visit_tracking_mode, status, manual_active, payment_model, pending_renewal_start_date",
+          .select(
+            "id, first_name, last_name, phone, package_total_visits, package_name, visits_used, package_price, amount_paid, internal_notes, square_customer_id, visit_tracking_mode, status, manual_active, payment_model, pending_renewal_start_date",
           )
           .is("deleted_at", null)
           .range(from, from + pageSize - 1);
@@ -2145,7 +2146,8 @@ async function loadAppointmentsForRange(
     for (let i = 0; i < 100; i++) {
       const { data: page, error: cErr } = await supabase
         .from("clients")
-        .square_customer_id, visit_tracking_mode, status, manual_active, payment_model, pending_renewal_start_date",
+        .select(
+          "id, first_name, last_name, phone, package_total_visits, package_name, visits_used, package_price, amount_paid, internal_notes, square_customer_id, visit_tracking_mode, status, manual_active, payment_model, pending_renewal_start_date",
         )
         .is("deleted_at", null)
         .range(from, from + pageSize - 1);
@@ -2442,7 +2444,7 @@ export const getClientVisitTracking = createServerFn({ method: "GET" })
     if (!token) return { visit: null };
     const { data: c, error } = await context.supabase
       .from("clients")
-      .square_customer_id, visit_tracking_mode")
+      .select("id, visits_used, package_total_visits, square_customer_id, visit_tracking_mode")
       .eq("id", data.clientId)
       .maybeSingle();
     if (error) throw error;

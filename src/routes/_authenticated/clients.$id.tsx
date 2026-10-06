@@ -26,6 +26,8 @@ import {
   getUncheckedRecentAppointments,
   completeVisitForClient,
   getClientVisitTracking,
+  setVisitTrackingMode,
+  undoVisitCheckIn,
   type ClientAppointment,
 } from "@/lib/schedule.functions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -153,6 +155,24 @@ function ClientDetailPage() {
   });
   const visitTracking = trackingQ.data?.visit ?? null;
   const squareTracks = !!visitTracking && !visitTracking.manualCheckInNeeded;
+  const setModeFn = useServerFn(setVisitTrackingMode);
+  const undoFn = useServerFn(undoVisitCheckIn);
+  const refreshVisitData = () => {
+    qc.invalidateQueries({ queryKey: ["client", id] });
+    qc.invalidateQueries({ queryKey: ["activities", id] });
+    qc.invalidateQueries({ queryKey: ["visit-tracking", id] });
+    qc.invalidateQueries({ queryKey: ["unchecked-appointments", id] });
+  };
+  const modeMut = useMutation({
+    mutationFn: (mode: "auto" | "square" | "hub") => setModeFn({ data: { clientId: id, mode } }),
+    onSuccess: () => { toast.success("Visit tracking updated"); refreshVisitData(); },
+    onError: (e: Error) => toast.error(e.message),
+  });
+  const undoMut = useMutation({
+    mutationFn: (activityId: string) => undoFn({ data: { activityId } }),
+    onSuccess: () => { toast.success("Check-in undone"); refreshVisitData(); },
+    onError: (e: Error) => toast.error(e.message),
+  });
   const uncheckedQ = useQuery({
     queryKey: ["unchecked-appointments", id],
     queryFn: () => fetchUnchecked({ data: { clientId: id } }),
@@ -270,6 +290,21 @@ function ClientDetailPage() {
         </div>
         <div className="flex flex-col items-end gap-1">
           {visitTracking && <VisitSourceLine visit={visitTracking} />}
+          {c.square_customer_id && (c.package_total_visits ?? 0) > 0 && (
+            <label className="flex items-center gap-2 text-xs text-muted-foreground">
+              Count visits from
+              <select
+                className="rounded-md border bg-background px-2 py-1 text-xs text-foreground"
+                value={(c as Client & { visit_tracking_mode?: string }).visit_tracking_mode ?? "auto"}
+                disabled={modeMut.isPending}
+                onChange={(e) => modeMut.mutate(e.target.value as "auto" | "square" | "hub")}
+              >
+                <option value="auto">Automatic</option>
+                <option value="square">Use Square appointment notes</option>
+                <option value="hub">Use Hub manual check-in</option>
+              </select>
+            </label>
+          )}
           <div className="flex flex-wrap gap-2">
 
             {(c.package_total_visits ?? 0) > 0 &&
@@ -467,8 +502,21 @@ function ClientDetailPage() {
                       </div>
                       <div className="text-xs text-slate-500">{a.description}</div>
                     </div>
-                    <div className="text-xs text-slate-400">
+                    <div className="flex items-center gap-2 text-xs text-slate-400">
                       {new Date(a.created_at).toLocaleString()}
+                      {a.activity_type === "visit" && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 px-2 text-xs"
+                          disabled={undoMut.isPending}
+                          onClick={() => {
+                            if (confirm("Undo this check-in? The visit will be given back.")) undoMut.mutate(a.id);
+                          }}
+                        >
+                          Undo
+                        </Button>
+                      )}
                     </div>
                   </li>
                 ))}

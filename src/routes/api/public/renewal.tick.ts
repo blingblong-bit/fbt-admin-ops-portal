@@ -209,7 +209,7 @@ export const Route = createFileRoute("/api/public/renewal/tick")({
           for (const c of (openCampaigns ?? []) as Campaign[]) {
             const { data: cli } = await supabaseAdmin
               .from("clients")
-              .select("package_start_date, package_total_visits, visits_used, square_customer_id")
+              .square_customer_id, visit_tracking_mode")
               .eq("id", c.client_id)
               .maybeSingle();
             if (!cli) continue;

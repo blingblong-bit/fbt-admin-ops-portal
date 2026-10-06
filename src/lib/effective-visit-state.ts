@@ -69,7 +69,7 @@ export type HubVisitClient = {
  * no N/N → 1/N renewal to explain it. Older anomalies are warnings only.
  */
 export function currentPositionUnreadable(seq: SequenceEntry[], issues: NoteIssue[]): boolean {
-  const pastNoted = seq.filter((e) => e.past && e.note);
+  const pastNoted = seq.filter((e) => e.past && e.note && !isSupersededCancellation(seq, e));
   const latest = pastNoted[pastNoted.length - 1];
   if (!latest) return false;
   const day = latest.date.slice(0, 10);

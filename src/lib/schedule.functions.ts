@@ -2455,3 +2455,67 @@ export const getClientVisitTracking = createServerFn({ method: "GET" })
     if (index.error) return { visit: null };
     return { visit: visitTrackingFrom(effectiveStateFor(index, c)) };
   });
+
+/** Staff choice: who counts this client's visits — Square notes, Hub check-ins, or automatic. */
+export const setVisitTrackingMode = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { clientId: string; mode: "auto" | "square" | "hub" }) => {
+    if (!d?.clientId || !["auto", "square", "hub"].includes(d.mode)) throw new Error("Invalid input");
+    return d;
+  })
+  .handler(async ({ data, context }) => {
+    const { error } = await context.supabase
+      .from("clients")
+      .update({ visit_tracking_mode: data.mode })
+      .eq("id", data.clientId);
+    if (error) throw error;
+    const label = { auto: "Automatic", square: "Square appointment notes", hub: "Hub manual check-ins" }[data.mode];
+    await context.supabase.from("client_activities").insert({
+      client_id: data.clientId,
+      activity_type: "visit_tracking_change",
+      description: `Visit tracking set to: ${label}`,
+      metadata: { mode: data.mode },
+    });
+    return { ok: true };
+  });
+
+/** Undo a mistaken check-in: removes the visit entry and gives back the visit if one was counted. */
+export const undoVisitCheckIn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { activityId: string }) => {
+    if (!d?.activityId) throw new Error("activityId required");
+    return d;
+  })
+  .handler(async ({ data, context }) => {
+    const { data: a, error } = await context.supabase
+      .from("client_activities")
+      .select("id, client_id, activity_type, description, metadata")
+      .eq("id", data.activityId)
+      .single();
+    if (error) throw error;
+    if (a.activity_type !== "visit") throw new Error("Only check-ins can be undone.");
+    const meta = (a.metadata ?? {}) as Record<string, unknown>;
+    if (meta.new_package_first_visit) {
+      throw new Error("This check-in started a new package — fix it with Edit Client instead.");
+    }
+    const counted = /^Visit completed/.test(a.description ?? "") && !meta.check_in_mode;
+    let visitsUsed: number | null = null;
+    if (counted) {
+      const { data: c, error: cErr } = await context.supabase
+        .from("clients").select("visits_used").eq("id", a.client_id).single();
+      if (cErr) throw cErr;
+      visitsUsed = Math.max(0, Number(c.visits_used ?? 0) - 1);
+      const { error: uErr } = await context.supabase
+        .from("clients").update({ visits_used: visitsUsed }).eq("id", a.client_id);
+      if (uErr) throw uErr;
+    }
+    const { error: dErr } = await context.supabase.from("client_activities").delete().eq("id", a.id);
+    if (dErr) throw dErr;
+    await context.supabase.from("client_activities").insert({
+      client_id: a.client_id,
+      activity_type: "visit_undone",
+      description: `Check-in undone: ${a.description ?? ""}`,
+      metadata: { ...meta, undone_activity_id: a.id },
+    });
+    return { ok: true, visits_used: visitsUsed };
+  });

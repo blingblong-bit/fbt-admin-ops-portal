@@ -43,6 +43,6 @@ describe("Charles Parish: two cancellations rebooked in order", () => {
       b("3", "2026-10-06", "7/8", "CANCELLED_BY_SELLER"), b("4", "2026-10-08", "8/8", "CANCELLED_BY_SELLER"),
       b("5", "2026-10-13", "7/8"), b("6", "2026-10-15", "8/8"),
     ], "2026-10-09T21:00:00Z");
-    expect(s.used).toBe(6);
+    expect(s.visitsUsed).toBe(6); expect(s.remainingVisits).toBe(2); expect(s.source).toMatch(/square/);
   });
 });

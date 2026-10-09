@@ -35,3 +35,14 @@ describe("check-in presentation", () => {
     expect(countsAsMissedCheckIn(null)).toBe(true);
   });
 });
+
+describe("Charles Parish: two cancellations rebooked in order", () => {
+  it("cancelled 7/8 and 8/8 rebooked later → 6/8 used", () => {
+    const s = resolveEffectiveVisitState({ visits_used: 2, package_total_visits: 8 }, [
+      b("1", "2026-09-29", "5/8"), b("2", "2026-10-01", "6/8"),
+      b("3", "2026-10-06", "7/8", "CANCELLED_BY_SELLER"), b("4", "2026-10-08", "8/8", "CANCELLED_BY_SELLER"),
+      b("5", "2026-10-13", "7/8"), b("6", "2026-10-15", "8/8"),
+    ], "2026-10-09T21:00:00Z");
+    expect(s.used).toBe(6);
+  });
+});

@@ -213,9 +213,11 @@ export function isSupersededCancellation(seq: SequenceEntry[], e: SequenceEntry)
   if ((!!prev && key(prev) === key(e)) || (!!next && key(next) === key(e))) return true;
   // Several cancellations rebooked in order (cancelled 7/8, cancelled 8/8 →
   // live 7/8, live 8/8): look ahead within the same package for the same number.
+  let lastN = 0;
   for (const x of seq.slice(i + 1)) {
     if (!x.note || x.cancelled) continue;
-    if (x.note.total !== e.note.total || x.note.n > e.note.n) break;
+    if (x.note.total !== e.note.total || x.note.n > e.note.n || x.note.n < lastN) break;
+    lastN = x.note.n;
     if (key(x) === key(e)) return true;
   }
   // A cancelled package opener (1/N, or any number right after a finished N/N)

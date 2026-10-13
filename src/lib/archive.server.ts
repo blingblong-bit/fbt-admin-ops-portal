@@ -55,8 +55,10 @@ export async function resolveSquareCustomerIds(
   token: string,
   c: { square_customer_id: string | null; phone: string | null; email: string | null },
 ): Promise<string[] | null> {
+  // A linked Square profile is authoritative: never widen to phone/email,
+  // which can pull in family members who share a number.
+  if (c.square_customer_id) return [c.square_customer_id];
   const ids = new Set<string>();
-  if (c.square_customer_id) ids.add(c.square_customer_id);
   const phone = e164(c.phone);
   if (phone) {
     const r = await searchCustomers(token, { phone_number: { exact: phone } });

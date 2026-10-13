@@ -16,7 +16,11 @@ Nothing on screen changes yet. No client records, payments, renewals, visits, me
 ## Status and timing, kept separately for each money type
 - Previous debt and current balance are already owed, so they are always Due now/Overdue. Square appointments never change that status.
 - Current balance also gets a separate Expected Collection window from the next Square appointment: this week, next week, later, or no appointment/unknown.
-- Prepared renewal: Upcoming if its start date hasn't arrived yet, Due now/Overdue once it has, and Needs review if the amount is known but the start date isn't. Its expected date is the renewal start date.
+- Prepared renewal status comes from the existing Square-driven package progress (visits used vs. total, plus the first uncovered appointment). The stored renewal date is not used on its own, and the Square forecast wins when the two disagree:
+  - Due now/Overdue: the current package is complete and the next package has reached its start, or the first uncovered appointment is today or already past.
+  - Upcoming: the current package still has visits left, and a first uncovered appointment is booked in the future. Its expected date is that appointment.
+  - Prepared (no scheduled start yet): visits remain and no uncovered appointment is booked. The dollars still count, but they are never called overdue. Example: 5/8 used, $345 renewal dated Oct 2, no upcoming appointment.
+  - Needs review: the amount is known, but Hub can't work out where the package ends (for example, Square's position is unreadable or there's no visit tracking).
 - Needs review means a known dollar amount whose timing or meaning is unclear. A missing package price is not a known balance. It goes on a separate package-info exception list and is never counted as $0.
 - Pay-per-visit or special clients with no dependable dollar amount are listed as exceptions. No amounts are made up and no new fields are added.
 

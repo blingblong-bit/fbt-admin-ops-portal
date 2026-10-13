@@ -17,7 +17,7 @@ Payment, renewal, visit, dues, and texting logic. No publishing.
 
 ## Technical details
 - `src/lib/archive-eligibility.ts`: pure `canArchive(bookings, now)` — active = start >= start of today (Chicago) and status not in CANCELLED_BY_CUSTOMER / CANCELLED_BY_SELLER / DECLINED / NO_SHOW.
-- `src/lib/archive.functions.ts`: `checkArchiveEligibility`, `archiveClient`, `restoreClient` server fns with `requireSupabaseAuth` + staff check. Archive re-fetches Square bookings (uncached) server-side and refuses if blocked; with no Square link, allowed. Update sets only `status` (`archived` / `active`) and inserts a `client_activities` row. Square fetch failure blocks with a "couldn't verify Square" message.
-- UI: client page header button + Payment Due row menu, using AlertDialog; button disabled with the blocked message after eligibility check.
-- Test `src/lib/archive-eligibility.test.ts`: no upcoming → allowed; future ACCEPTED → blocked; future cancelled only → allowed; archive update payload contains only `status` (history fields untouched).
+- `src/lib/archive.functions.ts`: `checkArchiveEligibility`, `archiveClient`, `restoreClient` server fns with `requireSupabaseAuth` + admin/superadmin role check (`has_role`); staff are refused. Archive re-fetches Square bookings (uncached) server-side and refuses if blocked. If no `square_customer_id`, attempt existing reliable phone/email customer matching; if still unmapped or any Square fetch fails, block with "Square scheduling status could not be verified." No link never means allowed. Update sets only `status` (`archived` / `active`) and inserts a `client_activities` row.
+- UI: client page header button + Payment Due row menu, using AlertDialog; buttons shown only to admin/superadmin; disabled with the blocked message after eligibility check.
+- Test `src/lib/archive-eligibility.test.ts`: no upcoming → allowed; future ACCEPTED → blocked; future cancelled only → allowed; unverifiable Square → blocked; archive update payload contains only `status` (history fields untouched).
 - Run `bunx vitest run src/lib` and type check, then report.

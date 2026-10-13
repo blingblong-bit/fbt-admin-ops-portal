@@ -2,7 +2,7 @@
 
 ## What you get
 A report with exact counts and dollar totals for the proposed "Payment Due = master money list", compared side by side with today's tiles, plus a downloadable CSV:
-Client | Previous Debt | Current Balance | Renewal Balance | Total Tracked | Timing/Status | Expected Payment Date | Reason
+Client | Previous Debt | Previous Status | Current Balance | Current Status | Current Expected Collection | Renewal Balance | Renewal Status | Renewal Expected Date | Total Tracked | Reason
 
 Nothing on screen changes yet. No client records, payments, renewals, visits, messages or campaigns are touched. Texting stays off. No publishing.
 
@@ -13,16 +13,16 @@ Nothing on screen changes yet. No client records, payments, renewals, visits, me
 - Total tracked = the three added together. One row per client, never duplicated.
 - Included: every non-archived, non-assessment, non-deleted client with a total above $0.
 
-## Timing per amount
-- Previous debt: Overdue.
-- Current balance: Overdue if from a prior week, Due this week if this week, Upcoming if next week, using today's existing weekly rules.
-- Prepared renewal: Due this week / Upcoming based on the existing expected-start forecast (renewal start date or first uncovered appointment).
-- Needs review: a known amount when Hub can't tell when it's due (for example, missing price setup or no date). The dollars stay visible.
-- Pay-per-visit or special cases with no dependable dollar amount are listed separately as exceptions. No amounts are made up and no new fields are added.
+## Status and timing, kept separately for each money type
+- Previous debt and current balance are already owed, so they are always Due now/Overdue. Square appointments never change that status.
+- Current balance also gets a separate Expected Collection window from the next Square appointment: this week, next week, later, or no appointment/unknown.
+- Prepared renewal: Upcoming if its start date hasn't arrived yet, Due now/Overdue once it has, and Needs review if the amount is known but the start date isn't. Its expected date is the renewal start date.
+- Needs review means a known dollar amount whose timing or meaning is unclear. A missing package price is not a known balance. It goes on a separate package-info exception list and is never counted as $0.
+- Pay-per-visit or special clients with no dependable dollar amount are listed as exceptions. No amounts are made up and no new fields are added.
 
 ## Report contents
 - Unique clients and total dollars; totals and client counts for each of the three money types.
-- Counts and dollars for Overdue/Due now, Due this week, Upcoming, and Needs review.
+- Dollars for Due now/Overdue, Upcoming, and Needs review, added up per money type (a client's whole total is never assigned to a single category). Current balances are also broken down by expected collection window. Client counts can overlap when one client has money in more than one category, and the report says so.
 - Clients with more than one money type; a confirmation that each client appears once.
 - Reconciliation check: the per-client totals add up exactly to previous + current + renewal, with $0 left unexplained.
 - Old vs new: current Payment Due count and dollars, Renewal Scheduled non-zero count and dollars, how many clients are on both, the proposed master count and dollars, and how many clients become newly visible because their only money is a prepared renewal.

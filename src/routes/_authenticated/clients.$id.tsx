@@ -9,6 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { recordManualPayment } from "@/lib/payments.functions";
 import { renewPackage } from "@/lib/renewal.functions";
 import { AppShell } from "@/components/AppShell";
+import { ArchiveClientButton } from "@/components/ArchiveClientButton";
 import { VisitSourceLine } from "@/components/VisitSourceLine";
 import { StatusBadge } from "@/components/StatusBadge";
 import { RenewalFlagBadge, useIsRenewalFlagged } from "@/components/RenewalFlagBadge";
@@ -333,6 +334,7 @@ function ClientDetailPage() {
             <Button variant="outline" onClick={() => setRenewOpen(true)}>
               Renew Package
             </Button>
+            <ArchiveClientButton clientId={c.id} clientName={fullName(c)} archived={c.status === "archived"} />
             {packageReviewNeeded && (
               <Button
                 variant="outline"

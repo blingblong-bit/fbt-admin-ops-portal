@@ -64,7 +64,30 @@ export type MasterDuesCtx = {
   nextAppointmentYmd: Map<string, string>;
   /** Square-driven renewal timing per client; missing → unknown. */
   renewalTiming: Map<string, RenewalTiming>;
+  /** Clients with numbered Square package appointments (e.g. "1 of 8"). */
+  squareNumberedPackage?: Set<string>;
 };
+
+/**
+ * Assessment-status clients count only with clear package evidence: a priced
+ * multi-visit package, or numbered Square package appointments. A price alone
+ * (e.g. a one-off assessment fee) is not enough.
+ */
+export function assessmentHasPackage(c: MasterDuesClient, squareNumbered: boolean): boolean {
+  if (squareNumbered) return true;
+  return (c.package_total_visits ?? 0) > 1 && Number(c.package_price ?? 0) > 0;
+}
+
+/**
+ * Renewal timing from the first uncovered appointment's actual start time.
+ * It is "started" only once that moment has passed — a later-today
+ * appointment is still upcoming.
+ */
+export function timingFromUncovered(startIso: string, nowIso: string, ymd: string): RenewalTiming {
+  return new Date(startIso).getTime() <= new Date(nowIso).getTime()
+    ? { kind: "started", ymd, reason: `First uncovered appointment ${startIso} has started` }
+    : { kind: "upcoming", ymd, reason: `First uncovered appointment ${startIso}` };
+}
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
 const money = (n: unknown) => Math.max(0, r2(Number(n ?? 0)));
@@ -94,7 +117,8 @@ export function computeMasterDues(clients: MasterDuesClient[], ctx: MasterDuesCt
   for (const c of clients) {
     if (seen.has(c.id)) continue;
     seen.add(c.id);
-    if (c.deleted_at || c.status === "archived" || c.status === "assessment") continue;
+    if (c.deleted_at || c.status === "archived") continue;
+    if (c.status === "assessment" && !assessmentHasPackage(c, !!ctx.squareNumberedPackage?.has(c.id))) continue;
     const name = `${c.first_name} ${c.last_name}`.trim();
     const reasons: string[] = [];
 

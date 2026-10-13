@@ -78,3 +78,24 @@ describe("computeMasterDues", () => {
     expect(run([base("a", { pending_renewal_price: 345 })], {}, { a: { kind: "started", ymd: "2026-10-09" } }).rows[0].renewal.status).toBe("due_now");
   });
 });
+
+describe("master dues v2 rules", () => {
+  it("later-today first uncovered appointment is Upcoming until its start time", async () => {
+    const { timingFromUncovered } = await import("./master-dues");
+    expect(timingFromUncovered("2026-10-13T22:15:00Z", "2026-10-13T20:50:00Z", "2026-10-13").kind).toBe("upcoming");
+    expect(timingFromUncovered("2026-10-13T20:45:00Z", "2026-10-13T20:50:00Z", "2026-10-13").kind).toBe("started");
+  });
+  it("assessment client with priced multi-visit package is included", () => {
+    expect(run([base("a", { status: "assessment", amount_paid: 0 })]).rows).toHaveLength(1);
+  });
+  it("assessment client with numbered Square package is included", () => {
+    const out = computeMasterDues([base("a", { status: "assessment", package_total_visits: 1, amount_paid: 0 })], {
+      todayYmd: today, nextAppointmentYmd: new Map(), renewalTiming: new Map(), squareNumberedPackage: new Set(["a"]),
+    });
+    expect(out.rows).toHaveLength(1);
+  });
+  it("true assessment-only client (single priced visit) stays excluded", () => {
+    expect(run([base("a", { status: "assessment", package_total_visits: 1, package_price: 50, amount_paid: 0 })]).rows).toEqual([]);
+    expect(run([base("a", { status: "assessment", package_total_visits: 0, package_price: 0 })]).rows).toEqual([]);
+  });
+});

@@ -46,4 +46,6 @@
 
 ## Master dues (Payment Due as master list)
 - [x] Read-only dry run + CSV
+- [x] v2 dry run (timestamp + assessment rules)
+- [ ] Angler Davis: cancelled 8/8 counted as current position (needs approval to fix)
 - [ ] UI change: waiting on owner comparison against Notes

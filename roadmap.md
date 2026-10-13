@@ -43,3 +43,7 @@
 - [x] Rebooked/renumbered cancellations no longer flag (Charles Parish)
 - [x] "This is correct" button (expires when Square bookings change) + Show confirmed / Undo
 - [x] Refresh reads Square fresh; review pages hold data 1 minute
+
+## Master dues (Payment Due as master list)
+- [x] Read-only dry run + CSV
+- [ ] UI change: waiting on owner comparison against Notes

@@ -30,6 +30,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { AppShell } from "@/components/AppShell";
 import { StatusBadge } from "@/components/StatusBadge";
 import { SmartClientCard } from "@/components/SmartClientCard";
+import { ArchiveClientButton } from "@/components/ArchiveClientButton";
 import { PreRenewCard } from "@/components/PreRenewCard";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -1256,6 +1257,9 @@ function Dashboard() {
                     scheduleStatusDetail={scheduleStatusDetail}
                   />
                   {forecast && <PreRenewCard forecast={forecast} hideAmount={isStaff} />}
+                  {(filter === "payment_due" || filter === "payment_due_this_week" || filter === "payment_due_next_week" || filter === "overdue_prior_weeks") && (
+                    <ArchiveClientButton clientId={c.id} clientName={fullName(c)} archived={c.status === "archived"} size="sm" />
+                  )}
                 </div>
               );
             })}
@@ -1611,6 +1615,12 @@ function WeeklyPaymentView({
                     {row.forecast && row.nextAmount > 0 && (
                       <PreRenewCard forecast={row.forecast as RenewalForecastRow} />
                     )}
+                    <ArchiveClientButton
+                      clientId={row.client.id}
+                      clientName={fullName(row.client)}
+                      archived={row.client.status === "archived"}
+                      size="sm"
+                    />
                   </div>
                 );
               })}

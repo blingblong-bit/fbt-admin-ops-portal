@@ -1,7 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { archiveUpdatePayload, decideArchive, type ArchiveDecision } from "./archive-eligibility";
-import { loadLiveSchedule } from "./archive.server";
 
 type Ctx = { supabase: any; userId: string };
 
@@ -21,6 +20,7 @@ async function evaluate(ctx: Ctx, clientId: string): Promise<ArchiveDecision> {
     .single();
   if (error) throw error;
   const now = new Date();
+  const { loadLiveSchedule } = await import("./archive.server");
   const live = await loadLiveSchedule(c, now);
   return decideArchive(live.verified, live.bookings, now);
 }

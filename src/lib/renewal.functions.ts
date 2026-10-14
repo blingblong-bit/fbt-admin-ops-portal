@@ -9,8 +9,10 @@ export type RenewPackageInput = {
   startDate: string | null;
   /** Money collected right now, on top of anything already prepaid. */
   paidNow?: number;
-  source?: "manual_renewal" | "pre_renewal_activation";
+  source?: "manual_renewal" | "pre_renewal_activation" | "boundary_activation";
   bookingId?: string | null;
+  /** Visits already used on the new package (Square boundary activation). Default 0. */
+  visitsUsed?: number;
 };
 
 export type RenewPackageResult = {
@@ -42,6 +44,7 @@ export async function renewClientPackage(
     p_extra_paid: Math.max(0, Number(input.paidNow ?? 0)),
     p_source: input.source ?? "manual_renewal",
     p_booking_id: input.bookingId ?? null,
+    p_visits_used: Math.max(0, Number(input.visitsUsed ?? 0)),
   });
   if (error) throw error as Error;
   const row = (Array.isArray(data) ? data[0] : data) as RenewPackageResult | undefined;

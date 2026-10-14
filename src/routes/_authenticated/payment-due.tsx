@@ -110,7 +110,7 @@ function PaymentDuePage() {
               </div>
             </div>
           )}
-          <p className="mt-6 text-xs text-muted-foreground">Computed {new Date(q.data.computed_at).toLocaleString()}</p>
+          <p className="mt-6 text-xs text-muted-foreground">Computed {new Date(q.data!.computed_at).toLocaleString()}</p>
         </>
       )}
     </AppShell>

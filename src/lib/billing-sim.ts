@@ -36,6 +36,8 @@ export type SimInput = {
   todayYmd: string;
   nowIso: string;
   lookbackWeeks?: number;
+  /** No payment records exist for this client at all (likely paid outside Square). */
+  paymentRecordsMissing?: boolean;
 };
 
 export type SimResult =
@@ -114,7 +116,10 @@ export function simulateBilling(inp: SimInput): SimResult {
   }
   for (const o of obligations) {
     if (o.open <= 0) { o.status = "paid"; continue; }
-    if (unclearBefore && o.ymd <= unclearBefore.slice(0, 10)) {
+    if (inp.paymentRecordsMissing && o.expected === "past") {
+      o.status = "needs_billing_review";
+      o.reason += "; no payment records for this client";
+    } else if (unclearBefore && o.ymd <= unclearBefore.slice(0, 10)) {
       o.status = "needs_billing_review";
       o.reason += "; an unclear payment may cover this";
     }

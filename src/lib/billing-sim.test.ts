@@ -74,4 +74,10 @@ describe("billing simulator", () => {
     expect(r.open).toBe(0);
     expect(r.payments[0].kind).toBe("unclear");
   });
+  it("missing payment records send past weeks to billing review, current week still counts", () => {
+    const r = ok(simulateBilling({ type: "pay_per_visit", rate: 40, appointments: [ap("a", "2026-10-07"), ap("b", "2026-10-15")], payments: [], todayYmd: today, nowIso: now, paymentRecordsMissing: true }));
+    expect(r.obligations.map((o) => o.status)).toEqual(["needs_billing_review", "upcoming"]);
+    expect(r.open).toBe(40);
+    expect(r.reviewOpen).toBe(40);
+  });
 });

@@ -3,7 +3,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { queryOptions } from "@tanstack/react-query";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { computeMasterDues, timingFromUncovered, type RenewalTiming } from "./master-dues";
+import { computeMasterDues, renewalTimingFor, type RenewalTiming } from "./master-dues";
 import { drivingCounts, forecastRenewal } from "./effective-visit-state";
 import { simulateBilling, type SimResult } from "./billing-sim";
 
@@ -53,13 +53,7 @@ export const getMasterDues = createServerFn({ method: "GET" })
       const bks = c.square_customer_id ? index.byCustomer.get(c.square_customer_id) ?? [] : [];
       if (bks.some((b) => NUMBERED.test(b.seller_note ?? "") || NUMBERED.test(b.customer_note ?? ""))) squareNumberedPackage.add(c.id);
       const f = forecastRenewal({ upcomingStarts: ups, visitsUsed: d.used, totalVisits: d.total, nextPackageStart: d.nextPackageStart });
-      let t: RenewalTiming;
-      if (st.suppressed) t = { kind: "unknown", ymd: null, reason: "Square position unreadable" };
-      else if (d.currentPackageStart && (Number(c.pending_renewal_price ?? 0) > 0 || c.pending_renewal_start_date) && (!c.package_start_date || chi(d.currentPackageStart) > c.package_start_date))
-        t = { kind: "started", ymd: chi(d.currentPackageStart), reason: "Square shows the next package began (1/N after N/N)" };
-      else if (d.nextPackageStart && d.nextPackageStart <= nowIso) t = { kind: "started", ymd: chi(d.nextPackageStart), reason: "Square shows the next package has started" };
-      else if (f.firstUncoveredStart) t = timingFromUncovered(f.firstUncoveredStart, nowIso, chi(f.firstUncoveredStart));
-      else t = { kind: "no_start", ymd: null, reason: "No uncovered appointment booked" };
+      const t = renewalTimingFor(c, { suppressed: st.suppressed, ...d, firstUncoveredStart: f.firstUncoveredStart }, nowIso);
       renewalTiming.set(c.id, t);
     }
 

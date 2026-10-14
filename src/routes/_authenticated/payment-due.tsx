@@ -1,13 +1,13 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { AppShell } from "@/components/AppShell";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useRole } from "@/hooks/useRole";
 import { getMasterDues, masterDuesQuery } from "@/lib/master-dues.functions";
-import { DUES_FILTERS, matchesFilter, sumRows, type DuesFilter } from "@/lib/master-dues-view";
+import { DUES_FILTERS, filterTotals, makeWeekOf, matchesFilter, sumRows, type DuesFilter } from "@/lib/master-dues-view";
 import type { MasterDuesRow, ObligationStatus } from "@/lib/master-dues";
 import { addDaysYmd, workWeekStartFromYmd } from "@/lib/work-week";
 
@@ -22,6 +22,7 @@ export const Route = createFileRoute("/_authenticated/payment-due")({
       { name: "twitter:card", content: "summary" },
     ],
   }),
+  validateSearch: (s: Record<string, unknown>): { filter?: string } => (typeof s.filter === "string" ? { filter: s.filter } : {}),
   component: PaymentDuePage,
 });
 
@@ -90,7 +91,7 @@ function PaymentDuePage() {
             ))}
           </div>
           <p className="mb-3 text-sm">
-            Shown: <b>{shown.length}</b> clients, <b>{$(sumRows(shown))}</b>
+            Shown: <b>{shownTotals.clients}</b> clients, <b>{$(shownTotals.dollars)}</b>
             {filter === "all" && <> · Difference from total: <b className={diff === 0 ? "" : "text-destructive"}>{$(diff)}</b></>}
           </p>
 

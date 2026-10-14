@@ -67,6 +67,7 @@ import { autofillPackagesFromSquare } from "@/lib/package-autofill.functions";
 import type { ScheduleStatus } from "@/components/SmartClientCard";
 import { useRole } from "@/hooks/useRole";
 import { getMasterDues, masterDuesQuery } from "@/lib/master-dues.functions";
+import { filterTotals, makeWeekOf, type DuesFilter } from "@/lib/master-dues-view";
 import { visibleTileMoney } from "@/lib/dashboard-tile-visibility";
 import {
   groupWeeklyPayments,
@@ -766,6 +767,12 @@ function Dashboard() {
   const fetchAutomation = useServerFn(getVisitAutomationReview);
   const masterDuesFn = useServerFn(getMasterDues);
   const masterQ = useQuery({ ...masterDuesQuery(() => masterDuesFn()), enabled: !isStaff });
+  const masterTile = (k: DuesFilter) => {
+    const d = masterQ.data?.data;
+    if (!d) return { clients: 0, dollars: undefined as number | undefined };
+    const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Chicago" });
+    return filterTotals(d.rows, k, makeWeekOf(today, workWeekStartFromYmd, addDaysYmd));
+  };
   const automationQ = useQuery({
     queryKey: ["visit-automation-review"],
     queryFn: () => orThrow(fetchAutomation({ data: {} })),
@@ -782,7 +789,7 @@ function Dashboard() {
 
 
 
-  const allTiles: (TileDef & { staffHidden?: boolean })[] = [
+  const allTiles: (TileDef & { staffHidden?: boolean; adminHidden?: boolean })[] = [
     {
       key: "payment_due",
       label: "Payment Due",
@@ -805,7 +812,8 @@ function Dashboard() {
       money: masterTile("this_week").dollars,
       moneyLabel: "expected",
       tone: "red",
-      href: "/payment-due?filter=this_week",
+      href: "/payment-due",
+      search: { filter: "this_week" },
       staffHidden: true,
     },
     {
@@ -817,7 +825,8 @@ function Dashboard() {
       money: masterTile("next_week").dollars,
       moneyLabel: "expected",
       tone: "red",
-      href: "/payment-due?filter=next_week",
+      href: "/payment-due",
+      search: { filter: "next_week" },
       staffHidden: true,
     },
     {
@@ -829,7 +838,8 @@ function Dashboard() {
       money: masterTile("due_now").dollars,
       moneyLabel: "due now",
       tone: "red",
-      href: "/payment-due?filter=due_now",
+      href: "/payment-due",
+      search: { filter: "due_now" },
       staffHidden: true,
     },
     {
@@ -1383,6 +1393,7 @@ type TileDef = {
   countLabel?: string;
   hideCount?: boolean;
   ctaLabel?: string;
+  search?: Record<string, string>;
 };
 
 function Tile({

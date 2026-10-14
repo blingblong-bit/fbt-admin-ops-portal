@@ -14,6 +14,7 @@
  * - Missing package price is a package-info exception, never a $0 balance.
  */
 import { addDaysYmd, workWeekStartFromYmd } from "./work-week";
+import type { SimResult } from "./billing-sim";
 
 export type MasterDuesClient = {
   id: string;
@@ -29,6 +30,18 @@ export type MasterDuesClient = {
   pending_renewal_start_date?: string | null;
   pending_renewal_price?: number | null;
   pending_renewal_paid?: number | null;
+  billing_type?: string | null;
+};
+
+export type BillingBucket = {
+  type: "pay_per_visit" | "weekly" | null;
+  amount: number;
+  due_now: number;
+  /** Unpaid obligations from prior work weeks (always Due Now). */
+  carryover: number;
+  this_week: number;
+  next_week: number;
+  obligations: { ymd: string; kind: "visit" | "week"; open: number; status: string; expected: string }[];
 };
 
 export type RenewalTiming = {
@@ -47,6 +60,7 @@ export type MasterDuesRow = {
   previous: { amount: number; status: ObligationStatus };
   current: { amount: number; status: ObligationStatus; expected: CollectionWindow | null };
   renewal: { amount: number; status: ObligationStatus; expected_ymd: string | null };
+  billing: BillingBucket;
   total: number;
   reasons: string[];
 };
@@ -54,7 +68,7 @@ export type MasterDuesRow = {
 export type MasterDuesException = {
   client_id: string;
   name: string;
-  kind: "package_info_needed" | "pay_per_visit";
+  kind: "package_info_needed" | "pay_per_visit" | "billing_setup_needed" | "billing_review";
   reason: string;
 };
 
@@ -66,6 +80,8 @@ export type MasterDuesCtx = {
   renewalTiming: Map<string, RenewalTiming>;
   /** Clients with numbered Square package appointments (e.g. "1 of 8"). */
   squareNumberedPackage?: Set<string>;
+  /** Simulated PPV/weekly obligations for clients whose billing_type is not package. */
+  billing?: Map<string, SimResult>;
 };
 
 /**
@@ -124,7 +140,31 @@ export function computeMasterDues(clients: MasterDuesClient[], ctx: MasterDuesCt
 
     const prev = money(c.previous_package_owed);
     let cur = 0;
-    if (c.payment_model === "pay_per_visit") {
+    const bt = c.billing_type === "pay_per_visit" || c.billing_type === "weekly" ? c.billing_type : null;
+    const billing: BillingBucket = { type: bt, amount: 0, due_now: 0, carryover: 0, this_week: 0, next_week: 0, obligations: [] };
+    if (bt) {
+      // PPV / weekly clients: package fields don't drive money.
+      const sim = ctx.billing?.get(c.id);
+      if (!sim || sim.setup !== "ok") {
+        exceptions.push({ client_id: c.id, name, kind: "billing_setup_needed", reason: sim?.setup === "needs_billing_setup" ? sim.reason : "Billing rate or Square schedule unavailable" });
+      } else {
+        for (const o of sim.obligations) {
+          if (o.open <= 0) continue;
+          billing.obligations.push({ ymd: o.ymd, kind: o.kind, open: o.open, status: o.status, expected: o.expected });
+          if (o.status === "needs_billing_review") continue;
+          billing.amount += o.open;
+          if (o.status === "due_now") billing.due_now += o.open;
+          if (o.expected === "past") billing.carryover += o.open;
+          if (o.expected === "this_week") billing.this_week += o.open;
+          if (o.expected === "next_week") billing.next_week += o.open;
+        }
+        for (const k of ["amount", "due_now", "carryover", "this_week", "next_week"] as const) billing[k] = r2(billing[k]);
+        const review = sim.reviewOpen + sim.payments.reduce((s, p) => s + p.amount, 0);
+        if (review > 0)
+          exceptions.push({ client_id: c.id, name, kind: "billing_review", reason: [sim.reviewOpen > 0 ? `$${sim.reviewOpen} obligations need billing review` : "", ...sim.payments.map((p) => `$${p.amount} payment: ${p.reason}`)].filter(Boolean).join("; ") });
+        if (billing.carryover > 0) reasons.push("Unpaid from prior weeks");
+      }
+    } else if (c.payment_model === "pay_per_visit") {
       exceptions.push({ client_id: c.id, name, kind: "pay_per_visit", reason: "Pay-per-visit: no per-visit amount stored" });
     } else if (!(Number(c.package_price ?? 0) > 0)) {
       if ((c.package_total_visits ?? 0) > 0)
@@ -134,7 +174,7 @@ export function computeMasterDues(clients: MasterDuesClient[], ctx: MasterDuesCt
     }
 
     const renPrice = Number(c.pending_renewal_price ?? 0);
-    const ren = renPrice > 0 ? money(renPrice - Number(c.pending_renewal_paid ?? 0)) : 0;
+    const ren = !bt && renPrice > 0 ? money(renPrice - Number(c.pending_renewal_paid ?? 0)) : 0;
     let renStatus: ObligationStatus = "none";
     let renYmd: string | null = null;
     if (ren > 0) {
@@ -144,7 +184,7 @@ export function computeMasterDues(clients: MasterDuesClient[], ctx: MasterDuesCt
       if (t.reason) reasons.push(`Renewal: ${t.reason}`);
     }
 
-    const total = r2(prev + cur + ren);
+    const total = r2(prev + cur + ren + billing.amount);
     if (total <= 0) continue;
     const nextAppt = ctx.nextAppointmentYmd.get(c.id) ?? null;
     if (prev > 0) reasons.push("Debt from an earlier package");
@@ -160,6 +200,7 @@ export function computeMasterDues(clients: MasterDuesClient[], ctx: MasterDuesCt
         expected: cur > 0 ? windowFor(nextAppt, ctx.todayYmd) : null,
       },
       renewal: { amount: ren, status: renStatus, expected_ymd: renYmd },
+      billing,
       total,
       reasons,
     });
@@ -183,7 +224,11 @@ export function computeMasterDues(clients: MasterDuesClient[], ctx: MasterDuesCt
     previous: tally((r) => ({ amount: r.previous.amount, ok: true })),
     current: tally((r) => ({ amount: r.current.amount, ok: true })),
     renewal: tally((r) => ({ amount: r.renewal.amount, ok: true })),
-    multiBucket: rows.filter((r) => [r.previous, r.current, r.renewal].filter((b) => b.amount > 0).length > 1).length,
+    billing: tally((r) => ({ amount: r.billing.amount, ok: true })),
+    ppv: tally((r) => ({ amount: r.billing.amount, ok: r.billing.type === "pay_per_visit" })),
+    weekly: tally((r) => ({ amount: r.billing.amount, ok: r.billing.type === "weekly" })),
+    carryover: tally((r) => ({ amount: r.billing.carryover, ok: true })),
+    multiBucket: rows.filter((r) => [r.previous, r.current, r.renewal, r.billing].filter((b) => b.amount > 0).length > 1).length,
     renewalByStatus: {
       due_now: renewalBy("due_now"),
       upcoming: renewalBy("upcoming"),
@@ -197,6 +242,6 @@ export function computeMasterDues(clients: MasterDuesClient[], ctx: MasterDuesCt
       unknown: currentBy("unknown"),
     },
   };
-  const unexplained = r2(totals.total - (totals.previous.dollars + totals.current.dollars + totals.renewal.dollars));
+  const unexplained = r2(totals.total - (totals.previous.dollars + totals.current.dollars + totals.renewal.dollars + totals.billing.dollars));
   return { rows, exceptions, totals, unexplained };
 }

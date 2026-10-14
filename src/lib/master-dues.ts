@@ -256,7 +256,7 @@ export function shouldActivateRenewal(c: MasterDuesClient, timing: RenewalTiming
 }
 
 /** Pure mirror of renew_client_package's money moves (for tests/audits). */
-export function activatedState(c: MasterDuesClient) {
+export function activatedState(c: MasterDuesClient & Record<string, any>, opts: { visitsUsed?: number; startYmd?: string | null } = {}) {
   const unpaid = Math.max(0, Number(c.package_price ?? 0) - Number(c.amount_paid ?? 0));
   return {
     ...c,
@@ -266,5 +266,9 @@ export function activatedState(c: MasterDuesClient) {
     pending_renewal_price: null,
     pending_renewal_paid: 0,
     pending_renewal_start_date: null,
+    package_total_visits: Number(c.pending_renewal_total_visits ?? c.package_total_visits ?? 0),
+    package_start_date: opts.startYmd ?? c.pending_renewal_start_date ?? null,
+    visits_used: Math.max(0, opts.visitsUsed ?? 0),
+    completed_history: { package_price: c.package_price, amount_paid: c.amount_paid, visits_used: c.visits_used, package_total_visits: c.package_total_visits },
   };
 }

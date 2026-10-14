@@ -53,3 +53,16 @@ describe("All sorting", () => {
     expect(sortRows(out.rows, wo).map((r) => r.client_id)).toEqual(["due", "thisA", "thisB", "next", "later", "prep", "review"]);
   });
 });
+
+describe("activation with visits used", () => {
+  it("p_visits_used=3 → new package at 3/N, totals unchanged", () => {
+    const base = c({ pending_renewal_paid: 200, pending_renewal_total_visits: 8 } as any);
+    const a0 = activatedState(base);
+    const a3 = activatedState(base, { visitsUsed: 3, startYmd: "2026-10-07" });
+    expect(a3.visits_used).toBe(3);
+    expect(a3.package_total_visits).toBe(8);
+    expect(a3.package_start_date).toBe("2026-10-07");
+    expect(a0.visits_used).toBe(0);
+    expect(owed(a3)).toBe(owed(a0));
+  });
+});

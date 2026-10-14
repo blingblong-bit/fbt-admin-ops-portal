@@ -67,6 +67,8 @@ import { autofillPackagesFromSquare } from "@/lib/package-autofill.functions";
 import type { ScheduleStatus } from "@/components/SmartClientCard";
 import { useRole } from "@/hooks/useRole";
 import { getMasterDues, masterDuesQuery } from "@/lib/master-dues.functions";
+import { filterTotals, makeWeekOf, type DuesFilter } from "@/lib/master-dues-view";
+import { addDaysYmd, workWeekStartFromYmd } from "@/lib/work-week";
 import { visibleTileMoney } from "@/lib/dashboard-tile-visibility";
 import {
   groupWeeklyPayments,
@@ -766,6 +768,12 @@ function Dashboard() {
   const fetchAutomation = useServerFn(getVisitAutomationReview);
   const masterDuesFn = useServerFn(getMasterDues);
   const masterQ = useQuery({ ...masterDuesQuery(() => masterDuesFn()), enabled: !isStaff });
+  const masterTile = (k: DuesFilter) => {
+    const d = masterQ.data?.data;
+    if (!d) return { clients: 0, dollars: undefined as number | undefined };
+    const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Chicago" });
+    return filterTotals(d.rows, k, makeWeekOf(today, workWeekStartFromYmd, addDaysYmd));
+  };
   const automationQ = useQuery({
     queryKey: ["visit-automation-review"],
     queryFn: () => orThrow(fetchAutomation({ data: {} })),
@@ -782,7 +790,7 @@ function Dashboard() {
 
 
 
-  const allTiles: (TileDef & { staffHidden?: boolean })[] = [
+  const allTiles: (TileDef & { staffHidden?: boolean; adminHidden?: boolean })[] = [
     {
       key: "payment_due",
       label: "Payment Due",
@@ -801,12 +809,12 @@ function Dashboard() {
       label: "Payment Due — This Week",
       sublabel: formatYmdRange(thisWeekQuery.data?.week_start, thisWeekQuery.data?.week_end),
       icon: <CircleDollarSign className="h-5 w-5" />,
-      count: counts.payment_due_this_week,
-      money: counts.payment_due_this_week_total,
-      moneyLabel: "outstanding",
-      extraMoney: counts.next_package_this_week_total,
-      extraMoneyLabel: "next package",
+      count: masterTile("this_week").clients,
+      money: masterTile("this_week").dollars,
+      moneyLabel: "expected",
       tone: "red",
+      href: "/payment-due",
+      search: { filter: "this_week" },
       staffHidden: true,
     },
     {
@@ -814,25 +822,25 @@ function Dashboard() {
       label: "Payment Due — Next Week",
       sublabel: formatYmdRange(nextWeekQuery.data?.week_start, nextWeekQuery.data?.week_end),
       icon: <CircleDollarSign className="h-5 w-5" />,
-      count: counts.payment_due_next_week,
-      money: counts.payment_due_next_week_total,
-      moneyLabel: "outstanding",
-      extraMoney: counts.next_package_next_week_total,
-      extraMoneyLabel: "next package",
+      count: masterTile("next_week").clients,
+      money: masterTile("next_week").dollars,
+      moneyLabel: "expected",
       tone: "red",
+      href: "/payment-due",
+      search: { filter: "next_week" },
       staffHidden: true,
     },
     {
       key: "overdue_prior_weeks",
-      label: "Overdue — Prior Weeks",
-      sublabel: thisWeekQuery.data?.week_start
-        ? `before ${formatYmdRange(thisWeekQuery.data.week_start, thisWeekQuery.data.week_start)?.split(" – ")[0]}`
-        : undefined,
+      label: "Due Now / Overdue",
+      sublabel: "already owed — any timing",
       icon: <AlertTriangle className="h-5 w-5" />,
-      count: counts.overdue_prior_weeks,
-      money: counts.overdue_prior_weeks_total,
-      moneyLabel: "outstanding",
+      count: masterTile("due_now").clients,
+      money: masterTile("due_now").dollars,
+      moneyLabel: "due now",
       tone: "red",
+      href: "/payment-due",
+      search: { filter: "due_now" },
       staffHidden: true,
     },
     {
@@ -859,6 +867,8 @@ function Dashboard() {
       money: isStaff ? undefined : counts.critical_total,
       moneyLabel: "outstanding",
       tone: "red",
+      // No Master Dues urgency rule yet → hidden for admins so it can't conflict.
+      adminHidden: true,
     },
     {
       key: "payments_review",
@@ -908,8 +918,6 @@ function Dashboard() {
       sublabel: "booked past current package",
       icon: <RefreshCw className="h-5 w-5" />,
       count: counts.needs_renewal,
-      money: isStaff ? undefined : counts.next_package_unprepared_total,
-      moneyLabel: "next packages not yet prepared",
       tone: counts.needs_renewal > 0 ? "amber" : "slate",
     },
     {
@@ -918,8 +926,6 @@ function Dashboard() {
       sublabel: "next package prepared — activates at check-in",
       icon: <RefreshCw className="h-5 w-5" />,
       count: counts.renewal_scheduled,
-      money: isStaff ? undefined : counts.next_package_prepared_total,
-      moneyLabel: "next packages prepared",
       tone: "slate",
     },
     {
@@ -962,8 +968,7 @@ function Dashboard() {
       sublabel: `${duesBlocked} blocked · ${duesClosed} payment received`,
       icon: <MessageSquare className="h-5 w-5" />,
       count: duesReady,
-      money: duesReadyTotal > 0 ? duesReadyTotal : undefined,
-      moneyLabel: "ready to send",
+      // Count only: dollars live in Payment Due (Master Dues).
       tone: duesReady > 0 ? "amber" : "slate",
       href: "/dues-texts",
       staffHidden: true,
@@ -996,7 +1001,7 @@ function Dashboard() {
       tone: "slate",
     },
   ];
-  const tiles = allTiles.filter((t) => !(isStaff && t.staffHidden));
+  const tiles = allTiles.filter((t) => !(isStaff && t.staffHidden) && !(!isStaff && t.adminHidden));
 
   // Per-user tile visibility. Persisted in localStorage; defaults to the
   // curated "essential" set below. Tiles not in the essentials list are
@@ -1389,6 +1394,7 @@ type TileDef = {
   countLabel?: string;
   hideCount?: boolean;
   ctaLabel?: string;
+  search?: Record<string, string>;
 };
 
 function Tile({

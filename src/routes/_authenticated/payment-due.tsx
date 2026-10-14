@@ -1,13 +1,13 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { AppShell } from "@/components/AppShell";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useRole } from "@/hooks/useRole";
 import { getMasterDues, masterDuesQuery } from "@/lib/master-dues.functions";
-import { DUES_FILTERS, matchesFilter, sumRows, type DuesFilter } from "@/lib/master-dues-view";
+import { DUES_FILTERS, filterTotals, makeWeekOf, matchesFilter, sumRows, type DuesFilter } from "@/lib/master-dues-view";
 import type { MasterDuesRow, ObligationStatus } from "@/lib/master-dues";
 import { addDaysYmd, workWeekStartFromYmd } from "@/lib/work-week";
 
@@ -22,6 +22,7 @@ export const Route = createFileRoute("/_authenticated/payment-due")({
       { name: "twitter:card", content: "summary" },
     ],
   }),
+  validateSearch: (s: Record<string, unknown>): { filter?: string } => (typeof s.filter === "string" ? { filter: s.filter } : {}),
   component: PaymentDuePage,
 });
 
@@ -36,17 +37,16 @@ function PaymentDuePage() {
   const { isAdmin, isLoading: roleLoading } = useRole();
   const fn = useServerFn(getMasterDues);
   const q = useQuery({ ...masterDuesQuery(() => fn()), enabled: isAdmin });
-  const [filter, setFilter] = useState<DuesFilter>("all");
+  const search = Route.useSearch();
+  const navigate = Route.useNavigate();
+  const filter: DuesFilter = DUES_FILTERS.some((f) => f.key === search.filter) ? (search.filter as DuesFilter) : "all";
+  const setFilter = (f: DuesFilter) => navigate({ search: { filter: f }, replace: true });
 
   const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Chicago" });
-  const thisStart = workWeekStartFromYmd(today);
-  const weekOf = (ymd: string | null) => {
-    if (!ymd) return null;
-    const w = workWeekStartFromYmd(ymd);
-    return w <= thisStart ? "this" : w === addDaysYmd(thisStart, 7) ? "next" : "later";
-  };
+  const weekOf = makeWeekOf(today, workWeekStartFromYmd, addDaysYmd);
   const data = q.data?.data ?? null;
   const shown = useMemo(() => (data ? data.rows.filter((r) => matchesFilter(r, filter, weekOf)).sort((a, b) => b.total - a.total) : []), [data, filter]);
+  const shownTotals = data ? filterTotals(data.rows, filter, weekOf) : { clients: 0, dollars: 0 };
 
   if (!roleLoading && !isAdmin) {
     return <AppShell><p className="text-muted-foreground">Payment Due is available to admins only.</p></AppShell>;
@@ -91,7 +91,7 @@ function PaymentDuePage() {
             ))}
           </div>
           <p className="mb-3 text-sm">
-            Shown: <b>{shown.length}</b> clients, <b>{$(sumRows(shown))}</b>
+            Shown: <b>{shownTotals.clients}</b> clients, <b>{$(shownTotals.dollars)}</b>
             {filter === "all" && <> · Difference from total: <b className={diff === 0 ? "" : "text-destructive"}>{$(diff)}</b></>}
           </p>
 

@@ -32,3 +32,9 @@ Kept separate. The recommended fix, which needs your approval later: move the 10
 - Temporary audit script under /tmp that reuses `effective-visit-state` and `computeMasterDues`. The pure activation preview mirrors `renew_client_package`. Only reads.
 - Anomaly rules for B: prepaid > price; two payment entries of the same amount within 3 days (Square plus manual); a manual entry inside the package window; or ledger pending-applied total ≠ stored pending_renewal_paid.
 - Proposed RPC addition (not applied yet): an optional `p_visits_used integer DEFAULT 0` on `renew_client_package`, set inside the same locked update.
+
+## Additions (approved)
+- A client counts as clean only when the preview passes all six checks in step 3 together.
+- Report before any migration: exact A and B counts, every client moved from A to B and why, every A client that fails the preview and why, the B anomaly details, and confirmation that every clean A preview keeps dollars exactly the same.
+- Added test: a preview with visits used set to 3 produces the new package at 3/N (not 0/N) and leaves the money totals unchanged.
+- Run the audit, tests and typecheck, then stop and report. No client, renewal-step or database changes yet.

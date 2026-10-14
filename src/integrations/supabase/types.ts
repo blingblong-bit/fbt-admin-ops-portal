@@ -52,6 +52,8 @@ export type Database = {
       clients: {
         Row: {
           amount_paid: number
+          billing_effective_date: string | null
+          billing_type: string
           created_at: string
           deleted_at: string | null
           email: string | null
@@ -73,6 +75,7 @@ export type Database = {
           pending_renewal_price: number | null
           pending_renewal_start_date: string | null
           pending_renewal_total_visits: number | null
+          per_visit_rate: number | null
           phone: string | null
           previous_package_owed: number
           sms_consent_at: string | null
@@ -86,9 +89,12 @@ export type Database = {
           updated_at: string
           visit_tracking_mode: string
           visits_used: number | null
+          weekly_rate: number | null
         }
         Insert: {
           amount_paid?: number
+          billing_effective_date?: string | null
+          billing_type?: string
           created_at?: string
           deleted_at?: string | null
           email?: string | null
@@ -110,6 +116,7 @@ export type Database = {
           pending_renewal_price?: number | null
           pending_renewal_start_date?: string | null
           pending_renewal_total_visits?: number | null
+          per_visit_rate?: number | null
           phone?: string | null
           previous_package_owed?: number
           sms_consent_at?: string | null
@@ -123,9 +130,12 @@ export type Database = {
           updated_at?: string
           visit_tracking_mode?: string
           visits_used?: number | null
+          weekly_rate?: number | null
         }
         Update: {
           amount_paid?: number
+          billing_effective_date?: string | null
+          billing_type?: string
           created_at?: string
           deleted_at?: string | null
           email?: string | null
@@ -147,6 +157,7 @@ export type Database = {
           pending_renewal_price?: number | null
           pending_renewal_start_date?: string | null
           pending_renewal_total_visits?: number | null
+          per_visit_rate?: number | null
           phone?: string | null
           previous_package_owed?: number
           sms_consent_at?: string | null
@@ -160,6 +171,7 @@ export type Database = {
           updated_at?: string
           visit_tracking_mode?: string
           visits_used?: number | null
+          weekly_rate?: number | null
         }
         Relationships: []
       }

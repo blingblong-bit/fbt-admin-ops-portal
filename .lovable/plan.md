@@ -5,8 +5,9 @@ Nothing in production changes. No new fields, no client or payment edits, nothin
 ## What gets built (simulation only)
 1. A pure billing simulator that sits alongside Master Dues and does not change its rules.
    - Billing types: package, pay_per_visit, weekly. Rates are supplied by the simulator, not stored.
-   - PPV: each non-cancelled Square appointment in this week or next week is its own obligation. It is Upcoming before start and Due Now after start. Later appointments are shown for information only and are not counted.
-   - Weekly: one obligation per Monday–Friday billing week that has at least one appointment, whatever the number of visits. Upcoming before the week starts, Due Now once it begins. This uses the Hub's existing work-week rule, so weekends roll into the next week.
+   - Window: the previous 4 work weeks, the current week and next week. Unpaid obligations from past weeks stay Due Now. Future obligations count only through next week; anything later is shown for information only. If a payment in the lookback can't be clearly matched, the obligation is marked "Needs billing review" instead of being guessed.
+   - PPV: each non-cancelled Square appointment in the window is its own obligation. It is Upcoming before start and Due Now after start.
+   - Weekly: one obligation per Monday–Friday billing week that has at least one appointment, whatever the number of visits. Upcoming before the week starts, Due Now once it begins. For example, last week $80 unpaid plus this week $80 unpaid shows as $160 Due Now. This uses the Hub's existing work-week rule, so weekends roll into the next week.
    - Cancelled visits create no charge and there is no cancellation fee. No-shows are listed as exceptions.
    - Payments go to the oldest open obligation, but only when the client, timing, amount and billing evidence all clearly point to it. If they don't, the payment is reported as "payment allocation unclear" rather than forced onto an obligation. Any excess is reported as an overpayment and never becomes credit.
    - An unclear model or rate becomes "Needs billing setup", adds $0 and is excluded from totals.
@@ -29,7 +30,12 @@ Nothing in production changes. No new fields, no client or payment edits, nothin
   - Due Now, This Week and Next Week dollars
   - excluded clients
   - overpayments and unmatched payments
-- Reconciliation: current Master Dues + simulated open obligations = projected total, with projected client count and dollars.
+- Reconciliation, with the subtraction and addition shown on separate lines so each can be checked:
+  current live Master Dues
+  − Master Dues dollars explicitly replaced by the new billing model
+  + simulated open PPV/Weekly obligations
+  = projected Master Dues
+  This is reported with exact client counts and dollars for both the current and projected totals, and must show a $0 difference.
 - Recommended model and rate per client, plus a go/no-go on implementing before Sunday.
 - All lib tests and a typecheck.
 

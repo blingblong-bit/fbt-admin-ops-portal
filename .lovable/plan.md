@@ -8,9 +8,10 @@ Nothing in production changes. No new fields, no client or payment edits, nothin
    - PPV: each non-cancelled Square appointment in this week or next week is its own obligation. It is Upcoming before start and Due Now after start. Later appointments are shown for information only and are not counted.
    - Weekly: one obligation per Monday–Friday billing week that has at least one appointment, whatever the number of visits. Upcoming before the week starts, Due Now once it begins. This uses the Hub's existing work-week rule, so weekends roll into the next week.
    - Cancelled visits create no charge and there is no cancellation fee. No-shows are listed as exceptions.
-   - Payments go to the oldest open obligation first. Any excess is reported as an overpayment exception and never becomes credit.
+   - Payments go to the oldest open obligation, but only when the client, timing, amount and billing evidence all clearly point to it. If they don't, the payment is reported as "payment allocation unclear" rather than forced onto an obligation. Any excess is reported as an overpayment and never becomes credit.
    - An unclear model or rate becomes "Needs billing setup", adds $0 and is excluded from totals.
-   - Anyone who already has a Master Dues row is never counted a second time.
+   - Additive mode: a client who is outside Master Dues today adds their simulated obligations to the total.
+   - Replacement mode: when a named client's current Master Dues row exists only because the Hub treats them as a package client (for example Ava's $375), those package dollars are swapped for the simulated PPV or weekly amount. Previous debt and unrelated balances stay as they are. No one is counted twice.
 2. Thirteen pure tests that cover every case in your list.
 
 ## Live audit (read-only)
@@ -20,6 +21,7 @@ Nothing in production changes. No new fields, no client or payment edits, nothin
 
 ## Deliverables
 - A CSV with the table you specified: Client, Type, Rate, Appointment/Week, Status, Amount, Payment Applied, Open, Expected, Confidence, Reason.
+- A per-client summary: Current Master Dues Amount, Simulated Billing Amount, Net Change.
 - Totals:
   - PPV total
   - Weekly total

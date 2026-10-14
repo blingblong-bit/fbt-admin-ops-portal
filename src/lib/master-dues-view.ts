@@ -67,3 +67,30 @@ export function filterTotals(rows: MasterDuesRow[], f: DuesFilter, weekOf: WeekO
   }
   return { clients, dollars: Math.round(dollars * 100) / 100 };
 }
+
+/** Rank of a row's highest-priority open bucket (lower = first). Display only. */
+export function rowRank(r: MasterDuesRow, weekOf: WeekOf): { rank: number; ymd: string } {
+  const ren = r.renewal.amount > 0;
+  const renWk = ren ? weekOf(r.renewal.expected_ymd) : null;
+  if (r.previous.amount > 0 || r.current.amount > 0 || r.billing.due_now > 0 || r.renewal.status === "due_now") {
+    const past = r.billing.obligations.filter((o) => o.status === "due_now").map((o) => o.ymd).sort()[0];
+    return { rank: 1, ymd: past ?? (r.renewal.status === "due_now" ? r.renewal.expected_ymd ?? "" : "") };
+  }
+  const wk = r.billing.obligations.map((o) => o.ymd).sort()[0] ?? "";
+  if (r.billing.this_week > 0 || (ren && renWk === "this")) return { rank: 2, ymd: (ren && renWk === "this" ? r.renewal.expected_ymd : wk) ?? "" };
+  if (r.billing.next_week > 0 || (ren && renWk === "next")) return { rank: 3, ymd: (ren && renWk === "next" ? r.renewal.expected_ymd : wk) ?? "" };
+  if (r.renewal.status === "upcoming") return { rank: 4, ymd: r.renewal.expected_ymd ?? "" };
+  if (r.renewal.status === "prepared") return { rank: 5, ymd: "" };
+  return { rank: 6, ymd: r.renewal.expected_ymd ?? "" };
+}
+
+export function sortRows(rows: MasterDuesRow[], weekOf: WeekOf): MasterDuesRow[] {
+  const k = new Map(rows.map((r) => [r.client_id, rowRank(r, weekOf)]));
+  return [...rows].sort((a, b) => {
+    const x = k.get(a.client_id)!, y = k.get(b.client_id)!;
+    if (x.rank !== y.rank) return x.rank - y.rank;
+    const xd = x.ymd || "9999", yd = y.ymd || "9999";
+    if (xd !== yd) return xd < yd ? -1 : 1;
+    return a.name.localeCompare(b.name);
+  });
+}

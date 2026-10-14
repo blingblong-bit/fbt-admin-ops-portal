@@ -7,7 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useRole } from "@/hooks/useRole";
 import { getMasterDues, masterDuesQuery } from "@/lib/master-dues.functions";
-import { DUES_FILTERS, filterTotals, makeWeekOf, matchesFilter, sumRows, type DuesFilter } from "@/lib/master-dues-view";
+import { DUES_FILTERS, filterTotals, makeWeekOf, matchesFilter, sortRows, sumRows, type DuesFilter } from "@/lib/master-dues-view";
 import type { MasterDuesRow, ObligationStatus } from "@/lib/master-dues";
 import { addDaysYmd, workWeekStartFromYmd } from "@/lib/work-week";
 
@@ -45,7 +45,7 @@ function PaymentDuePage() {
   const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Chicago" });
   const weekOf = makeWeekOf(today, workWeekStartFromYmd, addDaysYmd);
   const data = q.data?.data ?? null;
-  const shown = useMemo(() => (data ? data.rows.filter((r) => matchesFilter(r, filter, weekOf)).sort((a, b) => b.total - a.total) : []), [data, filter]);
+  const shown = useMemo(() => (data ? sortRows(data.rows.filter((r) => matchesFilter(r, filter, weekOf)), weekOf) : []), [data, filter]);
   const shownTotals = data ? filterTotals(data.rows, filter, weekOf) : { clients: 0, dollars: 0 };
 
   if (!roleLoading && !isAdmin) {

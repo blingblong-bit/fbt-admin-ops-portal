@@ -40,3 +40,33 @@ describe("same-size package boundary", () => {
     expect(s.currentPackageStart?.slice(0, 10)).toBe("2026-10-07");
   });
 });
+
+import { forecastRenewal, drivingCounts } from "./effective-visit-state";
+import { renewalTimingFor } from "./master-dues";
+describe("prepared renewal timing vs completed boundary (Jay)", () => {
+  const jay = [
+    b("a", "2026-08-21", "8 of 8"), b("1", "2026-08-26", "1 of 8"), b("2", "2026-09-09", "2 of 8"), b("3", "2026-09-11", "3 of 8"),
+    b("4", "2026-09-16", "4 of 8"), b("5", "2026-09-18", "5 of 8"), b("6", "2026-09-23", "6 of 8"), b("7", "2026-09-25", "7 of 8"),
+    b("8", "2026-09-30", "8 of 8"), b("x", "2026-10-06", "1 of 8", "CANCELLED_BY_SELLER"), b("n", "2026-10-28", "1 of 8"),
+  ];
+  const client = { pending_renewal_price: 345, pending_renewal_start_date: "2026-10-06", package_start_date: "2026-06-17" };
+  const timing = (bs: any[], now: string) => {
+    const s = resolveEffectiveVisitState({ visits_used: 3, package_total_visits: 8 }, bs, now);
+    const d = drivingCounts(s);
+    const ups = bs.filter((x) => x.start_at > now && x.status === "ACCEPTED").map((x) => x.start_at);
+    const f = forecastRenewal({ upcomingStarts: ups, visitsUsed: d.used, totalVisits: d.total, nextPackageStart: d.nextPackageStart });
+    return renewalTimingFor(client, { suppressed: s.suppressed, ...d, firstUncoveredStart: f.firstUncoveredStart }, now);
+  };
+  it("completed 8/26 package → Upcoming 10/28, not Due Now", () => {
+    expect(timing(jay, NOW)).toMatchObject({ kind: "upcoming", ymd: "2026-10-28" });
+  });
+  it("after the 10/28 1/8 starts → started", () => {
+    expect(timing(jay, "2026-10-28T16:00:00Z").kind).toBe("started");
+  });
+  it("Emma pattern still in progress → started", () => {
+    expect(timing([...base, b("e1", "2026-10-07", "1 of 8"), b("e2", "2026-10-08", "2 of 8"), b("e3", "2026-10-14", "3 of 8")], NOW)).toMatchObject({ kind: "started", ymd: "2026-10-07" });
+  });
+  it("completed package, nothing booked → prepared, never due now", () => {
+    expect(timing(jay.slice(0, 9), NOW).kind).toBe("no_start");
+  });
+});

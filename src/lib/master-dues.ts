@@ -272,3 +272,25 @@ export function activatedState(c: MasterDuesClient & Record<string, any>, opts: 
     completed_history: { package_price: c.package_price, amount_paid: c.amount_paid, visits_used: c.visits_used, package_total_visits: c.package_total_visits },
   };
 }
+
+const chiYmd = (iso: string) => new Date(iso).toLocaleDateString("en-CA", { timeZone: "America/Chicago" });
+
+/**
+ * Square-driven timing for a prepared renewal. A past 1/N boundary counts as
+ * the prepared renewal's start only while the package it opened is still in
+ * progress; once that package reached N/N the renewal belongs to the next one.
+ */
+export function renewalTimingFor(
+  c: { pending_renewal_price?: number | null; pending_renewal_start_date?: string | null; package_start_date?: string | null },
+  s: { suppressed: boolean; used: number; total: number; nextPackageStart: string | null; currentPackageStart: string | null; firstUncoveredStart: string | null },
+  nowIso: string,
+): RenewalTiming {
+  if (s.suppressed) return { kind: "unknown", ymd: null, reason: "Square position unreadable" };
+  const pending = Number(c.pending_renewal_price ?? 0) > 0 || !!c.pending_renewal_start_date;
+  if (pending && s.currentPackageStart && s.used < s.total && (!c.package_start_date || chiYmd(s.currentPackageStart) > c.package_start_date))
+    return { kind: "started", ymd: chiYmd(s.currentPackageStart), reason: "Square shows the next package began (1/N after N/N)" };
+  if (s.nextPackageStart && s.nextPackageStart <= nowIso)
+    return { kind: "started", ymd: chiYmd(s.nextPackageStart), reason: "Square shows the next package has started" };
+  if (s.firstUncoveredStart) return timingFromUncovered(s.firstUncoveredStart, nowIso, chiYmd(s.firstUncoveredStart));
+  return { kind: "no_start", ymd: null, reason: "No uncovered appointment booked" };
+}

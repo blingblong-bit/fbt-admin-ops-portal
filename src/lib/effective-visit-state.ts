@@ -6,6 +6,7 @@ import {
   buildSequence,
   detectNoteIssues,
   isSupersededCancellation,
+  isOutrankedCancellation,
   type NoteIssue,
   type ReviewBooking,
   type SequenceEntry,
@@ -71,7 +72,7 @@ export type HubVisitClient = {
  * no N/N → 1/N renewal to explain it. Older anomalies are warnings only.
  */
 export function currentPositionUnreadable(seq: SequenceEntry[], issues: NoteIssue[]): boolean {
-  const pastNoted = seq.filter((e) => e.past && e.note && !isSupersededCancellation(seq, e));
+  const pastNoted = seq.filter((e) => e.past && e.note && !isSupersededCancellation(seq, e) && !isOutrankedCancellation(seq, e));
   const latest = pastNoted[pastNoted.length - 1];
   if (!latest) return false;
   const day = latest.date.slice(0, 10);
@@ -102,7 +103,7 @@ export function resolveEffectiveVisitState(
   const future = seq.filter((e) => !e.past);
   // A cancelled number that was rebooked on a live appointment was never used,
   // so it can't set the current position (e.g. cancelled 7/8 → rebooked 7/8).
-  const pastNoted = past.filter((e) => e.note && !isSupersededCancellation(seq, e));
+  const pastNoted = past.filter((e) => e.note && !isSupersededCancellation(seq, e) && !isOutrankedCancellation(seq, e));
   const hubUsed = client.visits_used ?? null;
   const hubTotal = Number(client.package_total_visits ?? 0);
 

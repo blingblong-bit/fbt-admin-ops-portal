@@ -292,3 +292,45 @@ describe("packageAutofillFromBookings lone notes + recency", () => {
     expect(__paf(mk([["a", "2026-06-16T15:00:00Z", "1 of 3"], ["b", "2026-06-17T15:00:00Z", "2 of 3"], ["c", "2026-06-18T15:00:00Z", "3 of 3"]]), now)).toBeNull();
   });
 });
+
+describe("outranked cancellations (Angler Davis)", () => {
+  const before = "2026-10-13T20:00:00Z";
+  const after = "2026-10-14T01:00:00Z";
+  const angler = [
+    b("1", "2026-09-28", "6 of 8"),
+    b("2", "2026-10-06", "8 of 8", "CANCELLED_BY_SELLER"),
+    { id: "3", start_at: "2026-10-13T22:15:00Z", seller_note: "7 of 8", status: "ACCEPTED" },
+  ];
+  it("1. 6 live → 7 cancelled → 8 live = 8/8 clean", () => {
+    const s = resolveEffectiveVisitState(hub(6), [b("1", "2026-09-01", "6/8"), b("2", "2026-09-08", "7/8", "CANCELLED_BY_SELLER"), b("3", "2026-09-15", "8/8")], now);
+    expect(s.visitsUsed).toBe(8);
+    expect(s.issues).toEqual([]);
+  });
+  it("2. 6 live → 8 cancelled → future 7 = 6/8, next 7, no renewal start", () => {
+    const s = resolveEffectiveVisitState(hub(6), angler, before);
+    expect(s.visitsUsed).toBe(6);
+    expect(s.nextVisitNumber).toBe(7);
+    expect(s.nextPackageStart).toBeNull();
+  });
+  it("3. after the 7/8 happens = 7/8", () => {
+    expect(resolveEffectiveVisitState(hub(6), angler, after).visitsUsed).toBe(7);
+  });
+  it("4. cancelled 8/8 doesn't trigger renewal", () => {
+    const s = resolveEffectiveVisitState(hub(6), angler, before);
+    const f = forecastRenewal({ upcomingStarts: ["2026-10-13T22:15:00Z"], visitsUsed: s.visitsUsed!, totalVisits: 8, nextPackageStart: s.nextPackageStart });
+    expect(f.needsRenewal).toBe(false);
+  });
+  it("5. same-number cancel/rebook unchanged", () => {
+    expect(resolveEffectiveVisitState(hub(6), [b("1", "2026-09-01", "6/8"), b("2", "2026-09-08", "7/8", "CANCELLED_BY_SELLER"), b("3", "2026-09-10", "7/8")], now).visitsUsed).toBe(7);
+  });
+  it("cancelled 6/8 → live 5/8 is outranked", () => {
+    expect(resolveEffectiveVisitState(hub(4), [b("1", "2026-09-01", "4/8"), b("2", "2026-09-08", "6/8", "CANCELLED_BY_SELLER"), b("3", "2026-09-10", "5/8")], now).visitsUsed).toBe(5);
+  });
+  it("1/N boundary (even cancelled) stops the scan", async () => {
+    const { buildSequence, isOutrankedCancellation } = await import("./square-visit-audit");
+    for (const st of ["ACCEPTED", "CANCELLED_BY_SELLER"]) {
+      const seq = buildSequence([b("1", "2026-09-08", "8/8", "CANCELLED_BY_SELLER"), b("2", "2026-09-10", "1/8", st), b("3", "2026-09-12", "2/8")], now);
+      expect(isOutrankedCancellation(seq, seq[0])).toBe(false);
+    }
+  });
+});

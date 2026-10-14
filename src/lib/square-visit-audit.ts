@@ -227,6 +227,23 @@ export function isSupersededCancellation(seq: SequenceEntry[], e: SequenceEntry)
 }
 
 /**
+ * Effective-position only: a cancelled higher number (e.g. cancelled 8/8) is
+ * outranked when the next live numbered booking in the same package is a
+ * lower mid-package number (live 7/8). Any 1/N (even cancelled) or a size
+ * change is a package boundary and stops the scan. History is untouched.
+ */
+export function isOutrankedCancellation(seq: SequenceEntry[], e: SequenceEntry): boolean {
+  if (!e.cancelled || !e.note || e.note.n <= 1) return false;
+  for (const x of seq.slice(seq.indexOf(e) + 1)) {
+    if (!x.note) continue;
+    if (x.note.n === 1 || x.note.total !== e.note.total) return false;
+    if (x.cancelled) continue;
+    return x.note.n > 1 && x.note.n < e.note.n;
+  }
+  return false;
+}
+
+/**
  * A cancelled booking whose number was later reused (the next numbered booking
  * in the same package has the same or a lower number) was renumbered and
  * rebooked, e.g. cancelled 3/8 → cancelled 4/8 → cancelled 3/8 → 4/8.

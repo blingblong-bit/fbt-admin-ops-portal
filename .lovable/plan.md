@@ -25,14 +25,16 @@ When Hub works out a client's current position, it skips a cancelled visit only 
 Run all lib tests and the typecheck. No publishing, no client record changes, no texts sent, and texting stays OFF.
 
 ## Technical details
-- `src/lib/square-visit-audit.ts`: add `isOutrankedCancellation(seq, e)`. It requires `e` to be cancelled with e.n > 1. It then scans forward, skipping cancelled entries, to the **next** non-cancelled numbered entry, which can be past or future.
-  - If that entry is 1/N, or has a different total, return false. This is a package boundary.
-  - If its total matches and 1 < n < e.n, return true.
-  - Otherwise return false. There is no deeper search.
+- `src/lib/square-visit-audit.ts`: add `isOutrankedCancellation(seq, e)`. It requires `e` to be cancelled with e.n > 1. It then scans each later numbered entry in order. Both past and future entries count.
+  - Any 1/N entry, **including a cancelled one**, stops the scan and returns false. This is a package boundary.
+  - Any entry with a different total stops the scan and returns false.
+  - A cancelled entry that isn't a boundary is skipped.
+  - At the first live entry: return true if its total matches and 1 < n < e.n. Otherwise return false. There is no deeper search.
 - Expected results:
   - 6/8, then cancelled 8/8, then 7/8: outranked
   - Cancelled 6/8, then 5/8: outranked
   - Cancelled 8/8, then 1/8, then 2/8: not outranked
+  - Cancelled 8/8, then cancelled 1/8, then 2/8: not outranked
   - Cancelled 7/8, then 8/8: not outranked
   - Same-number rebooking: unchanged
 - A future entry counts only as evidence for this comparison. It never adds to visitsUsed before it starts.

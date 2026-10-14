@@ -68,6 +68,7 @@ import type { ScheduleStatus } from "@/components/SmartClientCard";
 import { useRole } from "@/hooks/useRole";
 import { getMasterDues, masterDuesQuery } from "@/lib/master-dues.functions";
 import { filterTotals, makeWeekOf, type DuesFilter } from "@/lib/master-dues-view";
+import { addDaysYmd, workWeekStartFromYmd } from "@/lib/work-week";
 import { visibleTileMoney } from "@/lib/dashboard-tile-visibility";
 import {
   groupWeeklyPayments,

@@ -36,6 +36,8 @@ export type SimInput = {
   todayYmd: string;
   nowIso: string;
   lookbackWeeks?: number;
+  /** Billing effective date: nothing before its work week is reconstructed (overrides lookbackWeeks). */
+  windowStartYmd?: string | null;
   /** No payment records exist for this client at all (likely paid outside Square). */
   paymentRecordsMissing?: boolean;
 };
@@ -63,7 +65,7 @@ export function simulateBilling(inp: SimInput): SimResult {
 
   const thisWk = workWeekStartFromYmd(inp.todayYmd);
   const nextWk = addDaysYmd(thisWk, 7);
-  const winStart = addDaysYmd(thisWk, -7 * (inp.lookbackWeeks ?? 4));
+  const winStart = inp.windowStartYmd ? workWeekStartFromYmd(inp.windowStartYmd) : addDaysYmd(thisWk, -7 * (inp.lookbackWeeks ?? 4));
   const horizonEnd = addDaysYmd(nextWk, 7); // exclusive
   const expectedFor = (wk: string): SimObligation["expected"] => (wk < thisWk ? "past" : wk === thisWk ? "this_week" : "next_week");
   const nowMs = new Date(inp.nowIso).getTime();
@@ -96,6 +98,7 @@ export function simulateBilling(inp: SimInput): SimResult {
   let unclearBefore: string | null = null;
   const pays = [...inp.payments].sort((a, b) => a.at_iso.localeCompare(b.at_iso));
   for (const p of pays) {
+    if (p.at_iso.slice(0, 10) < winStart) continue;
     const amt = r2(Number(p.amount));
     const multiple = amt / rate;
     if (!(amt > 0) || Math.abs(multiple - Math.round(multiple)) > 1e-6) {

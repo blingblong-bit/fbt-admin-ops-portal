@@ -78,7 +78,7 @@ function PaymentDuePage() {
         <>
           <div className="mb-2 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
             <Summary label="Master Dues Total" clients={t.clients} dollars={t.total} strong />
-            <Summary label="Owed Now (previous + current)" clients={data.rows.filter((r) => r.previous.amount + r.current.amount > 0).length} dollars={Math.round((t.previous.dollars + t.current.dollars + t.renewalByStatus.due_now.dollars) * 100) / 100} note={t.renewalByStatus.due_now.dollars > 0 ? `incl. ${$(t.renewalByStatus.due_now.dollars)} started renewals` : undefined} />
+            <Summary label="Owed Now" clients={data.rows.filter((r) => r.previous.amount + r.current.amount > 0).length} dollars={Math.round((t.previous.dollars + t.current.dollars + t.renewalByStatus.due_now.dollars) * 100) / 100} note={t.renewalByStatus.due_now.dollars > 0 ? `incl. ${$(t.renewalByStatus.due_now.dollars)} started renewals` : undefined} />
             <Summary label="Upcoming Renewals" clients={t.renewalByStatus.upcoming.clients} dollars={t.renewalByStatus.upcoming.dollars} />
             <Summary label="Prepared — No Scheduled Start" clients={t.renewalByStatus.prepared.clients} dollars={t.renewalByStatus.prepared.dollars} />
             <Summary label="Needs Review" clients={t.renewalByStatus.needs_review.clients} dollars={t.renewalByStatus.needs_review.dollars} />

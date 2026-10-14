@@ -760,6 +760,7 @@ export type Database = {
           p_source?: string
           p_start_date: string
           p_total_visits: number
+          p_visits_used?: number
         }
         Returns: {
           amount_paid: number

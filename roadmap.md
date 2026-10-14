@@ -49,3 +49,8 @@
 - [x] v2 dry run (timestamp + assessment rules)
 - [ ] Angler Davis: cancelled 8/8 counted as current position (needs approval to fix)
 - [ ] UI change: waiting on owner comparison against Notes
+
+## Billing types (PPV / weekly)
+- [x] billing_type / rates / effective date; Randy, Suzy, Grayson, Kaysie set
+- [x] Payment Due + tiles include PPV/weekly obligations; Carryover filter
+- [ ] Ava Banks, Julian Marable, Nick Smith billing model (needs owner decision)

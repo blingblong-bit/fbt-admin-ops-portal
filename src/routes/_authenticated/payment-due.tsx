@@ -57,6 +57,7 @@ function PaymentDuePage() {
   const diff = t ? Math.round((t.total - allSum) * 100) / 100 : 0;
   const pkgInfo = data?.exceptions.filter((e) => e.kind === "package_info_needed") ?? [];
   const ppv = data?.exceptions.filter((e) => e.kind === "pay_per_visit") ?? [];
+  const billingEx = data?.exceptions.filter((e) => e.kind === "billing_setup_needed" || e.kind === "billing_review") ?? [];
 
   return (
     <AppShell>
@@ -76,11 +77,12 @@ function PaymentDuePage() {
         <Card><CardContent className="p-4"><p className="font-semibold text-destructive">Square unavailable</p><p className="text-sm text-muted-foreground">Totals are hidden rather than shown wrong. Try Refresh in a minute.</p></CardContent></Card>
       ) : (
         <>
-          <div className="mb-2 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+          <div className="mb-2 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
             <Summary label="Master Dues Total" clients={t.clients} dollars={t.total} strong />
-            <Summary label="Owed Now" clients={data.rows.filter((r) => r.previous.amount + r.current.amount > 0).length} dollars={Math.round((t.previous.dollars + t.current.dollars + t.renewalByStatus.due_now.dollars) * 100) / 100} note={t.renewalByStatus.due_now.dollars > 0 ? `incl. ${$(t.renewalByStatus.due_now.dollars)} started renewals` : undefined} />
+            <Summary label="Owed Now" clients={filterTotals(data.rows, "due_now", weekOf).clients} dollars={filterTotals(data.rows, "due_now", weekOf).dollars} note={t.renewalByStatus.due_now.dollars > 0 ? `incl. ${$(t.renewalByStatus.due_now.dollars)} started renewals` : undefined} />
             <Summary label="Upcoming Renewals" clients={t.renewalByStatus.upcoming.clients} dollars={t.renewalByStatus.upcoming.dollars} />
             <Summary label="Prepared — No Scheduled Start" clients={t.renewalByStatus.prepared.clients} dollars={t.renewalByStatus.prepared.dollars} />
+            <Summary label="Pay-per-visit / Weekly" clients={t.billing.clients} dollars={t.billing.dollars} note={t.carryover.dollars > 0 ? `${$(t.carryover.dollars)} carryover` : undefined} />
             <Summary label="Needs Review" clients={t.renewalByStatus.needs_review.clients} dollars={t.renewalByStatus.needs_review.dollars} />
           </div>
           <p className="mb-4 text-xs text-muted-foreground">Client counts can overlap when one client has money in more than one category. Dollars never double count.</p>
@@ -100,13 +102,14 @@ function PaymentDuePage() {
             {shown.length === 0 && <p className="text-muted-foreground">No clients in this filter.</p>}
           </div>
 
-          {(ppv.length > 0 || pkgInfo.length > 0) && (
+          {(ppv.length > 0 || pkgInfo.length > 0 || billingEx.length > 0) && (
             <div className="mt-8">
               <h2 className="mb-1 text-lg font-semibold">Dues Exceptions</h2>
               <p className="mb-3 text-sm text-muted-foreground">Not counted in the total — no dependable dollar amount yet.</p>
               <div className="grid gap-4 md:grid-cols-2">
                 <ExceptionList title="Pay-per-visit" items={ppv} />
                 <ExceptionList title="Package Info Needed" items={pkgInfo} />
+                {billingEx.length > 0 && <ExceptionList title="Billing Setup / Review" items={billingEx} />}
               </div>
             </div>
           )}
@@ -140,6 +143,7 @@ function DuesCard({ r }: { r: MasterDuesRow }) {
         <div className="grid gap-1 text-sm sm:grid-cols-3">
           {r.previous.amount > 0 && <Bucket label="Previous debt" amount={r.previous.amount} status={STATUS[r.previous.status]} />}
           {r.current.amount > 0 && <Bucket label="Current balance" amount={r.current.amount} status={STATUS[r.current.status]} sub={r.current.expected ? WINDOW[r.current.expected] : undefined} />}
+          {r.billing.amount > 0 && <Bucket label={r.billing.type === "weekly" ? "Weekly billing" : "Pay-per-visit"} amount={r.billing.amount} status={r.billing.due_now > 0 ? `${$(r.billing.due_now)} Due Now` : "Upcoming"} sub={r.billing.obligations.filter((o) => o.status !== "needs_billing_review").map((o) => `${o.kind === "week" ? "Wk " : ""}${fmtYmd(o.ymd)} ${$(o.open)}${o.expected === "past" ? " (carryover)" : o.status === "upcoming" ? " (upcoming)" : ""}`).join(" · ")} />}
           {r.renewal.amount > 0 && <Bucket label="Renewal" amount={r.renewal.amount} status={STATUS[r.renewal.status]} sub={r.renewal.expected_ymd ? `Expected ${fmtYmd(r.renewal.expected_ymd)}` : undefined} />}
         </div>
         {r.reasons.length > 0 && <p className="mt-2 text-xs text-muted-foreground">{r.reasons.join(" · ")}</p>}

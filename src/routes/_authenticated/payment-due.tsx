@@ -36,17 +36,16 @@ function PaymentDuePage() {
   const { isAdmin, isLoading: roleLoading } = useRole();
   const fn = useServerFn(getMasterDues);
   const q = useQuery({ ...masterDuesQuery(() => fn()), enabled: isAdmin });
-  const [filter, setFilter] = useState<DuesFilter>("all");
+  const search = Route.useSearch();
+  const navigate = Route.useNavigate();
+  const filter: DuesFilter = DUES_FILTERS.some((f) => f.key === search.filter) ? (search.filter as DuesFilter) : "all";
+  const setFilter = (f: DuesFilter) => navigate({ search: { filter: f }, replace: true });
 
   const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Chicago" });
-  const thisStart = workWeekStartFromYmd(today);
-  const weekOf = (ymd: string | null) => {
-    if (!ymd) return null;
-    const w = workWeekStartFromYmd(ymd);
-    return w <= thisStart ? "this" : w === addDaysYmd(thisStart, 7) ? "next" : "later";
-  };
+  const weekOf = makeWeekOf(today, workWeekStartFromYmd, addDaysYmd);
   const data = q.data?.data ?? null;
   const shown = useMemo(() => (data ? data.rows.filter((r) => matchesFilter(r, filter, weekOf)).sort((a, b) => b.total - a.total) : []), [data, filter]);
+  const shownTotals = data ? filterTotals(data.rows, filter, weekOf) : { clients: 0, dollars: 0 };
 
   if (!roleLoading && !isAdmin) {
     return <AppShell><p className="text-muted-foreground">Payment Due is available to admins only.</p></AppShell>;

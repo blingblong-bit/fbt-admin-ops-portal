@@ -50,6 +50,7 @@ describe("filterTotals", () => {
 });
 
 import { simulateBilling } from "./billing-sim";
+import { makeWeekOf } from "./master-dues-view";
 describe("PPV / weekly billing in Master Dues", () => {
   const now = "2026-10-14T17:00:00Z";
   const ap = (id: string, ymd: string, h = 15) => ({ id, ymd, start_iso: `${ymd}T${h}:00:00Z`, status: "ACCEPTED" });
@@ -59,7 +60,7 @@ describe("PPV / weekly billing in Master Dues", () => {
     { todayYmd: "2026-10-14", nextAppointmentYmd: new Map(), renewalTiming: new Map(), billing: new Map([["r", wk]]) },
   );
   const r = out.rows.find((x) => x.client_id === "r")!;
-  const wo = makeWeekOf("2026-10-14", (y) => y, (y) => y);
+  const wo = makeWeekOf("2026-10-14", (y: string) => y, (y: string) => y);
   it("weekly client ignores package fields and carries prior week", () => {
     expect(r.current.amount).toBe(0);
     expect(r.renewal.amount).toBe(0);

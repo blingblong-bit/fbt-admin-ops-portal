@@ -48,6 +48,8 @@ export type EffectiveVisitState = {
   recent: UpcomingVisit[];
   /** ISO start of the first future 1/N (not cancelled) after a completed package, when Square shows it. */
   nextPackageStart: string | null;
+  /** ISO start of the past live 1/N that opened the current Square package after an N/N. */
+  currentPackageStart: string | null;
   /** Warning only — Square numbering has an anomaly worth a look. Never overrides Square. */
   reviewStatus: ReviewStatus;
   /** False only when Square's current position genuinely can't be worked out. */
@@ -130,6 +132,7 @@ export function resolveEffectiveVisitState(
       remainingVisits: Math.max(0, hubTotal - used),
       reason,
       nextPackageStart: null,
+      currentPackageStart: null,
       reviewStatus,
       automationUsable: usable,
       suppressed: !usable,
@@ -184,9 +187,18 @@ export function resolveEffectiveVisitState(
     }
   }
 
+  // Past boundary: latest live 1/N whose previous relevant numbered entry is a completed N/N.
+  let currentPackageStart: string | null = null;
+  const rel = pastNoted.filter((e) => !e.cancelled);
+  for (let i = rel.length - 1; i >= 1; i--) {
+    const a = rel[i - 1].note!, b = rel[i].note!;
+    if (b.n === 1 && a.n === a.total) { currentPackageStart = rel[i].date; break; }
+  }
+
   return {
     ...base,
     source: "square",
+    currentPackageStart,
     visitsUsed: used,
     totalVisits: total,
     latestVisitBookingId: latest?.booking_id ?? null,
@@ -251,9 +263,9 @@ export function forecastRenewal(i: ForecastInput): ForecastResult {
  * Square (clean or flagged) → Square state. Hub fallback → Hub; when the
  * fallback was forced by an unreadable Square position, suppressed=true holds new decisions.
  */
-export function drivingCounts(s: EffectiveVisitState): { used: number; total: number; nextPackageStart: string | null } {
-  if (s.source === "square") return { used: s.visitsUsed, total: s.totalVisits, nextPackageStart: s.nextPackageStart };
-  return { used: Number(s.hubVisitsUsed ?? 0), total: s.hubTotalVisits, nextPackageStart: null };
+export function drivingCounts(s: EffectiveVisitState): { used: number; total: number; nextPackageStart: string | null; currentPackageStart: string | null } {
+  if (s.source === "square") return { used: s.visitsUsed, total: s.totalVisits, nextPackageStart: s.nextPackageStart, currentPackageStart: s.currentPackageStart };
+  return { used: Number(s.hubVisitsUsed ?? 0), total: s.hubTotalVisits, nextPackageStart: null, currentPackageStart: null };
 }
 
 // ---------------------------------------------------------------------------

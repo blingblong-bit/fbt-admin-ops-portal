@@ -55,6 +55,8 @@ export const getMasterDues = createServerFn({ method: "GET" })
       const f = forecastRenewal({ upcomingStarts: ups, visitsUsed: d.used, totalVisits: d.total, nextPackageStart: d.nextPackageStart });
       let t: RenewalTiming;
       if (st.suppressed) t = { kind: "unknown", ymd: null, reason: "Square position unreadable" };
+      else if (d.currentPackageStart && (Number(c.pending_renewal_price ?? 0) > 0 || c.pending_renewal_start_date) && (!c.package_start_date || chi(d.currentPackageStart) > c.package_start_date))
+        t = { kind: "started", ymd: chi(d.currentPackageStart), reason: "Square shows the next package began (1/N after N/N)" };
       else if (d.nextPackageStart && d.nextPackageStart <= nowIso) t = { kind: "started", ymd: chi(d.nextPackageStart), reason: "Square shows the next package has started" };
       else if (f.firstUncoveredStart) t = timingFromUncovered(f.firstUncoveredStart, nowIso, chi(f.firstUncoveredStart));
       else t = { kind: "no_start", ymd: null, reason: "No uncovered appointment booked" };

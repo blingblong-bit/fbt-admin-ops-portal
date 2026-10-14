@@ -5,6 +5,7 @@ import { queryOptions } from "@tanstack/react-query";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { computeMasterDues, timingFromUncovered, type RenewalTiming } from "./master-dues";
 import { drivingCounts, forecastRenewal } from "./effective-visit-state";
+import { simulateBilling, type SimResult } from "./billing-sim";
 
 type Result =
   | { error: string; computed_at: string; data: null }
@@ -60,7 +61,32 @@ export const getMasterDues = createServerFn({ method: "GET" })
       renewalTiming.set(c.id, t);
     }
 
-    const data = computeMasterDues(clients, { todayYmd: chi(nowIso), nextAppointmentYmd, renewalTiming, squareNumberedPackage });
+    // PPV / weekly billing: obligations from Square appointments since the
+    // billing effective date; payments only from that date, clearly attributable.
+    const billing = new Map<string, SimResult>();
+    const billed = clients.filter((c) => c.billing_type === "pay_per_visit" || c.billing_type === "weekly");
+    if (billed.length) {
+      const { data: pays, error: pe } = await supabase
+        .from("square_payments").select("square_payment_id, client_id, amount_cents, status, created_at")
+        .in("client_id", billed.map((c) => c.id)).eq("status", "COMPLETED");
+      if (pe) throw pe;
+      for (const c of billed) {
+        const rate = c.billing_type === "weekly" ? c.weekly_rate : c.per_visit_rate;
+        const eff: string | null = c.billing_effective_date ?? null;
+        const bks = c.square_customer_id ? index.byCustomer.get(c.square_customer_id) ?? [] : [];
+        billing.set(c.id, simulateBilling({
+          type: c.billing_type,
+          rate: eff && c.square_customer_id ? rate : null,
+          appointments: bks.filter((b) => b.start_at).map((b) => ({ id: b.id, start_iso: b.start_at!, ymd: chi(b.start_at!), status: b.status })),
+          payments: (pays ?? []).filter((p: any) => p.client_id === c.id).map((p: any) => ({ id: p.square_payment_id, at_iso: new Date(p.created_at).toISOString(), amount: Number(p.amount_cents) / 100 })),
+          todayYmd: chi(nowIso),
+          nowIso,
+          windowStartYmd: eff,
+        }));
+      }
+    }
+
+    const data = computeMasterDues(clients, { todayYmd: chi(nowIso), nextAppointmentYmd, renewalTiming, squareNumberedPackage, billing });
     return { error: null, computed_at: nowIso, data };
   });
 

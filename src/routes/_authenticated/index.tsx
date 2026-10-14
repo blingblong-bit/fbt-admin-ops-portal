@@ -66,6 +66,7 @@ import { getVisitAutomationReview } from "@/lib/visit-automation-review.function
 import { autofillPackagesFromSquare } from "@/lib/package-autofill.functions";
 import type { ScheduleStatus } from "@/components/SmartClientCard";
 import { useRole } from "@/hooks/useRole";
+import { getMasterDues, masterDuesQuery } from "@/lib/master-dues.functions";
 import { visibleTileMoney } from "@/lib/dashboard-tile-visibility";
 import {
   groupWeeklyPayments,
@@ -763,6 +764,8 @@ function Dashboard() {
     : "checking Square…";
 
   const fetchAutomation = useServerFn(getVisitAutomationReview);
+  const masterDuesFn = useServerFn(getMasterDues);
+  const masterQ = useQuery({ ...masterDuesQuery(() => masterDuesFn()), enabled: !isStaff });
   const automationQ = useQuery({
     queryKey: ["visit-automation-review"],
     queryFn: () => orThrow(fetchAutomation({ data: {} })),
@@ -783,11 +786,14 @@ function Dashboard() {
     {
       key: "payment_due",
       label: "Payment Due",
+      // Same getMasterDues query as /payment-due → tile and page always match.
+      sublabel: masterQ.data?.error ? "Square unavailable" : masterQ.data ? "master dues" : "loading…",
       icon: <CircleDollarSign className="h-5 w-5" />,
-      count: counts.payment_due,
-      money: counts.payment_due_total,
-      moneyLabel: "outstanding",
+      count: masterQ.data?.data?.totals.clients ?? 0,
+      money: masterQ.data?.data?.totals.total,
+      moneyLabel: "tracked",
       tone: "red",
+      href: "/payment-due",
       staffHidden: true,
     },
     {

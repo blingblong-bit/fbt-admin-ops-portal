@@ -10,3 +10,4 @@
 <!-- LOVABLE:END -->
 
 - `src/lib/master-dues.ts` is the pure master-dues calculator (previous / current / prepared-renewal buckets with separate status); renewal timing is supplied by the caller from Square-driven progress, never from the stored renewal date alone — keeps money logic testable and stale dates harmless.
+- Payment Due reads only from getMasterDues/computeMasterDues (dashboard tile and /payment-due share one query); Renewal Scheduled is workflow-only — prevents total drift.

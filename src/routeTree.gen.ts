@@ -20,6 +20,7 @@ import { Route as AuthenticatedMergeCenterRouteImport } from './routes/_authenti
 import { Route as AuthenticatedMessagingPreviewRouteImport } from './routes/_authenticated/messaging-preview'
 import { Route as AuthenticatedMissedCheckInsRouteImport } from './routes/_authenticated/missed-check-ins'
 import { Route as AuthenticatedNotesLedgerRouteImport } from './routes/_authenticated/notes-ledger'
+import { Route as AuthenticatedPaymentDueRouteImport } from './routes/_authenticated/payment-due'
 import { Route as AuthenticatedPaymentHistoryRouteImport } from './routes/_authenticated/payment-history'
 import { Route as AuthenticatedRenewalReviewRouteImport } from './routes/_authenticated/renewal-review'
 import { Route as AuthenticatedScheduleCheckRouteImport } from './routes/_authenticated/schedule-check'
@@ -99,6 +100,11 @@ const AuthenticatedNotesLedgerRoute =
     path: '/notes-ledger',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedPaymentDueRoute = AuthenticatedPaymentDueRouteImport.update({
+  id: '/payment-due',
+  path: '/payment-due',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedPaymentHistoryRoute =
   AuthenticatedPaymentHistoryRouteImport.update({
     id: '/payment-history',
@@ -221,6 +227,7 @@ export interface FileRoutesByFullPath {
   '/messaging-preview': typeof AuthenticatedMessagingPreviewRoute
   '/missed-check-ins': typeof AuthenticatedMissedCheckInsRoute
   '/notes-ledger': typeof AuthenticatedNotesLedgerRoute
+  '/payment-due': typeof AuthenticatedPaymentDueRoute
   '/payment-history': typeof AuthenticatedPaymentHistoryRoute
   '/renewal-review': typeof AuthenticatedRenewalReviewRoute
   '/schedule-check': typeof AuthenticatedScheduleCheckRoute
@@ -252,6 +259,7 @@ export interface FileRoutesByTo {
   '/messaging-preview': typeof AuthenticatedMessagingPreviewRoute
   '/missed-check-ins': typeof AuthenticatedMissedCheckInsRoute
   '/notes-ledger': typeof AuthenticatedNotesLedgerRoute
+  '/payment-due': typeof AuthenticatedPaymentDueRoute
   '/payment-history': typeof AuthenticatedPaymentHistoryRoute
   '/renewal-review': typeof AuthenticatedRenewalReviewRoute
   '/schedule-check': typeof AuthenticatedScheduleCheckRoute
@@ -286,6 +294,7 @@ export interface FileRoutesById {
   '/_authenticated/messaging-preview': typeof AuthenticatedMessagingPreviewRoute
   '/_authenticated/missed-check-ins': typeof AuthenticatedMissedCheckInsRoute
   '/_authenticated/notes-ledger': typeof AuthenticatedNotesLedgerRoute
+  '/_authenticated/payment-due': typeof AuthenticatedPaymentDueRoute
   '/_authenticated/payment-history': typeof AuthenticatedPaymentHistoryRoute
   '/_authenticated/renewal-review': typeof AuthenticatedRenewalReviewRoute
   '/_authenticated/schedule-check': typeof AuthenticatedScheduleCheckRoute
@@ -321,6 +330,7 @@ export interface FileRouteTypes {
     | '/messaging-preview'
     | '/missed-check-ins'
     | '/notes-ledger'
+    | '/payment-due'
     | '/payment-history'
     | '/renewal-review'
     | '/schedule-check'
@@ -352,6 +362,7 @@ export interface FileRouteTypes {
     | '/messaging-preview'
     | '/missed-check-ins'
     | '/notes-ledger'
+    | '/payment-due'
     | '/payment-history'
     | '/renewal-review'
     | '/schedule-check'
@@ -385,6 +396,7 @@ export interface FileRouteTypes {
     | '/_authenticated/messaging-preview'
     | '/_authenticated/missed-check-ins'
     | '/_authenticated/notes-ledger'
+    | '/_authenticated/payment-due'
     | '/_authenticated/payment-history'
     | '/_authenticated/renewal-review'
     | '/_authenticated/schedule-check'
@@ -499,6 +511,13 @@ declare module '@tanstack/react-router' {
       path: '/notes-ledger'
       fullPath: '/notes-ledger'
       preLoaderRoute: typeof AuthenticatedNotesLedgerRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/payment-due': {
+      id: '/_authenticated/payment-due'
+      path: '/payment-due'
+      fullPath: '/payment-due'
+      preLoaderRoute: typeof AuthenticatedPaymentDueRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/payment-history': {
@@ -653,6 +672,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedMessagingPreviewRoute: typeof AuthenticatedMessagingPreviewRoute
   AuthenticatedMissedCheckInsRoute: typeof AuthenticatedMissedCheckInsRoute
   AuthenticatedNotesLedgerRoute: typeof AuthenticatedNotesLedgerRoute
+  AuthenticatedPaymentDueRoute: typeof AuthenticatedPaymentDueRoute
   AuthenticatedPaymentHistoryRoute: typeof AuthenticatedPaymentHistoryRoute
   AuthenticatedRenewalReviewRoute: typeof AuthenticatedRenewalReviewRoute
   AuthenticatedScheduleCheckRoute: typeof AuthenticatedScheduleCheckRoute
@@ -676,6 +696,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedMessagingPreviewRoute: AuthenticatedMessagingPreviewRoute,
   AuthenticatedMissedCheckInsRoute: AuthenticatedMissedCheckInsRoute,
   AuthenticatedNotesLedgerRoute: AuthenticatedNotesLedgerRoute,
+  AuthenticatedPaymentDueRoute: AuthenticatedPaymentDueRoute,
   AuthenticatedPaymentHistoryRoute: AuthenticatedPaymentHistoryRoute,
   AuthenticatedRenewalReviewRoute: AuthenticatedRenewalReviewRoute,
   AuthenticatedScheduleCheckRoute: AuthenticatedScheduleCheckRoute,

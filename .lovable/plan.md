@@ -42,6 +42,6 @@ No calculation rule changes and no database changes. Nothing on the page can edi
   - Returns `computeMasterDues(...)` unchanged.
   - If Square fails to load, it returns an error and the page shows "Square unavailable" rather than wrong totals.
 - New route `src/routes/_authenticated/payment-due.tsx`: loader `ensureQueryData` plus `useSuspenseQuery`. Filtering and the reconciliation total are computed client-side from the returned rows. Includes its own head() title.
-- Dashboard (`index.tsx`): for admins, the Payment Due tile links to `/payment-due` and shows the master total. Staff behaviour and the other tiles are unchanged.
+- Dashboard (`index.tsx`): for admins, the Payment Due tile links to `/payment-due` and shows the master total from the same `getMasterDues` query (shared queryOptions and cache key). There is no separate dashboard calculation, so the tile and the page headline always match. Staff behaviour and the other tiles are unchanged.
 - Test: a small pure test checks that filter and reconciliation helpers keep shown rows summing exactly to the totals.
 - Record the rule in `AGENTS.md`: Payment Due reads only from `computeMasterDues`, and Renewal Scheduled is workflow-only.

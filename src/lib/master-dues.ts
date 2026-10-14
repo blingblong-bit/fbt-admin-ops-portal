@@ -245,3 +245,26 @@ export function computeMasterDues(clients: MasterDuesClient[], ctx: MasterDuesCt
   const unexplained = r2(totals.total - (totals.previous.dollars + totals.current.dollars + totals.renewal.dollars + totals.billing.dollars));
   return { rows, exceptions, totals, unexplained };
 }
+
+/**
+ * Prepared renewal activates only on real package-start evidence from Square /
+ * effective visit state ("started"). A stored start date passing is never enough.
+ */
+export function shouldActivateRenewal(c: MasterDuesClient, timing: RenewalTiming | undefined): boolean {
+  if (!(Number(c.pending_renewal_price ?? 0) > 0) && !c.pending_renewal_start_date) return false;
+  return timing?.kind === "started";
+}
+
+/** Pure mirror of renew_client_package's money moves (for tests/audits). */
+export function activatedState(c: MasterDuesClient) {
+  const unpaid = Math.max(0, Number(c.package_price ?? 0) - Number(c.amount_paid ?? 0));
+  return {
+    ...c,
+    previous_package_owed: r2(Number(c.previous_package_owed ?? 0) + unpaid),
+    package_price: Number(c.pending_renewal_price ?? 0),
+    amount_paid: Number(c.pending_renewal_paid ?? 0),
+    pending_renewal_price: null,
+    pending_renewal_paid: 0,
+    pending_renewal_start_date: null,
+  };
+}

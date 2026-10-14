@@ -47,3 +47,9 @@ I'll also confirm whether today's edit reduced her amount paid.
 - `effective-visit-state.ts`: add `currentPackageStart` to the Square state, taken from the past entries where the previous entry is the old package's final N/N. Excludes cancelled, superseded and outranked entries.
 - `master-dues.functions.ts`: a renewal is `started` when there's a pending renewal and `currentPackageStart > package_start_date` (or `nextPackageStart <= now`, as today).
 - The audit script is temporary and lives outside the app. Activation later goes through `renew_client_package`. For Emma's outcome B, the payment reallocation is a separate, approved data change.
+
+## Refinement (approved)
+- `currentPackageStart`: a past, live 1/N is a boundary when the **previous relevant numbered entry** is the old package's N/N. "Relevant" means after the existing sequence rules run: skip unnumbered appointments, superseded/rebooked entries and outranked cancellations. A cancelled 1/N is never a start.
+- Extra tests: 8/8 → unnumbered → 1/8 → 2/8 → 3/8 detects the start, and 8/8 → non-authoritative cancelled duplicate → 1/8 keeps the boundary.
+- Emma: treat the payment records as the source of truth, not her current amount paid. Report both Square payment IDs, times and amounts, where each payment was originally applied, what today's edit changed (if it can be determined), and the exact ledger after a future approved activation. No activation, no payment edits, no temporary debt.
+- Audit output for every newly detected reset or stale pending renewal: detected start, effective position, current price/paid, pending price/prepaid, proposed post-activation balance, Master Dues before/after, and any suspected misallocation.

@@ -351,7 +351,7 @@ export function packageAutofillFromBookings(
   nowIso: string,
 ): PackageAutofill | null {
   const seq = buildSequence(bookings, nowIso);
-  const noted = seq.filter((e) => e.note !== null && !isSupersededCancellation(seq, e) && !isOutrankedCancellation(seq, e));
+  const noted = seq.filter((e) => e.note !== null && !isSupersededCancellation(seq, e));
   if (noted.length === 0) return null;
 
   // Only current packages: a numbered visit in the last 60 days or upcoming.

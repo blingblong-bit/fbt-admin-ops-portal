@@ -110,7 +110,7 @@ describe("resolveEffectiveVisitState", () => {
     expect(s.source).toBe("hub_fallback");
     expect(s.automationUsable).toBe(false);
     expect(s.suppressed).toBe(true);
-    expect(drivingCounts(s)).toEqual({ used: 3, total: 8, nextPackageStart: null });
+    expect(drivingCounts(s)).toEqual({ used: 3, total: 8, nextPackageStart: null, currentPackageStart: null });
   });
 
   it("latest visit goes backward with no renewal → held", () => {

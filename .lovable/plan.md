@@ -53,3 +53,15 @@ I'll also confirm whether today's edit reduced her amount paid.
 - Extra tests: 8/8 → unnumbered → 1/8 → 2/8 → 3/8 detects the start, and 8/8 → non-authoritative cancelled duplicate → 1/8 keeps the boundary.
 - Emma: treat the payment records as the source of truth, not her current amount paid. Report both Square payment IDs, times and amounts, where each payment was originally applied, what today's edit changed (if it can be determined), and the exact ledger after a future approved activation. No activation, no payment edits, no temporary debt.
 - Audit output for every newly detected reset or stale pending renewal: detected start, effective position, current price/paid, pending price/prepaid, proposed post-activation balance, Master Dues before/after, and any suspected misallocation.
+
+## Report classification (added)
+Each stale renewal is sorted into one of three groups:
+1. **Safe activation:** the boundary is clear and the payments already match the new package.
+2. **Activation + payment reallocation:** the boundary is clear, but the money sits on the wrong package (like Emma).
+3. **Needs manual review:** either the boundary or which package a payment belongs to is ambiguous.
+
+For each group: client count and dollars involved. Also Master Dues total before vs. after the proposed corrections, and confirmation that activation-only cases keep total tracked dollars the same.
+
+Emma's recommended ledger: old package price/paid, new package price/paid, where Payment 1 and Payment 2 belong, and the final amount owed.
+
+Still no activations, reallocations, publishing or texts.

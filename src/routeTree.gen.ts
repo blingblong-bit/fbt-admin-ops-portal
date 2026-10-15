@@ -28,6 +28,7 @@ import { Route as AuthenticatedSquareDiagnosticRouteImport } from './routes/_aut
 import { Route as AuthenticatedSyncLogRouteImport } from './routes/_authenticated/sync-log'
 import { Route as AuthenticatedVisitAutomationReviewRouteImport } from './routes/_authenticated/visit-automation-review'
 import { Route as AuthenticatedVisitNoteReviewRouteImport } from './routes/_authenticated/visit-note-review'
+import { Route as AuthenticatedWeeklyDuesRouteImport } from './routes/_authenticated/weekly-dues'
 import { Route as AuthenticatedClientsIndexRouteImport } from './routes/_authenticated/clients.index'
 import { Route as AuthenticatedClientsIdRouteImport } from './routes/_authenticated/clients.$id'
 import { Route as AuthenticatedClientsDeletedRouteImport } from './routes/_authenticated/clients.deleted'
@@ -146,6 +147,11 @@ const AuthenticatedVisitNoteReviewRoute =
     path: '/visit-note-review',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedWeeklyDuesRoute = AuthenticatedWeeklyDuesRouteImport.update({
+  id: '/weekly-dues',
+  path: '/weekly-dues',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedClientsIndexRoute =
   AuthenticatedClientsIndexRouteImport.update({
     id: '/clients/',
@@ -235,6 +241,7 @@ export interface FileRoutesByFullPath {
   '/sync-log': typeof AuthenticatedSyncLogRoute
   '/visit-automation-review': typeof AuthenticatedVisitAutomationReviewRoute
   '/visit-note-review': typeof AuthenticatedVisitNoteReviewRoute
+  '/weekly-dues': typeof AuthenticatedWeeklyDuesRoute
   '/clients/$id': typeof AuthenticatedClientsIdRoute
   '/clients/deleted': typeof AuthenticatedClientsDeletedRoute
   '/clients/new': typeof AuthenticatedClientsNewRoute
@@ -267,6 +274,7 @@ export interface FileRoutesByTo {
   '/sync-log': typeof AuthenticatedSyncLogRoute
   '/visit-automation-review': typeof AuthenticatedVisitAutomationReviewRoute
   '/visit-note-review': typeof AuthenticatedVisitNoteReviewRoute
+  '/weekly-dues': typeof AuthenticatedWeeklyDuesRoute
   '/': typeof AuthenticatedIndexRoute
   '/clients/$id': typeof AuthenticatedClientsIdRoute
   '/clients/deleted': typeof AuthenticatedClientsDeletedRoute
@@ -302,6 +310,7 @@ export interface FileRoutesById {
   '/_authenticated/sync-log': typeof AuthenticatedSyncLogRoute
   '/_authenticated/visit-automation-review': typeof AuthenticatedVisitAutomationReviewRoute
   '/_authenticated/visit-note-review': typeof AuthenticatedVisitNoteReviewRoute
+  '/_authenticated/weekly-dues': typeof AuthenticatedWeeklyDuesRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
   '/_authenticated/clients/$id': typeof AuthenticatedClientsIdRoute
   '/_authenticated/clients/deleted': typeof AuthenticatedClientsDeletedRoute
@@ -338,6 +347,7 @@ export interface FileRouteTypes {
     | '/sync-log'
     | '/visit-automation-review'
     | '/visit-note-review'
+    | '/weekly-dues'
     | '/clients/$id'
     | '/clients/deleted'
     | '/clients/new'
@@ -370,6 +380,7 @@ export interface FileRouteTypes {
     | '/sync-log'
     | '/visit-automation-review'
     | '/visit-note-review'
+    | '/weekly-dues'
     | '/'
     | '/clients/$id'
     | '/clients/deleted'
@@ -404,6 +415,7 @@ export interface FileRouteTypes {
     | '/_authenticated/sync-log'
     | '/_authenticated/visit-automation-review'
     | '/_authenticated/visit-note-review'
+    | '/_authenticated/weekly-dues'
     | '/_authenticated/'
     | '/_authenticated/clients/$id'
     | '/_authenticated/clients/deleted'
@@ -569,6 +581,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedVisitNoteReviewRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/weekly-dues': {
+      id: '/_authenticated/weekly-dues'
+      path: '/weekly-dues'
+      fullPath: '/weekly-dues'
+      preLoaderRoute: typeof AuthenticatedWeeklyDuesRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/clients/': {
       id: '/_authenticated/clients/'
       path: '/clients'
@@ -680,6 +699,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedSyncLogRoute: typeof AuthenticatedSyncLogRoute
   AuthenticatedVisitAutomationReviewRoute: typeof AuthenticatedVisitAutomationReviewRoute
   AuthenticatedVisitNoteReviewRoute: typeof AuthenticatedVisitNoteReviewRoute
+  AuthenticatedWeeklyDuesRoute: typeof AuthenticatedWeeklyDuesRoute
   AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
   AuthenticatedClientsIdRoute: typeof AuthenticatedClientsIdRoute
   AuthenticatedClientsDeletedRoute: typeof AuthenticatedClientsDeletedRoute
@@ -705,6 +725,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedVisitAutomationReviewRoute:
     AuthenticatedVisitAutomationReviewRoute,
   AuthenticatedVisitNoteReviewRoute: AuthenticatedVisitNoteReviewRoute,
+  AuthenticatedWeeklyDuesRoute: AuthenticatedWeeklyDuesRoute,
   AuthenticatedIndexRoute: AuthenticatedIndexRoute,
   AuthenticatedClientsIdRoute: AuthenticatedClientsIdRoute,
   AuthenticatedClientsDeletedRoute: AuthenticatedClientsDeletedRoute,

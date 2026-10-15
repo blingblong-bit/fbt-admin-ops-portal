@@ -25,5 +25,8 @@ Goal: for a chosen Mon–Fri week, show who is expected to pay, prior-week unpai
 - Tests for: section exclusivity, carryover = unpaid only, weekly once per week, renewal not due from date alone, reconciliation $0.
 - Run tests and typecheck. No client records changed, no texts, no publishing.
 
-## Open point
-Note: Oct 19–23 is next week relative to today, so "Prior Week Carryover" for that view means open obligations dated Oct 12–16 as of now (payments made the rest of this week would reduce it).
+## Carryover for future weeks (approved clarification)
+- For a future week, Prior Week Carryover is provisional until the prior week closes. For Oct 19–23 run on Oct 15 it uses open obligations dated Oct 12–16 as of now.
+- Always computed live from current open amounts; never frozen or snapshotted, so payments made before the week ends shrink it automatically.
+- Sections stay mutually exclusive. An obligation dated in the immediately prior week stays in Carryover even if the client has no appointment in the selected week; it never falls into Older Outstanding.
+- Preview output also lists every carryover client and every older-outstanding client; CSV saved to Files.

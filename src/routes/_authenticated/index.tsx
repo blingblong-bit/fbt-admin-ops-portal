@@ -67,6 +67,7 @@ import { autofillPackagesFromSquare } from "@/lib/package-autofill.functions";
 import type { ScheduleStatus } from "@/components/SmartClientCard";
 import { useRole } from "@/hooks/useRole";
 import { getMasterDues, masterDuesQuery } from "@/lib/master-dues.functions";
+import { computeWeeklyDues } from "@/lib/weekly-dues";
 import { filterTotals, makeWeekOf, type DuesFilter } from "@/lib/master-dues-view";
 import { addDaysYmd, workWeekStartFromYmd } from "@/lib/work-week";
 import { visibleTileMoney } from "@/lib/dashboard-tile-visibility";
@@ -774,6 +775,13 @@ function Dashboard() {
     const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Chicago" });
     return filterTotals(d.rows, k, makeWeekOf(today, workWeekStartFromYmd, addDaysYmd));
   };
+  const weeklyTile = (() => {
+    const d = masterQ.data?.data;
+    if (!d) return null;
+    const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Chicago" });
+    return computeWeeklyDues(d.rows, d.appointments, workWeekStartFromYmd(today)).totals;
+  })();
+  const $tile = (n: number) => n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
   const automationQ = useQuery({
     queryKey: ["visit-automation-review"],
     queryFn: () => orThrow(fetchAutomation({ data: {} })),
@@ -802,6 +810,20 @@ function Dashboard() {
       moneyLabel: "tracked",
       tone: "red",
       href: "/payment-due",
+      staffHidden: true,
+    },
+    {
+      key: "weekly_dues",
+      label: "Weekly Dues",
+      sublabel: weeklyTile
+        ? `${$tile(weeklyTile.expected)} expected · ${$tile(weeklyTile.carryover)} carryover`
+        : masterQ.data?.error ? "Square unavailable" : "loading…",
+      icon: <CircleDollarSign className="h-5 w-5" />,
+      count: weeklyTile?.expectedClients ?? 0,
+      money: weeklyTile?.total,
+      moneyLabel: "actionable",
+      tone: "red",
+      href: "/weekly-dues",
       staffHidden: true,
     },
     {

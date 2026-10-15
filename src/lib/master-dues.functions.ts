@@ -9,7 +9,7 @@ import { simulateBilling, type SimResult } from "./billing-sim";
 
 type Result =
   | { error: string; computed_at: string; data: null }
-  | { error: null; computed_at: string; data: ReturnType<typeof computeMasterDues> };
+  | { error: null; computed_at: string; data: ReturnType<typeof computeMasterDues> & { appointments: Record<string, string[]> } };
 
 const chi = (iso: string) => new Date(iso).toLocaleDateString("en-CA", { timeZone: "America/Chicago" });
 const NUMBERED = /\b\d+\s*(of|\/)\s*\d+\b/i;
@@ -83,7 +83,18 @@ export const getMasterDues = createServerFn({ method: "GET" })
     }
 
     const data = computeMasterDues(clients, { todayYmd: chi(nowIso), nextAppointmentYmd, renewalTiming, squareNumberedPackage, billing });
-    return { error: null, computed_at: nowIso, data };
+    // Weekly Dues: non-cancelled appointment starts from 2 weeks back to 2 weeks ahead (display only).
+    const lo = Date.parse(nowIso) - 21 * 864e5, hi = Date.parse(nowIso) + 21 * 864e5;
+    const appointments: Record<string, string[]> = {};
+    for (const r of data.rows) {
+      const c = clients.find((x) => x.id === r.client_id);
+      const bks = c?.square_customer_id ? index.byCustomer.get(c.square_customer_id) ?? [] : [];
+      appointments[r.client_id] = bks
+        .filter((b) => b.start_at && !/CANCEL|DECLINE|NO_SHOW/i.test(b.status ?? ""))
+        .map((b) => b.start_at!)
+        .filter((s) => { const t = Date.parse(s); return t >= lo && t <= hi; });
+    }
+    return { error: null, computed_at: nowIso, data: { ...data, appointments } };
   });
 
 export const masterDuesQuery = (fn: () => Promise<Result>) =>

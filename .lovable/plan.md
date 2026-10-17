@@ -1,28 +1,70 @@
-# Emma / David verification and correction prep (no writes until final approval)
+# Verification report and correction previews: Emma Sazonov, David Butner
 
-## Read-only findings already confirmed
+Nothing has been written. No payment flags were cleared, no records were archived, nothing was published or texted, and Square was not changed.
 
-**Emma Sazonov** (linked Square record)
-- Current Hub: "8 Sessions", $375, start 9/4, 4/8 used, paid $375, no previous debt, no prepared renewal.
-- Two distinct COMPLETED Square payments, each logged once: `L7zg…YhQZY` $375 (9/08) and `bdW7…DkZY` $375 (10/06, flagged for review). Both were applied to the "current package" at the time.
-- Correction will not create or delete any payment rows or payment activities. Both IDs stay attached to her, so a payment retry stays idempotent and can't double-count.
+## 1. Live Square payment check (read directly from Square)
 
-**David Butner** (linked record `67340893…`)
-- 10/01 payment `JmbT…HEZY`: $345, COMPLETED in the stored record, unique ID, logged once.
-- It was applied entirely to the current 9/08 package (prior $0, pending $0). That makes current paid $690 against a $345 price, so it is a $345 overpayment on the current package. It is not applied to any other debt or package.
-- The 7/07, 8/11, and 9/08 $345 payments each match one earlier package. There is no sign of a duplicate.
-- **New concern:** there is a second, unlinked "David Butner" record (`a0d0d064…`, 6/02 package, $0 paid). It is not archived. There is also a second unlinked "Melani McKamey" record (`fcdf41f0…`, fully paid). Before any money moves, check whether Payment Due counts the extra David record as $345 owed.
+| Payment | Client | Status | Amount | Refunds | Square time (UTC) | Chicago local time | Source |
+|---|---|---|---|---|---|---|---|
+| `JmbT…HEZY` | David | COMPLETED | $345 | none | 2026-10-01 15:32 | Oct 1, 10:32 AM | Card, own order |
+| `TPXW…TUTZY` | David | COMPLETED | $345 | none | 2026-09-08 15:33 | Sep 8, 10:33 AM | Card, separate order |
+| `L7zg…YhQZY` | Emma | COMPLETED | $375 | none | 2026-09-08 18:55 | Sep 8, 1:55 PM | Venmo (recorded in Square) |
+| `bdW7…DkZY` | Emma | COMPLETED | $375 | none | 2026-10-06 04:44 | **Oct 5, 11:44 PM CDT** | Venmo (recorded in Square) |
 
-## Steps on approval (all read-only)
+- **David's Oct 1 payment** went through and has no refund. It is linked to David's own Square customer record and is a separate order and receipt from his Sep 8 payment, so it is not a duplicate. In the Hub it is logged once and was applied entirely to his current package: $0 to old debt, $0 to the prepared renewal. That's why his current package shows $690 paid against a $345 price. It is **not** applied to any other debt or package.
+- **Emma's date:** Square stored her second payment as Oct 6 in UTC, which is **Oct 5, 11:44 PM** Chicago time. The correct business date is **Oct 5**.
 
-1. **Check David's payment live in Square.** Fetch `JmbT…HEZY` directly from Square. Confirm its status is COMPLETED, the amount is $345, it has no refund, it's the right customer, and the receipt is different from the 9/08 payment. Report any mismatch and stop there.
-2. **Check the extra David record.** Show whether Master Dues counts it, and what it would contribute. Only recommend archiving it; don't do it.
-3. **Check Melani on screen.** Open Payment Due as an admin in the preview. Screenshot Melani's row and confirm it shows $345, Upcoming, Nov 6, and not under Due Now.
-4. **Exact write previews.** Return field-by-field before/after values and Master Dues before/after:
-   - Emma: add a closing note for the 9/4 package at 8/8, tied to the 9/08 payment. Set the current package start to 10/07 with 4/8 used and $375 paid, tied to the 10/05–10/06 payment. Clear the review flag on `bdW7…`. Expected balance: $0 → $0.
-   - David: move $345 from current paid ($690 → $345) to prepared-renewal paid ($0 → $345), tied to `JmbT…HEZY`. Clear the review flag. Expected balance: $345 → $0.
-5. **Safety checks shown with the preview:** payment row counts stay the same, payment activity counts stay the same, all package history entries are kept, and only new correction notes are added.
+## 2. Extra David record (and extra Melani record)
+- `a0d0d064…` "David Butner" (6/02 package, $0 paid) and `fcdf41f0…` "Melani McKamey" are both already marked **archived**. Neither is linked to Square.
+- Payment Due skips archived records, so neither adds any dollars. No action is needed. These were not touched.
 
-## Final write (only after you approve the previews)
-- One transaction per client: update the fields, add a correction note that lists both payment IDs, then read the record back.
-- No publishing, no texts, no Square changes.
+## 3. Melani on Payment Due (live preview, signed in as admin)
+Her row reads: **Renewal $345.00 · Upcoming · Expected Fri, Nov 6**, with the note "Renewal prepared after the 2026-08-28 start; next booked package 2026-11-06". She is not listed under Due Now.
+
+## 4. Correction previews
+
+### Emma Sazonov
+Plan: keep the September package as a real history entry, then start the October package.
+- **Step A:** mark the September package complete. Visits used go 4 → 8. Package start stays 9/4. Paid stays $375, which is covered by `L7zg` (9/08).
+- **Step B:** start the new package through the standard Renew Package action, which permanently saves a "Package completed" history entry with the September details. New package: "8 Sessions", 8 visits, $375, starting 10/07, 4 visits used, $375 paid (covered by `bdW7`, Oct 5).
+
+| Field | Before | After |
+|---|---|---|
+| Package start | 2026-09-04 | 2026-10-07 |
+| Visits used | 4 | 4 (on the new package) |
+| Price / paid | $375 / $375 | $375 / $375 |
+| Old-package debt | $0 | $0 (September unpaid = $375 − $375 = $0) |
+| Prepared renewal | none | none |
+
+History after the change: the September package is saved as 8/8 visits, $375 price, $375 paid, start 9/4. A renewal entry is added for 10/07, plus a correction note naming both payment IDs and the Oct 5 local date.
+
+**Master Dues: $0 → $0.**
+
+Both original payment entries stay exactly as they are: no copies, no edits, no deletions.
+
+### David Butner
+| Field | Before | After |
+|---|---|---|
+| Current package paid | $690 | $345 (covered by `TPXW`, 9/08) |
+| Prepared renewal paid | $0 | $345 (covered by `JmbT`, 10/01) |
+| Prepared renewal start / price | 10/13 (stored) / $345 | unchanged; Payment Due still uses Square timing (10/27) |
+
+**Master Dues: $345 (renewal, Upcoming 10/27) → $0.**
+
+The current package is $345 − $345 = $0 owed, and the prepared renewal is $345 − $345 = $0 owed. A correction note naming `JmbT` is added.
+
+### Effects on other records
+- No other client changes.
+- The number of Square payment entries and payment activity entries stays exactly the same.
+- No package history is deleted; only new history and note entries are added.
+- Whole-account Payment Due total drops by $345, all from David. Emma adds $0.
+
+### Review flags (recommendation only, not applied)
+- `JmbT` (David): once the move above is written and read back as $345 / $345, the payment is fully reconciled and the flag can be cleared.
+- `bdW7` (Emma): once the September history entry and the October package are written and read back, the payment is fully reconciled and the flag can be cleared.
+- Each flag will be cleared only if you approve that separately.
+
+## 5. Final write (only on your explicit approval)
+- One transaction per client.
+- Re-check the "before" values first, and abort if anything has changed since this report.
+- Read the record back afterward and confirm payment entry counts are unchanged.

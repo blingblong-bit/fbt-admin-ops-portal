@@ -1,53 +1,42 @@
-# Prepared renewal: stored start date vs first uncovered visit (read-only investigation)
+# Prepared renewal: stored start date vs Square timing (findings + remaining read-only steps)
 
-Nothing changes: no dates, packages, payments, dues rules, texts or publishing.
+Nothing is changed and nothing is published. This plan only lists what the investigation found and what still needs to run.
 
-## What is already confirmed
-- **Where the stored date comes from.** "New package starts" (the stored renewal start date) is set in the Renew Package dialog. When the renewal was prepared, it was prefilled from the client's next Square appointment, or today's date if there was none. Staff could then edit it. So it is an admin-entered earliest-eligible date, frozen when the renewal was prepared. It is not the real activation date and does not update when bookings move.
-- **Payment Due / Weekly Dues ignore it for timing.** Master Dues gets renewal timing only from Square progress (boundary, then first uncovered appointment). That explains the mismatches you saw:
+## Findings so far (confirmed by reading the code)
+- **The stored "New package starts" date** is an earliest-eligible date entered by an admin. When the renewal was prepared, it was prefilled from the next Square appointment, and staff could edit it. It is not an imported date and not the date the renewal actually started.
+- **Payment Due, Weekly Dues and dashboard tiles** take renewal timing from Square progress only. The stored date does not decide the week or the amount.
+- **Square payment webhook:** the stored date only checks whether a renewal exists, to explain an overpayment. Money is routed by `apply_square_payment`, not by date. No issue.
+- **Dues texts:** the stored date only shows in the draft text and as a check that a date exists. It never triggers a send, and sending stays off. This is a display issue only: the text could show the stored date instead of Square's date.
+- **Check-in activation: a real gap was found.** At check-in, the prepared package activates when the visit is on or after the stored date and either:
+  - Square shows the visit as 1/N, **or**
+  - Square has no visit number for that booking, **or the Square lookup fails or times out**.
 
-| Client | Stored start | Prepared on | Hub used/total |
-|---|---|---|---|
-| Lisa Myers | 10/14 | 10/08 | 3/8 |
-| Janet Womack | 10/23 | 9/23 | 4/8 (Hub start also 10/23) |
-| Angler Davis | 10/06 | 9/29 | 6/8 (no Hub start) |
-| Jay Reynolds | 10/06 | 10/13 | 3/8 |
-| Greg English | 10/12 | 10/06 | 5/8 |
-| Brody Phillips | 10/14 | 10/06 | 5/8 |
-| Abby Quick | 10/05 | 9/30 | 0/4, $100 prepaid |
+  It does **not** check whether the current package still has visits left. So for Lisa Myers (3/8 used, stored 10/14), an unnumbered visit, or a failed Square lookup, on or after 10/14 would switch her to the new package early. Then, in one step, it would carry her unpaid balance forward as previous-package debt.
+- **Remaining visits with a prepared renewal** (Abby Quick, Greg English, Brody Phillips) are allowed by design. They are only at risk through the check-in gap above.
 
-- **Remaining visits are allowed.** A prepared renewal with visits left is allowed by design (pre-renew). That alone is not a bug.
-
-## What still needs checking (not yet confirmed)
-1. **Other places that read the stored date.** Check-in / Schedule Check, the Square webhook payment routing, the renewal tick, and dues text drafts all read it. Confirm whether any of them activates the renewal or routes money by that date instead of by Square progress. That would be the real early-activation risk.
-2. **Whether anything already activated early.** For every client with a prepared renewal, compare these, and flag any activation, payment routing or dues text that went by the stored date before the current package was used up:
-   - stored start
+## Remaining read-only steps
+1. **Check past early activations.** For every one of the roughly 40 past automatic activations, compare the activating booking's Square note and the old package's Square position at that moment. Flag any that activated while the old package still had valid visits, with the money effect.
+2. **Check today's exposure.** For every current prepared renewal, list:
+   - stored date
    - Square first uncovered appointment
-   - Square visit position
-   - activity history
-3. **Oct 19–23 effect.** Run the same live Master Dues calculation two ways:
-   - (a) as it is now
-   - (b) a test version that places each renewal by its stored date
+   - Square position and remaining visits
+   - whether a booking on or after the stored date is unnumbered (meaning it would activate early under the current rule)
+3. **Oct 19–23 verification.** Re-run live Master Dues and Weekly Dues, including the $5,410 Expected This Week figure. Then a test-only rerun puts each renewal on its stored date. List every client whose amount, week or category would differ, and confirm the live list uses Square timing. A mismatch in the stored date alone is not counted as an error.
+4. **Save a CSV** with one row per client: `/mnt/documents/prepared-renewal-date-check_v1.csv`. Each row gets a verdict:
+   - display only
+   - record needs correction (with exact before/after)
+   - Needs Review
 
-   Then list every client whose Oct 19–23 amount, week or category would differ. Confirm the current list uses (a). Expected result: no wrong inclusions, but this is unconfirmed until the run.
+## Proposed smallest fix (not built until you approve)
+- **Check-in:** activate a prepared package only when one of these is true:
+  - Square marks the visit 1/N, **or**
+  - the current package is used up (by Square position, falling back to Hub).
 
-## Output
-- Client-level CSV of every prepared renewal with these columns:
-  - stored start
-  - first uncovered appointment
-  - Square position
-  - remaining visits
-  - Master Dues timing
-  - Oct 19–23 amount: now vs by stored date
-  - verdict: display only / record needs correction / Needs Review
-- Exact root cause, affected clients, and the smallest proposed fix. Likely fix: show the Square-driven date next to the stored one, labelled "earliest eligible", and make any code path found in check 1 use Square timing. Nothing will be built until you approve.
+  A missing number or a failed lookup alone never activates it.
+- **Display:** label the stored date "Earliest eligible start". Show the Square first-uncovered date next to it on the client page and in dues text drafts.
+- **Tests:** an unnumbered visit with visits left must not activate. A failed Square lookup must not activate. 1/N still activates. A used-up package still activates.
 
 ## Technical notes
-- Timing source: `renewalTimingFor` in `src/lib/master-dues.ts`.
-- The stored date is written by `RenewDialog` in `clients.$id.tsx`.
-- Readers to audit:
-  - `schedule-check.tsx` (lines ~830, 982, 1624, 1770)
-  - `square.webhook.ts:639`
-  - `renewal.tick.ts`
-  - `dues-messaging.ts:217-241`
-- Read-only queries and a local script only.
+- The gap is in `schedule.functions.ts` around lines 731-748, in `shouldActivatePreparedPackage` (`effective-visit-state.ts:334`), which returns true when `squareNote` is null. `squareNoteForBooking` returns null on any fetch error.
+- Webhook: `square.webhook.ts:639` (`detectOverpayment` only).
+- Dues texts: `dues-messaging.ts:217-241` and `dues-messaging.functions.ts:311`.

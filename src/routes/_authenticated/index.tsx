@@ -1697,13 +1697,13 @@ function exportWeeklyPaymentCsv(groups: WeeklyPaymentGroups) {
     });
   }
   const rows = [
-    ["Name", "Current Package Owed", "Next Package Owed", "Renewal State", "Renewal Start", "Total Owed"],
+    ["Name", "Current Package Owed", "Next Package Owed", "Renewal State", "Expected Renewal (Square)", "Total Owed"],
     ...[...byClient.values()].map((row) => [
       fullName(row.client),
       String(row.currentAmount),
       String(row.nextAmount),
       row.forecast ? (row.forecast.pre_renewed ? "Renewal Scheduled" : "Needs Renewal") : "Payment Due",
-      row.forecast?.pending_start_ymd ?? row.forecast?.first_uncovered_ymd ?? "",
+      row.forecast ? (row.forecast.no_upcoming ? "Prepared — No Scheduled Start" : row.forecast.first_uncovered_ymd) : "",
       String(row.currentAmount + row.nextAmount),
     ]),
   ];

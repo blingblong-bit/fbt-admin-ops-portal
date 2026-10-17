@@ -141,6 +141,8 @@ function ClientDetailPage() {
   const { isAdmin: isAdminUser } = useRole();
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ["client", id] });
+    qc.invalidateQueries({ queryKey: ["payment-allocations", id] });
+    qc.invalidateQueries({ queryKey: ["master-dues"] });
     qc.invalidateQueries({ queryKey: ["activities", id] });
     qc.invalidateQueries({ queryKey: ["clients"] });
     // A check-in/renewal can clear a prepared next package — refresh Needs Renewal.

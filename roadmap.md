@@ -56,6 +56,7 @@
 - [ ] Ava Banks, Julian Marable, Nick Smith billing model (needs owner decision)
 
 ## Weekly Dues
+- [x] Oct 19–23 collection list with held accounts (read-only CSV)
 - [x] Pure weekly module, /weekly-dues page, dashboard tile, Oct 19–23 read-only preview
 - [ ] Publish (waits on owner approval)
 

@@ -144,20 +144,40 @@ function ymdLocalToInstant(s: string): Date {
 // no timezone needed since the date is already specified in local terms.
 import { addDaysYmd, workWeekStartFromYmd } from "@/lib/work-week";
 import { parseVisitNote } from "@/lib/square-visit-audit";
-import { shouldActivatePreparedPackage } from "@/lib/effective-visit-state";
+import { decidePreparedActivation, type ActivationNote, type PackageEvidence } from "@/lib/effective-visit-state";
 
 /** Server-only: the visit number Square shows on one booking, or null if unreadable. */
-async function squareNoteForBooking(bookingId: string): Promise<{ n: number; total: number } | null> {
+async function squareNoteForBooking(bookingId: string): Promise<ActivationNote> {
   const token = process.env.SQUARE_PRODUCTION_ACCESS_TOKEN;
-  if (!token) return null;
+  if (!token) return { status: "lookup_failed" };
   try {
     const r = await fetch(`https://connect.squareup.com/v2/bookings/${encodeURIComponent(bookingId)}`, {
       headers: { Authorization: `Bearer ${token}`, "Square-Version": "2024-10-17" },
       signal: AbortSignal.timeout(8000),
     });
-    if (!r.ok) return null;
+    if (!r.ok) return { status: "lookup_failed" };
     const j = (await r.json()) as { booking?: { seller_note?: string; customer_note?: string } };
-    return parseVisitNote(j.booking?.seller_note) ?? parseVisitNote(j.booking?.customer_note);
+    const n = parseVisitNote(j.booking?.seller_note) ?? parseVisitNote(j.booking?.customer_note);
+    return n ? { status: "numbered", n: n.n, total: n.total } : { status: "unnumbered" };
+  } catch {
+    return { status: "lookup_failed" };
+  }
+}
+
+async function packageEvidenceFor(client: {
+  square_customer_id: string | null; visits_used: number | null; package_total_visits: number; visit_tracking_mode?: string | null;
+}): Promise<PackageEvidence> {
+  const token = process.env.SQUARE_PRODUCTION_ACCESS_TOKEN;
+  if (!token) return null;
+  if (!client.square_customer_id) return { source: "hub_fallback" };
+  try {
+    const { loadSquareBookingIndex, effectiveStateFor } = await import("@/lib/effective-visit-state.server");
+    const idx = await loadSquareBookingIndex(token, 180, 60);
+    if (idx.error) return null;
+    const st = effectiveStateFor(idx, client);
+    if (st.suppressed) return { source: "review" };
+    if (st.source === "square") return { source: "square", used: st.visitsUsed, total: st.totalVisits };
+    return { source: "hub_fallback" };
   } catch {
     return null;
   }

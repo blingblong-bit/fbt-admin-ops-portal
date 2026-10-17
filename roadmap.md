@@ -60,10 +60,10 @@
 - [ ] Publish (waits on owner approval)
 
 ## Admin workflow improvements (pre-launch)
-- [ ] Manual payment method/note + Square ref duplicate block + 3-day same-amount warning
-- [ ] Payment allocation ledger (original vs transfer) + safe reallocation (admin)
-- [ ] Prepaid corrections via reallocation
-- [ ] Billing type/rate/effective date editing (admin)
-- [ ] Before/after edit history
-- [ ] Boundary-aware renew-twice block + Undo last renewal
-- [ ] Tests + e2e with temporary test clients; GO/NO-GO
+- [x] Manual payment method/note + Square ref duplicate block + 3-day same-amount warning
+- [x] Payment allocation ledger (original vs transfer) + safe reallocation (admin)
+- [x] Prepaid corrections via reallocation
+- [x] Billing type/rate/effective date editing (admin)
+- [x] Before/after edit history
+- [x] Boundary-aware renew-twice block + Undo last renewal
+- [x] Tests + e2e with temporary test clients; GO/NO-GO

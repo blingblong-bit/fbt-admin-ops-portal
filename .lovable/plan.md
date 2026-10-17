@@ -20,6 +20,12 @@ Every client that isn't archived or deleted (not only the ones on Payment Due), 
 - Root causes: for each confirmed bug, which part of the logic causes it and the smallest safe fix, plus suggested tests to guard against it. Nothing gets built yet.
 - Deliverables: `/mnt/documents/integrity-audit_v1.csv` (one row per client) and a summary in chat.
 
+## Safeguards
+- Package starts are found only with the existing visit-position logic, which already handles unnumbered visits and changes in package size. If a start is uncertain, it is flagged instead of being treated as a renewal.
+- Two payments of the same amount within a day are labeled possible duplicates, never confirmed. Deleting or moving a payment is recommended only with stronger evidence, such as a matching manual entry and a note, or a single real Square charge.
+- The report states how many clients were eligible, how many were fully audited, and how many have incomplete Square data. A client with incomplete data is never marked as cleared.
+- The spreadsheet lists every eligible client, including those with no findings. Confirmed system bugs are kept separate from suspected data problems.
+
 ## Validation
 Run the existing tests and type check, then stop.
 

@@ -54,7 +54,6 @@ export function PreRenewCard({
     onError: (e: Error) => toast.error(e.message),
   });
 
-  const startYmd = forecast.pending_start_ymd ?? forecast.first_uncovered_ymd;
 
   return (
     <div className="-mt-1 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
@@ -175,7 +174,7 @@ function PreRenewDialog({
   const mutation = useMutation({
     mutationFn: () => onSubmit(form),
     onSuccess: () => {
-      toast.success(`Next package scheduled for ${formatDate(form.startYmd)}`);
+      toast.success(`Earliest eligible start set to ${formatDate(form.startYmd)}`);
       onDone();
       onClose();
     },

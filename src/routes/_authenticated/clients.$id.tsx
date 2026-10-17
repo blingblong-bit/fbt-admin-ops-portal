@@ -8,6 +8,8 @@ import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { recordManualPayment } from "@/lib/payments.functions";
 import { renewPackage } from "@/lib/renewal.functions";
+import { updateClientDetails } from "@/lib/admin-finance.functions";
+import { PaymentAllocationsCard } from "@/components/PaymentAllocationsCard";
 import { AppShell } from "@/components/AppShell";
 import { ArchiveClientButton } from "@/components/ArchiveClientButton";
 import { VisitSourceLine } from "@/components/VisitSourceLine";
@@ -487,6 +489,7 @@ function ClientDetailPage() {
 
         <MessagesCard clientId={id} client={c as never} />
 
+        {isAdminUser && <PaymentAllocationsCard client={c} onDone={refresh} />}
         <Card className="lg:col-span-3">
           <CardHeader>
             <CardTitle>Timeline</CardTitle>

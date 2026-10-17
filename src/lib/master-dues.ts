@@ -279,6 +279,17 @@ const chiYmd = (iso: string) => new Date(iso).toLocaleDateString("en-CA", { time
 export type LiveNumbered = { iso: string; n: number; of: number };
 export type BoundaryEvidence = { live: LiveNumbered[]; preparedAtIso?: string | null };
 
+const NUM_CAP = /\b(\d+)\s*(?:of|\/)\s*(\d+)\b/i;
+export function liveNumbered(bks: { start_at?: string | null; status?: string | null; seller_note?: string | null; customer_note?: string | null }[]): LiveNumbered[] {
+  const out: LiveNumbered[] = [];
+  for (const b of bks) {
+    if (!b.start_at || /CANCEL|DECLINE|NO_SHOW/i.test(b.status ?? "")) continue;
+    const m = (b.seller_note ?? "").match(NUM_CAP) ?? (b.customer_note ?? "").match(NUM_CAP);
+    if (m) out.push({ iso: new Date(b.start_at).toISOString(), n: +m[1], of: +m[2] });
+  }
+  return out.sort((a, b) => a.iso.localeCompare(b.iso));
+}
+
 /** First future live 1/N that directly follows a live N/N — the next booked package start. */
 export function futureBookedBoundary(live: LiveNumbered[], nowIso: string): string | null {
   for (let i = 1; i < live.length; i++) {

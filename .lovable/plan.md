@@ -7,13 +7,13 @@ When a client has a prepared renewal, the system checks whether Square shows a n
 
 Melani's stored start (8/14) is out of date. The 8/28 start Square shows is the package she is in now (at 6/8), not her renewal. Her renewal really starts at the first visit her current package doesn't cover: 11/6.
 
-## New rule
-A past Square package start counts as the prepared renewal's start only if all of these are true:
-1. That package is still in progress (unchanged from the Jay fix).
-2. It began after the renewal was prepared. A renewal can't start before it existed.
-3. If the preparation time isn't recorded, Square must also show the package Hub tracks was finished (an N/N on or after Hub's start date and before the new 1/N). This keeps Emma-type cases working.
-
-Otherwise the renewal timing comes from the first appointment the current Square package doesn't cover, counting only live visits. It never uses any future 1/N or a cancelled one. If the boundary is unclear, timing becomes Needs Review instead of guessing.
+## New rule (Square visit sequence first; preparation time only supports it)
+Check these in order for a client with a prepared renewal:
+1. **A future boundary is already booked.** Square shows the current package ending (a future live N/N) and then a live 1/N after it. The renewal belongs to that 1/N, so it shows as Upcoming on that date. This is Melani (11/6).
+2. **A clear past boundary.** Square shows the package Hub tracks finished (a live N/N on or after Hub's start date), then a live 1/N, and that new package is still in progress. The renewal has started and is Due Now. This holds even if the renewal was prepared after that first visit. This is Emma.
+3. **The past boundary was the start of the current package.** The old package finished before Hub's start date, or there's no N/N between them. Here the "new" package is the one Hub already tracks. The renewal timing comes from the first appointment the current package doesn't cover. Melani also fits this case.
+4. **Unclear.** The sequence can't settle it (gaps, conflicting numbers, or a changed package size with no clear N/N). The renewal is marked Needs Review: not active, not Due Now. When the renewal was prepared is used only to add a supporting note here; it never decides the outcome by itself.
+5. **Unchanged:** Jay-type completed packages fall through to the next live start. Cancelled or no-show visits never count as a boundary.
 
 ## Tests to add
 - **Melani:** 8/28 start was before the renewal was prepared. Shows Upcoming 11/6, not Due Now.

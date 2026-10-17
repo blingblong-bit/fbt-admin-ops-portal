@@ -1,35 +1,47 @@
-# Admin workflow readiness check: results and proposed fixes
+# Admin workflow improvements (approved scope with your safeguards)
 
-I checked each action against the screens staff use today. Nothing was changed, nothing was texted, nothing was published.
+These rules don't change: financial corrections are admin-only, every money change is saved in one step or not at all, no existing client money records are changed, the Payment Due and Weekly Dues calculations stay the same, and no texts, Square changes or publishing.
 
-## Results
+## Readiness findings (baseline)
+- **Yes:** edit package fields, edits flow through to Payment Due and Weekly Dues.
+- **Partial:** renewing a package, manual payments, prepared renewal edits, history.
+- **No:** moving a payment between packages, changing billing type.
+- The renewal-timing fix is already in the code that would be published.
 
-| # | Workflow | In Hub now | Where staff do it | Keeps history? | Risk |
-|---|---|---|---|---|---|
-| 1 | Edit package price, start date, size, visits used | **Yes** | Client page, then Edit Client | Partly. The note only says "Client details edited" and doesn't record the old or new values | Low |
-| 2 | Finish an old package and start a new one | **Partial** | Client page, then Renew Package. Can also prepare one ahead (Prepare next package) | Unpaid money moves into "previous package owed". The old package is kept only as a history note. There is no package history list | Medium. Pressing Renew twice duplicates the debt (this is what happened to Hunter) |
-| 3 | Record a manual payment (Venmo or cash) | **Partial** | Client page, then Record Payment | Yes, with its own ID, and a retry can't record it twice | **High.** There is no way to mark it Venmo or cash, or add a note. If staff also enter the same payment in Square, it gets counted twice, and nothing warns them |
-| 4 | Move a payment from the current package to a prepared renewal (or back) | **No** | Only by hand-editing "amount paid" in Edit Client. The prepared renewal's paid amount can't be edited at all | No | **High.** This is how Keri ended up showing $50 owed. It needed a database edit for David |
-| 5 | Edit a prepared renewal's date, size or price, or cancel it | **Partial** | Client page, then the prepared package card, then Edit or Cancel | Yes, with a history note | The prepaid amount can't be edited |
-| 6 | Change billing type (package, pay-per-visit, weekly, assessment) | **No** | Not on any screen. Edit Client only has an old package / pay-per-visit switch, which Payment Due doesn't use | Not applicable | **High.** Pay-per-visit and weekly rates and start dates can only be set through a database edit |
-| 7 | Review correction history and payment notes | **Partial** | Client page, then Activity. Also the Payment History page | Payments: yes. Edits: no before and after values | Medium |
-| 8 | Edits update Payment Due and Weekly Dues | **Yes** | Both pages use the same calculation and refresh within about a minute (or with Refresh) | Not applicable | Low |
-
-**Renewal-timing fix:** yes, it's in the version that would be published. Publishing sends the current code, and its tests are included and pass (Melani shows Upcoming 11/6).
-
-## Recommendation: NO-GO for now
-The money totals are trustworthy. But staff can't yet fix the most common mistakes (items 3, 4 and 6) on their own. Without those fixes, they would either get balances wrong or need someone to edit the database.
-
-## Proposed fixes (I'll build these only if you approve; launch after them would be GO)
-1. **Record Payment:** add a required method (Venmo, cash, check, other) and a note. If Square already has a payment for the same amount within 3 days, show a warning: "Square may already have this payment".
-2. **Move payment:** a new admin-only action on the client page that moves an amount between previous package owed, the current package and the prepared renewal. It can't move more than was paid and keeps the total the same. Each move adds a detailed history note.
-3. **Prepared renewal:** add a "prepaid amount" field to the existing Edit form.
-4. **Billing type:** add an admin-only section to Edit Client with billing type, rate and start date. It warns that pay-per-visit and weekly billing ignore the package fields.
-5. **Edit history:** Edit Client and these new actions record before and after values in the Activity list.
-6. **Renew safety:** block a second Renew within 10 minutes for the same client unless the admin confirms.
-7. **Checks:** add tests for the payment move (total unchanged, can't go below 0), the duplicate warning and the billing-type save. Then run the full test suite and code check, and confirm one client end to end in the browser using fake test data only (no real clients).
+## What gets built
+1. **Manual payment method and notes.** Record Payment gets a required method (Venmo, cash, check, other) and a note, plus an optional Square payment ID.
+   - If that Square payment ID is already recorded for any client, it is **blocked**.
+   - If the same client has a payment for the same amount within 3 days, a **warning** asks the admin to confirm. It never blocks on its own.
+2. **Move a payment between packages.** On the client page, each payment shows where its money went: previous package, current package, or prepared renewal. An admin picks one payment and moves part of it to another bucket.
+   - The payment ID and total received never change.
+   - It can't move more than that payment put into a bucket, and no bucket can go below $0.
+   - Every move is saved as a new step in that payment's history, with who did it, when, and why.
+   - Payments from before allocation was recorded show as **Needs Review**, and moving them is blocked.
+3. **Prepaid amount on a prepared renewal.** Editing the prepaid amount is done through the same move action, so money is never created from nothing. Editing a prepared renewal's dates, size and price stays in the existing Edit form.
+4. **Billing type, rate and start date.** An admin-only section with package, pay-per-visit, weekly or assessment (assessment only where the app already supports it). It warns that the package fields stop counting toward money owed for pay-per-visit and weekly clients.
+5. **Before and after history.** Edit Client and every new action save which fields changed, from what, and to what. The Activity list shows them.
+6. **Renew-twice protection.** Each renewal is tied to the package it ends: its start date, size and the Square visit that started the new one.
+   - Renewing the same package boundary twice is blocked, however much time has passed.
+   - A separate admin-only **Undo renewal** puts the client back exactly as they were before (from the saved history) and records why. It's only offered for the most recent renewal, and only if no payments or visits landed afterward. Otherwise it shows Needs Review.
+7. **Tests:**
+   - moves keep each payment's total the same and never go negative
+   - an older payment with no recorded split can't be moved
+   - a repeated Square ID is blocked, and a same-amount payment within 3 days only warns
+   - renewing the same boundary twice is blocked, and Undo restores the earlier state exactly
+   - only admins can make these changes
+   - billing-type save works
+   - Then the full test suite and code check.
+   - End-to-end in the browser with **temporary test clients only**, removed afterward.
+8. Update the roadmap and project notes, then give you an updated GO / NO-GO.
 
 ## Technical details
-- New server functions with requireSupabaseAuth plus an admin role check: `reallocatePayment` (one update that keeps the sum of `previous_package_owed` reduction, `amount_paid` and `pending_renewal_paid` the same) and `updateBillingType`. The manual payment gets `method` and `note` stored on the `square_payments` row (`note` column already exists), with the method added to the manual payment ID prefix.
-- The duplicate warning reads `square_payments` for the client and only warns. It never blocks or merges.
-- Payment Due and Weekly Dues logic is unchanged.
+- Migration (additive only):
+  - New table `payment_allocations` (`id`, `client_id`, `payment_ref`, `bucket` prev/current/pending, `amount`, `reason`, `actor`, `created_at`). It is append-only, with grants and admin-only RLS.
+  - New nullable columns `square_payments.method`, `square_payments.manual_note`, and `clients.last_renewal_key`.
+- New security-definer functions. Each checks the admin role, locks the client row and validates input:
+  - `reallocate_payment(client, payment_ref, from, to, amount, reason)` adjusts `previous_package_owed` / `amount_paid` / `pending_renewal_paid` by the same amount in opposite directions and inserts allocation rows. It rejects payments whose allocation is unknown. Older allocations come from the existing payment activity metadata (`applied_to_*`). Where that is missing, the payment is marked Needs Review.
+  - `undo_last_renewal(client, reason)` restores from the `package_completed` and `renewal` activity metadata.
+  - `update_billing(client, type, rate, effective_date)`.
+- `renew_client_package` gets a boundary key check. The parameter stays optional, so existing callers keep working. `apply_square_payment` stays the only path that records payments; the manual path passes its method and note.
+- Edit Client moves to a server function that diffs old and new values into the activity metadata.
+- No changes to `master-dues.ts`, `weekly-dues.ts` or `billing-sim.ts`.

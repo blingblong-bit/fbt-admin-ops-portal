@@ -796,6 +796,14 @@ export const completeVisitForClient = createServerFn({ method: "POST" })
         });
         return { ok: true, visits_used: c.visits_used ?? 0, mode: "allocation_review", activated_renewal: false } as const;
       }
+      if (decision.action === "count_current" && /missing|failed/.test(decision.reason)) {
+        await context.supabase.from("client_activities").insert({
+          client_id: data.clientId,
+          activity_type: "renewal_activation_held",
+          description: `Renewal activation held — needs review (${decision.reason})`,
+          metadata: { reason: decision.reason, ...(data.bookingId ? { booking_id: data.bookingId } : {}) },
+        });
+      }
       if (decision.action === "activate") {
         const newTotal = Number(c.pending_renewal_total_visits ?? c.package_total_visits ?? 0);
         const newPrice = Number(c.pending_renewal_price ?? c.package_price ?? 0);

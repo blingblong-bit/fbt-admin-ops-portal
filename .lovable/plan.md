@@ -17,6 +17,13 @@ These rules don't change: financial corrections are admin-only, every money chan
    - It can't move more than that payment put into a bucket, and no bucket can go below $0.
    - Every move is saved as a new step in that payment's history, with who did it, when, and why.
    - Payments from before allocation was recorded show as **Needs Review**, and moving them is blocked.
+   - **Accounting rules:**
+     - Each payment keeps one "original" split, plus any number of later "moves".
+     - Where its money sits now = the original split plus all moves. That always adds up to exactly the payment amount.
+     - A move only takes from what currently sits in a bucket, so the same dollars can't be moved twice.
+     - Total money received never changes.
+     - **Previous-package debt is money still owed, not money paid.** Moving $X of a payment off the old debt adds $X back to what's owed on the old package. Moving $X onto the old debt reduces what's owed. It can't reduce the debt below $0, or by more than the debt that existed.
+     - If a payment's original split can't be rebuilt reliably, it stays Needs Review and can't be moved.
 3. **Prepaid amount on a prepared renewal.** Editing the prepaid amount is done through the same move action, so money is never created from nothing. Editing a prepared renewal's dates, size and price stays in the existing Edit form.
 4. **Billing type, rate and start date.** An admin-only section with package, pay-per-visit, weekly or assessment (assessment only where the app already supports it). It warns that the package fields stop counting toward money owed for pay-per-visit and weekly clients.
 5. **Before and after history.** Edit Client and every new action save which fields changed, from what, and to what. The Activity list shows them.
@@ -25,6 +32,9 @@ These rules don't change: financial corrections are admin-only, every money chan
    - A separate admin-only **Undo renewal** puts the client back exactly as they were before (from the saved history) and records why. It's only offered for the most recent renewal, and only if no payments or visits landed afterward. Otherwise it shows Needs Review.
 7. **Tests:**
    - moves keep each payment's total the same and never go negative
+   - moving a payment twice in a row can't move the same dollars twice
+   - moving money onto or off the old-package debt works as the accounting rules above describe
+   - each payment's current split adds up to its amount
    - an older payment with no recorded split can't be moved
    - a repeated Square ID is blocked, and a same-amount payment within 3 days only warns
    - renewing the same boundary twice is blocked, and Undo restores the earlier state exactly

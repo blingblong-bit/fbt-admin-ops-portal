@@ -281,7 +281,7 @@ function ClientDetailPage() {
             {packageReviewNeeded && <PackageReviewBadge priceNeeded={!!c && packagePriceNeeded(c)} />}
             {c.pending_renewal_start_date && (
               <span className="inline-flex items-center rounded-full border border-emerald-300 bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-900">
-                ✅ Renewal scheduled for {formatDate(c.pending_renewal_start_date)}
+                ✅ Renewal prepared — earliest eligible start {formatDate(c.pending_renewal_start_date)} (activates when Square shows the new package starting)
               </span>
             )}
           </div>

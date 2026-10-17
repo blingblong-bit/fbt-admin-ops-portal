@@ -70,11 +70,11 @@ export function PreRenewCard({
         </div>
       ) : (
         <div className="mt-1">
-          First uncovered appointment: {formatDate(forecast.first_uncovered_ymd)}
+          Expected renewal (from Square): {formatDate(forecast.first_uncovered_ymd)}
         </div>
       )}
       {startYmd && (
-        <div className="mt-1 font-medium">New package starts {formatDate(startYmd)}</div>
+        <div className="mt-1 font-medium">Earliest eligible start (set when prepared): {formatDate(startYmd)}</div>
       )}
       {!hideAmount && (
         <div className="mt-1">
@@ -87,8 +87,8 @@ export function PreRenewCard({
         <div className="mt-2 space-y-2">
           <div className="rounded-md border border-emerald-300 bg-emerald-50 px-2 py-1 font-semibold text-emerald-900">
             {forecast.no_upcoming
-              ? "Renewal prepared — activates at the first check-in on or after its start date"
-              : `✅ Renewal scheduled for ${formatDate(startYmd)} — activates at that check-in`}
+              ? "Renewal prepared — activates only when Square shows the new package starting"
+              : `✅ Renewal prepared — earliest ${formatDate(startYmd)}; activates at the 1st visit of the new package`}
           </div>
           <div className="flex gap-2">
             <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setOpen(true)}>

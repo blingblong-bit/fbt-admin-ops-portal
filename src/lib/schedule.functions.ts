@@ -752,21 +752,51 @@ export const completeVisitForClient = createServerFn({ method: "POST" })
       const visitYmd = ymdInTz(
         data.appointmentStartAt ? new Date(data.appointmentStartAt) : new Date(),
       );
-      // Square decides: if this appointment is numbered in Square, only a 1/N
-      // starts the new package (e.g. a late 8/8 still belongs to the old one).
-      let squareNote: { n: number; total: number } | null = null;
-      if (visitYmd >= c.pending_renewal_start_date && data.bookingId) {
-        squareNote = await squareNoteForBooking(data.bookingId);
+      // The stored date is only the earliest eligible start. Activation needs
+      // reliable evidence (1/N, or the current package provably used up).
+      let decision: ReturnType<typeof decidePreparedActivation> = { action: "not_eligible" };
+      if (visitYmd >= c.pending_renewal_start_date) {
+        const note: ActivationNote = data.bookingId
+          ? await squareNoteForBooking(data.bookingId)
+          : { status: "lookup_failed" };
+        let evidence: PackageEvidence = null;
+        if (!(note.status === "numbered" && note.n === 1)) {
+          const { data: extra } = await context.supabase
+            .from("clients").select("square_customer_id, visit_tracking_mode").eq("id", data.clientId).single();
+          evidence = await packageEvidenceFor({
+            square_customer_id: (extra as any)?.square_customer_id ?? null,
+            visit_tracking_mode: (extra as any)?.visit_tracking_mode ?? null,
+            visits_used: c.visits_used,
+            package_total_visits: c.package_total_visits,
+          });
+        }
+        decision = decidePreparedActivation({
+          visitYmd,
+          preparedStartYmd: c.pending_renewal_start_date,
+          note,
+          hubUsed: Number(c.visits_used ?? 0),
+          hubTotal: Number(c.package_total_visits ?? 0),
+          evidence,
+        });
       }
-      // If the old package has no visits left, this visit can only belong to
-      // the prepared package — start it even when Square numbering is off.
-      const oldPackageFull =
-        Number(c.package_total_visits ?? 0) > 0 &&
-        Number(c.visits_used ?? 0) >= Number(c.package_total_visits ?? 0);
-      if (
-        shouldActivatePreparedPackage(visitYmd, c.pending_renewal_start_date, squareNote) ||
-        (oldPackageFull && visitYmd >= c.pending_renewal_start_date)
-      ) {
+      if (decision.action === "hold") {
+        // Unclear evidence: keep the renewal prepared, record the booking, and
+        // take no visit from a package that may already be used up.
+        await context.supabase.from("client_activities").insert({
+          client_id: data.clientId,
+          activity_type: "visit",
+          description: `Checked in — package allocation needs review (renewal activation held: ${decision.reason})`,
+          metadata: {
+            check_in_mode: "allocation_review",
+            package_allocation_needs_review: true,
+            renewal_activation_held: true,
+            reason: decision.reason,
+            ...(data.bookingId ? { booking_id: data.bookingId } : {}),
+          },
+        });
+        return { ok: true, visits_used: c.visits_used ?? 0, mode: "allocation_review", activated_renewal: false } as const;
+      }
+      if (decision.action === "activate") {
         const newTotal = Number(c.pending_renewal_total_visits ?? c.package_total_visits ?? 0);
         const newPrice = Number(c.pending_renewal_price ?? c.package_price ?? 0);
         const newName = c.pending_renewal_package_name ?? c.package_name ?? null;

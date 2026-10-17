@@ -33,7 +33,10 @@ Nothing is changed and nothing is published. This plan only lists what the inves
   2. Square's visit position shows the current package is used up.
   3. Square has no usable numbering, but the Hub count is reliable and shows the package used up. Reliable means Hub fallback, not Review required.
 - **Never activates on any of these alone:** the stored date passing, a missing Square number, or a failed Square lookup.
-- **When the evidence is unclear,** the visit counts on the current package and the renewal stays prepared. A "Renewal activation held — needs review" note is logged on the client so it can be checked.
+- **When the evidence is unclear,** the renewal stays prepared.
+  - If the current package clearly has visits left, the visit counts on it as normal.
+  - If the current package may already be used up, no visit is taken from it. The booking is still checked in and saved, and is marked "Package allocation needs review".
+  - Either way, a "Renewal activation held — needs review" note is logged on the client.
 - **Display:**
   - The stored date becomes "Earliest eligible start".
   - The Square-driven "Expected renewal" date shows next to it on the client page.

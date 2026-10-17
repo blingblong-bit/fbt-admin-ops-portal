@@ -275,20 +275,55 @@ export function activatedState(c: MasterDuesClient & Record<string, any>, opts: 
 
 const chiYmd = (iso: string) => new Date(iso).toLocaleDateString("en-CA", { timeZone: "America/Chicago" });
 
+/** Live (not cancelled / no-show) numbered Square appointments, sorted by start. */
+export type LiveNumbered = { iso: string; n: number; of: number };
+export type BoundaryEvidence = { live: LiveNumbered[]; preparedAtIso?: string | null };
+
+/** First future live 1/N that directly follows a live N/N — the next booked package start. */
+export function futureBookedBoundary(live: LiveNumbered[], nowIso: string): string | null {
+  for (let i = 1; i < live.length; i++) {
+    const p = live[i - 1], x = live[i];
+    if (x.iso > nowIso && x.n === 1 && p.n === p.of) return x.iso;
+  }
+  return null;
+}
+
 /**
- * Square-driven timing for a prepared renewal. A past 1/N boundary counts as
- * the prepared renewal's start only while the package it opened is still in
- * progress; once that package reached N/N the renewal belongs to the next one.
+ * Square-driven timing for a prepared renewal. Square's visit sequence decides;
+ * when the renewal was prepared is supporting evidence only.
+ *  1. A past 1/N counts as the renewal's start only when Square shows the
+ *     package Hub tracks finished (live N/N on/after Hub's start date) and the
+ *     new package is still in progress.
+ *  2. If the past 1/N merely opened the package Hub already tracks (stale Hub
+ *     start date), the renewal goes to the next booked boundary / first
+ *     uncovered visit.
+ *  3. Both a clear past start and a later booked boundary → Needs Review,
+ *     unless preparation after the past start supports the later one.
+ * Without evidence (legacy callers) the prior rule applies.
  */
 export function renewalTimingFor(
   c: { pending_renewal_price?: number | null; pending_renewal_start_date?: string | null; package_start_date?: string | null },
   s: { suppressed: boolean; used: number; total: number; nextPackageStart: string | null; currentPackageStart: string | null; firstUncoveredStart: string | null },
   nowIso: string,
+  ev?: BoundaryEvidence,
 ): RenewalTiming {
   if (s.suppressed) return { kind: "unknown", ymd: null, reason: "Square position unreadable" };
   const pending = Number(c.pending_renewal_price ?? 0) > 0 || !!c.pending_renewal_start_date;
-  if (pending && s.currentPackageStart && s.used < s.total && (!c.package_start_date || chiYmd(s.currentPackageStart) > c.package_start_date))
-    return { kind: "started", ymd: chiYmd(s.currentPackageStart), reason: "Square shows the next package began (1/N after N/N)" };
+  const pastStart = pending && s.currentPackageStart && s.used < s.total && (!c.package_start_date || chiYmd(s.currentPackageStart) > c.package_start_date) ? s.currentPackageStart : null;
+  if (pastStart && !ev) return { kind: "started", ymd: chiYmd(pastStart), reason: "Square shows the next package began (1/N after N/N)" };
+  if (pastStart && ev) {
+    const startYmd = chiYmd(pastStart);
+    const clearPast = ev.live.some((x) => x.n === x.of && x.iso < pastStart && (!c.package_start_date || chiYmd(x.iso) >= c.package_start_date));
+    const future = futureBookedBoundary(ev.live, nowIso);
+    if (clearPast && !future) return { kind: "started", ymd: startYmd, reason: "Square shows the Hub package finished and the next package began" };
+    if (clearPast && future) {
+      if (ev.preparedAtIso && ev.preparedAtIso > pastStart)
+        return { kind: "upcoming", ymd: chiYmd(future), reason: `Renewal prepared after the ${startYmd} start; next booked package ${chiYmd(future)}` };
+      return { kind: "unknown", ymd: null, reason: `Ambiguous: package began ${startYmd} and another is booked ${chiYmd(future)}` };
+    }
+    // The past 1/N opened the package Hub already tracks — not this renewal.
+    if (future) return timingFromUncovered(future, nowIso, chiYmd(future));
+  }
   if (s.nextPackageStart && s.nextPackageStart <= nowIso)
     return { kind: "started", ymd: chiYmd(s.nextPackageStart), reason: "Square shows the next package has started" };
   if (s.firstUncoveredStart) return timingFromUncovered(s.firstUncoveredStart, nowIso, chiYmd(s.firstUncoveredStart));

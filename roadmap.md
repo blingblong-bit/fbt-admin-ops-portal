@@ -68,3 +68,9 @@
 - [x] Before/after edit history
 - [x] Boundary-aware renew-twice block + Undo last renewal
 - [x] Tests + e2e with temporary test clients; GO/NO-GO
+
+## Prepared-renewal check-in activation
+- [x] Read-only check: past activations, current exposure, Oct 19–23 recheck, CSV
+- [x] Check-in activates only on 1/N or a used-up package; unclear → held, no visit taken
+- [x] "Earliest eligible start" vs Square expected renewal labels; tests
+- [ ] Publish (waits on owner approval)

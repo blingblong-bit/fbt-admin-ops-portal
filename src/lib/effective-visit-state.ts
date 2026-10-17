@@ -327,17 +327,52 @@ export function currentPackageAlreadyCovers(
 }
 
 /**
- * Start a prepared package on this check-in? The date must have been reached,
- * and when Square numbers the appointment it must be 1/N. No readable Square
- * note falls back to the date rule.
+ * Start a prepared package on this check-in? The stored date is only the
+ * earliest eligible start — it never activates on its own. Activation needs
+ * reliable evidence: Square marks this visit 1/N, or the current package is
+ * provably used up (Square position, or a reliable Hub count when Square has
+ * no numbering). A missing number or failed lookup alone never activates.
  */
-export function shouldActivatePreparedPackage(
-  visitYmd: string,
-  preparedStartYmd: string,
-  squareNote: { n: number; total: number } | null,
-): boolean {
-  if (visitYmd < preparedStartYmd) return false;
-  return !squareNote || squareNote.n === 1;
+export type ActivationNote =
+  | { status: "numbered"; n: number; total: number }
+  | { status: "unnumbered" }
+  | { status: "lookup_failed" };
+export type PackageEvidence =
+  /** Square-derived position for the client (null = could not be loaded). */
+  | { source: "square"; used: number; total: number }
+  | { source: "hub_fallback" }
+  | { source: "review" }
+  | null;
+export type ActivationDecision =
+  | { action: "not_eligible" }
+  | { action: "activate"; reason: string }
+  | { action: "count_current"; reason: string }
+  | { action: "hold"; consumeVisit: false; reason: string };
+
+export function decidePreparedActivation(i: {
+  visitYmd: string;
+  preparedStartYmd: string;
+  note: ActivationNote;
+  hubUsed: number;
+  hubTotal: number;
+  evidence: PackageEvidence;
+}): ActivationDecision {
+  if (i.visitYmd < i.preparedStartYmd) return { action: "not_eligible" };
+  const hubFull = i.hubTotal > 0 && i.hubUsed >= i.hubTotal;
+  if (i.note.status === "numbered") {
+    if (i.note.n === 1) return { action: "activate", reason: "Square marks this visit 1/N" };
+    if (!hubFull) return { action: "count_current", reason: `Square marks this visit ${i.note.n}/${i.note.total} of the current package` };
+    return { action: "hold", consumeVisit: false, reason: `Square marks this visit ${i.note.n}/${i.note.total} but Hub shows the package used up` };
+  }
+  const ev = i.evidence;
+  if (ev?.source === "square" && ev.total > 0 && ev.used >= ev.total)
+    return { action: "activate", reason: "Square shows the current package is used up" };
+  if (i.note.status === "unnumbered" && ev?.source === "hub_fallback" && hubFull)
+    return { action: "activate", reason: "No Square numbering; reliable Hub count shows the package used up" };
+  const why = i.note.status === "lookup_failed" ? "Square lookup failed" : "Square visit number missing";
+  if (!hubFull && !(ev?.source === "square" && ev.used >= ev.total))
+    return { action: "count_current", reason: `${why}; current package still has visits left` };
+  return { action: "hold", consumeVisit: false, reason: `${why}; package may be used up but evidence is unreliable` };
 }
 
 export type PackageAutofill = {

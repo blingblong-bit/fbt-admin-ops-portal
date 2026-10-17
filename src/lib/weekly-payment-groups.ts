@@ -9,6 +9,7 @@ export type WeeklyRenewalForecast = {
   pre_renewed: boolean;
   first_uncovered_ymd: string;
   pending_start_ymd: string | null;
+  no_upcoming?: boolean;
 };
 
 export type WeeklyPaymentRow = {

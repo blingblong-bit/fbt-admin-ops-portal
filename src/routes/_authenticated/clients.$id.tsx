@@ -31,6 +31,7 @@ import {
   getClientVisitTracking,
   setVisitTrackingMode,
   undoVisitCheckIn,
+  getRenewalForecast,
   type ClientAppointment,
 } from "@/lib/schedule.functions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -149,6 +150,14 @@ function ClientDetailPage() {
     qc.invalidateQueries({ queryKey: ["renewal-forecast"] });
   };
 
+  const fetchForecast = useServerFn(getRenewalForecast);
+  const forecastQ = useQuery({
+    queryKey: ["renewal-forecast"],
+    queryFn: () => fetchForecast(),
+    staleTime: 60_000,
+    enabled: !!c?.pending_renewal_start_date,
+  });
+  const renewalRow = (forecastQ.data as { rows?: { client_id: string; first_uncovered_ymd: string; no_upcoming: boolean }[] } | undefined)?.rows?.find((r) => r.client_id === id);
   const completeVisitFn = useServerFn(completeVisitForClient);
   const fetchUnchecked = useServerFn(getUncheckedRecentAppointments);
 
@@ -281,7 +290,14 @@ function ClientDetailPage() {
             {packageReviewNeeded && <PackageReviewBadge priceNeeded={!!c && packagePriceNeeded(c)} />}
             {c.pending_renewal_start_date && (
               <span className="inline-flex items-center rounded-full border border-emerald-300 bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-900">
-                ✅ Renewal prepared — earliest eligible start {formatDate(c.pending_renewal_start_date)} (activates when Square shows the new package starting)
+                {renewalRow && !renewalRow.no_upcoming
+                  ? `✅ Renewal prepared — expected ${formatDate(renewalRow.first_uncovered_ymd)} (from Square)`
+                  : renewalRow
+                    ? "Prepared — No Scheduled Start"
+                    : "✅ Renewal prepared"}
+                <span className="font-normal opacity-75">
+                  {" "}· earliest eligible {formatDate(c.pending_renewal_start_date)}
+                </span>
               </span>
             )}
           </div>

@@ -54,7 +54,6 @@ export function PreRenewCard({
     onError: (e: Error) => toast.error(e.message),
   });
 
-  const startYmd = forecast.pending_start_ymd ?? forecast.first_uncovered_ymd;
 
   return (
     <div className="-mt-1 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
@@ -65,16 +64,18 @@ export function PreRenewCard({
       </div>
       {forecast.no_upcoming ? (
         <div className="mt-1 rounded-md border border-amber-300 bg-amber-100 px-2 py-1 font-semibold">
-          Prepared Renewal — No Upcoming Appointment. Nothing is booked, so this isn't counted in
-          any weekly payment total. Edit or cancel it below.
+          {forecast.pre_renewed ? "Prepared — No Scheduled Start. " : "Prepared Renewal — No Upcoming Appointment. "}
+          Nothing is booked, so this isn't counted in any weekly payment total. Edit or cancel it below.
         </div>
       ) : (
-        <div className="mt-1">
+        <div className="mt-1 font-medium">
           Expected renewal (from Square): {formatDate(forecast.first_uncovered_ymd)}
         </div>
       )}
-      {startYmd && (
-        <div className="mt-1 font-medium">Earliest eligible start (set when prepared): {formatDate(startYmd)}</div>
+      {forecast.pending_start_ymd && (
+        <div className="mt-1 opacity-75">
+          Earliest eligible start (set when prepared): {formatDate(forecast.pending_start_ymd)}
+        </div>
       )}
       {!hideAmount && (
         <div className="mt-1">
@@ -87,8 +88,8 @@ export function PreRenewCard({
         <div className="mt-2 space-y-2">
           <div className="rounded-md border border-emerald-300 bg-emerald-50 px-2 py-1 font-semibold text-emerald-900">
             {forecast.no_upcoming
-              ? "Renewal prepared — activates only when Square shows the new package starting"
-              : `✅ Renewal prepared — earliest ${formatDate(startYmd)}; activates at the 1st visit of the new package`}
+              ? "Prepared — No Scheduled Start"
+              : `✅ Renewal prepared — expected ${formatDate(forecast.first_uncovered_ymd)} (from Square)`}
           </div>
           <div className="flex gap-2">
             <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setOpen(true)}>
@@ -173,7 +174,7 @@ function PreRenewDialog({
   const mutation = useMutation({
     mutationFn: () => onSubmit(form),
     onSuccess: () => {
-      toast.success(`Next package scheduled for ${formatDate(form.startYmd)}`);
+      toast.success(`Earliest eligible start set to ${formatDate(form.startYmd)}`);
       onDone();
       onClose();
     },
@@ -204,7 +205,7 @@ function PreRenewDialog({
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <Label>Start Date</Label>
+              <Label>Earliest eligible start</Label>
               <Input
                 type="date"
                 value={form.startYmd}

@@ -27,14 +27,26 @@ Nothing is changed and nothing is published. This plan only lists what the inves
    - record needs correction (with exact before/after)
    - Needs Review
 
-## Proposed smallest fix (not built until you approve)
-- **Check-in:** activate a prepared package only when one of these is true:
-  - Square marks the visit 1/N, **or**
-  - the current package is used up (by Square position, falling back to Hub).
-
-  A missing number or a failed lookup alone never activates it.
-- **Display:** label the stored date "Earliest eligible start". Show the Square first-uncovered date next to it on the client page and in dues text drafts.
-- **Tests:** an unnumbered visit with visits left must not activate. A failed Square lookup must not activate. 1/N still activates. A used-up package still activates.
+## Fix (code only, built after the read-only steps; not published)
+- **Check-in activation** needs reliable evidence. It switches to the prepared package only when one of these is true:
+  1. Square marks this visit 1/N.
+  2. Square's visit position shows the current package is used up.
+  3. Square has no usable numbering, but the Hub count is reliable and shows the package used up. Reliable means Hub fallback, not Review required.
+- **Never activates on any of these alone:** the stored date passing, a missing Square number, or a failed Square lookup.
+- **When the evidence is unclear,** the visit counts on the current package and the renewal stays prepared. A "Renewal activation held — needs review" note is logged on the client so it can be checked.
+- **Display:**
+  - The stored date becomes "Earliest eligible start".
+  - The Square-driven "Expected renewal" date shows next to it on the client page.
+  - Dues text drafts use the Square-driven date when there is one.
+- **Regression tests:**
+  - An unnumbered visit with visits left does not activate.
+  - A failed lookup does not activate.
+  - A date past the stored date with no evidence does not activate.
+  - 1/N activates.
+  - A used-up package by Square activates.
+  - A used-up package by reliable Hub fallback activates.
+  - An unreliable Hub count is held and flagged.
+- **What does not change:** Payment Due and Weekly Dues rules, past client records, Square, and texts. Any historical correction is proposed separately for your approval.
 
 ## Technical notes
 - The gap is in `schedule.functions.ts` around lines 731-748, in `shouldActivatePreparedPackage` (`effective-visit-state.ts:334`), which returns true when `squareNote` is null. `squareNoteForBooking` returns null on any fetch error.

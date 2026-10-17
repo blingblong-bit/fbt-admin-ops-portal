@@ -186,17 +186,39 @@ describe("currentPackageAlreadyCovers", () => {
   });
 });
 
-import { shouldActivatePreparedPackage as act } from "./effective-visit-state";
-describe("shouldActivatePreparedPackage", () => {
-  it("Angela Bell: 8/8 on the prepared date does not start the new package", () => {
-    expect(act("2026-09-16", "2026-09-16", { n: 8, total: 8 })).toBe(false);
+import { decidePreparedActivation as dec } from "./effective-visit-state";
+describe("decidePreparedActivation (check-in)", () => {
+  const base = { visitYmd: "2026-10-20", preparedStartYmd: "2026-10-14", hubUsed: 3, hubTotal: 8 };
+  it("before the earliest eligible date never activates", () => {
+    expect(dec({ ...base, visitYmd: "2026-10-13", note: { status: "numbered", n: 1, total: 8 }, evidence: null }).action).toBe("not_eligible");
   });
-  it("1/8 on/after the date starts it", () => {
-    expect(act("2026-09-30", "2026-09-16", { n: 1, total: 8 })).toBe(true);
+  it("Lisa pattern: unnumbered visit with visits left does not activate", () => {
+    expect(dec({ ...base, note: { status: "unnumbered" }, evidence: { source: "square", used: 3, total: 8 } }).action).toBe("count_current");
   });
-  it("no Square note falls back to the date", () => {
-    expect(act("2026-09-16", "2026-09-16", null)).toBe(true);
-    expect(act("2026-09-15", "2026-09-16", null)).toBe(false);
+  it("failed Square lookup with visits left does not activate", () => {
+    expect(dec({ ...base, note: { status: "lookup_failed" }, evidence: null }).action).toBe("count_current");
+  });
+  it("date passed with no evidence and possibly-full package is held, no visit consumed", () => {
+    const d = dec({ ...base, hubUsed: 8, note: { status: "lookup_failed" }, evidence: null });
+    expect(d).toMatchObject({ action: "hold", consumeVisit: false });
+  });
+  it("1/N activates", () => {
+    expect(dec({ ...base, note: { status: "numbered", n: 1, total: 8 }, evidence: null }).action).toBe("activate");
+  });
+  it("Angela Bell: 8/8 on the date stays on the current package", () => {
+    expect(dec({ ...base, hubUsed: 7, note: { status: "numbered", n: 8, total: 8 }, evidence: null }).action).toBe("count_current");
+  });
+  it("package used up by Square position activates", () => {
+    expect(dec({ ...base, note: { status: "unnumbered" }, evidence: { source: "square", used: 8, total: 8 } }).action).toBe("activate");
+  });
+  it("package used up by reliable Hub fallback activates", () => {
+    expect(dec({ ...base, hubUsed: 8, note: { status: "unnumbered" }, evidence: { source: "hub_fallback" } }).action).toBe("activate");
+  });
+  it("unreliable Hub count (Square needs review) is held and flagged", () => {
+    expect(dec({ ...base, hubUsed: 8, note: { status: "unnumbered" }, evidence: { source: "review" } }).action).toBe("hold");
+  });
+  it("failed lookup never activates even when Hub shows full", () => {
+    expect(dec({ ...base, hubUsed: 8, note: { status: "lookup_failed" }, evidence: { source: "hub_fallback" } }).action).toBe("hold");
   });
 });
 

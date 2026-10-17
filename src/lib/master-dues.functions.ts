@@ -3,7 +3,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { queryOptions } from "@tanstack/react-query";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { computeMasterDues, renewalTimingFor, type RenewalTiming } from "./master-dues";
+import { computeMasterDues, renewalTimingFor, type RenewalTiming, type LiveNumbered } from "./master-dues";
 import { drivingCounts, forecastRenewal } from "./effective-visit-state";
 import { simulateBilling, type SimResult } from "./billing-sim";
 
@@ -13,6 +13,16 @@ type Result =
 
 const chi = (iso: string) => new Date(iso).toLocaleDateString("en-CA", { timeZone: "America/Chicago" });
 const NUMBERED = /\b\d+\s*(of|\/)\s*\d+\b/i;
+const NUM_CAP = /\b(\d+)\s*(?:of|\/)\s*(\d+)\b/i;
+export function liveNumbered(bks: { start_at?: string | null; status?: string | null; seller_note?: string | null; customer_note?: string | null }[]): LiveNumbered[] {
+  const out: LiveNumbered[] = [];
+  for (const b of bks) {
+    if (!b.start_at || /CANCEL|DECLINE|NO_SHOW/i.test(b.status ?? "")) continue;
+    const m = (b.seller_note ?? "").match(NUM_CAP) ?? (b.customer_note ?? "").match(NUM_CAP);
+    if (m) out.push({ iso: new Date(b.start_at).toISOString(), n: +m[1], of: +m[2] });
+  }
+  return out.sort((a, b) => a.iso.localeCompare(b.iso));
+}
 
 export const getMasterDues = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
@@ -53,7 +63,10 @@ export const getMasterDues = createServerFn({ method: "GET" })
       const bks = c.square_customer_id ? index.byCustomer.get(c.square_customer_id) ?? [] : [];
       if (bks.some((b) => NUMBERED.test(b.seller_note ?? "") || NUMBERED.test(b.customer_note ?? ""))) squareNumberedPackage.add(c.id);
       const f = forecastRenewal({ upcomingStarts: ups, visitsUsed: d.used, totalVisits: d.total, nextPackageStart: d.nextPackageStart });
-      const t = renewalTimingFor(c, { suppressed: st.suppressed, ...d, firstUncoveredStart: f.firstUncoveredStart }, nowIso);
+      const t = renewalTimingFor(c, { suppressed: st.suppressed, ...d, firstUncoveredStart: f.firstUncoveredStart }, nowIso, {
+        live: liveNumbered(bks),
+        preparedAtIso: c.pending_renewal_created_at ? new Date(c.pending_renewal_created_at).toISOString() : null,
+      });
       renewalTiming.set(c.id, t);
     }
 

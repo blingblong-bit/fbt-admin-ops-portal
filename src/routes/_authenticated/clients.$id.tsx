@@ -978,6 +978,7 @@ function EditDialog({
   const navigate = useNavigate();
   const { isAdmin } = useRole();
   const saveDetails = useServerFn(updateClientDetails);
+  const fx = form as unknown as Record<string, unknown>;
   useEffect(() => {
     setForm(client);
     setEditReason("");
@@ -1120,7 +1121,7 @@ function EditDialog({
                 <select
                   aria-label="Billing type"
                   className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                  value={String((form as Record<string, unknown>).billing_type ?? "package")}
+                  value={String(fx.billing_type ?? "package")}
                   onChange={(e) => setForm((x) => ({ ...x, billing_type: e.target.value }) as Client)}
                 >
                   <option value="package">Package</option>
@@ -1132,7 +1133,7 @@ function EditDialog({
                 <Input
                   type="date"
                   aria-label="Billing start date"
-                  value={String((form as Record<string, unknown>).billing_effective_date ?? "")}
+                  value={String(fx.billing_effective_date ?? "")}
                   onChange={(e) => setForm((x) => ({ ...x, billing_effective_date: e.target.value || null }) as Client)}
                 />
               </Field>
@@ -1142,7 +1143,7 @@ function EditDialog({
                   min={0}
                   step="0.01"
                   aria-label="Per-visit rate"
-                  value={String((form as Record<string, unknown>).per_visit_rate ?? "")}
+                  value={String(fx.per_visit_rate ?? "")}
                   onChange={(e) => setForm((x) => ({ ...x, per_visit_rate: e.target.value === "" ? null : Number(e.target.value) }) as Client)}
                 />
               </Field>
@@ -1152,11 +1153,11 @@ function EditDialog({
                   min={0}
                   step="0.01"
                   aria-label="Weekly rate"
-                  value={String((form as Record<string, unknown>).weekly_rate ?? "")}
+                  value={String(fx.weekly_rate ?? "")}
                   onChange={(e) => setForm((x) => ({ ...x, weekly_rate: e.target.value === "" ? null : Number(e.target.value) }) as Client)}
                 />
               </Field>
-              {(form as Record<string, unknown>).billing_type !== "package" && (form as Record<string, unknown>).billing_type && (
+              {!!fx.billing_type && fx.billing_type !== "package" && (
                 <p className="sm:col-span-2 text-xs text-amber-700">
                   Pay-per-visit and weekly clients are billed from their Square appointments since the billing start date. The package price and amount paid above no longer count toward what they owe.
                 </p>

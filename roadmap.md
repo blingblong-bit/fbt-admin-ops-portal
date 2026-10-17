@@ -58,3 +58,12 @@
 ## Weekly Dues
 - [x] Pure weekly module, /weekly-dues page, dashboard tile, Oct 19–23 read-only preview
 - [ ] Publish (waits on owner approval)
+
+## Admin workflow improvements (pre-launch)
+- [x] Manual payment method/note + Square ref duplicate block + 3-day same-amount warning
+- [x] Payment allocation ledger (original vs transfer) + safe reallocation (admin)
+- [x] Prepaid corrections via reallocation
+- [x] Billing type/rate/effective date editing (admin)
+- [x] Before/after edit history
+- [x] Boundary-aware renew-twice block + Undo last renewal
+- [x] Tests + e2e with temporary test clients; GO/NO-GO

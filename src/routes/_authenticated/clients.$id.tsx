@@ -8,6 +8,8 @@ import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { recordManualPayment } from "@/lib/payments.functions";
 import { renewPackage } from "@/lib/renewal.functions";
+import { updateClientDetails } from "@/lib/admin-finance.functions";
+import { PaymentAllocationsCard } from "@/components/PaymentAllocationsCard";
 import { AppShell } from "@/components/AppShell";
 import { ArchiveClientButton } from "@/components/ArchiveClientButton";
 import { VisitSourceLine } from "@/components/VisitSourceLine";
@@ -136,8 +138,11 @@ function ClientDetailPage() {
     if (edit) setEditOpen(true);
   }, [edit]);
 
+  const { isAdmin: isAdminUser } = useRole();
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ["client", id] });
+    qc.invalidateQueries({ queryKey: ["payment-allocations", id] });
+    qc.invalidateQueries({ queryKey: ["master-dues"] });
     qc.invalidateQueries({ queryKey: ["activities", id] });
     qc.invalidateQueries({ queryKey: ["clients"] });
     // A check-in/renewal can clear a prepared next package — refresh Needs Renewal.
@@ -487,6 +492,7 @@ function ClientDetailPage() {
 
         <MessagesCard clientId={id} client={c as never} />
 
+        {isAdminUser && <PaymentAllocationsCard client={c} onDone={refresh} />}
         <Card className="lg:col-span-3">
           <CardHeader>
             <CardTitle>Timeline</CardTitle>
@@ -640,32 +646,52 @@ function PaymentDialog({
     attemptedRef.current = false;
   }, [open]);
 
+  const [method, setMethod] = useState<string>("");
+  const [note, setNote] = useState("");
+  const [squareRef, setSquareRef] = useState("");
+  const [warnings, setWarnings] = useState<{ ref: string; amount: number; at: string }[] | null>(null);
+  useEffect(() => {
+    setMethod("");
+    setNote("");
+    setSquareRef("");
+    setWarnings(null);
+  }, [open]);
+
   const mutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (confirmDuplicate: boolean) => {
       const amt = Number(amount);
       if (!(amt > 0)) throw new Error("Enter an amount greater than 0");
       if (amt > owed) throw new Error(`Cannot exceed balance of ${formatCurrency(owed)}`);
-      // Routed through a server function: apply_square_payment is EXECUTE-
-      // granted to service_role only, so the browser client can't call it.
-      // The RPC locks the client row, checks idempotency by payment id,
-      // updates amount_paid, and inserts the activity row in one transaction.
+      if (!method) throw new Error("Choose how the payment was made");
       const amountCents = Math.round(amt * 100);
       const isRetry = attemptedRef.current;
       if (!requestKeyRef.current) requestKeyRef.current = crypto.randomUUID();
       attemptedRef.current = true;
       const result = await recordPayment({
-        data: { client_id: client.id, amount_cents: amountCents, request_key: requestKeyRef.current },
+        data: {
+          client_id: client.id,
+          amount_cents: amountCents,
+          request_key: requestKeyRef.current,
+          method: method as "venmo",
+          note,
+          square_ref: squareRef.trim() || undefined,
+          confirm_duplicate: confirmDuplicate,
+        },
       });
+      if (result.status === "confirm_needed") {
+        attemptedRef.current = false;
+        setWarnings(result.warnings);
+        return false;
+      }
       if (!result.credited && !isRetry) {
         throw new Error("Payment was not applied (duplicate id — try again).");
       }
       requestKeyRef.current = null;
       attemptedRef.current = false;
+      return true;
     },
-
-
-
-    onSuccess: () => {
+    onSuccess: (done) => {
+      if (!done) return;
       toast.success("Payment recorded");
       onDone();
       onClose();
@@ -678,9 +704,12 @@ function PaymentDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Record Payment</DialogTitle>
+          <DialogDescription>
+            For money taken outside Square (Venmo, cash, check). Payments run through Square sync on their own — don't record them here too.
+          </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
-          <p className="text-sm text-slate-500">
+          <p className="text-sm text-muted-foreground">
             Outstanding balance: <strong>{formatCurrency(owed)}</strong>
           </p>
           {prev > 0 && (
@@ -696,16 +725,61 @@ function PaymentDialog({
             max={owed}
             step="0.01"
             value={amount}
-            onChange={(e) => setAmount(Number(e.target.value))}
+            onChange={(e) => {
+              setAmount(Number(e.target.value));
+              setWarnings(null);
+            }}
           />
+          <Label htmlFor="pay-method">Method</Label>
+          <select
+            id="pay-method"
+            aria-label="Payment method"
+            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+            value={method}
+            onChange={(e) => setMethod(e.target.value)}
+          >
+            <option value="">Choose…</option>
+            <option value="venmo">Venmo</option>
+            <option value="cash">Cash</option>
+            <option value="check">Check</option>
+            <option value="square">Square (not synced yet)</option>
+            <option value="other">Other</option>
+          </select>
+          {method === "square" && (
+            <>
+              <Label htmlFor="pay-ref">Square payment ID</Label>
+              <Input id="pay-ref" value={squareRef} onChange={(e) => setSquareRef(e.target.value)} placeholder="From the Square receipt" />
+            </>
+          )}
+          <Label htmlFor="pay-note">Note</Label>
+          <Input id="pay-note" value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. Venmo @handle, 10/16" />
+          {warnings && (
+            <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900">
+              A payment of the same amount was recorded for this client in the last 3 days:
+              <ul className="mt-1 list-disc pl-4">
+                {warnings.map((w) => (
+                  <li key={w.ref}>
+                    {formatCurrency(w.amount)} on {new Date(w.at).toLocaleString()}
+                  </li>
+                ))}
+              </ul>
+              Only continue if this is a different payment.
+            </div>
+          )}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>
             Cancel
           </Button>
-          <Button onClick={() => mutation.mutate()} disabled={mutation.isPending}>
-            Record Payment
-          </Button>
+          {warnings ? (
+            <Button onClick={() => mutation.mutate(true)} disabled={mutation.isPending}>
+              It's a different payment — record it
+            </Button>
+          ) : (
+            <Button onClick={() => mutation.mutate(false)} disabled={mutation.isPending}>
+              Record Payment
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -902,8 +976,15 @@ function EditDialog({
 }) {
   const [form, setForm] = useState(client);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [editReason, setEditReason] = useState("");
   const navigate = useNavigate();
-  useEffect(() => setForm(client), [client, open]);
+  const { isAdmin } = useRole();
+  const saveDetails = useServerFn(updateClientDetails);
+  const fx = form as unknown as Record<string, unknown>;
+  useEffect(() => {
+    setForm(client);
+    setEditReason("");
+  }, [client, open]);
 
   const deleteMutation = useMutation({
     mutationFn: async () => {
@@ -940,33 +1021,33 @@ function EditDialog({
       if (form.payment_model !== "pay_per_visit" && Number(form.amount_paid) > Number(form.package_price)) {
         throw new Error("Amount paid cannot exceed package price");
       }
-      const { error } = await supabase
-        .from("clients")
-        .update({
-          first_name: form.first_name,
-          last_name: form.last_name,
-          phone: form.phone || null,
-          email: form.email || null,
-          package_name: form.package_name || null,
-          package_total_visits: Number(form.package_total_visits),
-          package_price: Number(form.package_price),
-          package_start_date: form.package_start_date || null,
-          visits_used: visitsUsedVal,
-          amount_paid: Number(form.amount_paid),
-          internal_notes: form.internal_notes || null,
-          payment_model: form.payment_model === "pay_per_visit" ? "pay_per_visit" : "package",
-          manual_active: Boolean(form.manual_active),
-          status: form.manual_active ? "active" : form.status,
-        } as never)
-        .eq("id", client.id);
-
-
-      if (error) throw error;
-      await supabase.from("client_activities").insert({
-        client_id: client.id,
-        activity_type: "edit",
-        description: "Client details edited",
-      });
+      const f = form as Client & Record<string, unknown>;
+      const num = (v: unknown) => (v === null || v === undefined || v === "" ? null : Number(v));
+      const patch: Record<string, unknown> = {
+        first_name: form.first_name,
+        last_name: form.last_name,
+        phone: form.phone || null,
+        email: form.email || null,
+        package_name: form.package_name || null,
+        package_total_visits: Number(form.package_total_visits),
+        package_price: Number(form.package_price),
+        package_start_date: form.package_start_date || null,
+        visits_used: visitsUsedVal,
+        amount_paid: Number(form.amount_paid),
+        internal_notes: form.internal_notes || null,
+        payment_model: form.payment_model === "pay_per_visit" ? "pay_per_visit" : "package",
+        manual_active: Boolean(form.manual_active),
+        status: form.manual_active ? "active" : form.status,
+      };
+      if (isAdmin) {
+        patch.billing_type = f.billing_type ?? "package";
+        patch.per_visit_rate = num(f.per_visit_rate);
+        patch.weekly_rate = num(f.weekly_rate);
+        patch.billing_effective_date = (f.billing_effective_date as string) || null;
+      }
+      // One locked server-side update that records every changed field
+      // (before → after) in the client's history.
+      await saveDetails({ data: { clientId: client.id, patch, reason: editReason } });
     },
     onSuccess: () => {
       toast.success("Saved");
@@ -1035,6 +1116,64 @@ function EditDialog({
               </select>
             </Field>
           )}
+          {isAdmin && (
+            <div className="sm:col-span-2 grid gap-3 rounded-md border p-3 sm:grid-cols-2">
+              <div className="sm:col-span-2 text-sm font-medium">Billing (admin only)</div>
+              <Field label="Billing type">
+                <select
+                  aria-label="Billing type"
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  value={String(fx.billing_type ?? "package")}
+                  onChange={(e) => setForm((x) => ({ ...x, billing_type: e.target.value }) as Client)}
+                >
+                  <option value="package">Package</option>
+                  <option value="pay_per_visit">Pay-per-visit</option>
+                  <option value="weekly">Weekly</option>
+                </select>
+              </Field>
+              <Field label="Billing start date">
+                <Input
+                  type="date"
+                  aria-label="Billing start date"
+                  value={String(fx.billing_effective_date ?? "")}
+                  onChange={(e) => setForm((x) => ({ ...x, billing_effective_date: e.target.value || null }) as Client)}
+                />
+              </Field>
+              <Field label="Per-visit rate ($)">
+                <Input
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  aria-label="Per-visit rate"
+                  value={String(fx.per_visit_rate ?? "")}
+                  onChange={(e) => setForm((x) => ({ ...x, per_visit_rate: e.target.value === "" ? null : Number(e.target.value) }) as Client)}
+                />
+              </Field>
+              <Field label="Weekly rate ($)">
+                <Input
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  aria-label="Weekly rate"
+                  value={String(fx.weekly_rate ?? "")}
+                  onChange={(e) => setForm((x) => ({ ...x, weekly_rate: e.target.value === "" ? null : Number(e.target.value) }) as Client)}
+                />
+              </Field>
+              {!!fx.billing_type && fx.billing_type !== "package" && (
+                <p className="sm:col-span-2 text-xs text-amber-700">
+                  Pay-per-visit and weekly clients are billed from their Square appointments since the billing start date. The package price and amount paid above no longer count toward what they owe.
+                </p>
+              )}
+              <p className="sm:col-span-2 text-xs text-muted-foreground">
+                Assessment clients: set Status to Assessment. That's a client status, not a billing type.
+              </p>
+            </div>
+          )}
+          <div className="sm:col-span-2">
+            <Field label="Reason for change (saved in history)">
+              <Input aria-label="Reason for change" value={editReason} onChange={(e) => setEditReason(e.target.value)} />
+            </Field>
+          </div>
           <div className="sm:col-span-2">
             <Field label="Internal Notes">
               <Textarea rows={3} value={form.internal_notes ?? ""} onChange={(e) => up("internal_notes", e.target.value)} />

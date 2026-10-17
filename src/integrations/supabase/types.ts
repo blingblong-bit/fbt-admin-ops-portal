@@ -61,6 +61,7 @@ export type Database = {
           id: string
           internal_notes: string | null
           last_name: string
+          last_renewal_key: string | null
           manual_active: boolean
           needs_review: boolean
           next_package_price: number | null
@@ -102,6 +103,7 @@ export type Database = {
           id?: string
           internal_notes?: string | null
           last_name: string
+          last_renewal_key?: string | null
           manual_active?: boolean
           needs_review?: boolean
           next_package_price?: number | null
@@ -143,6 +145,7 @@ export type Database = {
           id?: string
           internal_notes?: string | null
           last_name?: string
+          last_renewal_key?: string | null
           manual_active?: boolean
           needs_review?: boolean
           next_package_price?: number | null
@@ -406,6 +409,53 @@ export type Database = {
           {
             foreignKeyName: "notes_ledger_resolutions_resolved_client_id_fkey"
             columns: ["resolved_client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      payment_allocations: {
+        Row: {
+          actor: string | null
+          amount: number
+          bucket: string
+          client_id: string
+          created_at: string
+          id: string
+          kind: string
+          payment_ref: string
+          reason: string | null
+          transfer_id: string | null
+        }
+        Insert: {
+          actor?: string | null
+          amount: number
+          bucket: string
+          client_id: string
+          created_at?: string
+          id?: string
+          kind: string
+          payment_ref: string
+          reason?: string | null
+          transfer_id?: string | null
+        }
+        Update: {
+          actor?: string | null
+          amount?: number
+          bucket?: string
+          client_id?: string
+          created_at?: string
+          id?: string
+          kind?: string
+          payment_ref?: string
+          reason?: string | null
+          transfer_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payment_allocations_client_id_fkey"
+            columns: ["client_id"]
             isOneToOne: false
             referencedRelation: "clients"
             referencedColumns: ["id"]
@@ -749,7 +799,22 @@ export type Database = {
         }
         Returns: boolean
       }
+      is_admin: { Args: { _user_id: string }; Returns: boolean }
       is_staff: { Args: { _user_id: string }; Returns: boolean }
+      reallocate_payment: {
+        Args: {
+          p_amount: number
+          p_client_id: string
+          p_from: string
+          p_payment_ref: string
+          p_reason: string
+          p_to: string
+        }
+        Returns: {
+          amount: number
+          bucket: string
+        }[]
+      }
       renew_client_package: {
         Args: {
           p_booking_id?: string
@@ -768,6 +833,14 @@ export type Database = {
           previous_package_owed: number
           unpaid_carried_forward: number
         }[]
+      }
+      undo_last_renewal: {
+        Args: { p_client_id: string; p_reason: string }
+        Returns: Json
+      }
+      update_client_details: {
+        Args: { p_client_id: string; p_patch: Json; p_reason?: string }
+        Returns: Json
       }
     }
     Enums: {

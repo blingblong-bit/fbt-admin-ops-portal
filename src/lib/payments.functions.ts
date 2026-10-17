@@ -831,12 +831,32 @@ export const retryAllMatchedBlockedPayments = createServerFn({ method: "POST" })
  * service_role only — calling it from the browser (role `authenticated`)
  * fails with "permission denied for function apply_square_payment".
  */
+export const MANUAL_PAYMENT_METHODS = ["venmo", "cash", "check", "square", "other"] as const;
+export type ManualPaymentMethod = (typeof MANUAL_PAYMENT_METHODS)[number];
+
+export type ManualPaymentResult =
+  | { status: "confirm_needed"; warnings: { ref: string; amount: number; at: string }[] }
+  | { status: "recorded"; credited: boolean; appliedAmount: number; alreadyApplied: boolean };
+
 export const recordManualPayment = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { client_id: string; amount_cents: number; request_key?: string }) => d)
-  .handler(async ({ data, context }) => {
+  .inputValidator(
+    (d: {
+      client_id: string;
+      amount_cents: number;
+      request_key?: string;
+      method?: ManualPaymentMethod;
+      note?: string;
+      square_ref?: string;
+      confirm_duplicate?: boolean;
+    }) => d,
+  )
+  .handler(async ({ data, context }): Promise<ManualPaymentResult> => {
     if (!Number.isInteger(data.amount_cents) || data.amount_cents <= 0) {
       throw new Error("Enter an amount greater than 0");
+    }
+    if (!data.method || !MANUAL_PAYMENT_METHODS.includes(data.method)) {
+      throw new Error("Choose how the payment was made");
     }
     // Caller must be staff/admin.
     const { data: isStaff, error: roleErr } = await context.supabase.rpc("is_staff", {
@@ -845,20 +865,79 @@ export const recordManualPayment = createServerFn({ method: "POST" })
     if (roleErr) throw roleErr;
     if (!isStaff) throw new Error("Not authorized to record payments");
 
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const admin = supabaseAdmin as unknown as SupabaseClient<Database>;
+
+    // Exact Square reference: block if that transaction is already in the Hub.
+    const ref = (data.square_ref ?? "").trim();
+    if (ref) {
+      const [{ data: sp, error: e1 }, { data: act, error: e2 }] = await Promise.all([
+        admin.from("square_payments").select("id").eq("square_payment_id", ref).limit(1),
+        admin.from("client_activities").select("id").contains("metadata", { square_payment_id: ref }).limit(1),
+      ]);
+      if (e1) throw e1;
+      if (e2) throw e2;
+      if ((sp?.length ?? 0) > 0 || (act?.length ?? 0) > 0) {
+        throw new Error("This Square payment is already in the Hub — it can't be recorded again.");
+      }
+    }
+
+    // Same client + same amount within 3 days → warn, never block on its own.
+    if (!data.confirm_duplicate) {
+      const since = new Date(Date.now() - 3 * 864e5).toISOString();
+      const { data: recent, error } = await admin
+        .from("client_activities")
+        .select("created_at, metadata")
+        .eq("client_id", data.client_id)
+        .eq("activity_type", "payment")
+        .gte("created_at", since);
+      if (error) throw error;
+      const { sameAmountWarnings } = await import("@/lib/payment-allocation");
+      const warnings = sameAmountWarnings(
+        (recent ?? []).map((r) => {
+          const m = (r.metadata ?? {}) as Record<string, unknown>;
+          return { ref: String(m.square_payment_id ?? ""), amount: Number(m.amount ?? 0), at: r.created_at };
+        }),
+        data.amount_cents / 100,
+        new Date().toISOString(),
+      );
+      if (warnings.length) return { status: "confirm_needed", warnings };
+    }
+
     // A retry/timeout of the same submission reuses the caller's request key,
     // so apply_square_payment's idempotency check makes the second attempt a
-    // no-op instead of recording the payment twice.
+    // no-op instead of recording the payment twice. A real Square reference is
+    // used as the id so a later Square sync of it is recognised as the same money.
     const key = (data.request_key ?? "").trim();
-    const paymentId = key ? `manual:${key}` : `manual:${crypto.randomUUID()}`;
+    const paymentId = ref || (key ? `manual:${key}` : `manual:${crypto.randomUUID()}`);
 
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const result = await applyPaymentOnce(supabaseAdmin as unknown as SupabaseClient<Database>, {
+    const result = await applyPaymentOnce(admin, {
       clientId: data.client_id,
       squarePaymentId: paymentId,
       amountCents: data.amount_cents,
       matchMethod: "manual",
       manualResolution: true,
     });
-    return result;
+    if (result.credited) {
+      const { data: rows } = await admin
+        .from("client_activities")
+        .select("id, metadata")
+        .eq("client_id", data.client_id)
+        .contains("metadata", { square_payment_id: paymentId })
+        .limit(1);
+      const row = rows?.[0];
+      if (row) {
+        const note = (data.note ?? "").trim();
+        await admin
+          .from("client_activities")
+          .update({
+            description: `Manual payment (${data.method}) — $${(data.amount_cents / 100).toFixed(2)}${note ? ` — ${note}` : ""}`,
+            metadata: { ...((row.metadata ?? {}) as Record<string, unknown>), method: data.method, note: note || null, recorded_by: context.userId },
+          } as never)
+          .eq("id", row.id);
+      }
+    }
+    return { status: "recorded", ...result };
   });
+
 

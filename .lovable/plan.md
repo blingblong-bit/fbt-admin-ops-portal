@@ -1,5 +1,7 @@
 # Verification report and correction previews: Emma Sazonov, David Butner
 
+Approving this plan carries out the corrections below as written. For each client, the original values are re-checked first, all changes happen together or not at all, and the record is read back afterward. Review flags stay as they are, and nothing changes in Square.
+
 Nothing has been written. No payment flags were cleared, no records were archived, nothing was published or texted, and Square was not changed.
 
 ## 1. Live Square payment check (read directly from Square)

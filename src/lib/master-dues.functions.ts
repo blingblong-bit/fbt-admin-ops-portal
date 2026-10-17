@@ -3,7 +3,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { queryOptions } from "@tanstack/react-query";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { computeMasterDues, renewalTimingFor, type RenewalTiming } from "./master-dues";
+import { computeMasterDues, renewalTimingFor, type RenewalTiming, liveNumbered } from "./master-dues";
 import { drivingCounts, forecastRenewal } from "./effective-visit-state";
 import { simulateBilling, type SimResult } from "./billing-sim";
 
@@ -53,7 +53,10 @@ export const getMasterDues = createServerFn({ method: "GET" })
       const bks = c.square_customer_id ? index.byCustomer.get(c.square_customer_id) ?? [] : [];
       if (bks.some((b) => NUMBERED.test(b.seller_note ?? "") || NUMBERED.test(b.customer_note ?? ""))) squareNumberedPackage.add(c.id);
       const f = forecastRenewal({ upcomingStarts: ups, visitsUsed: d.used, totalVisits: d.total, nextPackageStart: d.nextPackageStart });
-      const t = renewalTimingFor(c, { suppressed: st.suppressed, ...d, firstUncoveredStart: f.firstUncoveredStart }, nowIso);
+      const t = renewalTimingFor(c, { suppressed: st.suppressed, ...d, firstUncoveredStart: f.firstUncoveredStart }, nowIso, {
+        live: liveNumbered(bks),
+        preparedAtIso: c.pending_renewal_created_at ? new Date(c.pending_renewal_created_at).toISOString() : null,
+      });
       renewalTiming.set(c.id, t);
     }
 

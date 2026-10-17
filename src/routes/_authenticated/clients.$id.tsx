@@ -640,32 +640,52 @@ function PaymentDialog({
     attemptedRef.current = false;
   }, [open]);
 
+  const [method, setMethod] = useState<string>("");
+  const [note, setNote] = useState("");
+  const [squareRef, setSquareRef] = useState("");
+  const [warnings, setWarnings] = useState<{ ref: string; amount: number; at: string }[] | null>(null);
+  useEffect(() => {
+    setMethod("");
+    setNote("");
+    setSquareRef("");
+    setWarnings(null);
+  }, [open]);
+
   const mutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (confirmDuplicate: boolean) => {
       const amt = Number(amount);
       if (!(amt > 0)) throw new Error("Enter an amount greater than 0");
       if (amt > owed) throw new Error(`Cannot exceed balance of ${formatCurrency(owed)}`);
-      // Routed through a server function: apply_square_payment is EXECUTE-
-      // granted to service_role only, so the browser client can't call it.
-      // The RPC locks the client row, checks idempotency by payment id,
-      // updates amount_paid, and inserts the activity row in one transaction.
+      if (!method) throw new Error("Choose how the payment was made");
       const amountCents = Math.round(amt * 100);
       const isRetry = attemptedRef.current;
       if (!requestKeyRef.current) requestKeyRef.current = crypto.randomUUID();
       attemptedRef.current = true;
       const result = await recordPayment({
-        data: { client_id: client.id, amount_cents: amountCents, request_key: requestKeyRef.current },
+        data: {
+          client_id: client.id,
+          amount_cents: amountCents,
+          request_key: requestKeyRef.current,
+          method: method as "venmo",
+          note,
+          square_ref: squareRef.trim() || undefined,
+          confirm_duplicate: confirmDuplicate,
+        },
       });
+      if (result.status === "confirm_needed") {
+        attemptedRef.current = false;
+        setWarnings(result.warnings);
+        return false;
+      }
       if (!result.credited && !isRetry) {
         throw new Error("Payment was not applied (duplicate id — try again).");
       }
       requestKeyRef.current = null;
       attemptedRef.current = false;
+      return true;
     },
-
-
-
-    onSuccess: () => {
+    onSuccess: (done) => {
+      if (!done) return;
       toast.success("Payment recorded");
       onDone();
       onClose();
@@ -678,9 +698,12 @@ function PaymentDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Record Payment</DialogTitle>
+          <DialogDescription>
+            For money taken outside Square (Venmo, cash, check). Payments run through Square sync on their own — don't record them here too.
+          </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
-          <p className="text-sm text-slate-500">
+          <p className="text-sm text-muted-foreground">
             Outstanding balance: <strong>{formatCurrency(owed)}</strong>
           </p>
           {prev > 0 && (
@@ -696,16 +719,61 @@ function PaymentDialog({
             max={owed}
             step="0.01"
             value={amount}
-            onChange={(e) => setAmount(Number(e.target.value))}
+            onChange={(e) => {
+              setAmount(Number(e.target.value));
+              setWarnings(null);
+            }}
           />
+          <Label htmlFor="pay-method">Method</Label>
+          <select
+            id="pay-method"
+            aria-label="Payment method"
+            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+            value={method}
+            onChange={(e) => setMethod(e.target.value)}
+          >
+            <option value="">Choose…</option>
+            <option value="venmo">Venmo</option>
+            <option value="cash">Cash</option>
+            <option value="check">Check</option>
+            <option value="square">Square (not synced yet)</option>
+            <option value="other">Other</option>
+          </select>
+          {method === "square" && (
+            <>
+              <Label htmlFor="pay-ref">Square payment ID</Label>
+              <Input id="pay-ref" value={squareRef} onChange={(e) => setSquareRef(e.target.value)} placeholder="From the Square receipt" />
+            </>
+          )}
+          <Label htmlFor="pay-note">Note</Label>
+          <Input id="pay-note" value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. Venmo @handle, 10/16" />
+          {warnings && (
+            <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900">
+              A payment of the same amount was recorded for this client in the last 3 days:
+              <ul className="mt-1 list-disc pl-4">
+                {warnings.map((w) => (
+                  <li key={w.ref}>
+                    {formatCurrency(w.amount)} on {new Date(w.at).toLocaleString()}
+                  </li>
+                ))}
+              </ul>
+              Only continue if this is a different payment.
+            </div>
+          )}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>
             Cancel
           </Button>
-          <Button onClick={() => mutation.mutate()} disabled={mutation.isPending}>
-            Record Payment
-          </Button>
+          {warnings ? (
+            <Button onClick={() => mutation.mutate(true)} disabled={mutation.isPending}>
+              It's a different payment — record it
+            </Button>
+          ) : (
+            <Button onClick={() => mutation.mutate(false)} disabled={mutation.isPending}>
+              Record Payment
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

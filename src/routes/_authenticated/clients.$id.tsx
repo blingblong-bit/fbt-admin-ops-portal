@@ -138,6 +138,7 @@ function ClientDetailPage() {
     if (edit) setEditOpen(true);
   }, [edit]);
 
+  const { isAdmin: isAdminUser } = useRole();
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ["client", id] });
     qc.invalidateQueries({ queryKey: ["activities", id] });

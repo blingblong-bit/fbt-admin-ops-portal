@@ -13,10 +13,10 @@ export type Activity = {
   metadata: Record<string, unknown> | null;
 };
 export type ClientMoney = {
-  previous_package_owed: number | null;
-  amount_paid: number | null;
-  pending_renewal_paid: number | null;
-  pending_renewal_start_date: string | null;
+  previous_package_owed?: number | null;
+  amount_paid?: number | null;
+  pending_renewal_paid?: number | null;
+  pending_renewal_start_date?: string | null;
 };
 
 export const BUCKETS: Bucket[] = ["previous", "current", "pending"];

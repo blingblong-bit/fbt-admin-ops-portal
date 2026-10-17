@@ -970,8 +970,14 @@ function EditDialog({
 }) {
   const [form, setForm] = useState(client);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [editReason, setEditReason] = useState("");
   const navigate = useNavigate();
-  useEffect(() => setForm(client), [client, open]);
+  const { isAdmin } = useRole();
+  const saveDetails = useServerFn(updateClientDetails);
+  useEffect(() => {
+    setForm(client);
+    setEditReason("");
+  }, [client, open]);
 
   const deleteMutation = useMutation({
     mutationFn: async () => {
@@ -1008,33 +1014,33 @@ function EditDialog({
       if (form.payment_model !== "pay_per_visit" && Number(form.amount_paid) > Number(form.package_price)) {
         throw new Error("Amount paid cannot exceed package price");
       }
-      const { error } = await supabase
-        .from("clients")
-        .update({
-          first_name: form.first_name,
-          last_name: form.last_name,
-          phone: form.phone || null,
-          email: form.email || null,
-          package_name: form.package_name || null,
-          package_total_visits: Number(form.package_total_visits),
-          package_price: Number(form.package_price),
-          package_start_date: form.package_start_date || null,
-          visits_used: visitsUsedVal,
-          amount_paid: Number(form.amount_paid),
-          internal_notes: form.internal_notes || null,
-          payment_model: form.payment_model === "pay_per_visit" ? "pay_per_visit" : "package",
-          manual_active: Boolean(form.manual_active),
-          status: form.manual_active ? "active" : form.status,
-        } as never)
-        .eq("id", client.id);
-
-
-      if (error) throw error;
-      await supabase.from("client_activities").insert({
-        client_id: client.id,
-        activity_type: "edit",
-        description: "Client details edited",
-      });
+      const f = form as Client & Record<string, unknown>;
+      const num = (v: unknown) => (v === null || v === undefined || v === "" ? null : Number(v));
+      const patch: Record<string, unknown> = {
+        first_name: form.first_name,
+        last_name: form.last_name,
+        phone: form.phone || null,
+        email: form.email || null,
+        package_name: form.package_name || null,
+        package_total_visits: Number(form.package_total_visits),
+        package_price: Number(form.package_price),
+        package_start_date: form.package_start_date || null,
+        visits_used: visitsUsedVal,
+        amount_paid: Number(form.amount_paid),
+        internal_notes: form.internal_notes || null,
+        payment_model: form.payment_model === "pay_per_visit" ? "pay_per_visit" : "package",
+        manual_active: Boolean(form.manual_active),
+        status: form.manual_active ? "active" : form.status,
+      };
+      if (isAdmin) {
+        patch.billing_type = f.billing_type ?? "package";
+        patch.per_visit_rate = num(f.per_visit_rate);
+        patch.weekly_rate = num(f.weekly_rate);
+        patch.billing_effective_date = (f.billing_effective_date as string) || null;
+      }
+      // One locked server-side update that records every changed field
+      // (before → after) in the client's history.
+      await saveDetails({ data: { clientId: client.id, patch, reason: editReason } });
     },
     onSuccess: () => {
       toast.success("Saved");
@@ -1103,6 +1109,64 @@ function EditDialog({
               </select>
             </Field>
           )}
+          {isAdmin && (
+            <div className="sm:col-span-2 grid gap-3 rounded-md border p-3 sm:grid-cols-2">
+              <div className="sm:col-span-2 text-sm font-medium">Billing (admin only)</div>
+              <Field label="Billing type">
+                <select
+                  aria-label="Billing type"
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  value={String((form as Record<string, unknown>).billing_type ?? "package")}
+                  onChange={(e) => setForm((x) => ({ ...x, billing_type: e.target.value }) as Client)}
+                >
+                  <option value="package">Package</option>
+                  <option value="pay_per_visit">Pay-per-visit</option>
+                  <option value="weekly">Weekly</option>
+                </select>
+              </Field>
+              <Field label="Billing start date">
+                <Input
+                  type="date"
+                  aria-label="Billing start date"
+                  value={String((form as Record<string, unknown>).billing_effective_date ?? "")}
+                  onChange={(e) => setForm((x) => ({ ...x, billing_effective_date: e.target.value || null }) as Client)}
+                />
+              </Field>
+              <Field label="Per-visit rate ($)">
+                <Input
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  aria-label="Per-visit rate"
+                  value={String((form as Record<string, unknown>).per_visit_rate ?? "")}
+                  onChange={(e) => setForm((x) => ({ ...x, per_visit_rate: e.target.value === "" ? null : Number(e.target.value) }) as Client)}
+                />
+              </Field>
+              <Field label="Weekly rate ($)">
+                <Input
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  aria-label="Weekly rate"
+                  value={String((form as Record<string, unknown>).weekly_rate ?? "")}
+                  onChange={(e) => setForm((x) => ({ ...x, weekly_rate: e.target.value === "" ? null : Number(e.target.value) }) as Client)}
+                />
+              </Field>
+              {(form as Record<string, unknown>).billing_type !== "package" && (form as Record<string, unknown>).billing_type && (
+                <p className="sm:col-span-2 text-xs text-amber-700">
+                  Pay-per-visit and weekly clients are billed from their Square appointments since the billing start date. The package price and amount paid above no longer count toward what they owe.
+                </p>
+              )}
+              <p className="sm:col-span-2 text-xs text-muted-foreground">
+                Assessment clients: set Status to Assessment. That's a client status, not a billing type.
+              </p>
+            </div>
+          )}
+          <div className="sm:col-span-2">
+            <Field label="Reason for change (saved in history)">
+              <Input aria-label="Reason for change" value={editReason} onChange={(e) => setEditReason(e.target.value)} />
+            </Field>
+          </div>
           <div className="sm:col-span-2">
             <Field label="Internal Notes">
               <Textarea rows={3} value={form.internal_notes ?? ""} onChange={(e) => up("internal_notes", e.target.value)} />

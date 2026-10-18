@@ -2119,6 +2119,17 @@ export const cancelPendingRenewal = createServerFn({ method: "POST" })
     return { clientId: d.clientId };
   })
   .handler(async ({ data, context }): Promise<{ ok: true }> => {
+    const { data: cur, error: readErr } = await context.supabase
+      .from("clients")
+      .select("pending_renewal_paid")
+      .eq("id", data.clientId)
+      .single();
+    if (readErr) throw readErr;
+    if (Number(cur?.pending_renewal_paid ?? 0) > 0) {
+      throw new Error(
+        `This prepared package already has $${Number(cur!.pending_renewal_paid).toFixed(2)} prepaid. Move that payment to the right package on the client page before cancelling, so it doesn't carry into the next renewal.`,
+      );
+    }
     const { error } = await context.supabase
       .from("clients")
       .update({

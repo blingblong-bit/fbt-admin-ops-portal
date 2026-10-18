@@ -66,3 +66,10 @@ describe("activation with visits used", () => {
     expect(owed(a3)).toBe(owed(a0));
   });
 });
+
+import { decidePreparedActivation as dpa } from "./effective-visit-state";
+describe("manual check-in without an appointment", () => {
+  it("full Hub package, no Square numbering → starts the prepared renewal", () => {
+    expect(dpa({ visitYmd: "2026-10-20", preparedStartYmd: "2026-10-20", note: { status: "unnumbered" }, hubUsed: 8, hubTotal: 8, evidence: { source: "hub_fallback" } }).action).toBe("activate");
+  });
+});

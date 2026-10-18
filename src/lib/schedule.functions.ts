@@ -756,9 +756,11 @@ export const completeVisitForClient = createServerFn({ method: "POST" })
       // reliable evidence (1/N, or the current package provably used up).
       let decision: ReturnType<typeof decidePreparedActivation> = { action: "not_eligible" };
       if (visitYmd >= c.pending_renewal_start_date) {
+        // Manual check-in (no appointment chosen): nothing was looked up, so
+        // there is simply no Square number — not a failed lookup.
         const note: ActivationNote = data.bookingId
           ? await squareNoteForBooking(data.bookingId)
-          : { status: "lookup_failed" };
+          : { status: "unnumbered" };
         let evidence: PackageEvidence = null;
         if (!(note.status === "numbered" && note.n === 1)) {
           const { data: extra } = await context.supabase

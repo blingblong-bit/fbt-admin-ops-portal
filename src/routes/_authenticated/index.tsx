@@ -833,7 +833,7 @@ function Dashboard() {
     {
       key: "payment_due_this_week",
       label: "Payment Due — This Week",
-      sublabel: formatYmdRange(thisWeekQuery.data?.week_start, thisWeekQuery.data?.week_end),
+      sublabel: freshTag + formatYmdRange(thisWeekQuery.data?.week_start, thisWeekQuery.data?.week_end),
       icon: <CircleDollarSign className="h-5 w-5" />,
       count: masterTile("this_week").clients,
       money: masterTile("this_week").dollars,
@@ -846,7 +846,7 @@ function Dashboard() {
     {
       key: "payment_due_next_week",
       label: "Payment Due — Next Week",
-      sublabel: formatYmdRange(nextWeekQuery.data?.week_start, nextWeekQuery.data?.week_end),
+      sublabel: freshTag + formatYmdRange(nextWeekQuery.data?.week_start, nextWeekQuery.data?.week_end),
       icon: <CircleDollarSign className="h-5 w-5" />,
       count: masterTile("next_week").clients,
       money: masterTile("next_week").dollars,

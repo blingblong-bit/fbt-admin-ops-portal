@@ -1,5 +1,6 @@
 import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
+import { useSquareSyncWatcher } from "@/hooks/useSquareSyncWatcher";
 
 export const Route = createFileRoute("/_authenticated")({
   ssr: false,
@@ -17,5 +18,10 @@ export const Route = createFileRoute("/_authenticated")({
     }
     return { user: data.session.user };
   },
-  component: () => <Outlet />,
+  component: AuthedLayout,
 });
+
+function AuthedLayout() {
+  useSquareSyncWatcher();
+  return <Outlet />;
+}

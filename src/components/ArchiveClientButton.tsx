@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useRole } from "@/hooks/useRole";
 import { archiveClient, checkArchiveEligibility, restoreClient } from "@/lib/archive.functions";
+import { invalidateFor } from "@/lib/invalidation";
 
 /** Admin-only manual Archive / Restore. Never archives automatically. */
 export function ArchiveClientButton({
@@ -40,9 +41,7 @@ export function ArchiveClientButton({
   if (!isAdmin) return null;
 
   const refresh = () => {
-    qc.invalidateQueries({ queryKey: ["clients"] });
-    qc.invalidateQueries({ queryKey: ["client", clientId] });
-    qc.invalidateQueries();
+    invalidateFor(qc, "client-archived");
   };
 
   if (archived) {

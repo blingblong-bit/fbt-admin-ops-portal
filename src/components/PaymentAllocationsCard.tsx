@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { listPaymentAllocations, reallocatePayment, undoLastRenewal } from "@/lib/admin-finance.functions";
 import { BUCKETS, BUCKET_LABEL, planMove, type Bucket, type PaymentStatus } from "@/lib/payment-allocation";
 import { formatCurrency, type Client } from "@/lib/clients";
+import { invalidateFor } from "@/lib/invalidation";
 
 /** Admin-only: where each payment's money sits, safe moves, and renewal undo. */
 export function PaymentAllocationsCard({ client, onDone }: { client: Client; onDone: () => void }) {
@@ -22,8 +23,7 @@ export function PaymentAllocationsCard({ client, onDone }: { client: Client; onD
   const [moving, setMoving] = useState<PaymentStatus | null>(null);
   const [undoOpen, setUndoOpen] = useState(false);
   const refresh = () => {
-    qc.invalidateQueries({ queryKey: ["payment-allocations", client.id] });
-    qc.invalidateQueries({ queryKey: ["master-dues"] });
+    invalidateFor(qc, ["payment-changed", "renewal-changed"], { clientId: client.id });
     onDone();
   };
 

@@ -23,6 +23,7 @@ import {
   primaryAction,
   type Client,
 } from "@/lib/clients";
+import { invalidateFor } from "@/lib/invalidation";
 
 
 export type ScheduleStatus = "this_week" | "next_week" | "not_scheduled" | "carried_over" | "overdue_prior";
@@ -71,8 +72,7 @@ export function SmartClientCard({
   const [paymentOpen, setPaymentOpen] = useState(false);
 
   const refresh = () => {
-    qc.invalidateQueries({ queryKey: ["clients"] });
-    qc.invalidateQueries({ queryKey: ["client", client.id] });
+    invalidateFor(qc, "payment-changed", { clientId: client.id });
   };
 
   const primary = (() => {

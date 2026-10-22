@@ -18,6 +18,7 @@ import {
   preRenewNextPackage,
   type RenewalForecastRow,
 } from "@/lib/schedule.functions";
+import { invalidateFor } from "@/lib/invalidation";
 
 /**
  * Needs Renewal detail + "Pre-Renew Next Package".
@@ -40,9 +41,7 @@ export function PreRenewCard({
   const cancelPending = useServerFn(cancelPendingRenewal);
 
   const refresh = () => {
-    qc.invalidateQueries({ queryKey: ["renewal-forecast"] });
-    qc.invalidateQueries({ queryKey: ["clients"] });
-    qc.invalidateQueries({ queryKey: ["client", forecast.client_id] });
+    invalidateFor(qc, "renewal-changed", { clientId: forecast.client_id });
   };
 
   const cancelMutation = useMutation({

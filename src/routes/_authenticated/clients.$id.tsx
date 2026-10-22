@@ -79,6 +79,7 @@ import {
   type Client,
   type ClientActivity,
 } from "@/lib/clients";
+import { invalidateFor } from "@/lib/invalidation";
 
 const searchSchema = z.object({
   edit: fallback(z.number().optional(), undefined).default(undefined),
@@ -141,13 +142,8 @@ function ClientDetailPage() {
 
   const { isAdmin: isAdminUser } = useRole();
   const refresh = () => {
-    qc.invalidateQueries({ queryKey: ["client", id] });
-    qc.invalidateQueries({ queryKey: ["payment-allocations", id] });
-    qc.invalidateQueries({ queryKey: ["master-dues"] });
-    qc.invalidateQueries({ queryKey: ["activities", id] });
-    qc.invalidateQueries({ queryKey: ["clients"] });
-    // A check-in/renewal can clear a prepared next package — refresh Needs Renewal.
-    qc.invalidateQueries({ queryKey: ["renewal-forecast"] });
+    // Used after payments, renewals, package edits and check-ins on this profile.
+    invalidateFor(qc, ["payment-changed", "renewal-changed", "package-edited", "visit-changed"], { clientId: id });
   };
 
   const fetchForecast = useServerFn(getRenewalForecast);
@@ -173,10 +169,7 @@ function ClientDetailPage() {
   const setModeFn = useServerFn(setVisitTrackingMode);
   const undoFn = useServerFn(undoVisitCheckIn);
   const refreshVisitData = () => {
-    qc.invalidateQueries({ queryKey: ["client", id] });
-    qc.invalidateQueries({ queryKey: ["activities", id] });
-    qc.invalidateQueries({ queryKey: ["visit-tracking", id] });
-    qc.invalidateQueries({ queryKey: ["unchecked-appointments", id] });
+    invalidateFor(qc, "visit-changed", { clientId: id });
   };
   const modeMut = useMutation({
     mutationFn: (mode: "auto" | "square" | "hub") => setModeFn({ data: { clientId: id, mode } }),
@@ -212,10 +205,6 @@ function ClientDetailPage() {
     onSuccess: () => {
       toast.success("Visit recorded");
       setVisitPickerOpen(false);
-      qc.invalidateQueries({ queryKey: ["unchecked-appointments", id] });
-      qc.invalidateQueries({ queryKey: ["day-review"] });
-      qc.invalidateQueries({ queryKey: ["missed-check-ins"] });
-      qc.invalidateQueries({ queryKey: ["completed-visit-bookings"] });
       refresh();
     },
     onError: (e: Error) => toast.error(e.message),
@@ -242,7 +231,6 @@ function ClientDetailPage() {
     },
     onSuccess: (_d, dismiss) => {
       toast.success(dismiss ? "Marked as not needing a package" : "Re-flagged for package review");
-      qc.invalidateQueries({ queryKey: ["package_review_dismissals"] });
       refresh();
     },
     onError: (e: Error) => toast.error(e.message),
@@ -1493,9 +1481,7 @@ function MessagesCard({
   const eligibility = smsEligibility(client);
 
   const refresh = () => {
-    qc.invalidateQueries({ queryKey: ["dues-messages"] });
-    qc.invalidateQueries({ queryKey: ["client", clientId] });
-    qc.invalidateQueries({ queryKey: ["clients"] });
+    invalidateFor(qc, "client-info-changed", { clientId });
   };
 
   const consent = useMutation({

@@ -24,6 +24,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { totalOwed, formatCurrency, formatDate, fullName, type Client } from "@/lib/clients";
+import { invalidateFor } from "@/lib/invalidation";
 
 export const Route = createFileRoute("/_authenticated/clients/deleted")({
   beforeLoad: requireAdmin,
@@ -49,8 +50,7 @@ function DeletedClientsPage() {
   });
 
   const refresh = () => {
-    qc.invalidateQueries({ queryKey: ["clients"] });
-    qc.invalidateQueries({ queryKey: ["clients", "deleted"] });
+    invalidateFor(qc, "client-archived");
   };
 
   const restore = useMutation({

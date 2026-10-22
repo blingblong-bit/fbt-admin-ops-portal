@@ -56,6 +56,7 @@ import {
   listSquareCustomerReviews,
   type SquareCustomerReview,
 } from "@/lib/backfill.functions";
+import { invalidateFor } from "@/lib/invalidation";
 
 
 export const Route = createFileRoute("/_authenticated/schedule-check")({
@@ -112,11 +113,8 @@ function ScheduleCheckPage() {
         return next;
       });
       toast.success("Visit recorded");
-      qc.invalidateQueries({ queryKey: ["schedule-check"] });
-      qc.invalidateQueries({ queryKey: ["clients"] });
-      qc.invalidateQueries({ queryKey: ["completed-visit-bookings"] });
-      // A check-in can activate a prepared next package — refresh Needs Renewal.
-      qc.invalidateQueries({ queryKey: ["renewal-forecast"] });
+      // A check-in can activate a prepared next package — refreshes dues too.
+      invalidateFor(qc, "visit-changed");
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -165,9 +163,7 @@ function ScheduleCheckPage() {
       toast.success(
         `Backfill complete — ${r.processed}/${r.total} processed · ${r.auto_linked} auto-linked · ${r.queued_for_review} need review · ${r.hidden_old} hidden (old) · ${r.updated_contact} contact updates · ${r.errors.length} errors`,
       );
-      qc.invalidateQueries({ queryKey: ["schedule-check"] });
-      qc.invalidateQueries({ queryKey: ["clients"] });
-      qc.invalidateQueries({ queryKey: ["square-reviews"] });
+      invalidateFor(qc, "square-sync");
     },
     onError: (e: Error) => toast.error(`Backfill failed: ${e.message}`),
   });
@@ -294,7 +290,7 @@ function ScheduleCheckPage() {
       (a) => a.square_customer_id && bySquare.has(a.square_customer_id),
     );
     if (stale) {
-      qc.invalidateQueries({ queryKey: ["schedule-check"] });
+      qc.invalidateQueries({ queryKey: ["schedule-check"] }); // invalidation-ok: render-time stale link detection, not a save
     }
   }, [rawData, linkable, qc]);
 
@@ -1154,8 +1150,7 @@ function UnmatchedAppointmentsCard({ appointments }: { appointments: ScheduleApp
       linkFn({ data: vars }),
     onSuccess: () => {
       toast.success("Square customer linked");
-      qc.invalidateQueries({ queryKey: ["schedule-check"] });
-      qc.invalidateQueries({ queryKey: ["linkable-clients"] });
+      invalidateFor(qc, "square-link-changed");
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -1170,8 +1165,7 @@ function UnmatchedAppointmentsCard({ appointments }: { appointments: ScheduleApp
     }) => createFn({ data: vars }),
     onSuccess: () => {
       toast.success("Client created and linked to Square");
-      qc.invalidateQueries({ queryKey: ["schedule-check"] });
-      qc.invalidateQueries({ queryKey: ["linkable-clients"] });
+      invalidateFor(qc, "square-link-changed");
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -1971,10 +1965,7 @@ function SquareReviewCard() {
   });
 
   const invalidate = () => {
-    qc.invalidateQueries({ queryKey: ["square-reviews"] });
-    qc.invalidateQueries({ queryKey: ["linkable-clients"] });
-    qc.invalidateQueries({ queryKey: ["schedule-check"] });
-    qc.invalidateQueries({ queryKey: ["clients"] });
+    invalidateFor(qc, "square-link-changed");
   };
 
   const linkMut = useMutation({

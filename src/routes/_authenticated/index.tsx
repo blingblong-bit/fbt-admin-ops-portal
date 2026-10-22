@@ -66,6 +66,7 @@ import { getVisitAutomationReview } from "@/lib/visit-automation-review.function
 import { autofillPackagesFromSquare } from "@/lib/package-autofill.functions";
 import type { ScheduleStatus } from "@/components/SmartClientCard";
 import { useRole } from "@/hooks/useRole";
+import { useDuesFreshness } from "@/components/DuesFreshnessBanner";
 import { getMasterDues, masterDuesQuery } from "@/lib/master-dues.functions";
 import { computeWeeklyDues } from "@/lib/weekly-dues";
 import { filterTotals, makeWeekOf, type DuesFilter } from "@/lib/master-dues-view";
@@ -76,6 +77,7 @@ import {
   type WeeklyPaymentGroups,
   type WeeklyPaymentRow,
 } from "@/lib/weekly-payment-groups";
+import { invalidateFor } from "@/lib/invalidation";
 
 
 export const Route = createFileRoute("/_authenticated/")({
@@ -467,8 +469,7 @@ function Dashboard() {
     autofillPackagesFromSquare()
       .then((r) => {
         if (r?.ok && (r.filled?.length ?? 0) > 0) {
-          queryClient.invalidateQueries({ queryKey: ["clients"] });
-          queryClient.invalidateQueries({ queryKey: ["package_review_dismissals"] });
+          invalidateFor(queryClient, "package-edited");
         }
       })
       .catch(() => {});
@@ -769,6 +770,9 @@ function Dashboard() {
   const fetchAutomation = useServerFn(getVisitAutomationReview);
   const masterDuesFn = useServerFn(getMasterDues);
   const masterQ = useQuery({ ...masterDuesQuery(() => masterDuesFn()), enabled: !isStaff });
+  const masterFresh = useDuesFreshness(masterQ);
+  // Prefix for money tiles: never present a failed refresh as current.
+  const freshTag = masterFresh.untrusted ? `Out of date — last updated ${masterFresh.label} · ` : masterFresh.state === "updating" ? "Updating… · " : "";
   const masterTile = (k: DuesFilter) => {
     const d = masterQ.data?.data;
     if (!d) return { clients: 0, dollars: undefined as number | undefined };
@@ -803,7 +807,7 @@ function Dashboard() {
       key: "payment_due",
       label: "Payment Due",
       // Same getMasterDues query as /payment-due → tile and page always match.
-      sublabel: masterQ.data?.error ? "Square unavailable" : masterQ.data ? "master dues" : "loading…",
+      sublabel: masterQ.data?.error ? "Square unavailable" : masterQ.data ? `${freshTag}master dues` : "loading…",
       icon: <CircleDollarSign className="h-5 w-5" />,
       count: masterQ.data?.data?.totals.clients ?? 0,
       money: masterQ.data?.data?.totals.total,
@@ -816,7 +820,7 @@ function Dashboard() {
       key: "weekly_dues",
       label: "Weekly Dues",
       sublabel: weeklyTile
-        ? `${$tile(weeklyTile.expected)} expected · ${$tile(weeklyTile.carryover)} carryover`
+        ? `${freshTag}${$tile(weeklyTile.expected)} expected · ${$tile(weeklyTile.carryover)} carryover`
         : masterQ.data?.error ? "Square unavailable" : "loading…",
       icon: <CircleDollarSign className="h-5 w-5" />,
       count: weeklyTile?.expectedClients ?? 0,
@@ -829,7 +833,7 @@ function Dashboard() {
     {
       key: "payment_due_this_week",
       label: "Payment Due — This Week",
-      sublabel: formatYmdRange(thisWeekQuery.data?.week_start, thisWeekQuery.data?.week_end),
+      sublabel: freshTag + formatYmdRange(thisWeekQuery.data?.week_start, thisWeekQuery.data?.week_end),
       icon: <CircleDollarSign className="h-5 w-5" />,
       count: masterTile("this_week").clients,
       money: masterTile("this_week").dollars,
@@ -842,7 +846,7 @@ function Dashboard() {
     {
       key: "payment_due_next_week",
       label: "Payment Due — Next Week",
-      sublabel: formatYmdRange(nextWeekQuery.data?.week_start, nextWeekQuery.data?.week_end),
+      sublabel: freshTag + formatYmdRange(nextWeekQuery.data?.week_start, nextWeekQuery.data?.week_end),
       icon: <CircleDollarSign className="h-5 w-5" />,
       count: masterTile("next_week").clients,
       money: masterTile("next_week").dollars,
@@ -855,7 +859,7 @@ function Dashboard() {
     {
       key: "overdue_prior_weeks",
       label: "Due Now / Overdue",
-      sublabel: "already owed — any timing",
+      sublabel: `${freshTag}already owed — any timing`,
       icon: <AlertTriangle className="h-5 w-5" />,
       count: masterTile("due_now").clients,
       money: masterTile("due_now").dollars,

@@ -17,6 +17,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     { to: "/clients", label: "All Clients" },
     { to: "/clients/new", label: "Add Client" },
     { to: "/schedule-check", label: "Schedule Check" },
+    { to: "/collections", label: "Collections", adminOnly: true },
     { to: "/clients/deleted", label: "Deleted Clients", adminOnly: true },
   ] as const;
 

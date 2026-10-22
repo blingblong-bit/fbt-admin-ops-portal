@@ -1,0 +1,206 @@
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
+import { useMemo } from "react";
+import { AppShell } from "@/components/AppShell";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { useRole } from "@/hooks/useRole";
+import { DuesFreshnessBanner, useDuesFreshness } from "@/components/DuesFreshnessBanner";
+import { getMasterDues, masterDuesQuery } from "@/lib/master-dues.functions";
+import { byClient, computeCollections, type CollectionGroup, type CollectionItem } from "@/lib/collections";
+import { addDaysYmd, workWeekStartFromYmd } from "@/lib/work-week";
+
+type Tab = "week" | "past" | "upcoming" | "all";
+const TABS: { key: Tab; label: string }[] = [
+  { key: "week", label: "This Week" },
+  { key: "past", label: "Past Due" },
+  { key: "upcoming", label: "Upcoming" },
+  { key: "all", label: "All Balances" },
+];
+
+export const Route = createFileRoute("/_authenticated/collections")({
+  head: () => ({
+    meta: [
+      { title: "Collections · FIT Beyond Therapy Admin" },
+      { name: "description", content: "Front-desk collections: who to collect from this week, past-due balances, and upcoming renewals." },
+      { property: "og:title", content: "Collections · FIT Beyond Therapy Admin" },
+      { property: "og:description", content: "Front-desk collections: who to collect from this week, past-due balances, and upcoming renewals." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
+    ],
+  }),
+  validateSearch: (s: Record<string, unknown>): { tab?: Tab } =>
+    TABS.some((t) => t.key === s.tab) ? { tab: s.tab as Tab } : {},
+  component: CollectionsPage,
+});
+
+const $ = (n: number) => n.toLocaleString("en-US", { style: "currency", currency: "USD" });
+const md = (ymd: string) => new Date(`${ymd}T12:00:00`).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+const time = (iso: string | null) => (iso ? new Date(iso).toLocaleTimeString("en-US", { timeZone: "America/Chicago", hour: "numeric", minute: "2-digit" }) : "");
+const GROUP_TONE: Record<CollectionGroup, string> = {
+  thisWeek: "bg-primary/10 text-primary",
+  pastDue: "bg-destructive/10 text-destructive",
+  upcoming: "bg-muted text-muted-foreground",
+  review: "bg-accent text-accent-foreground",
+};
+const GROUP_NAME: Record<CollectionGroup, string> = { thisWeek: "This week", pastDue: "Past due", upcoming: "Not due yet", review: "Needs review" };
+
+function CollectionsPage() {
+  const { isAdmin, isLoading: roleLoading } = useRole();
+  const fn = useServerFn(getMasterDues);
+  const q = useQuery({ ...masterDuesQuery(() => fn()), enabled: isAdmin });
+  const fresh = useDuesFreshness(q);
+  const tab: Tab = Route.useSearch().tab ?? "week";
+  const navigate = Route.useNavigate();
+
+  const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Chicago" });
+  const weekStart = workWeekStartFromYmd(today);
+  const data = q.data?.data ?? null;
+  const c = useMemo(() => (data ? computeCollections(data.rows, data.appointments, data.exceptions, weekStart) : null), [data, weekStart]);
+
+  if (!roleLoading && !isAdmin) return <AppShell><p className="text-muted-foreground">Collections is available to admins only.</p></AppShell>;
+
+  const pick = (g: CollectionGroup[]) => (c ? c.items.filter((i) => g.includes(i.group)) : []);
+  const weekItems = pick(["thisWeek"]);
+
+  return (
+    <AppShell>
+      <div className="mb-4 flex flex-wrap items-end justify-between gap-2">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">Collections</h1>
+          <p className="text-sm text-muted-foreground">
+            {c ? `Week of ${md(c.week.start)} – ${md(c.week.end)}` : "Mon–Fri work week"} · who to collect from, and why
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-1">
+          <Button asChild variant="ghost" size="sm"><Link to="/payment-due">Payment Due (detail)</Link></Button>
+          <Button asChild variant="ghost" size="sm"><Link to="/weekly-dues">Weekly Dues (detail)</Link></Button>
+          <Button variant="outline" size="sm" onClick={() => q.refetch()} disabled={q.isFetching}>{q.isFetching ? "Refreshing…" : "Refresh"}</Button>
+        </div>
+      </div>
+
+      {!q.isLoading && <DuesFreshnessBanner q={q} />}
+      {q.isLoading || roleLoading ? (
+        <p className="text-muted-foreground">Loading from Square…</p>
+      ) : q.isError && !q.data ? (
+        <Card><CardContent className="p-4 text-destructive">Couldn't load Collections. {String((q.error as Error)?.message ?? "")}</CardContent></Card>
+      ) : q.data?.error || !c ? (
+        <Card><CardContent className="p-4"><p className="font-semibold text-destructive">Square unavailable</p><p className="text-sm text-muted-foreground">Totals are hidden rather than shown wrong. Try Refresh in a minute.</p></CardContent></Card>
+      ) : (
+        <div className={fresh.untrusted ? "opacity-50" : ""} data-stale={fresh.untrusted || undefined}>
+          <div className="mb-1 grid grid-cols-2 gap-2 lg:grid-cols-4">
+            <Stat label="Past Due" hint="Collect now — no visit this week" t={c.totals.pastDue} tone="text-destructive" onClick={() => navigate({ search: { tab: "past" }, replace: true })} />
+            <Stat label="Scheduled This Week" hint="Collect at their visit" t={c.totals.thisWeek} tone="text-primary" onClick={() => navigate({ search: { tab: "week" }, replace: true })} />
+            <Stat label="Upcoming — Not Due Yet" hint="Future or prepared renewals" t={c.totals.upcoming} onClick={() => navigate({ search: { tab: "upcoming" }, replace: true })} />
+            <Stat label="Needs Review" hint="Check before collecting" t={c.totals.review} onClick={() => navigate({ search: { tab: "all" }, replace: true })} />
+          </div>
+          <p className="mb-4 text-xs text-muted-foreground">
+            These four add up to the full balance ledger ({$(c.totals.masterTotal)}); each dollar is in one card only.
+            {c.totals.unexplained !== 0 && <b className="text-destructive"> Unexplained difference {$(c.totals.unexplained)} — use Payment Due.</b>}
+          </p>
+
+          <div role="tablist" className="mb-4 flex gap-1 overflow-x-auto border-b">
+            {TABS.map((t) => (
+              <button key={t.key} role="tab" aria-selected={tab === t.key} onClick={() => navigate({ search: { tab: t.key }, replace: true })}
+                className={`whitespace-nowrap border-b-2 px-3 py-2 text-sm font-medium ${tab === t.key ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"}`}>
+                {t.label}
+              </button>
+            ))}
+          </div>
+
+          {tab === "week" && <WeekTab items={weekItems} weekStart={c.week.start} />}
+          {tab === "past" && <ClientList items={pick(["pastDue"])} empty="No past-due balances." />}
+          {tab === "upcoming" && (
+            <>
+              <p className="mb-3 text-sm text-muted-foreground">Not owed yet. These become due when the new package actually starts in Square.</p>
+              <ClientList items={pick(["upcoming"])} empty="No upcoming renewals." />
+            </>
+          )}
+          {tab === "all" && (
+            <>
+              <ClientList items={c.items} empty="No balances." showGroup />
+              {c.exceptions.length > 0 && (
+                <section className="mt-6">
+                  <h2 className="mb-1 text-lg font-semibold">Needs Review — no dollar amount yet</h2>
+                  <p className="mb-2 text-sm text-muted-foreground">Not counted in any total until the package or billing info is filled in.</p>
+                  <div className="space-y-2">
+                    {c.exceptions.map((e) => (
+                      <Card key={`${e.client_id}-${e.kind}`}><CardContent className="flex flex-wrap items-center justify-between gap-2 p-3">
+                        <div><Link to="/clients/$id" params={{ id: e.client_id }} className="font-medium hover:underline">{e.name}</Link>
+                          <p className="text-sm text-muted-foreground">{e.reason}</p></div>
+                        <Button asChild size="sm" variant="outline"><Link to="/clients/$id" params={{ id: e.client_id }}>Open profile</Link></Button>
+                      </CardContent></Card>
+                    ))}
+                  </div>
+                </section>
+              )}
+            </>
+          )}
+          <p className="mt-6 text-xs text-muted-foreground">Computed {new Date(q.data!.computed_at).toLocaleString()}</p>
+        </div>
+      )}
+    </AppShell>
+  );
+}
+
+function Stat({ label, hint, t, tone, onClick }: { label: string; hint: string; t: { dollars: number; clients: number }; tone?: string; onClick: () => void }) {
+  return (
+    <button onClick={onClick} className="text-left">
+      <Card className="h-full transition-colors hover:border-primary"><CardContent className="p-3">
+        <p className="text-xs font-medium text-muted-foreground">{label}</p>
+        <p className={`text-2xl font-semibold ${tone ?? ""}`}>{$(t.dollars)}</p>
+        <p className="text-xs text-muted-foreground">{t.clients} client{t.clients === 1 ? "" : "s"} · {hint}</p>
+      </CardContent></Card>
+    </button>
+  );
+}
+
+function WeekTab({ items, weekStart }: { items: CollectionItem[]; weekStart: string }) {
+  if (!items.length) return <p className="text-muted-foreground">No one scheduled this week owes anything.</p>;
+  return (
+    <>
+      {[0, 1, 2, 3, 4].map((d) => {
+        const ymd = addDaysYmd(weekStart, d);
+        const day = items.filter((i) => i.ymd === ymd);
+        if (!day.length) return null;
+        return (
+          <section key={ymd} className="mb-5">
+            <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">{md(ymd)} · {$(day.reduce((s, i) => s + i.amount, 0))}</h2>
+            <ClientList items={day} empty="" />
+          </section>
+        );
+      })}
+    </>
+  );
+}
+
+function ClientList({ items, empty, showGroup }: { items: CollectionItem[]; empty: string; showGroup?: boolean }) {
+  const groups = byClient(items);
+  if (!groups.length) return empty ? <p className="text-muted-foreground">{empty}</p> : null;
+  return (
+    <div className="space-y-2">
+      {groups.map((g) => (
+        <Card key={g.client_id}><CardContent className="p-3">
+          <div className="flex items-start justify-between gap-2">
+            <Link to="/clients/$id" params={{ id: g.client_id }} className="font-semibold hover:underline">{g.name}</Link>
+            <span className="text-lg font-semibold">{$(g.amount)}</span>
+          </div>
+          <ul className="mt-1 space-y-1.5">
+            {g.items.map((i, k) => (
+              <li key={k} className="flex flex-wrap items-baseline justify-between gap-x-3 text-sm">
+                <span className="min-w-0">
+                  {showGroup && <span className={`mr-1.5 rounded px-1.5 py-0.5 text-xs font-medium ${GROUP_TONE[i.group]}`}>{GROUP_NAME[i.group]}</span>}
+                  <span className="font-medium">{i.label}</span>
+                  <span className="text-muted-foreground"> · {i.reason}{i.ymd ? ` · ${md(i.ymd)}` : ""}{i.time_iso ? ` ${time(i.time_iso)}` : ""}</span>
+                  <span className="block text-xs text-muted-foreground">Next: {i.action}</span>
+                </span>
+                {g.items.length > 1 && <span className="text-muted-foreground">{$(i.amount)}</span>}
+              </li>
+            ))}
+          </ul>
+        </CardContent></Card>
+      ))}
+    </div>
+  );
+}

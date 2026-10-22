@@ -14,8 +14,8 @@ import { addDaysYmd, workWeekStartFromYmd } from "@/lib/work-week";
 type Tab = "week" | "past" | "upcoming" | "all";
 const TABS: { key: Tab; label: string }[] = [
   { key: "week", label: "This Week" },
-  { key: "past", label: "Past Due" },
-  { key: "upcoming", label: "Upcoming" },
+  { key: "past", label: "Due Now" },
+  { key: "upcoming", label: "Not Due Yet" },
   { key: "all", label: "All Balances" },
 ];
 
@@ -74,8 +74,13 @@ function CollectionsPage() {
           </p>
         </div>
         <div className="flex flex-wrap gap-1">
-          <Button asChild variant="ghost" size="sm"><Link to="/payment-due">Payment Due (detail)</Link></Button>
-          <Button asChild variant="ghost" size="sm"><Link to="/weekly-dues">Weekly Dues (detail)</Link></Button>
+          <details className="relative">
+            <summary className="cursor-pointer list-none rounded-md px-3 py-2 text-sm text-muted-foreground hover:text-foreground">Detailed views ▾</summary>
+            <div className="absolute right-0 z-10 mt-1 grid w-48 rounded-md border bg-popover p-1 shadow-md">
+              <Link to="/payment-due" className="rounded px-2 py-1.5 text-sm hover:bg-muted">Payment Due ledger</Link>
+              <Link to="/weekly-dues" className="rounded px-2 py-1.5 text-sm hover:bg-muted">Weekly Dues</Link>
+            </div>
+          </details>
           <Button variant="outline" size="sm" onClick={() => q.refetch()} disabled={q.isFetching}>{q.isFetching ? "Refreshing…" : "Refresh"}</Button>
         </div>
       </div>
@@ -90,13 +95,13 @@ function CollectionsPage() {
       ) : (
         <div className={fresh.untrusted ? "opacity-50" : ""} data-stale={fresh.untrusted || undefined}>
           <div className="mb-1 grid grid-cols-2 gap-2 lg:grid-cols-4">
-            <Stat label="Past Due" hint="Collect now — no visit this week" t={c.totals.pastDue} tone="text-destructive" onClick={() => navigate({ search: { tab: "past" }, replace: true })} />
-            <Stat label="Scheduled This Week" hint="Collect at their visit" t={c.totals.thisWeek} tone="text-primary" onClick={() => navigate({ search: { tab: "week" }, replace: true })} />
-            <Stat label="Upcoming — Not Due Yet" hint="Future or prepared renewals" t={c.totals.upcoming} onClick={() => navigate({ search: { tab: "upcoming" }, replace: true })} />
+            <Stat label="Due Now" hint="Past due — collect now" t={c.totals.pastDue} tone="text-destructive" onClick={() => navigate({ search: { tab: "past" }, replace: true })} />
+            <Stat label="Due This Week" hint="Collect at their visit" t={c.totals.thisWeek} tone="text-primary" onClick={() => navigate({ search: { tab: "week" }, replace: true })} />
+            <Stat label="Not Due Yet" hint="Next packages not started" t={c.totals.upcoming} onClick={() => navigate({ search: { tab: "upcoming" }, replace: true })} />
             <Stat label="Needs Review" hint="Check before collecting" t={c.totals.review} onClick={() => navigate({ search: { tab: "all" }, replace: true })} />
           </div>
-          <p className="mb-4 text-xs text-muted-foreground">
-            These four add up to the full balance ledger ({$(c.totals.masterTotal)}); each dollar is in one card only.
+          <p className="mb-4 text-sm text-muted-foreground">
+            Total on the books: <b className="text-foreground">{$(c.totals.masterTotal)}</b> — each dollar counted in one card only.
             {c.totals.unexplained !== 0 && <b className="text-destructive"> Unexplained difference {$(c.totals.unexplained)} — use Payment Due.</b>}
           </p>
 
@@ -175,32 +180,62 @@ function WeekTab({ items, weekStart }: { items: CollectionItem[]; weekStart: str
   );
 }
 
-function ClientList({ items, empty, showGroup }: { items: CollectionItem[]; empty: string; showGroup?: boolean }) {
+const URGENCY: CollectionGroup[] = ["pastDue", "thisWeek", "review", "upcoming"];
+const STATUS_TEXT: Record<CollectionGroup, string> = { pastDue: "Due now", thisWeek: "Due this week", review: "Needs review", upcoming: "Not due yet" };
+
+/** Plain staff-facing label for what the money is for. Display only. */
+function whatFor(i: CollectionItem): string {
+  switch (i.kind) {
+    case "current": return "Current package";
+    case "previous": return "Past balance (earlier package)";
+    case "renewal": return i.group === "upcoming" || i.group === "review" ? "Next package (not started)" : "New package (started)";
+    case "ppv": return "Per-visit charges";
+    case "weekly": return "Weekly billing";
+    default: return i.label;
+  }
+}
+
+function ClientList({ items, empty }: { items: CollectionItem[]; empty: string; showGroup?: boolean }) {
   const groups = byClient(items);
   if (!groups.length) return empty ? <p className="text-muted-foreground">{empty}</p> : null;
   return (
     <div className="space-y-2">
-      {groups.map((g) => (
-        <Card key={g.client_id}><CardContent className="p-3">
-          <div className="flex items-start justify-between gap-2">
-            <Link to="/clients/$id" params={{ id: g.client_id }} className="font-semibold hover:underline">{g.name}</Link>
-            <span className="text-lg font-semibold">{$(g.amount)}</span>
-          </div>
-          <ul className="mt-1 space-y-1.5">
-            {g.items.map((i, k) => (
-              <li key={k} className="flex flex-wrap items-baseline justify-between gap-x-3 text-sm">
-                <span className="min-w-0">
-                  {showGroup && <span className={`mr-1.5 rounded px-1.5 py-0.5 text-xs font-medium ${GROUP_TONE[i.group]}`}>{GROUP_NAME[i.group]}</span>}
-                  <span className="font-medium">{i.label}</span>
-                  <span className="text-muted-foreground"> · {i.reason}{i.ymd ? ` · ${md(i.ymd)}` : ""}{i.time_iso ? ` ${time(i.time_iso)}` : ""}</span>
-                  <span className="block text-xs text-muted-foreground">Next: {i.action}</span>
-                </span>
-                {g.items.length > 1 && <span className="text-muted-foreground">{$(i.amount)}</span>}
-              </li>
-            ))}
-          </ul>
-        </CardContent></Card>
-      ))}
+      {groups.map((g) => {
+        const status = URGENCY.find((u) => g.items.some((i) => i.group === u)) ?? "upcoming";
+        const lead = g.items.find((i) => i.group === status) ?? g.items[0];
+        return (
+          <Card key={g.client_id}><CardContent className="p-3 sm:p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <Link to="/clients/$id" params={{ id: g.client_id }} className="text-base font-semibold hover:underline">{g.name}</Link>
+                <div className="mt-1">
+                  <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${GROUP_TONE[status]}`}>{STATUS_TEXT[status]}</span>
+                </div>
+              </div>
+              <div className="text-right">
+                <p className="text-xs text-muted-foreground">{status === "upcoming" ? "Will owe" : "Owes"}</p>
+                <p className="text-2xl font-bold leading-tight">{$(g.amount)}</p>
+              </div>
+            </div>
+            <p className="mt-2 text-sm"><span className="font-medium">Next step:</span> {lead.action}{lead.ymd ? ` · ${md(lead.ymd)}` : ""}{lead.time_iso ? ` ${time(lead.time_iso)}` : ""}</p>
+            <details className="mt-2 text-sm">
+              <summary className="cursor-pointer py-1 text-muted-foreground">Details ({g.items.length})</summary>
+              <ul className="mt-1 space-y-1.5 border-l pl-3">
+                {g.items.map((i, k) => (
+                  <li key={k} className="flex flex-wrap items-baseline justify-between gap-x-3">
+                    <span className="min-w-0">
+                      <span className="font-medium">{whatFor(i)}</span>
+                      <span className="text-muted-foreground"> · {STATUS_TEXT[i.group]} · {i.reason}{i.ymd ? ` · ${md(i.ymd)}` : ""}</span>
+                    </span>
+                    <span className="text-muted-foreground">{$(i.amount)}</span>
+                  </li>
+                ))}
+              </ul>
+              <Button asChild size="sm" variant="outline" className="mt-2"><Link to="/clients/$id" params={{ id: g.client_id }}>Open profile</Link></Button>
+            </details>
+          </CardContent></Card>
+        );
+      })}
     </div>
   );
 }

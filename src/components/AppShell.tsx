@@ -14,14 +14,16 @@ import {
 export function AppShell({ children }: { children: ReactNode }) {
   const primaryNavAll = [
     { to: "/", label: "Dashboard" },
-    { to: "/clients", label: "All Clients" },
-    { to: "/clients/new", label: "Add Client" },
-    { to: "/schedule-check", label: "Schedule Check" },
     { to: "/collections", label: "Collections", adminOnly: true },
-    { to: "/clients/deleted", label: "Deleted Clients", adminOnly: true },
+    { to: "/clients", label: "All Clients" },
+    { to: "/schedule-check", label: "Schedule Check" },
+    { to: "/clients/new", label: "Add Client" },
   ] as const;
 
   const adminNav = [
+    { to: "/payment-due", label: "Payment Due ledger" },
+    { to: "/weekly-dues", label: "Weekly Dues" },
+    { to: "/clients/deleted", label: "Deleted Clients" },
     { to: "/dues-texts", label: "Dues Texts" },
     { to: "/dues-queue", label: "Send Dues Message" },
     { to: "/messaging-preview", label: "Messaging Preview" },

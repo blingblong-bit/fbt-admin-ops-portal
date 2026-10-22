@@ -13,6 +13,7 @@ import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/index'
 import { Route as AuthenticatedBackupRouteImport } from './routes/_authenticated/backup'
+import { Route as AuthenticatedCollectionsRouteImport } from './routes/_authenticated/collections'
 import { Route as AuthenticatedDuesQueueRouteImport } from './routes/_authenticated/dues-queue'
 import { Route as AuthenticatedDuesTextsRouteImport } from './routes/_authenticated/dues-texts'
 import { Route as AuthenticatedImportRouteImport } from './routes/_authenticated/import'
@@ -62,6 +63,12 @@ const AuthenticatedBackupRoute = AuthenticatedBackupRouteImport.update({
   path: '/backup',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedCollectionsRoute =
+  AuthenticatedCollectionsRouteImport.update({
+    id: '/collections',
+    path: '/collections',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedDuesQueueRoute = AuthenticatedDuesQueueRouteImport.update({
   id: '/dues-queue',
   path: '/dues-queue',
@@ -226,6 +233,7 @@ export interface FileRoutesByFullPath {
   '/': typeof AuthenticatedIndexRoute
   '/auth': typeof AuthRoute
   '/backup': typeof AuthenticatedBackupRoute
+  '/collections': typeof AuthenticatedCollectionsRoute
   '/dues-queue': typeof AuthenticatedDuesQueueRoute
   '/dues-texts': typeof AuthenticatedDuesTextsRoute
   '/import': typeof AuthenticatedImportRoute
@@ -259,6 +267,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
   '/backup': typeof AuthenticatedBackupRoute
+  '/collections': typeof AuthenticatedCollectionsRoute
   '/dues-queue': typeof AuthenticatedDuesQueueRoute
   '/dues-texts': typeof AuthenticatedDuesTextsRoute
   '/import': typeof AuthenticatedImportRoute
@@ -295,6 +304,7 @@ export interface FileRoutesById {
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/auth': typeof AuthRoute
   '/_authenticated/backup': typeof AuthenticatedBackupRoute
+  '/_authenticated/collections': typeof AuthenticatedCollectionsRoute
   '/_authenticated/dues-queue': typeof AuthenticatedDuesQueueRoute
   '/_authenticated/dues-texts': typeof AuthenticatedDuesTextsRoute
   '/_authenticated/import': typeof AuthenticatedImportRoute
@@ -332,6 +342,7 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/backup'
+    | '/collections'
     | '/dues-queue'
     | '/dues-texts'
     | '/import'
@@ -365,6 +376,7 @@ export interface FileRouteTypes {
   to:
     | '/auth'
     | '/backup'
+    | '/collections'
     | '/dues-queue'
     | '/dues-texts'
     | '/import'
@@ -400,6 +412,7 @@ export interface FileRouteTypes {
     | '/_authenticated'
     | '/auth'
     | '/_authenticated/backup'
+    | '/_authenticated/collections'
     | '/_authenticated/dues-queue'
     | '/_authenticated/dues-texts'
     | '/_authenticated/import'
@@ -474,6 +487,13 @@ declare module '@tanstack/react-router' {
       path: '/backup'
       fullPath: '/backup'
       preLoaderRoute: typeof AuthenticatedBackupRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/collections': {
+      id: '/_authenticated/collections'
+      path: '/collections'
+      fullPath: '/collections'
+      preLoaderRoute: typeof AuthenticatedCollectionsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/dues-queue': {
@@ -684,6 +704,7 @@ declare module '@tanstack/react-router' {
 
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedBackupRoute: typeof AuthenticatedBackupRoute
+  AuthenticatedCollectionsRoute: typeof AuthenticatedCollectionsRoute
   AuthenticatedDuesQueueRoute: typeof AuthenticatedDuesQueueRoute
   AuthenticatedDuesTextsRoute: typeof AuthenticatedDuesTextsRoute
   AuthenticatedImportRoute: typeof AuthenticatedImportRoute
@@ -709,6 +730,7 @@ interface AuthenticatedRouteRouteChildren {
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedBackupRoute: AuthenticatedBackupRoute,
+  AuthenticatedCollectionsRoute: AuthenticatedCollectionsRoute,
   AuthenticatedDuesQueueRoute: AuthenticatedDuesQueueRoute,
   AuthenticatedDuesTextsRoute: AuthenticatedDuesTextsRoute,
   AuthenticatedImportRoute: AuthenticatedImportRoute,

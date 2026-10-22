@@ -54,7 +54,7 @@ export function computeCollections(
   return {
     week: w.week,
     items,
-    exceptions: exceptions.filter((e) => e.kind !== "pay_per_visit"),
+    exceptions,
     totals: { ...totals, sum, masterTotal, unexplained: r2(masterTotal - sum) },
   };
 }

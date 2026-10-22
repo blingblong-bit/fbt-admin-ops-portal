@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { formatCurrency } from "@/lib/clients";
+import { invalidateFor } from "@/lib/invalidation";
 
 export const Route = createFileRoute("/_authenticated/clients/new")({
   head: () => ({ meta: [{ title: "Add Client · FIT Beyond Therapy Admin" }] }),
@@ -102,7 +103,7 @@ function AddClientPage() {
     },
     onSuccess: (data) => {
       toast.success("Client added");
-      queryClient.invalidateQueries({ queryKey: ["clients"] });
+      invalidateFor(queryClient, "client-info-changed");
       navigate({ to: "/clients/$id", params: { id: data.id } });
     },
     onError: (e: Error) => toast.error(e.message),

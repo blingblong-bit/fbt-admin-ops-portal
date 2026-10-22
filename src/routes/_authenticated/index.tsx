@@ -76,6 +76,7 @@ import {
   type WeeklyPaymentGroups,
   type WeeklyPaymentRow,
 } from "@/lib/weekly-payment-groups";
+import { invalidateFor } from "@/lib/invalidation";
 
 
 export const Route = createFileRoute("/_authenticated/")({
@@ -467,8 +468,7 @@ function Dashboard() {
     autofillPackagesFromSquare()
       .then((r) => {
         if (r?.ok && (r.filled?.length ?? 0) > 0) {
-          queryClient.invalidateQueries({ queryKey: ["clients"] });
-          queryClient.invalidateQueries({ queryKey: ["package_review_dismissals"] });
+          invalidateFor(queryClient, "package-edited");
         }
       })
       .catch(() => {});

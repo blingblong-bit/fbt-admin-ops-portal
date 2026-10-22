@@ -17,6 +17,7 @@ import {
 
   type DayReviewRow,
 } from "@/lib/schedule.functions";
+import { invalidateFor } from "@/lib/invalidation";
 
 export const Route = createFileRoute("/_authenticated/missed-check-ins")({
   head: () => ({
@@ -136,12 +137,7 @@ function MissedCheckInsPage() {
             ? `Checked in — visit ${r.visits_used} recorded`
             : "Checked in",
       );
-      qc.invalidateQueries({ queryKey: ["day-review"] });
-      qc.invalidateQueries({ queryKey: ["missed-check-ins"] });
-      qc.invalidateQueries({ queryKey: ["clients"] });
-      qc.invalidateQueries({ queryKey: ["schedule-check"] });
-      qc.invalidateQueries({ queryKey: ["completed-visit-bookings"] });
-      qc.invalidateQueries({ queryKey: ["renewal-forecast"] });
+      invalidateFor(qc, "visit-changed");
     },
     onError: (e: Error) => toast.error(e.message || "Check in failed"),
   });
@@ -153,8 +149,7 @@ function MissedCheckInsPage() {
       }),
     onSuccess: () => {
       toast.success("Dismissed — no visit recorded");
-      qc.invalidateQueries({ queryKey: ["day-review"] });
-      qc.invalidateQueries({ queryKey: ["missed-check-ins"] });
+      invalidateFor(qc, "visit-changed");
     },
     onError: (e: Error) => toast.error(e.message || "Dismiss failed"),
   });

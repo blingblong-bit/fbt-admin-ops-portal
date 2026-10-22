@@ -37,6 +37,7 @@ import {
   searchClientsForPayment,
   suggestPaymentMatches,
 } from "@/lib/payments.functions";
+import { invalidateFor } from "@/lib/invalidation";
 
 
 export const Route = createFileRoute("/_authenticated/sync-log")({
@@ -509,7 +510,7 @@ function ResolvePaymentDialog({ payment }: { payment: PaymentRow }) {
           ? "Linked — payment was already credited to this client."
           : `Applied $${(payment.amount_cents / 100).toFixed(2)} to client.`,
       );
-      queryClient.invalidateQueries({ queryKey: ["square_payments_needs_review"] });
+      invalidateFor(queryClient, "payment-changed");
       setOpen(false);
     },
     onError: (e) => toast.error(`Link failed: ${(e as Error).message}`),
@@ -528,7 +529,7 @@ function ResolvePaymentDialog({ payment }: { payment: PaymentRow }) {
       }),
     onSuccess: () => {
       toast.success("Client created and payment applied.");
-      queryClient.invalidateQueries({ queryKey: ["square_payments_needs_review"] });
+      invalidateFor(queryClient, "payment-changed");
       setOpen(false);
     },
     onError: (e) => toast.error(`Create failed: ${(e as Error).message}`),
@@ -754,9 +755,7 @@ function RetryPaymentButton({ paymentRowId }: { paymentRowId: string }) {
       } else {
         toast.error(r.reason ?? "No matched client.");
       }
-      queryClient.invalidateQueries({ queryKey: ["square_payments_needs_review"] });
-      queryClient.invalidateQueries({ queryKey: ["square_payments_pending"] });
-      queryClient.invalidateQueries({ queryKey: ["square_sync_log"] });
+      invalidateFor(queryClient, "payment-changed");
     },
     onError: (e) => toast.error(`Retry failed: ${(e as Error).message}`),
   });
@@ -808,9 +807,7 @@ function RetryAllButton() {
       toast.success(
         `Retry complete — ${r.processed} processed · ${s.applied} applied, ${s.already_applied} already applied, ${s.blocked} still blocked.`,
       );
-      queryClient.invalidateQueries({ queryKey: ["square_payments_needs_review"] });
-      queryClient.invalidateQueries({ queryKey: ["square_payments_pending"] });
-      queryClient.invalidateQueries({ queryKey: ["square_sync_log"] });
+      invalidateFor(queryClient, "payment-changed");
     },
     onError: (e) => toast.error(`Retry all failed: ${(e as Error).message}`),
   });

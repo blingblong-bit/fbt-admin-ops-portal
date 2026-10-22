@@ -74,3 +74,9 @@
 - [x] Check-in activates only on 1/N or a used-up package; unclear → held, no visit taken
 - [x] "Earliest eligible start" vs Square expected renewal labels; tests
 - [ ] Publish (waits on owner approval)
+
+## Phase 1 — stale data (preview only)
+- [x] Shared invalidateFor + wire all save points
+- [x] Updating / Out of date indicators on money screens
+- [x] Tests + coverage check
+- [ ] Phase 2 Collections redesign — waiting on approval

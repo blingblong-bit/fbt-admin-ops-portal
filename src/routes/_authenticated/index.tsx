@@ -859,7 +859,7 @@ function Dashboard() {
     {
       key: "overdue_prior_weeks",
       label: "Due Now / Overdue",
-      sublabel: "already owed — any timing",
+      sublabel: `${freshTag}already owed — any timing`,
       icon: <AlertTriangle className="h-5 w-5" />,
       count: masterTile("due_now").clients,
       money: masterTile("due_now").dollars,

@@ -6,6 +6,7 @@ import { AppShell } from "@/components/AppShell";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useRole } from "@/hooks/useRole";
+import { DuesFreshnessBanner, useDuesFreshness } from "@/components/DuesFreshnessBanner";
 import { getMasterDues, masterDuesQuery } from "@/lib/master-dues.functions";
 import { DUES_FILTERS, filterTotals, makeWeekOf, matchesFilter, sortRows, sumRows, type DuesFilter } from "@/lib/master-dues-view";
 import type { MasterDuesRow, ObligationStatus } from "@/lib/master-dues";
@@ -37,6 +38,7 @@ function PaymentDuePage() {
   const { isAdmin, isLoading: roleLoading } = useRole();
   const fn = useServerFn(getMasterDues);
   const q = useQuery({ ...masterDuesQuery(() => fn()), enabled: isAdmin });
+  const fresh = useDuesFreshness(q);
   const search = Route.useSearch();
   const navigate = Route.useNavigate();
   const filter: DuesFilter = DUES_FILTERS.some((f) => f.key === search.filter) ? (search.filter as DuesFilter) : "all";
@@ -69,14 +71,15 @@ function PaymentDuePage() {
         <Button variant="outline" size="sm" onClick={() => q.refetch()} disabled={q.isFetching}>{q.isFetching ? "Refreshing…" : "Refresh"}</Button>
       </div>
 
+      {!q.isLoading && <DuesFreshnessBanner q={q} />}
       {q.isLoading || roleLoading ? (
         <p className="text-muted-foreground">Loading master dues from Square…</p>
-      ) : q.isError ? (
+      ) : q.isError && !q.data ? (
         <Card><CardContent className="p-4 text-destructive">Couldn't load Payment Due. {String((q.error as Error)?.message ?? "")}</CardContent></Card>
       ) : q.data?.error || !data || !t ? (
         <Card><CardContent className="p-4"><p className="font-semibold text-destructive">Square unavailable</p><p className="text-sm text-muted-foreground">Totals are hidden rather than shown wrong. Try Refresh in a minute.</p></CardContent></Card>
       ) : (
-        <>
+        <div className={fresh.untrusted ? "opacity-50" : ""} data-stale={fresh.untrusted || undefined}>
           <div className="mb-2 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
             <Summary label="Master Dues Total" clients={t.clients} dollars={t.total} strong />
             <Summary label="Owed Now" clients={filterTotals(data.rows, "due_now", weekOf).clients} dollars={filterTotals(data.rows, "due_now", weekOf).dollars} note={t.renewalByStatus.due_now.dollars > 0 ? `incl. ${$(t.renewalByStatus.due_now.dollars)} started renewals` : undefined} />
@@ -114,7 +117,7 @@ function PaymentDuePage() {
             </div>
           )}
           <p className="mt-6 text-xs text-muted-foreground">Computed {new Date(q.data!.computed_at).toLocaleString()}</p>
-        </>
+        </div>
       )}
     </AppShell>
   );

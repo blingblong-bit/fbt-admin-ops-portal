@@ -66,6 +66,7 @@ import { getVisitAutomationReview } from "@/lib/visit-automation-review.function
 import { autofillPackagesFromSquare } from "@/lib/package-autofill.functions";
 import type { ScheduleStatus } from "@/components/SmartClientCard";
 import { useRole } from "@/hooks/useRole";
+import { useDuesFreshness } from "@/components/DuesFreshnessBanner";
 import { getMasterDues, masterDuesQuery } from "@/lib/master-dues.functions";
 import { computeWeeklyDues } from "@/lib/weekly-dues";
 import { filterTotals, makeWeekOf, type DuesFilter } from "@/lib/master-dues-view";
@@ -769,6 +770,9 @@ function Dashboard() {
   const fetchAutomation = useServerFn(getVisitAutomationReview);
   const masterDuesFn = useServerFn(getMasterDues);
   const masterQ = useQuery({ ...masterDuesQuery(() => masterDuesFn()), enabled: !isStaff });
+  const masterFresh = useDuesFreshness(masterQ);
+  // Prefix for money tiles: never present a failed refresh as current.
+  const freshTag = masterFresh.untrusted ? `Out of date — last updated ${masterFresh.label} · ` : masterFresh.state === "updating" ? "Updating… · " : "";
   const masterTile = (k: DuesFilter) => {
     const d = masterQ.data?.data;
     if (!d) return { clients: 0, dollars: undefined as number | undefined };
@@ -803,7 +807,7 @@ function Dashboard() {
       key: "payment_due",
       label: "Payment Due",
       // Same getMasterDues query as /payment-due → tile and page always match.
-      sublabel: masterQ.data?.error ? "Square unavailable" : masterQ.data ? "master dues" : "loading…",
+      sublabel: masterQ.data?.error ? "Square unavailable" : masterQ.data ? `${freshTag}master dues` : "loading…",
       icon: <CircleDollarSign className="h-5 w-5" />,
       count: masterQ.data?.data?.totals.clients ?? 0,
       money: masterQ.data?.data?.totals.total,
@@ -816,7 +820,7 @@ function Dashboard() {
       key: "weekly_dues",
       label: "Weekly Dues",
       sublabel: weeklyTile
-        ? `${$tile(weeklyTile.expected)} expected · ${$tile(weeklyTile.carryover)} carryover`
+        ? `${freshTag}${$tile(weeklyTile.expected)} expected · ${$tile(weeklyTile.carryover)} carryover`
         : masterQ.data?.error ? "Square unavailable" : "loading…",
       icon: <CircleDollarSign className="h-5 w-5" />,
       count: weeklyTile?.expectedClients ?? 0,

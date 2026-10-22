@@ -6,6 +6,7 @@ import { AppShell } from "@/components/AppShell";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useRole } from "@/hooks/useRole";
+import { DuesFreshnessBanner, useDuesFreshness } from "@/components/DuesFreshnessBanner";
 import { getMasterDues, masterDuesQuery } from "@/lib/master-dues.functions";
 import { computeWeeklyDues, KIND_LABEL, matchesWeekly, weekdayIndex, WEEKDAYS, WEEKLY_FILTERS, type WeeklyFilter, type WeeklyItem } from "@/lib/weekly-dues";
 import { addDaysYmd, workWeekStartFromYmd } from "@/lib/work-week";
@@ -39,6 +40,7 @@ function WeeklyDuesPage() {
   const { isAdmin, isLoading: roleLoading } = useRole();
   const fn = useServerFn(getMasterDues);
   const q = useQuery({ ...masterDuesQuery(() => fn()), enabled: isAdmin });
+  const fresh = useDuesFreshness(q);
   const search = Route.useSearch();
   const navigate = Route.useNavigate();
   const sel = search.week ?? "current";
@@ -75,14 +77,15 @@ function WeeklyDuesPage() {
         </div>
       </div>
 
+      {!q.isLoading && <DuesFreshnessBanner q={q} />}
       {q.isLoading || roleLoading ? (
         <p className="text-muted-foreground">Loading from Square…</p>
-      ) : q.isError ? (
+      ) : q.isError && !q.data ? (
         <Card><CardContent className="p-4 text-destructive">Couldn't load Weekly Dues. {String((q.error as Error)?.message ?? "")}</CardContent></Card>
       ) : q.data?.error || !w ? (
         <Card><CardContent className="p-4"><p className="font-semibold text-destructive">Square unavailable</p><p className="text-sm text-muted-foreground">Totals are hidden rather than shown wrong.</p></CardContent></Card>
       ) : (
-        <>
+        <div className={fresh.untrusted ? "opacity-50" : ""} data-stale={fresh.untrusted || undefined}>
           <div className="mb-3 grid grid-cols-2 gap-2 lg:grid-cols-4">
             <Stat label="Expected This Week" value={w.totals.expected} sub={`${w.totals.expectedClients} clients`} />
             <Stat label={provisional ? "Prior Week Carryover (provisional)" : "Prior Week Carryover"} value={w.totals.carryover} sub={`${w.totals.carryoverClients} clients · ${range(w.week.priorStart, addDaysYmd(w.week.priorStart, 4))}`} />
@@ -130,7 +133,7 @@ function WeeklyDuesPage() {
             <p className="text-muted-foreground">Not due this week (future/prepared renewals, later forecast) = {$(w.totals.excluded)} · Master Dues total = {$(w.totals.masterTotal)}</p>
             <p className={w.totals.unexplained === 0 ? "" : "font-semibold text-destructive"}>Unexplained difference = {$(w.totals.unexplained)}</p>
           </CardContent></Card>
-        </>
+        </div>
       )}
     </AppShell>
   );

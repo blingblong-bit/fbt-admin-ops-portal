@@ -11,11 +11,21 @@ Every screen keeps its own hand-written list of "things to reload" after a chang
 3. **Appointment reschedules/cancels**: after a Square sync finishes, refresh the renewal forecast and Master Dues so the expected renewal date moves.
 4. **Never show old numbers as current.** If a dues refresh fails, Payment Due, Weekly Dues and dashboard money tiles show an "Out of date — last updated 9:42 PM · Retry" banner, and a "Updating…" hint while refreshing. Existing "Square unavailable" handling stays.
 
+## Safeguards
+- Refreshes fire only after a change has saved successfully; a failed save refreshes nothing.
+- Overlapping reloads: an older reload that finishes late is cancelled/ignored so it can't overwrite newer numbers.
+- Three clear states on money screens: current, "Updating…" (normal background reload, numbers still trusted), and "Out of date / couldn't verify" (failed or untrustworthy — numbers dimmed with Retry).
+- A finished Square sync refreshes every money and schedule view (Master Dues, Weekly Dues, dashboard tiles, Needs Renewal, Schedule Check, Missed Check-Ins, client profiles).
+- Billing, payment allocation, visit tracking, renewal activation and debt math stay exactly as they are.
+- After Phase 1 I stop and send a verification summary; no Phase 2, no record edits, no texts, no publishing.
+
 ## Refresh vs recalculation
 Reloading only helps if the recalculation is right. For each acceptance check I will compare the screen value to a fresh server calculation of the same client (read-only), not just watch the screen change.
 
 ## Verification (read-only, preview)
 - Unit test: each event refreshes the expected lists (e.g. "renewal changed" includes Master Dues, Weekly Dues, client, dashboard).
+- Coverage check: a test that scans the app and fails if any screen still refreshes data by hand instead of through the shared helper, plus a list of every save point and the event it fires.
+- Run all unit tests, typecheck and any integration tests; report failures, any remaining stale-data paths, and pass/fail for each acceptance criterion.
 - Browser checks against existing clients without saving financial changes where possible: Danielle Daigle (prepared renewal $200 owed), Brody Phillips and Greg English (prior-week renewal debt), one paid-up client, one with old-package debt. Confirm their totals before and after a reload are identical (nothing moved on its own), and that a harmless edit-and-revert on a test record updates all screens without a hard refresh.
 - Simulate a failed refresh and confirm the "Out of date" banner appears.
 - Full test suite + typecheck.

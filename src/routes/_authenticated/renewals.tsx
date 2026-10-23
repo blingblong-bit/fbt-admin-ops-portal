@@ -13,6 +13,27 @@ import { attentionReason, groupRenewals } from "@/lib/renewals-view";
 import { chunk } from "@/lib/chunk";
 import { SearchBox } from "@/components/SearchBox";
 import { filterByName, normalizeQuery } from "@/lib/name-search";
+import { useRole } from "@/hooks/useRole";
+import { getSquareActivationReport } from "@/lib/admin-finance.functions";
+
+/** Admin dry-run: prepared renewals Square already started. Read-only. */
+function SquareStartedReport() {
+  const fn = useServerFn(getSquareActivationReport);
+  const [on, setOn] = useState(false);
+  const q = useQuery({ queryKey: ["square-activation-report"], queryFn: () => fn(), enabled: on, staleTime: 5 * 60_000 });
+  const rows = (q.data?.rows ?? []).filter((r) => r.kind === "backlog" || r.kind === "ambiguous" || r.kind === "activate");
+  return (
+    <Card><CardContent className="space-y-2 pt-4 text-sm">
+      <div className="flex items-center justify-between gap-2">
+        <span className="font-medium">Started in Square — review (nothing changes here)</span>
+        <Button size="sm" variant="outline" onClick={() => (on ? q.refetch() : setOn(true))}>{q.isFetching ? "Checking…" : "Check Square"}</Button>
+      </div>
+      {q.error && <p className="text-destructive">{(q.error as Error).message}</p>}
+      {q.data && <p className="text-muted-foreground">Automatic start is {q.data.enabled ? "on" : "off"}; earlier starts are backlog and only listed. Ready {q.data.counts.activate} · backlog {q.data.counts.backlog} · unclear {q.data.counts.ambiguous}</p>}
+      {rows.map((r) => <p key={r.name}><strong>{r.name}</strong> — {r.kind === "ambiguous" ? "Unclear" : r.kind === "backlog" ? "Backlog" : "Ready"}: {r.reason}</p>)}
+    </CardContent></Card>
+  );
+}
 
 export const Route = createFileRoute("/_authenticated/renewals")({
   head: () => ({
@@ -31,6 +52,7 @@ export const Route = createFileRoute("/_authenticated/renewals")({
 type Tab = "needs" | "scheduled" | "attention";
 
 function RenewalsPage() {
+  const { isAdmin: isAdminUser } = useRole();
   const fetchForecast = useServerFn(getRenewalForecast);
   // Bounded retries: a slow Square read must end in a visible error, not endless "Loading…".
   const forecastQ = useQuery({
@@ -75,11 +97,12 @@ function RenewalsPage() {
   return (
     <AppShell>
       <div className="space-y-6">
+        {isAdminUser && <SquareStartedReport />}
         <div>
           <h1 className="text-3xl font-semibold tracking-tight">Renewals</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             "Can start on or after" is the earliest day a prepared package is allowed to begin. It does not start the
-            package by itself — the package starts at the first check-in Square marks as 1 of N on or after that day.
+            package by itself — the package starts at the first completed Square visit marked 1 of N on or after that day.
           </p>
         </div>
         {forecastQ.data?.error && (

@@ -144,6 +144,7 @@ function ymdLocalToInstant(s: string): Date {
 // no timezone needed since the date is already specified in local terms.
 import { addDaysYmd, workWeekStartFromYmd } from "@/lib/work-week";
 import { parseVisitNote } from "@/lib/square-visit-audit";
+import { blocksAutoActivation } from "@/lib/package-override";
 import { decidePreparedActivation, type ActivationNote, type PackageEvidence } from "@/lib/effective-visit-state";
 
 /** Server-only: the visit number Square shows on one booking, or null if unreadable. */
@@ -772,7 +773,10 @@ export const completeVisitForClient = createServerFn({ method: "POST" })
             package_total_visits: c.package_total_visits,
           });
         }
+        const { data: ovr } = await context.supabase
+          .from("package_overrides").select("slot").eq("client_id", data.clientId).is("cleared_at", null);
         decision = decidePreparedActivation({
+          adminOverride: blocksAutoActivation((ovr ?? []) as { slot: "current" }[]),
           visitYmd,
           preparedStartYmd: c.pending_renewal_start_date,
           note,

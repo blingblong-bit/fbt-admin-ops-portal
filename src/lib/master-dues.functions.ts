@@ -37,6 +37,15 @@ export const getMasterDues = createServerFn({ method: "GET" })
       if (!data || data.length < 1000) break;
     }
 
+    // Admin package overrides win over raw package fields (read-time only).
+    const { data: ovr, error: oe } = await supabase.from("package_overrides").select("*").is("cleared_at", null);
+    if (oe) throw oe;
+    const { applyOverrides } = await import("./package-override");
+    for (let i = 0; i < clients.length; i++) {
+      const mine = (ovr ?? []).filter((o: any) => o.client_id === clients[i].id);
+      if (mine.length) clients[i] = applyOverrides(clients[i], mine);
+    }
+
     const { loadSquareBookingIndex, effectiveStateFor, upcomingStarts } = await import("./effective-visit-state.server");
     const index = await loadSquareBookingIndex(token, 180, 90);
     if (index.error) return { error: "Square unavailable", computed_at: now, data: null };

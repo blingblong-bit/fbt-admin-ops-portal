@@ -19,6 +19,7 @@ const PER_CLIENT = new Set([
   "client",
   "activities",
   "payment-allocations",
+  "package-overrides",
   "visit-tracking",
   "unchecked-appointments",
   "client-appointments",
@@ -26,7 +27,7 @@ const PER_CLIENT = new Set([
 ]);
 
 const MONEY = ["master-dues", "renewal-forecast", "clients", "dues-texts-counts", "dues-texts-board", "dues-queue"];
-const PROFILE = ["client", "activities", "payment-allocations"];
+const PROFILE = ["client", "activities", "payment-allocations", "package-overrides"];
 const SCHEDULE = [
   "schedule-check",
   "missed-check-ins",

@@ -155,3 +155,51 @@ export const getPackageEvidence = createServerFn({ method: "GET" })
     bookings.sort((a, b) => a.start_at.localeCompare(b.start_at));
     return { bookings, payments, squareError };
   });
+
+export const listPackageOverrides = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { clientId: string }) => {
+    if (!d?.clientId) throw new Error("clientId required");
+    return d;
+  })
+  .handler(async ({ data, context }) => {
+    const ctx = context as unknown as Ctx;
+    await assertAdmin(ctx);
+    const { data: rows, error } = await ctx.supabase
+      .from("package_overrides").select("*").eq("client_id", data.clientId).is("cleared_at", null);
+    if (error) throw error;
+    return (rows ?? []) as import("./package-override").PackageOverride[];
+  });
+
+export const setPackageOverride = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { clientId: string; slot: "current" | "pending" | "previous"; values: Record<string, unknown>; reason: string }) => {
+    if (!d?.clientId || !d.slot) throw new Error("Package required");
+    if (!d.reason?.trim()) throw new Error("A reason is required");
+    return d;
+  })
+  .handler(async ({ data, context }) => {
+    const ctx = context as unknown as Ctx;
+    await assertAdmin(ctx);
+    const { data: res, error } = await ctx.supabase.rpc("set_package_override", {
+      p_client_id: data.clientId, p_slot: data.slot, p_values: data.values, p_reason: data.reason.trim(),
+    });
+    if (error) throw new Error(error.message);
+    return res as { changed: boolean };
+  });
+
+export const clearPackageOverride = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { clientId: string; slot: "current" | "pending" | "previous"; reason: string }) => {
+    if (!d?.clientId || !d.reason?.trim()) throw new Error("A reason is required");
+    return d;
+  })
+  .handler(async ({ data, context }) => {
+    const ctx = context as unknown as Ctx;
+    await assertAdmin(ctx);
+    const { data: res, error } = await ctx.supabase.rpc("clear_package_override", {
+      p_client_id: data.clientId, p_slot: data.slot, p_reason: data.reason.trim(),
+    });
+    if (error) throw new Error(error.message);
+    return res as { changed: boolean };
+  });

@@ -23,3 +23,17 @@ export function workWeekStartFromYmd(ymd: string): string {
   const offset = dow === 0 ? 1 : dow === 6 ? 2 : -(dow - 1);
   return addDaysYmd(ymd, offset);
 }
+
+/** Business calendar date (America/Chicago, DST-aware) for an instant. */
+export function chicagoYmd(now: Date = new Date()): string {
+  return now.toLocaleDateString("en-CA", { timeZone: "America/Chicago" });
+}
+
+/**
+ * The collection work week for an instant. Rolls over at Saturday 00:00
+ * Chicago time (Friday 23:59:59 still belongs to the ending week), so the
+ * weekend is used to prepare next week's list.
+ */
+export function collectionWeekStart(now: Date = new Date()): string {
+  return workWeekStartFromYmd(chicagoYmd(now));
+}

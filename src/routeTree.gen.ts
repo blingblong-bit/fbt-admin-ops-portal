@@ -36,6 +36,7 @@ import { Route as AuthenticatedClientsIdRouteImport } from './routes/_authentica
 import { Route as AuthenticatedClientsDeletedRouteImport } from './routes/_authenticated/clients.deleted'
 import { Route as AuthenticatedClientsNewRouteImport } from './routes/_authenticated/clients.new'
 import { Route as ApiPublicPackageAutofillTickRouteImport } from './routes/api/public/package-autofill-tick'
+import { Route as ApiPublicRenewalActivationTickRouteImport } from './routes/api/public/renewal-activation-tick'
 import { Route as ApiPublicSquareDiagRouteImport } from './routes/api/public/square-diag'
 import { Route as ApiPublicVisitDiffSweepRouteImport } from './routes/api/public/visit-diff-sweep'
 import { Route as ApiPublicVisitDiffSweepTriggerRouteImport } from './routes/api/public/visit-diff-sweep-trigger'
@@ -193,6 +194,12 @@ const ApiPublicPackageAutofillTickRoute =
     path: '/api/public/package-autofill-tick',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicRenewalActivationTickRoute =
+  ApiPublicRenewalActivationTickRouteImport.update({
+    id: '/api/public/renewal-activation-tick',
+    path: '/api/public/renewal-activation-tick',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicSquareDiagRoute = ApiPublicSquareDiagRouteImport.update({
   id: '/api/public/square-diag',
   path: '/api/public/square-diag',
@@ -261,6 +268,7 @@ export interface FileRoutesByFullPath {
   '/clients/deleted': typeof AuthenticatedClientsDeletedRoute
   '/clients/new': typeof AuthenticatedClientsNewRoute
   '/api/public/package-autofill-tick': typeof ApiPublicPackageAutofillTickRoute
+  '/api/public/renewal-activation-tick': typeof ApiPublicRenewalActivationTickRoute
   '/api/public/square-diag': typeof ApiPublicSquareDiagRoute
   '/api/public/visit-diff-sweep': typeof ApiPublicVisitDiffSweepRoute
   '/api/public/visit-diff-sweep-trigger': typeof ApiPublicVisitDiffSweepTriggerRoute
@@ -297,6 +305,7 @@ export interface FileRoutesByTo {
   '/clients/deleted': typeof AuthenticatedClientsDeletedRoute
   '/clients/new': typeof AuthenticatedClientsNewRoute
   '/api/public/package-autofill-tick': typeof ApiPublicPackageAutofillTickRoute
+  '/api/public/renewal-activation-tick': typeof ApiPublicRenewalActivationTickRoute
   '/api/public/square-diag': typeof ApiPublicSquareDiagRoute
   '/api/public/visit-diff-sweep': typeof ApiPublicVisitDiffSweepRoute
   '/api/public/visit-diff-sweep-trigger': typeof ApiPublicVisitDiffSweepTriggerRoute
@@ -335,6 +344,7 @@ export interface FileRoutesById {
   '/_authenticated/clients/deleted': typeof AuthenticatedClientsDeletedRoute
   '/_authenticated/clients/new': typeof AuthenticatedClientsNewRoute
   '/api/public/package-autofill-tick': typeof ApiPublicPackageAutofillTickRoute
+  '/api/public/renewal-activation-tick': typeof ApiPublicRenewalActivationTickRoute
   '/api/public/square-diag': typeof ApiPublicSquareDiagRoute
   '/api/public/visit-diff-sweep': typeof ApiPublicVisitDiffSweepRoute
   '/api/public/visit-diff-sweep-trigger': typeof ApiPublicVisitDiffSweepTriggerRoute
@@ -373,6 +383,7 @@ export interface FileRouteTypes {
     | '/clients/deleted'
     | '/clients/new'
     | '/api/public/package-autofill-tick'
+    | '/api/public/renewal-activation-tick'
     | '/api/public/square-diag'
     | '/api/public/visit-diff-sweep'
     | '/api/public/visit-diff-sweep-trigger'
@@ -409,6 +420,7 @@ export interface FileRouteTypes {
     | '/clients/deleted'
     | '/clients/new'
     | '/api/public/package-autofill-tick'
+    | '/api/public/renewal-activation-tick'
     | '/api/public/square-diag'
     | '/api/public/visit-diff-sweep'
     | '/api/public/visit-diff-sweep-trigger'
@@ -446,6 +458,7 @@ export interface FileRouteTypes {
     | '/_authenticated/clients/deleted'
     | '/_authenticated/clients/new'
     | '/api/public/package-autofill-tick'
+    | '/api/public/renewal-activation-tick'
     | '/api/public/square-diag'
     | '/api/public/visit-diff-sweep'
     | '/api/public/visit-diff-sweep-trigger'
@@ -461,6 +474,7 @@ export interface RootRouteChildren {
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRoute
   ApiPublicPackageAutofillTickRoute: typeof ApiPublicPackageAutofillTickRoute
+  ApiPublicRenewalActivationTickRoute: typeof ApiPublicRenewalActivationTickRoute
   ApiPublicSquareDiagRoute: typeof ApiPublicSquareDiagRoute
   ApiPublicVisitDiffSweepRoute: typeof ApiPublicVisitDiffSweepRoute
   ApiPublicVisitDiffSweepTriggerRoute: typeof ApiPublicVisitDiffSweepTriggerRoute
@@ -662,6 +676,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicPackageAutofillTickRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/renewal-activation-tick': {
+      id: '/api/public/renewal-activation-tick'
+      path: '/api/public/renewal-activation-tick'
+      fullPath: '/api/public/renewal-activation-tick'
+      preLoaderRoute: typeof ApiPublicRenewalActivationTickRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/square-diag': {
       id: '/api/public/square-diag'
       path: '/api/public/square-diag'
@@ -783,6 +804,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRoute,
   ApiPublicPackageAutofillTickRoute: ApiPublicPackageAutofillTickRoute,
+  ApiPublicRenewalActivationTickRoute: ApiPublicRenewalActivationTickRoute,
   ApiPublicSquareDiagRoute: ApiPublicSquareDiagRoute,
   ApiPublicVisitDiffSweepRoute: ApiPublicVisitDiffSweepRoute,
   ApiPublicVisitDiffSweepTriggerRoute: ApiPublicVisitDiffSweepTriggerRoute,

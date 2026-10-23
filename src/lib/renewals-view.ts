@@ -12,7 +12,8 @@ export type RenewalGroups = {
 };
 
 export function attentionReason(r: RenewalForecastRow): string | null {
-  if (r.review_status === "needs_review") return "Square visit numbers need review";
+  // Old note issues alone don't need attention; only an unreadable CURRENT position does.
+  if (r.automation_usable === false) return "Current Square visit position is unclear";
   if (r.pre_renewed && r.no_upcoming) return "Prepared, but no upcoming appointment is booked";
   return null;
 }

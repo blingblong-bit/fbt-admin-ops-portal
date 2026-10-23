@@ -1945,7 +1945,7 @@ export const getRenewalForecast = createServerFn({ method: "GET" })
     const { data: pendingRows, error: pErr } = await context.supabase
       .from("clients")
       .select(
-        "id, visits_used, package_total_visits, package_price, package_start_date, next_package_price, pending_renewal_start_date, pending_renewal_price, pending_renewal_paid, pending_renewal_total_visits, pending_renewal_package_name",
+        "id, square_customer_id, visits_used, package_total_visits, package_price, package_start_date, next_package_price, pending_renewal_start_date, pending_renewal_price, pending_renewal_paid, pending_renewal_total_visits, pending_renewal_package_name",
       )
       .is("deleted_at", null)
       .neq("status", "archived")
@@ -1966,6 +1966,12 @@ export const getRenewalForecast = createServerFn({ method: "GET" })
       pending_renewal_package_name: string | null;
     }>) {
       if (seen.has(r.id)) continue;
+      // "No upcoming" only when Square truly has no future live appointment.
+      const ups = upcomingStarts(index, (r as { square_customer_id?: string | null }).square_customer_id ?? null);
+      const upYmds = ups.map((x) => ymdInTz(new Date(x)));
+      const firstAfter = upYmds.find((y) => y >= (r.pending_renewal_start_date ?? "")) ?? null;
+      const hasUpcoming = ups.length > 0;
+      const bStart = firstAfter ? workWeekStartFromYmd(firstAfter) : null;
       const used = Number(r.visits_used ?? 0);
       const total = Number(r.package_total_visits ?? 0);
       const basePrice = Number(r.package_price ?? 0);
@@ -1979,14 +1985,14 @@ export const getRenewalForecast = createServerFn({ method: "GET" })
         visits_used: used,
         package_total_visits: total,
         remaining: Math.max(0, total - used),
-        upcoming_count: 0,
-        appointment_ymds: [],
-        first_uncovered_index: 0,
-        first_uncovered_ymd: r.pending_renewal_start_date ?? "",
+        upcoming_count: ups.length,
+        appointment_ymds: upYmds,
+        first_uncovered_index: Math.max(0, firstAfter ? upYmds.indexOf(firstAfter) : 0),
+        first_uncovered_ymd: firstAfter ?? r.pending_renewal_start_date ?? "",
         visit_source: "hub_fallback",
         hub_visits_used: r.visits_used ?? null,
-        // Never counted in This Week / Next Week without a real appointment.
-        week_bucket: "later",
+        // Only a real appointment on/after the prepared start puts it in This/Next Week.
+        week_bucket: bStart === weekStartYmd ? "this" : bStart === nextWeekStartYmd ? "next" : "later",
         package_price: basePrice,
         next_package_price:
           pendingPrice !== null
@@ -1996,7 +2002,7 @@ export const getRenewalForecast = createServerFn({ method: "GET" })
         pending_start_ymd: r.pending_renewal_start_date,
         pending_total_visits: r.pending_renewal_total_visits ?? null,
         pending_package_name: r.pending_renewal_package_name ?? null,
-        no_upcoming: true,
+        no_upcoming: !hasUpcoming,
       });
     }
 

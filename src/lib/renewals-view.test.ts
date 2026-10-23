@@ -24,7 +24,11 @@ describe("groupRenewals", () => {
     expect(g.scheduled.length + g.needs.length + g.attention.length).toBe(0);
   });
   it("prepared with nothing booked or review flags go to Needs Attention only", () => {
-    const g = groupRenewals([row({ pre_renewed: true, no_upcoming: true }), row({ review_status: "needs_review" })]);
+    const g = groupRenewals([row({ pre_renewed: true, no_upcoming: true }), row({ automation_usable: false })]);
     expect([g.attention.length, g.scheduled.length, g.needs.length]).toEqual([2, 0, 0]);
+  });
+  it("old Square note issues alone don't need attention", () => {
+    const g = groupRenewals([row({ pre_renewed: true, no_upcoming: false, review_status: "needs_review", automation_usable: true })]);
+    expect([g.attention.length, g.scheduled.length]).toEqual([0, 1]);
   });
 });

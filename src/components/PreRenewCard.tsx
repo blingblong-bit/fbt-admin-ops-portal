@@ -73,7 +73,7 @@ export function PreRenewCard({
       )}
       {forecast.pending_start_ymd && (
         <div className="mt-1 opacity-75">
-          Earliest eligible start (set when prepared): {formatDate(forecast.pending_start_ymd)}
+          Can start on or after: {formatDate(forecast.pending_start_ymd)}
         </div>
       )}
       {!hideAmount && (
@@ -173,7 +173,7 @@ function PreRenewDialog({
   const mutation = useMutation({
     mutationFn: () => onSubmit(form),
     onSuccess: () => {
-      toast.success(`Earliest eligible start set to ${formatDate(form.startYmd)}`);
+      toast.success(`Can start on or after set to ${formatDate(form.startYmd)}`);
       onDone();
       onClose();
     },
@@ -204,7 +204,7 @@ function PreRenewDialog({
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <Label>Earliest eligible start</Label>
+              <Label>Can start on or after</Label>
               <Input
                 type="date"
                 value={form.startYmd}

@@ -3,7 +3,7 @@ import { applyOverrides, applyOverridesToRows, blocksAutoActivation, needsConfir
 import { decidePreparedActivation } from "./effective-visit-state";
 import { computeMasterDues } from "./master-dues";
 
-const raw = {
+const raw: { visit_tracking_mode?: string | null; [k: string]: any } & { id: string } = {
   id: "c1", first_name: "T", last_name: "U", package_total_visits: 8, visits_used: 2, package_price: 375,
   amount_paid: 375, package_start_date: null, previous_package_owed: 0,
   pending_renewal_start_date: "2026-10-19", pending_renewal_total_visits: 8, pending_renewal_price: 375, pending_renewal_paid: 175,

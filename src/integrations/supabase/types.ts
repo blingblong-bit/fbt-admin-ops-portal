@@ -415,6 +415,68 @@ export type Database = {
           },
         ]
       }
+      package_overrides: {
+        Row: {
+          actor: string | null
+          clear_reason: string | null
+          cleared_at: string | null
+          cleared_by: string | null
+          client_id: string
+          created_at: string
+          id: string
+          price: number | null
+          reason: string
+          recognized_paid: number | null
+          slot: string
+          start_date: string | null
+          status: string
+          total_visits: number | null
+          visits_used: number | null
+        }
+        Insert: {
+          actor?: string | null
+          clear_reason?: string | null
+          cleared_at?: string | null
+          cleared_by?: string | null
+          client_id: string
+          created_at?: string
+          id?: string
+          price?: number | null
+          reason: string
+          recognized_paid?: number | null
+          slot: string
+          start_date?: string | null
+          status?: string
+          total_visits?: number | null
+          visits_used?: number | null
+        }
+        Update: {
+          actor?: string | null
+          clear_reason?: string | null
+          cleared_at?: string | null
+          cleared_by?: string | null
+          client_id?: string
+          created_at?: string
+          id?: string
+          price?: number | null
+          reason?: string
+          recognized_paid?: number | null
+          slot?: string
+          start_date?: string | null
+          status?: string
+          total_visits?: number | null
+          visits_used?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "package_overrides_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       payment_allocations: {
         Row: {
           actor: string | null
@@ -792,6 +854,10 @@ export type Database = {
           newly_applied: boolean
         }[]
       }
+      clear_package_override: {
+        Args: { p_client_id: string; p_reason: string; p_slot: string }
+        Returns: Json
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -833,6 +899,15 @@ export type Database = {
           previous_package_owed: number
           unpaid_carried_forward: number
         }[]
+      }
+      set_package_override: {
+        Args: {
+          p_client_id: string
+          p_reason: string
+          p_slot: string
+          p_values: Json
+        }
+        Returns: Json
       }
       undo_last_renewal: {
         Args: { p_client_id: string; p_reason: string }

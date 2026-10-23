@@ -15,10 +15,10 @@ export const Route = createFileRoute("/api/public/renewal-activation-tick")({
         const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
         const { runSquareActivationSweep } = await import("@/lib/square-activation.server");
         const r = await runSquareActivationSweep(supabaseAdmin, token, { apply: body.dryRun !== true });
+        // Counts only — no client data on a public route.
         return Response.json({
-          ...r,
-          rows: r.rows.filter((x) => x.decision.kind !== "skip" && x.decision.kind !== "not_ready")
-            .map((x) => ({ name: x.name, kind: x.decision.kind, reason: x.decision.reason, applied: !!x.applied, error: x.error ?? null })),
+          enabled: r.enabled, wrote: r.wrote, sinceYmd: r.sinceYmd, squareError: r.squareError, counts: r.counts,
+          applied: r.rows.filter((x) => x.applied).length, errors: r.rows.filter((x) => x.error).length,
         });
       },
     },

@@ -203,3 +203,16 @@ export const clearPackageOverride = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     return res as { changed: boolean };
   });
+
+/** Admin dry-run: which prepared renewals Square has started. Never writes. */
+export const getSquareActivationReport = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const ctx = context as unknown as Ctx;
+    await assertAdmin(ctx);
+    const token = (process.env.SQUARE_PRODUCTION_ACCESS_TOKEN ?? "").replace(/^[\s"'`]+|[\s"'`]+$/g, "").trim();
+    if (!token) throw new Error("Square is not configured.");
+    const { runSquareActivationSweep } = await import("./square-activation.server");
+    const r = await runSquareActivationSweep(ctx.supabase, token, { apply: false });
+    return { ...r, rows: r.rows.filter((x) => x.decision.kind !== "skip").map((x) => ({ name: x.name, ...x.decision })) };
+  });

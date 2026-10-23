@@ -32,6 +32,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { SmartClientCard } from "@/components/SmartClientCard";
 import { ArchiveClientButton } from "@/components/ArchiveClientButton";
 import { PreRenewCard } from "@/components/PreRenewCard";
+import { AdminPrimaryAreas, AdminToolLinks } from "@/components/AdminDashboard";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -1076,6 +1077,7 @@ function Dashboard() {
     } catch { /* ignore */ }
   }, [hiddenTiles]);
   const [showAllTiles, setShowAllTiles] = usePersistentState("dash:showAll", false);
+  const [adminToolsOpen, setAdminToolsOpen] = usePersistentState("dash:adminTools", false);
 
   const toggleTileHidden = (key: string) => {
     setHiddenTiles((prev) => {
@@ -1124,13 +1126,36 @@ function Dashboard() {
       </div>
 
 
+      {!isStaff && (
+        <AdminPrimaryAreas
+          masterData={masterQ.data?.data ?? null}
+          renewalRows={renewalQuery.data?.rows ?? []}
+          newClientsCount={currentMonthNewCount}
+          newClientsLabel={longMonthLabel(currentClinicMonth())}
+          newClientsActive={newClientsActive}
+          onNewClients={() => {
+            setNewClientsMonth(currentClinicMonth());
+            setNewClientsActive((v) => !v);
+          }}
+        />
+      )}
+      {!isStaff && (
+        <div className="mb-2 mt-6 flex items-center justify-between">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Admin Tools</h2>
+          <button type="button" onClick={() => setAdminToolsOpen((v) => !v)} className="text-xs font-medium underline-offset-2 hover:underline">
+            {adminToolsOpen ? "Hide admin tools" : "Show admin tools"}
+          </button>
+        </div>
+      )}
+      {(isStaff || adminToolsOpen) && (<>
+      {!isStaff && <AdminToolLinks />}
       {/* Tiles */}
       <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 lg:grid-cols-4 xl:grid-cols-7">
-        {visibleTiles.map((t) => (
+        {visibleTiles.filter((t) => isStaff || t.key !== "new_clients").map((t) => (
           <Tile
             key={t.key}
             tile={t}
-            hideMoney={isStaff}
+            hideMoney={true}
             active={
               t.key === "new_clients"
                 ? newClientsActive
@@ -1165,6 +1190,7 @@ function Dashboard() {
               : "Customize tiles"}
         </button>
       </div>
+      </>)}
 
 
 

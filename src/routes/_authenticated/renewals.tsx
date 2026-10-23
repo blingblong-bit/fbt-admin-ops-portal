@@ -10,6 +10,7 @@ import { PreRenewCard } from "@/components/PreRenewCard";
 import { formatDate } from "@/lib/clients";
 import { getRenewalForecast, type RenewalForecastRow } from "@/lib/schedule.functions";
 import { attentionReason, groupRenewals } from "@/lib/renewals-view";
+import { chunk } from "@/lib/chunk";
 
 export const Route = createFileRoute("/_authenticated/renewals")({
   head: () => ({
@@ -29,16 +30,28 @@ type Tab = "needs" | "scheduled" | "attention";
 
 function RenewalsPage() {
   const fetchForecast = useServerFn(getRenewalForecast);
-  const forecastQ = useQuery({ queryKey: ["renewal-forecast"], queryFn: () => fetchForecast(), staleTime: 60_000 });
+  // Bounded retries: a slow Square read must end in a visible error, not endless "Loading…".
+  const forecastQ = useQuery({
+    queryKey: ["renewal-forecast"],
+    queryFn: () => fetchForecast(),
+    staleTime: 60_000,
+    retry: 1,
+  });
   const rows = forecastQ.data?.rows ?? [];
-  const ids = useMemo(() => rows.map((r) => r.client_id), [rows]);
+  const ids = useMemo(() => rows.map((r) => r.client_id).sort(), [rows]);
   const namesQ = useQuery({
     queryKey: ["clients", "renewal-names", ids.join(",")],
     enabled: ids.length > 0,
+    retry: 1,
+    staleTime: 5 * 60_000,
     queryFn: async () => {
-      const { data, error } = await supabase.from("clients").select("id, first_name, last_name").in("id", ids);
-      if (error) throw error;
-      return new Map((data ?? []).map((c) => [c.id, `${c.first_name} ${c.last_name}`.trim()]));
+      const map = new Map<string, string>();
+      for (const part of chunk(ids, 100)) {
+        const { data, error } = await supabase.from("clients").select("id, first_name, last_name").in("id", part);
+        if (error) throw error;
+        for (const c of data ?? []) map.set(c.id, `${c.first_name} ${c.last_name}`.trim());
+      }
+      return map;
     },
   });
   const groups = useMemo(() => groupRenewals(rows), [rows]);
@@ -79,8 +92,22 @@ function RenewalsPage() {
           ))}
         </div>
         <p className="text-sm text-muted-foreground">{current.help}</p>
-        {forecastQ.isLoading ? (
-          <p className="text-sm text-muted-foreground">Loading…</p>
+        {forecastQ.data && (
+          <p className="text-xs text-muted-foreground">
+            {forecastQ.isFetching ? "Updating… " : ""}
+            Last updated {new Date(forecastQ.dataUpdatedAt).toLocaleTimeString()}
+            {forecastQ.isError ? " · Out of date: the latest refresh failed." : ""}
+          </p>
+        )}
+        {forecastQ.isError && !forecastQ.data ? (
+          <div role="alert" className="flex flex-wrap items-center gap-3 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm">
+            <span>Renewals couldn't load. Nothing has changed, it just didn't finish reading.</span>
+            <Button size="sm" variant="outline" onClick={() => forecastQ.refetch()} disabled={forecastQ.isFetching}>
+              {forecastQ.isFetching ? "Retrying…" : "Retry"}
+            </Button>
+          </div>
+        ) : forecastQ.isLoading ? (
+          <p className="text-sm text-muted-foreground">Loading… reading Square appointments can take up to 20 seconds.</p>
         ) : current.list.length === 0 ? (
           <p className="text-sm text-muted-foreground">Nobody here right now.</p>
         ) : (

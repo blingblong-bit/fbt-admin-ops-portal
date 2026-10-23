@@ -418,6 +418,7 @@ export type Database = {
       package_overrides: {
         Row: {
           actor: string | null
+          baseline_visits_used: number | null
           clear_reason: string | null
           cleared_at: string | null
           cleared_by: string | null
@@ -435,6 +436,7 @@ export type Database = {
         }
         Insert: {
           actor?: string | null
+          baseline_visits_used?: number | null
           clear_reason?: string | null
           cleared_at?: string | null
           cleared_by?: string | null
@@ -452,6 +454,7 @@ export type Database = {
         }
         Update: {
           actor?: string | null
+          baseline_visits_used?: number | null
           clear_reason?: string | null
           cleared_at?: string | null
           cleared_by?: string | null

@@ -82,6 +82,6 @@
 - [ ] Phase 2 Collections redesign — waiting on approval
 
 ## Dashboard simplification (plan approved)
-- [ ] Phase 1: single Collections screen (This Week incl. due now, Next Week new-only, Not Due, Review, Master)
+- [x] Phase 1: single Collections screen (This Week incl. due now, Next Week new-only, Not Due, Review, Master)
 - [ ] Phase 2: Renewals area (waits for approval)
 - [ ] Phase 3: Dashboard 3 areas + Admin Tools (waits for approval)

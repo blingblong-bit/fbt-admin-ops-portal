@@ -1,7 +1,9 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
+import { SearchBox } from "@/components/SearchBox";
+import { filterByName, normalizeQuery } from "@/lib/name-search";
 import { AppShell } from "@/components/AppShell";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -55,6 +57,7 @@ function CollectionsPage() {
   const fresh = useDuesFreshness(q);
   const tab: Tab = Route.useSearch().tab ?? "week";
   const navigate = Route.useNavigate();
+  const [query, setQuery] = useState("");
 
   const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Chicago" });
   const weekStart = workWeekStartFromYmd(today);
@@ -134,31 +137,31 @@ function CollectionsPage() {
                   <ClientList items={pick(["pastDue"])} empty="" />
                 </section>
               )}
-              <WeekTab items={weekItems} weekStart={c.week.start} />
+              <WeekTab items={weekItems} weekStart={c.week.start} empty={searching ? (pick(["pastDue"]).length ? "" : "No client matches that name this week.") : undefined} />
             </>
           )}
           {tab === "next" && (
             <>
               <p className="mb-3 text-sm text-muted-foreground">Only new charges for {md(c.week.nextStart)} – {md(c.week.nextEnd)}. Older unpaid balances stay under This Week. Anything here that isn't paid moves into This Week when the week starts.</p>
-              <ClientList items={pick(["nextWeek"])} empty="Nothing new expected next week." />
+              <ClientList items={pick(["nextWeek"])} empty={searching ? "No client matches that name." : "Nothing new expected next week."} />
             </>
           )}
-          {tab === "past" && <ClientList items={pick(["pastDue"])} empty="No past-due balances." />}
+          {tab === "past" && <ClientList items={pick(["pastDue"])} empty={searching ? "No client matches that name." : "No past-due balances."} />}
           {tab === "upcoming" && (
             <>
               <p className="mb-3 text-sm text-muted-foreground">Not owed yet. These become due when the new package actually starts in Square.</p>
-              <ClientList items={pick(["upcoming"])} empty="No upcoming renewals." />
+              <ClientList items={pick(["upcoming"])} empty={searching ? "No client matches that name." : "No upcoming renewals."} />
             </>
           )}
           {tab === "all" && (
             <>
-              <ClientList items={c.items} empty="No balances." showGroup />
-              {c.exceptions.length > 0 && (
+              <ClientList items={shown} empty={searching ? "No client matches that name." : "No balances."} showGroup />
+              {shownExceptions.length > 0 && (
                 <section className="mt-6">
                   <h2 className="mb-1 text-lg font-semibold">Needs Review — no dollar amount yet</h2>
                   <p className="mb-2 text-sm text-muted-foreground">Not counted in any total until the package or billing info is filled in.</p>
                   <div className="space-y-2">
-                    {c.exceptions.map((e) => (
+                    {shownExceptions.map((e) => (
                       <Card key={`${e.client_id}-${e.kind}`}><CardContent className="flex flex-wrap items-center justify-between gap-2 p-3">
                         <div><Link to="/clients/$id" params={{ id: e.client_id }} className="font-medium hover:underline">{e.name}</Link>
                           <p className="text-sm text-muted-foreground">{e.reason}</p></div>
@@ -189,8 +192,8 @@ function Stat({ label, hint, t, tone, onClick }: { label: string; hint: string; 
   );
 }
 
-function WeekTab({ items, weekStart }: { items: CollectionItem[]; weekStart: string }) {
-  if (!items.length) return <p className="text-muted-foreground">No one scheduled this week owes anything.</p>;
+function WeekTab({ items, weekStart, empty }: { items: CollectionItem[]; weekStart: string; empty?: string }) {
+  if (!items.length) return empty === "" ? null : <p className="text-muted-foreground">{empty ?? "No one scheduled this week owes anything."}</p>;
   return (
     <>
       {[0, 1, 2, 3, 4].map((d) => {

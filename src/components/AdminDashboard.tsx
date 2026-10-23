@@ -33,7 +33,6 @@ export function AdminPrimaryAreas({
 }) {
   const col = useMemo(() => {
     if (!masterData) return null;
-    const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Chicago" });
     return computeCollections(masterData.rows, masterData.appointments, masterData.exceptions, collectionWeekStart());
   }, [masterData]);
   const ren = useMemo(() => groupRenewals(renewalRows), [renewalRows]);

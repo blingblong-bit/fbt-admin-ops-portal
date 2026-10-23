@@ -6,7 +6,7 @@ export function SearchBox({ value, onChange }: { value: string; onChange: (v: st
     <div className="relative mb-4 w-full sm:max-w-sm">
       <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
       <Input
-        type="search"
+        type="text" inputMode="search"
         aria-label="Search clients by name"
         placeholder="Search client name…"
         value={value}

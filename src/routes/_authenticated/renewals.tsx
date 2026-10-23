@@ -11,6 +11,8 @@ import { formatDate } from "@/lib/clients";
 import { getRenewalForecast, type RenewalForecastRow } from "@/lib/schedule.functions";
 import { attentionReason, groupRenewals } from "@/lib/renewals-view";
 import { chunk } from "@/lib/chunk";
+import { SearchBox } from "@/components/SearchBox";
+import { filterByName, normalizeQuery } from "@/lib/name-search";
 
 export const Route = createFileRoute("/_authenticated/renewals")({
   head: () => ({
@@ -63,6 +65,12 @@ function RenewalsPage() {
     { key: "attention", label: "Needs Attention", help: "Something needs a staff look before this renewal can be trusted.", list: groups.attention },
   ];
   const current = tabs.find((t) => t.key === tab)!;
+  const [query, setQuery] = useState("");
+  const searching = normalizeQuery(query) !== "";
+  const nameOf = (r: RenewalForecastRow) => namesQ.data?.get(r.client_id) ?? "";
+  // Display-only filter; tab counts below always use the full groups.
+  const visible = filterByName(current.list, query, nameOf);
+  const matchCount = (l: RenewalForecastRow[]) => filterByName(l, query, nameOf).length;
 
   return (
     <AppShell>
@@ -88,10 +96,12 @@ function RenewalsPage() {
             >
               <div className="text-sm text-muted-foreground">{t.label}</div>
               <div className="text-2xl font-semibold">{t.list.length}</div>
+              {searching && <div className="text-xs text-muted-foreground">{matchCount(t.list)} match</div>}
             </button>
           ))}
         </div>
         <p className="text-sm text-muted-foreground">{current.help}</p>
+        <SearchBox value={query} onChange={setQuery} />
         {forecastQ.data && (
           <p className="text-xs text-muted-foreground">
             {forecastQ.isFetching ? "Updating… " : ""}
@@ -108,11 +118,11 @@ function RenewalsPage() {
           </div>
         ) : forecastQ.isLoading ? (
           <p className="text-sm text-muted-foreground">Loading… reading Square appointments can take up to 20 seconds.</p>
-        ) : current.list.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Nobody here right now.</p>
+        ) : visible.length === 0 ? (
+          <p className="text-sm text-muted-foreground">{searching ? "No client in this tab matches that name." : "Nobody here right now."}</p>
         ) : (
           <div className="space-y-3">
-            {current.list.map((r) => (
+            {visible.map((r) => (
               <Card key={r.client_id}>
                 <CardContent className="space-y-2 p-4">
                   <div className="flex flex-wrap items-center justify-between gap-2">

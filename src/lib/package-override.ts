@@ -65,9 +65,7 @@ export function applyOverrides<T extends RawPackageFields>(c: T, overrides: Pack
     if (pen.status === "active") {
       // Admin says the prepared package has started: the current package
       // becomes prior (its unpaid balance carried once), pending becomes current.
-      const carried = cur?.status === "completed" || true
-        ? Math.max(0, n(out.package_price) - n(out.amount_paid))
-        : 0;
+      const carried = Math.max(0, n(out.package_price) - n(out.amount_paid));
       out.previous_package_owed = (n(out.previous_package_owed) + carried) as never;
       out.package_total_visits = pick(pen.total_visits, c.pending_renewal_total_visits ?? null) as never;
       out.package_price = pick(pen.price, c.pending_renewal_price ?? null) as never;

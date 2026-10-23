@@ -356,8 +356,11 @@ export function decidePreparedActivation(i: {
   hubUsed: number;
   hubTotal: number;
   evidence: PackageEvidence;
+  /** Active admin package override: never auto-activate over it. */
+  adminOverride?: boolean;
 }): ActivationDecision {
   if (i.visitYmd < i.preparedStartYmd) return { action: "not_eligible" };
+  if (i.adminOverride) return { action: "hold", consumeVisit: false, reason: "Admin package override is active; clear it to resume automatic renewal" };
   const hubFull = i.hubTotal > 0 && i.hubUsed >= i.hubTotal;
   if (i.note.status === "numbered") {
     if (i.note.n === 1) return { action: "activate", reason: "Square marks this visit 1/N" };

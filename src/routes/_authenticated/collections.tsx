@@ -11,7 +11,7 @@ import { useRole } from "@/hooks/useRole";
 import { DuesFreshnessBanner, useDuesFreshness } from "@/components/DuesFreshnessBanner";
 import { getMasterDues, masterDuesQuery } from "@/lib/master-dues.functions";
 import { byClient, computeCollections, type CollectionGroup, type CollectionItem } from "@/lib/collections";
-import { addDaysYmd, workWeekStartFromYmd } from "@/lib/work-week";
+import { addDaysYmd, chicagoYmd, collectionWeekStart } from "@/lib/work-week";
 
 type Tab = "week" | "past" | "next" | "upcoming" | "all";
 const TABS: { key: Tab; label: string }[] = [
@@ -59,8 +59,11 @@ function CollectionsPage() {
   const navigate = Route.useNavigate();
   const [query, setQuery] = useState("");
 
-  const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Chicago" });
-  const weekStart = workWeekStartFromYmd(today);
+  // Rolls to next week at Saturday 00:00 Chicago; "Previous week" shows the prior list live.
+  const [viewPrev, setViewPrev] = useState(false);
+  const curStart = collectionWeekStart();
+  const weekend = [0, 6].includes(new Date(`${chicagoYmd()}T12:00:00Z`).getUTCDay());
+  const weekStart = viewPrev ? addDaysYmd(curStart, -7) : curStart;
   const data = q.data?.data ?? null;
   const c = useMemo(() => (data ? computeCollections(data.rows, data.appointments, data.exceptions, weekStart) : null), [data, weekStart]);
 
@@ -81,8 +84,16 @@ function CollectionsPage() {
           <p className="text-sm text-muted-foreground">
             {c ? `Week of ${md(c.week.start)} – ${md(c.week.end)}` : "Mon–Fri work week"} · who to collect from, and why
           </p>
+          {viewPrev ? (
+            <p className="text-xs text-destructive">Viewing the previous week with today's balances (payments since then are reflected).</p>
+          ) : weekend ? (
+            <p className="text-xs text-muted-foreground">Weekend: this is next week's worklist. Unpaid amounts from last week are under Carried over.</p>
+          ) : null}
         </div>
         <div className="flex flex-wrap gap-1">
+          <Button variant={viewPrev ? "default" : "ghost"} size="sm" onClick={() => setViewPrev((v) => !v)}>
+            {viewPrev ? "Back to current week" : "Previous week"}
+          </Button>
           <details className="relative">
             <summary className="cursor-pointer list-none rounded-md px-3 py-2 text-sm text-muted-foreground hover:text-foreground">Detailed views ▾</summary>
             <div className="absolute right-0 z-10 mt-1 grid w-48 rounded-md border bg-popover p-1 shadow-md">
@@ -104,7 +115,7 @@ function CollectionsPage() {
       ) : (
         <div className={fresh.untrusted ? "opacity-50" : ""} data-stale={fresh.untrusted || undefined}>
           <div className="mb-1 grid grid-cols-2 gap-2 lg:grid-cols-4">
-            <Stat label="This Week" hint={`incl. ${$(c.totals.pastDue.dollars)} due now`} t={c.totals.thisWeekAll} tone="text-primary" onClick={() => navigate({ search: { tab: "week" }, replace: true })} />
+            <Stat label="This Week" hint={`${$(c.totals.pastDue.dollars)} carried over / due now + ${$(c.totals.thisWeek.dollars)} scheduled this week`} t={c.totals.thisWeekAll} tone="text-primary" onClick={() => navigate({ search: { tab: "week" }, replace: true })} />
             <Stat label={`Next Week · ${md(c.week.nextStart)}`} hint="new charges only" t={c.totals.nextWeek} onClick={() => navigate({ search: { tab: "next" }, replace: true })} />
             <Stat label="Not Due Yet" hint="Next packages not started" t={c.totals.upcoming} onClick={() => navigate({ search: { tab: "upcoming" }, replace: true })} />
             <Stat label="Needs Review" hint="Check before collecting" t={c.totals.review} onClick={() => navigate({ search: { tab: "all" }, replace: true })} />

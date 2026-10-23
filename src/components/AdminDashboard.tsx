@@ -4,7 +4,7 @@ import { Wallet, RefreshCw, UserPlus } from "lucide-react";
 import { formatCurrency } from "@/lib/clients";
 import { computeCollections } from "@/lib/collections";
 import { groupRenewals } from "@/lib/renewals-view";
-import { workWeekStartFromYmd } from "@/lib/work-week";
+import { collectionWeekStart } from "@/lib/work-week";
 import type { RenewalForecastRow } from "@/lib/schedule.functions";
 
 type MasterData = Parameters<typeof computeCollections> extends [infer R, infer A, infer E, string]
@@ -34,7 +34,7 @@ export function AdminPrimaryAreas({
   const col = useMemo(() => {
     if (!masterData) return null;
     const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Chicago" });
-    return computeCollections(masterData.rows, masterData.appointments, masterData.exceptions, workWeekStartFromYmd(today));
+    return computeCollections(masterData.rows, masterData.appointments, masterData.exceptions, collectionWeekStart());
   }, [masterData]);
   const ren = useMemo(() => groupRenewals(renewalRows), [renewalRows]);
   const money = (n: number | undefined) => (n === undefined ? "…" : formatCurrency(n));

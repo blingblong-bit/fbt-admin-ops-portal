@@ -27,12 +27,14 @@ Built on Weekly Dues items. Each dollar lands in exactly one bucket:
 ```text
 THIS WEEK  = Expected this week + Carryover (last week) + Older outstanding
              (shown as three sub-lines; the header total is their sum)
-NEXT WEEK  = only items expected next week (no older debt)
+NEXT WEEK  = only new items expected next week (no previous, current-balance
+             or carryover dollars, even with a next-week visit)
 NOT DUE YET / NEEDS REVIEW = the rest
 MASTER TOTAL = THIS WEEK + NEXT WEEK + NOT DUE YET + REVIEW   (difference must be $0)
+DUE NOW = Carryover + Older  -> a part of THIS WEEK, shown inside it, never added to it
 ```
-- Separate cards for **Due now** (carryover + older) and **Master total**, labelled so nobody adds them to This Week.
-- When the week rolls over, last week's unpaid items move into Carryover automatically. Nothing is stored.
+- The four top-line buckets never overlap. Due now is shown as "of which due now" inside This Week. Master total is the only sum.
+- Upcoming week: Next Week holds only per-visit charges, weekly billing and started-or-expected renewals dated in next Monday–Friday (plus that weekend before). When that week becomes current, those items move to Expected. Anything still unpaid a week later moves to Carryover, then to Older. All of this is calculated live and nothing is stored.
 - Each client shows once per tab, with one amount, one status and a link to their profile.
 - Fix the Payment Due Carryover filter so it also counts package renewals that started last week. Today it only counts per-visit and weekly billing.
 
@@ -49,12 +51,14 @@ MASTER TOTAL = THIS WEEK + NEXT WEEK + NOT DUE YET + REVIEW   (difference must b
 - Remove Critical, Not Scheduled and Almost Finished. Package Complete and All Active move to Admin Tools.
 - The staff dashboard stays unchanged unless you approve changing it.
 
-## Questions for you
-1. **Older debt with a visit next week:** does it show under This Week (it's due now) or Next Week? Proposed: This Week only, never both.
-2. **Weekend payments and visits:** do they count toward the next Monday's week, as they do now? Proposed: yes.
-3. **Renewal expected next week but not started:** show it under Next Week as "Will owe"? Proposed: yes, without saying it's due.
-4. **Needs Renewal:** does it trigger from bookings beyond the package, as now, or also when 1 visit is left?
-5. **Staff:** should staff also get the three-area dashboard, without dollar amounts?
+## Final decisions (your answers)
+1. Older unpaid balances show only under **This Week / Due now**, even when the client has a visit next week. They never show under Next Week.
+2. Keep the Monday–Friday work week. Saturday and Sunday count toward the following Monday's week.
+3. Needs Renewal appears only when bookings go past the current package. Having 1 visit left is not enough.
+4. A renewal expected next week but not yet started shows under Next Week as "Will owe", never as due.
+
+## Still open (not blocking)
+- Staff dashboard: it stays unchanged unless you later approve the three-area layout without dollar amounts.
 
 ## Risks to watch
 - Old links like `/payment-due?filter=...` and the tile links must keep working. Routes stay; only the tiles move.
@@ -66,7 +70,10 @@ MASTER TOTAL = THIS WEEK + NEXT WEEK + NOT DUE YET + REVIEW   (difference must b
 - This Week + Next Week + Not due + Review = Master total, with a $0 difference (unit test plus a live check).
 - No client dollar counted in two buckets (unit test on every item).
 - Rollover test: an unpaid item expected Monday of week W shows as Carryover in week W+1 and as Older in W+2. A payment removes it at once.
-- Next Week never includes older or carryover dollars.
+- Next Week never includes older or carryover dollars. A client with $80 of old debt and a visit next week shows $80 under This Week / Due now and $0 under Next Week.
+- Due now is never larger than This Week, and This Week + Next Week + Not due + Review = Master total.
+- A client who is 7/8 with no booking past the package does not appear in Needs Renewal. One booked past 8/8 does.
+- A Saturday visit counts toward the following Monday's week.
 - A renewal with a Sunday start counts toward the following Monday's week.
 - A scheduled renewal stays queued before "1 of N", and leaves after "1 of N" on or after the earliest date. It's not activated by date alone or by payment alone.
 - Cancelling a renewal with a prepayment is still blocked, now from the profile.

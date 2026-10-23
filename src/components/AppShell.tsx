@@ -15,6 +15,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const primaryNavAll = [
     { to: "/", label: "Dashboard" },
     { to: "/collections", label: "Collections", adminOnly: true },
+    { to: "/renewals", label: "Renewals" },
     { to: "/clients", label: "All Clients" },
     { to: "/schedule-check", label: "Schedule Check" },
     { to: "/clients/new", label: "Add Client" },

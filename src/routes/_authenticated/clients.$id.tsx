@@ -1,3 +1,5 @@
+import { PreRenewCard } from "@/components/PreRenewCard";
+import type { RenewalForecastRow } from "@/lib/schedule.functions";
 import { createFileRoute, Link, useCanGoBack, useNavigate, useRouter } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
@@ -284,7 +286,7 @@ function ClientDetailPage() {
                     ? "Prepared — No Scheduled Start"
                     : "✅ Renewal prepared"}
                 <span className="font-normal opacity-75">
-                  {" "}· earliest eligible {formatDate(c.pending_renewal_start_date)}
+                  {" "}· can start on or after {formatDate(c.pending_renewal_start_date)}
                 </span>
               </span>
             )}
@@ -296,6 +298,11 @@ function ClientDetailPage() {
           </p>
           <p className="mt-1 text-xs text-slate-400">
             Schedule status is read live from Square — manage appointments in Square.
+          {renewalRow && c.pending_renewal_start_date && (
+            <div className="mt-3 max-w-xl">
+              <PreRenewCard forecast={renewalRow as unknown as RenewalForecastRow} hideAmount={!isAdminUser} />
+            </div>
+          )}
           </p>
         </div>
         <div className="flex flex-col items-end gap-1">

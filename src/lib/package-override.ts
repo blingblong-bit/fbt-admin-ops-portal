@@ -16,6 +16,8 @@ export type PackageOverride = {
   status: OverrideStatus;
   reason?: string;
   created_at?: string;
+  /** Raw visits_used when a current override was set; later check-ins add on top. */
+  baseline_visits_used?: number | null;
 };
 
 export type RawPackageFields = {
@@ -29,6 +31,7 @@ export type RawPackageFields = {
   pending_renewal_total_visits?: number | null;
   pending_renewal_price?: number | null;
   pending_renewal_paid?: number | null;
+  visit_tracking_mode?: string | null;
 };
 
 const n = (v: unknown) => Number(v ?? 0);
@@ -47,14 +50,19 @@ export function applyOverrides<T extends RawPackageFields>(c: T, overrides: Pack
 
   if (cur) {
     out.package_total_visits = pick(cur.total_visits, c.package_total_visits ?? null) as never;
-    out.visits_used = pick(cur.visits_used, c.visits_used ?? null) as never;
+    if (cur.visits_used !== null) {
+      // Check-ins recorded after the override still count, on top of the admin figure.
+      const since = cur.baseline_visits_used == null ? 0 : Math.max(0, n(c.visits_used) - n(cur.baseline_visits_used));
+      const total = n(pick(cur.total_visits, c.package_total_visits ?? null));
+      out.visits_used = (total > 0 ? Math.min(total, n(cur.visits_used) + since) : n(cur.visits_used) + since) as never;
+    }
     out.package_price = pick(cur.price, c.package_price ?? null) as never;
     out.amount_paid = pick(cur.recognized_paid, c.amount_paid ?? null) as never;
     out.package_start_date = pick(cur.start_date, c.package_start_date ?? null) as never;
     if (cur.recognized_paid !== null && n(cur.recognized_paid) !== n(c.amount_paid))
       flags.push(`Recorded paid $${n(c.amount_paid)} differs from admin-recognized $${n(cur.recognized_paid)}`);
-    if (cur.visits_used !== null && n(cur.visits_used) !== n(c.visits_used))
-      flags.push(`Tracked visits ${n(c.visits_used)} differ from admin figure ${n(cur.visits_used)}`);
+    if (cur.visits_used !== null && n(out.visits_used) !== n(c.visits_used))
+      flags.push(`Tracked visits ${n(c.visits_used)} differ from admin figure ${n(out.visits_used)}`);
   }
   if (prev) {
     const owed = Math.max(0, n(prev.price) - n(prev.recognized_paid));
@@ -87,6 +95,8 @@ export function applyOverrides<T extends RawPackageFields>(c: T, overrides: Pack
       if (!out.pending_renewal_start_date) flags.push("Prepared renewal override needs a start date");
     }
   }
+  // Admin figures drive visit position, not Square notes, while overridden.
+  if (cur || pen) out.visit_tracking_mode = "hub" as never;
   return { ...out, override_flags: flags, has_override: overrides.length > 0 };
 }
 
@@ -98,4 +108,13 @@ export function blocksAutoActivation(overrides: Pick<PackageOverride, "slot">[])
 /** Status/paid changes are consequential and need a confirmation step. */
 export function needsConfirmation(before: Partial<PackageOverride>, after: PackageOverride): boolean {
   return (before.status ?? null) !== after.status || n(before.recognized_paid) !== n(after.recognized_paid);
+}
+
+/** Apply each client's active overrides to a list of rows (by `id`). */
+export function applyOverridesToRows<T extends RawPackageFields & { id: string }>(rows: T[], all: (PackageOverride & { client_id: string })[]): T[] {
+  if (!all.length) return rows;
+  return rows.map((r) => {
+    const mine = all.filter((o) => o.client_id === r.id);
+    return mine.length ? (applyOverrides(r, mine) as T) : r;
+  });
 }

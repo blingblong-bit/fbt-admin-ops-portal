@@ -144,7 +144,7 @@ function ymdLocalToInstant(s: string): Date {
 // no timezone needed since the date is already specified in local terms.
 import { addDaysYmd, workWeekStartFromYmd } from "@/lib/work-week";
 import { parseVisitNote } from "@/lib/square-visit-audit";
-import { blocksAutoActivation } from "@/lib/package-override";
+import { applyOverridesToRows, blocksAutoActivation } from "@/lib/package-override";
 import { decidePreparedActivation, type ActivationNote, type PackageEvidence } from "@/lib/effective-visit-state";
 
 /** Server-only: the visit number Square shows on one booking, or null if unreadable. */
@@ -1844,6 +1844,10 @@ export const getRenewalForecast = createServerFn({ method: "GET" })
     }
     // No early return when there are zero bookings: prepared renewals with no
     // upcoming appointment must still be listed further down.
+    const { data: ovrAll, error: oErr } = await context.supabase
+      .from("package_overrides").select("*").is("cleared_at", null);
+    if (oErr) throw oErr;
+    const ovr = (ovrAll ?? []) as any[];
     let rows: unknown[] | null = [];
     if (byCustomer.size > 0) {
       const { data, error: cErr } = await context.supabase
@@ -1853,11 +1857,12 @@ export const getRenewalForecast = createServerFn({ method: "GET" })
         )
         .is("deleted_at", null)
         .neq("status", "archived")
-        .gt("package_total_visits", 0)
-        .not("visits_used", "is", null)
         .in("square_customer_id", Array.from(byCustomer.keys()));
       if (cErr) throw cErr;
-      rows = data;
+      // Admin overrides first, then the usual package filters on effective values.
+      rows = applyOverridesToRows((data ?? []) as any[], ovr).filter(
+        (r: any) => Number(r.package_total_visits ?? 0) > 0 && r.visits_used !== null && r.visits_used !== undefined,
+      );
     }
 
     const out: RenewalForecastRow[] = [];
@@ -1940,13 +1945,15 @@ export const getRenewalForecast = createServerFn({ method: "GET" })
     const { data: pendingRows, error: pErr } = await context.supabase
       .from("clients")
       .select(
-        "id, visits_used, package_total_visits, package_price, next_package_price, pending_renewal_start_date, pending_renewal_price, pending_renewal_paid, pending_renewal_total_visits, pending_renewal_package_name",
+        "id, visits_used, package_total_visits, package_price, package_start_date, next_package_price, pending_renewal_start_date, pending_renewal_price, pending_renewal_paid, pending_renewal_total_visits, pending_renewal_package_name",
       )
       .is("deleted_at", null)
       .neq("status", "archived")
       .not("pending_renewal_start_date", "is", null);
     if (pErr) throw pErr;
-    for (const r of (pendingRows ?? []) as unknown as Array<{
+    // Prepared renewal an admin marked Active is no longer pending.
+    const pendingEff = applyOverridesToRows((pendingRows ?? []) as any[], ovr).filter((r: any) => !!r.pending_renewal_start_date);
+    for (const r of pendingEff as unknown as Array<{
       id: string;
       visits_used: number | null;
       package_total_visits: number;

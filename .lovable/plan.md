@@ -1,87 +1,47 @@
-# Dashboard simplification: Collections, Renewals, New Clients
+# Renewals "Needs Attention" — diagnosis and proposed fix (nothing changed yet)
 
-Plan only. Nothing is built until approved. Money calculations, payment allocation, renewal activation, texts and Square stay unchanged unless a phase says otherwise and you approve it.
+## What I found (read-only)
+- 48 active clients have a prepared renewal; 34 of them have a "can start on or after" date that has passed (15 by more than a week).
+- None of those 34 has a Hub check-in since their prepared start date. Hub check-ins fell from about 140 a week (mid-September) to 2–16 a week since Sep 28. The latest Hub visit for most of them is Sep 14–24.
+- Prepared renewals only become the current package at a **Hub check-in** (Square 1-of-N or a used-up package). With almost no Hub check-ins, those renewals never activated. Square has moved on to the new package, but the Hub still shows the old package plus a "prepared" renewal.
+- One admin package override already exists (set the week of Oct 19).
 
-## What exists today (confirmed by reading the code)
-- **Dashboard** has about 20 tiles: Payment Due, Weekly Dues, Payment Due This Week / Next Week, Due Now / Overdue, Not Scheduled, Almost Finished, Critical, Payments Review, Payment History, Missed Check-Ins, Package Complete, Needs Renewal, Renewal Scheduled, First Visit – No Package Info, Needs Renewal Review, Needs Manual Follow-up, New Clients, Dues Texts, Visit Note Review, Visit Automation Review, All Active.
-- **Menu** has Dashboard, Collections, All Clients, Schedule Check, Add Client, plus a long list of 13 more screens.
-- **Money sources:** every dollar comes from Master Dues (`computeMasterDues`). Each client has three amounts: Previous (debt from an older package), Current (balance on the active package) and Renewal (the next package, with status due_now / upcoming / prepared / needs_review). Per-visit and weekly billing come from the billing simulation.
-- **Three different ways of grouping by week exist today, and they disagree:**
-  1. Payment Due filters (`master-dues-view.ts`): This Week / Next Week / Due Now overlap on purpose. A client can show up in two of them, and Carryover only counts per-visit and weekly billing.
-  2. Weekly Dues (`weekly-dues.ts`): Expected / Carryover (last work week) / Older / Not due. These don't overlap and add up to the master total.
-  3. Collections (`collections.ts`): regroups Weekly Dues into This Week / Past Due / Upcoming / Review. These don't overlap either.
-- **Week boundaries:** the work week is Monday to Friday, and Saturday/Sunday count toward the next week (`work-week.ts`). Times use Chicago time.
-- **Renewals:** "Needs Renewal" means a client is booked past the end of their current package. "Renewal Scheduled" means the next package is prepared and starts at check-in. A prepared renewal starts only on Square "1 of N" evidence or a package that's provably used up (`decidePreparedActivation`). The stored renewal date is only the earliest date it is allowed to start. Cancelling a prepared renewal that holds a prepayment is blocked.
+## Why they land in Needs Attention (exact causes)
+1. **Wrong "no upcoming appointment" label (main cause).** The Renewals page reads the visit position from Square notes, which for these clients is the *new* package (e.g. 3 of 8). That package doesn't need renewal yet, so the client is dropped from the forecast. A second pass then re-adds every prepared renewal not already listed and marks it "Prepared, but no upcoming appointment is booked", even when appointments are booked. Clients already partway into the new package end up here.
+2. **Too-broad visit-number review.** Any Square note problem in the last 180 days (an old conflict or a backward number) flags the whole client "Square visit numbers need review", even when the current position is clear.
+3. **Stale Hub counters, not a re-renewal.** I found no client re-entering renewal right after a real activation. The data shows renewals that never activated, plus Hub visit counts that froze in late September.
 
-## Terms we'll use
-- **Due:** the money is collectible now. The package has started, or a visit or week has been billed.
-- **Expected:** due money tied to a visit this week, or a renewal whose first uncovered visit falls this week.
-- **Paid:** the amount covered by allocated payments. Only Master Dues decides this.
-- **Carryover:** due money from last work week that is still unpaid. It's calculated live, so a payment shrinks it right away, and nothing is saved separately.
-- **Older outstanding:** due money from before last week, or with no visit this week.
-- **Not due yet:** prepared or future renewals, and billing after next week. These show in the master total but never in a weekly total.
+Not verified: the exact split of the 34 clients across causes 1 and 2. That needs a live Square read, which I haven't done. The step-1 report below will produce those counts.
 
-## Phase 1: one Collections screen (display only)
-Built on Weekly Dues items. Each dollar lands in exactly one bucket:
-
+## Intended states
 ```text
-THIS WEEK  = Expected this week + Carryover (last week) + Older outstanding
-             (shown as three sub-lines; the header total is their sum)
-NEXT WEEK  = only new items expected next week (no previous, current-balance
-             or carryover dollars, even with a next-week visit)
-NOT DUE YET / NEEDS REVIEW = the rest
-MASTER TOTAL = THIS WEEK + NEXT WEEK + NOT DUE YET + REVIEW   (difference must be $0)
-DUE NOW = Carryover + Older  -> a part of THIS WEEK, shown inside it, never added to it
+Active (Square position has visits left, no prepared renewal) -> not listed
+Needs Renewal (booked visits run past the package)          -> Needs Renewal
+Prepared, not started in Square                             -> Scheduled
+Prepared, Square already shows the new package started      -> "Started in Square - confirm" (new, admin action)
+Prepared, truly no upcoming booking                         -> Needs Attention
+Current Square position unreadable                          -> Needs Attention
 ```
-- The four top-line buckets never overlap. Due now is shown as "of which due now" inside This Week. Master total is the only sum.
-- Upcoming week: Next Week holds only per-visit charges, weekly billing and started-or-expected renewals dated in next Monday–Friday (plus that weekend before). When that week becomes current, those items move to Expected. Anything still unpaid a week later moves to Carryover, then to Older. All of this is calculated live and nothing is stored.
-- Each client shows once per tab, with one amount, one status and a link to their profile.
-- Fix the Payment Due Carryover filter so it also counts package renewals that started last week. Today it only counts per-visit and weekly billing.
 
-## Phase 2: Renewals area
-- **Two lists only:** Needs Renewal (booked past the package, nothing prepared yet) and Scheduled (prepared).
-- A scheduled renewal leaves the list once Square shows "1 of N" on or after the earliest date and the package actually starts. That uses the existing activation rule, unchanged.
-- Rename "earliest eligible date" to **"Can start on or after"**, with help text: "This is not the start date. The package starts at the first check-in that Square numbers 1 of N."
-- Cancel or undo a renewal from the client profile only. The separate tile goes away, and the prepaid-money guard stays.
-- Needs Renewal Review and Manual Follow-up merge into one "Needs attention" sub-list.
+## Proposed minimal fix (needs your approval)
+1. **Read-only count first:** a one-off report listing each Needs Attention client with its exact reason, to confirm the split.
+2. **Forecast:** mark "no upcoming" only when there truly is no live upcoming appointment. A prepared renewal with bookings that isn't due yet goes to Scheduled.
+3. **Detect "started in Square":** a live past 1-of-N (or new-package numbering) on or after the prepared start date shows as "Started in Square — confirm". It is **not** activated automatically.
+4. **Confirm action (admin):** one button that starts the prepared renewal through the existing protected renewal step, with the visit count taken from Square. The old package's money is carried exactly as it is today. No payments are created.
+5. **Review flag:** only when the *current* Square position is unreadable, using the existing unreadable-position check, not on old history.
+6. Raw records and overrides are not changed. Clients with overrides keep the admin figures they already show.
 
-## Phase 3: Dashboard and navigation
-- The dashboard shows three areas: **Collections** (This Week, Next Week, Due now, Master), **Renewals** (Needs Renewal, Scheduled, Needs attention) and **New Clients** (this month, First Visit – No Package Info).
-- **Admin Tools** holds every other screen: Payment Due ledger, Weekly Dues, Payment History, Payments Review, Missed Check-Ins, Visit Note Review, Visit Automation, Dues Texts, Messaging, Merge Center, Import, Notes Ledger, Backup, Sync Log, Deleted Clients and Schedule Check.
-- Remove Critical, Not Scheduled and Almost Finished. Package Complete and All Active move to Admin Tools.
-- The staff dashboard stays unchanged unless you approve changing it.
+## Tests to add
+- Prepared renewal with upcoming bookings that isn't due yet → Scheduled, not Attention.
+- Truly no bookings → Attention.
+- Square 1-of-N after the prepared start → "Started in Square", and nothing is auto-activated.
+- Old resolved note conflict → not flagged. A same-day conflict on the latest visit → flagged.
+- Confirming carries the old balance exactly once and blocks a second confirmation (existing renewal-boundary check).
 
-## Final decisions (your answers)
-1. Older unpaid balances show only under **This Week / Due now**, even when the client has a visit next week. They never show under Next Week.
-2. Keep the Monday–Friday work week. Saturday and Sunday count toward the following Monday's week.
-3. Needs Renewal appears only when bookings go past the current package. Having 1 visit left is not enough.
-4. A renewal expected next week but not yet started shows under Next Week as "Will owe", never as due.
+## Separate question for you
+Since staff mostly stopped checking in through the Hub, should prepared renewals start from Square alone (1-of-N on or after the "can start on or after" date) without a Hub check-in? That would change the current activation rule, so I've left it out of the fix above.
 
-## Still open (not blocking)
-- Staff dashboard: it stays unchanged unless you later approve the three-area layout without dollar amounts.
-
-## Risks to watch
-- Old links like `/payment-due?filter=...` and the tile links must keep working. Routes stay; only the tiles move.
-- Payment Due's overlapping filters will no longer match the new tile figures. They'll be relabelled "views" so staff don't compare them to the tiles.
-- Phase 1 refresh behaviour must keep working on the new screens: shared refresh after saves, Square sync watcher, "Out of date" banner.
-- No database changes are needed for any phase. The only logic change is the Payment Due Carryover filter, and it's display only.
-
-## Acceptance tests
-- This Week + Next Week + Not due + Review = Master total, with a $0 difference (unit test plus a live check).
-- No client dollar counted in two buckets (unit test on every item).
-- Rollover test: an unpaid item expected Monday of week W shows as Carryover in week W+1 and as Older in W+2. A payment removes it at once.
-- Next Week never includes older or carryover dollars. A client with $80 of old debt and a visit next week shows $80 under This Week / Due now and $0 under Next Week.
-- Due now is never larger than This Week, and This Week + Next Week + Not due + Review = Master total.
-- A client who is 7/8 with no booking past the package does not appear in Needs Renewal. One booked past 8/8 does.
-- A Saturday visit counts toward the following Monday's week.
-- A renewal with a Sunday start counts toward the following Monday's week.
-- A scheduled renewal stays queued before "1 of N", and leaves after "1 of N" on or after the earliest date. It's not activated by date alone or by payment alone.
-- Cancelling a renewal with a prepayment is still blocked, now from the profile.
-- The Payment Due Carryover filter includes Brody/Greg-type renewals that started last week.
-- Each dashboard tile's figures match the screen it opens exactly.
-- Existing 285+ tests and typecheck pass. Screens checked on phone and desktop. No texts, no publishing.
-
-## Technical details
-- Phase 1: add `thisWeek/nextWeek/notDue/review` grouping in `src/lib/collections.ts`, calling `computeWeeklyDues` for W and W+7. The next-week pass keeps only `expected` items, so older dollars never show twice. Update `collections.tsx`. Patch `matchesFilter('carryover')` in `master-dues-view.ts` to include `renewal.status==='due_now'` with `expected_ymd` in the prior work week.
-- Phase 2: a new `/renewals` route reading the existing tile queries. Label copy goes in `PreRenewCard.tsx`. Move the cancel action into `clients.$id.tsx`. No change to `decidePreparedActivation` or `renew_client_package`.
-- Phase 3: regroup tile arrays in `src/routes/_authenticated/index.tsx`, admin path only. Add an Admin Tools section in `AppShell.tsx`. Update the tile-visibility tests.
+## Technical notes
+- Cause 1: in `getRenewalForecast` (src/lib/schedule.functions.ts), rows with `!fc.needsRenewal` are skipped, and the pending-renewal pass then adds every unseen prepared client with `no_upcoming: true`. In `attentionReason` (src/lib/renewals-view.ts), `pre_renewed && no_upcoming` sends them to Attention.
+- Cause 2: `reviewStatus` is `needs_review` whenever `detectNoteIssues` returns any issue across the window. Use `currentPositionUnreadable` instead for Attention.
+- Started detection reuses `effectiveStateFor`, using `currentPackageStart` or a past live 1/N date compared with `pending_renewal_start_date`.

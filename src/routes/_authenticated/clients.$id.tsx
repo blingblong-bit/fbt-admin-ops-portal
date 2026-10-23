@@ -12,6 +12,7 @@ import { recordManualPayment } from "@/lib/payments.functions";
 import { renewPackage } from "@/lib/renewal.functions";
 import { updateClientDetails } from "@/lib/admin-finance.functions";
 import { PaymentAllocationsCard } from "@/components/PaymentAllocationsCard";
+import { CorrectPackageCard } from "@/components/CorrectPackageCard";
 import { AppShell } from "@/components/AppShell";
 import { ArchiveClientButton } from "@/components/ArchiveClientButton";
 import { VisitSourceLine } from "@/components/VisitSourceLine";
@@ -503,6 +504,7 @@ function ClientDetailPage() {
 
         <MessagesCard clientId={id} client={c as never} />
 
+        {isAdminUser && <CorrectPackageCard client={c} onDone={refresh} />}
         {isAdminUser && <PaymentAllocationsCard client={c} onDone={refresh} />}
         <Card className="lg:col-span-3">
           <CardHeader>

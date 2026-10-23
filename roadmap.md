@@ -85,4 +85,4 @@
 - [x] Phase 1: single Collections screen (This Week incl. due now, Next Week new-only, Not Due, Review, Master)
 - [x] Phase 2: Renewals area (preview)
 - [x] Phase 3: Dashboard + Admin Tools (preview)
-- [ ] Fix Renewals Needs Attention misclassification + gated Square 1-of-N auto activation (dry-run backlog)
+- [x] Fix Renewals Needs Attention + gated Square 1-of-N activation (backlog awaiting review; enable flag + cron at go-live)

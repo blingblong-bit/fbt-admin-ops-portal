@@ -63,8 +63,12 @@ function CollectionsPage() {
 
   if (!roleLoading && !isAdmin) return <AppShell><p className="text-muted-foreground">Collections is available to admins only.</p></AppShell>;
 
-  const pick = (g: CollectionGroup[]) => (c ? c.items.filter((i) => g.includes(i.group)) : []);
+  // Search filters displayed rows only; totals above always come from the full `c`.
+  const shown = c ? filterByName(c.items, query, (i) => i.name) : [];
+  const shownExceptions = c ? filterByName(c.exceptions, query, (e) => e.name) : [];
+  const pick = (g: CollectionGroup[]) => shown.filter((i) => g.includes(i.group));
   const weekItems = pick(["thisWeek"]);
+  const searching = normalizeQuery(query) !== "";
 
   return (
     <AppShell>
@@ -115,6 +119,12 @@ function CollectionsPage() {
               </button>
             ))}
           </div>
+          <SearchBox value={query} onChange={setQuery} />
+          {searching && (
+            <p className="mb-3 text-xs text-muted-foreground">
+              Showing clients matching “{query.trim()}” · {new Set(shown.map((i) => i.client_id)).size} across all tabs. Totals above are unchanged.
+            </p>
+          )}
 
           {tab === "week" && (
             <>

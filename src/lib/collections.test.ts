@@ -49,3 +49,53 @@ describe("Collections Hub buckets", () => {
     expect(x.totals.thisWeek.dollars).toBe(0);
   });
 });
+
+const ob = (ymd: string, open: number) => ({ ymd, kind: "visit" as const, open, status: "due_now", expected: "past" });
+const ppv = (id: string, obs: ReturnType<typeof ob>[]) =>
+  row(id, { billing: { type: "pay_per_visit", amount: obs.reduce((s, o) => s + o.open, 0), due_now: 0, carryover: 0, this_week: 0, next_week: 0, obligations: obs } });
+
+describe("Collections: This Week / Next Week / Due now", () => {
+  const mix = [
+    row("old", { previous: { amount: 80, status: "due_now" } }),
+    row("cur", { current: { amount: 100, status: "due_now", expected: "next_week" } }),
+    row("ren", { renewal: { amount: 345, status: "upcoming", expected_ymd: "2026-10-28" } }),
+    row("prep", { renewal: { amount: 200, status: "prepared", expected_ymd: "2026-10-27" } }),
+    ppv("p", [ob("2026-10-20", 40), ob("2026-10-27", 40), ob("2026-11-10", 40)]),
+  ];
+  const appts = { old: ["2026-10-27T15:00:00Z"], cur: ["2026-10-28T15:00:00Z"] };
+  const c = computeCollections(mix, appts, [], W);
+
+  it("older unpaid balances with a next-week visit stay in This Week / Due now, never Next Week", () => {
+    const nx = c.items.filter((i) => i.group === "nextWeek").map((i) => i.client_id);
+    expect(nx).not.toContain("old");
+    expect(nx).not.toContain("cur");
+    expect(c.totals.pastDue.dollars).toBe(180);
+  });
+  it("Next Week holds only new items expected next week", () => {
+    expect(c.totals.nextWeek.dollars).toBe(385); // 345 renewal + 40 per-visit on 10/27
+  });
+  it("prepared renewals are never Next Week", () => expect(c.items.find((i) => i.client_id === "prep")?.group).toBe("upcoming"));
+  it("Due now is a part of This Week, not added on top", () => {
+    expect(c.totals.thisWeekAll.dollars).toBe(r2(c.totals.thisWeek.dollars + c.totals.pastDue.dollars));
+    expect(c.totals.pastDue.dollars).toBeLessThanOrEqual(c.totals.thisWeekAll.dollars);
+  });
+  it("buckets are disjoint and reconcile to the Master total", () => {
+    const ids = c.items.map((i) => `${i.client_id}|${i.kind}|${i.ymd}`);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(c.totals.sum).toBe(c.totals.masterTotal);
+    expect(c.totals.unexplained).toBe(0);
+  });
+  it("rollover: a Mon charge is This Week, then Carryover next week, then Older", () => {
+    const one = [ppv("r", [ob("2026-10-19", 50)])];
+    const g = (wk: string) => computeCollections(one, {}, [], wk).items[0];
+    expect(g("2026-10-12").group).toBe("nextWeek");
+    expect(g("2026-10-19").group).toBe("thisWeek");
+    expect(g("2026-10-26")).toMatchObject({ group: "pastDue", section: "carryover" });
+    expect(g("2026-11-02")).toMatchObject({ group: "pastDue", section: "older" });
+  });
+  it("a Saturday charge counts toward the following Monday's week", () => {
+    const x = computeCollections([ppv("s", [ob("2026-10-24", 30)])], {}, [], W);
+    expect(x.items[0].group).toBe("nextWeek");
+  });
+});
+const r2 = (n: number) => Math.round(n * 100) / 100;

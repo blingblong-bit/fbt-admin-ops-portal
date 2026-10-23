@@ -70,7 +70,10 @@ DUE NOW = Carryover + Older  -> a part of THIS WEEK, shown inside it, never adde
 - This Week + Next Week + Not due + Review = Master total, with a $0 difference (unit test plus a live check).
 - No client dollar counted in two buckets (unit test on every item).
 - Rollover test: an unpaid item expected Monday of week W shows as Carryover in week W+1 and as Older in W+2. A payment removes it at once.
-- Next Week never includes older or carryover dollars.
+- Next Week never includes older or carryover dollars. A client with $80 of old debt and a visit next week shows $80 under This Week / Due now and $0 under Next Week.
+- Due now is never larger than This Week, and This Week + Next Week + Not due + Review = Master total.
+- A client who is 7/8 with no booking past the package does not appear in Needs Renewal. One booked past 8/8 does.
+- A Saturday visit counts toward the following Monday's week.
 - A renewal with a Sunday start counts toward the following Monday's week.
 - A scheduled renewal stays queued before "1 of N", and leaves after "1 of N" on or after the earliest date. It's not activated by date alone or by payment alone.
 - Cancelling a renewal with a prepayment is still blocked, now from the profile.

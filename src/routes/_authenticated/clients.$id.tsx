@@ -298,12 +298,12 @@ function ClientDetailPage() {
           </p>
           <p className="mt-1 text-xs text-slate-400">
             Schedule status is read live from Square — manage appointments in Square.
+          </p>
           {renewalRow && c.pending_renewal_start_date && (
             <div className="mt-3 max-w-xl">
               <PreRenewCard forecast={renewalRow as unknown as RenewalForecastRow} hideAmount={!isAdminUser} />
             </div>
           )}
-          </p>
         </div>
         <div className="flex flex-col items-end gap-1">
           {visitTracking && <VisitSourceLine visit={visitTracking} />}

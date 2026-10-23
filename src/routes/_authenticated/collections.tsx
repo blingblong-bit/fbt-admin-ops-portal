@@ -11,10 +11,11 @@ import { getMasterDues, masterDuesQuery } from "@/lib/master-dues.functions";
 import { byClient, computeCollections, type CollectionGroup, type CollectionItem } from "@/lib/collections";
 import { addDaysYmd, workWeekStartFromYmd } from "@/lib/work-week";
 
-type Tab = "week" | "past" | "upcoming" | "all";
+type Tab = "week" | "past" | "next" | "upcoming" | "all";
 const TABS: { key: Tab; label: string }[] = [
   { key: "week", label: "This Week" },
   { key: "past", label: "Due Now" },
+  { key: "next", label: "Next Week" },
   { key: "upcoming", label: "Not Due Yet" },
   { key: "all", label: "All Balances" },
 ];
@@ -41,10 +42,11 @@ const time = (iso: string | null) => (iso ? new Date(iso).toLocaleTimeString("en
 const GROUP_TONE: Record<CollectionGroup, string> = {
   thisWeek: "bg-primary/10 text-primary",
   pastDue: "bg-destructive/10 text-destructive",
+  nextWeek: "bg-secondary text-secondary-foreground",
   upcoming: "bg-muted text-muted-foreground",
   review: "bg-accent text-accent-foreground",
 };
-const GROUP_NAME: Record<CollectionGroup, string> = { thisWeek: "This week", pastDue: "Past due", upcoming: "Not due yet", review: "Needs review" };
+const GROUP_NAME: Record<CollectionGroup, string> = { thisWeek: "This week", pastDue: "Past due", nextWeek: "Next week", upcoming: "Not due yet", review: "Needs review" };
 
 function CollectionsPage() {
   const { isAdmin, isLoading: roleLoading } = useRole();
@@ -95,13 +97,13 @@ function CollectionsPage() {
       ) : (
         <div className={fresh.untrusted ? "opacity-50" : ""} data-stale={fresh.untrusted || undefined}>
           <div className="mb-1 grid grid-cols-2 gap-2 lg:grid-cols-4">
-            <Stat label="Due Now" hint="Past due — collect now" t={c.totals.pastDue} tone="text-destructive" onClick={() => navigate({ search: { tab: "past" }, replace: true })} />
-            <Stat label="Due This Week" hint="Collect at their visit" t={c.totals.thisWeek} tone="text-primary" onClick={() => navigate({ search: { tab: "week" }, replace: true })} />
+            <Stat label="This Week" hint={`incl. ${$(c.totals.pastDue.dollars)} due now`} t={c.totals.thisWeekAll} tone="text-primary" onClick={() => navigate({ search: { tab: "week" }, replace: true })} />
+            <Stat label={`Next Week · ${md(c.week.nextStart)}`} hint="new charges only" t={c.totals.nextWeek} onClick={() => navigate({ search: { tab: "next" }, replace: true })} />
             <Stat label="Not Due Yet" hint="Next packages not started" t={c.totals.upcoming} onClick={() => navigate({ search: { tab: "upcoming" }, replace: true })} />
             <Stat label="Needs Review" hint="Check before collecting" t={c.totals.review} onClick={() => navigate({ search: { tab: "all" }, replace: true })} />
           </div>
           <p className="mb-4 text-sm text-muted-foreground">
-            Total on the books: <b className="text-foreground">{$(c.totals.masterTotal)}</b> — each dollar counted in one card only.
+            Master total: <b className="text-foreground">{$(c.totals.masterTotal)}</b> = This Week + Next Week + Not Due Yet + Needs Review. Due now ({$(c.totals.pastDue.dollars)}, {c.totals.pastDue.clients} clients) is already inside This Week.
             {c.totals.unexplained !== 0 && <b className="text-destructive"> Unexplained difference {$(c.totals.unexplained)} — use Payment Due.</b>}
           </p>
 
@@ -114,7 +116,23 @@ function CollectionsPage() {
             ))}
           </div>
 
-          {tab === "week" && <WeekTab items={weekItems} weekStart={c.week.start} />}
+          {tab === "week" && (
+            <>
+              {pick(["pastDue"]).length > 0 && (
+                <section className="mb-5">
+                  <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-destructive">Due now — unpaid from before · {$(c.totals.pastDue.dollars)}</h2>
+                  <ClientList items={pick(["pastDue"])} empty="" />
+                </section>
+              )}
+              <WeekTab items={weekItems} weekStart={c.week.start} />
+            </>
+          )}
+          {tab === "next" && (
+            <>
+              <p className="mb-3 text-sm text-muted-foreground">Only new charges for {md(c.week.nextStart)} – {md(c.week.nextEnd)}. Older unpaid balances stay under This Week. Anything here that isn't paid moves into This Week when the week starts.</p>
+              <ClientList items={pick(["nextWeek"])} empty="Nothing new expected next week." />
+            </>
+          )}
           {tab === "past" && <ClientList items={pick(["pastDue"])} empty="No past-due balances." />}
           {tab === "upcoming" && (
             <>
@@ -180,15 +198,15 @@ function WeekTab({ items, weekStart }: { items: CollectionItem[]; weekStart: str
   );
 }
 
-const URGENCY: CollectionGroup[] = ["pastDue", "thisWeek", "review", "upcoming"];
-const STATUS_TEXT: Record<CollectionGroup, string> = { pastDue: "Due now", thisWeek: "Due this week", review: "Needs review", upcoming: "Not due yet" };
+const URGENCY: CollectionGroup[] = ["pastDue", "thisWeek", "nextWeek", "review", "upcoming"];
+const STATUS_TEXT: Record<CollectionGroup, string> = { pastDue: "Due now", thisWeek: "Due this week", nextWeek: "Due next week", review: "Needs review", upcoming: "Not due yet" };
 
 /** Plain staff-facing label for what the money is for. Display only. */
 function whatFor(i: CollectionItem): string {
   switch (i.kind) {
     case "current": return "Current package";
     case "previous": return "Past balance (earlier package)";
-    case "renewal": return i.group === "upcoming" || i.group === "review" ? "Next package (not started)" : "New package (started)";
+    case "renewal": return i.group === "upcoming" || i.group === "review" || i.group === "nextWeek" ? "Next package (not started)" : "New package (started)";
     case "ppv": return "Per-visit charges";
     case "weekly": return "Weekly billing";
     default: return i.label;
@@ -213,7 +231,7 @@ function ClientList({ items, empty }: { items: CollectionItem[]; empty: string; 
                 </div>
               </div>
               <div className="text-right">
-                <p className="text-xs text-muted-foreground">{status === "upcoming" ? "Will owe" : "Owes"}</p>
+                <p className="text-xs text-muted-foreground">{status === "upcoming" || status === "nextWeek" ? "Will owe" : "Owes"}</p>
                 <p className="text-2xl font-bold leading-tight">{$(g.amount)}</p>
               </div>
             </div>

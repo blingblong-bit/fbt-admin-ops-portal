@@ -94,3 +94,64 @@ export const undoLastRenewal = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     return { ok: true };
   });
+
+export type PackageEvidence = {
+  bookings: { start_at: string; status: string; note: string }[];
+  payments: { at: string; amount: number; ref: string; source: "square" | "manual"; where: string }[];
+  squareError: string | null;
+};
+
+/** Read-only: Square appointment notes (~120 days back, 45 ahead) + recorded payments. Never writes. */
+export const getPackageEvidence = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { clientId: string }) => {
+    if (!d?.clientId) throw new Error("clientId required");
+    return d;
+  })
+  .handler(async ({ data, context }): Promise<PackageEvidence> => {
+    const ctx = context as unknown as Ctx;
+    await assertAdmin(ctx);
+    const { paymentSource } = await import("./package-correction");
+    const [{ data: client, error: e1 }, { data: acts, error: e2 }] = await Promise.all([
+      ctx.supabase.from("clients").select("square_customer_id").eq("id", data.clientId).single(),
+      ctx.supabase.from("client_activities").select("created_at, metadata").eq("client_id", data.clientId).eq("activity_type", "payment").order("created_at", { ascending: false }),
+    ]);
+    if (e1) throw e1;
+    if (e2) throw e2;
+    const payments = ((acts ?? []) as { created_at: string; metadata: Record<string, any> | null }[]).map((a) => {
+      const m = a.metadata ?? {};
+      const where = [
+        Number(m.applied_to_previous_package) ? `previous $${Number(m.applied_to_previous_package)}` : "",
+        Number(m.applied_to_current_package) ? `current $${Number(m.applied_to_current_package)}` : "",
+        Number(m.applied_to_pending_package) ? `prepared renewal $${Number(m.applied_to_pending_package)}` : "",
+      ].filter(Boolean).join(", ");
+      return { at: a.created_at, amount: Number(m.amount ?? m.applied_amount ?? 0), ref: String(m.square_payment_id ?? ""), source: paymentSource(m), where: where || "split not recorded" };
+    });
+    const bookings: PackageEvidence["bookings"] = [];
+    let squareError: string | null = null;
+    const cid = (client as { square_customer_id: string | null } | null)?.square_customer_id;
+    const token = (process.env.SQUARE_PRODUCTION_ACCESS_TOKEN ?? "").replace(/^[\s"'\u201C\u201D\u2018\u2019`]+|[\s"'\u201C\u201D\u2018\u2019`]+$/g, "").trim();
+    if (!cid) squareError = "Not linked to Square.";
+    else if (!token) squareError = "Square is not configured.";
+    else {
+      const day = 86_400_000;
+      const now = Date.now();
+      try {
+        for (let off = -120; off < 45; off += 31) {
+          const url = new URL("https://connect.squareup.com/v2/bookings");
+          url.searchParams.set("customer_id", cid);
+          url.searchParams.set("limit", "200");
+          url.searchParams.set("start_at_min", new Date(now + off * day).toISOString());
+          url.searchParams.set("start_at_max", new Date(now + Math.min(off + 31, 45) * day).toISOString());
+          const r = await fetch(url, { headers: { Authorization: `Bearer ${token}`, "Square-Version": "2024-10-17" } });
+          if (!r.ok) { squareError = `Square returned ${r.status}`; break; }
+          const j = (await r.json()) as { bookings?: { start_at: string; status: string; seller_note?: string; customer_note?: string }[] };
+          for (const b of j.bookings ?? []) bookings.push({ start_at: b.start_at, status: b.status, note: (b.seller_note ?? b.customer_note ?? "").trim() });
+        }
+      } catch (e) {
+        squareError = (e as Error).message;
+      }
+    }
+    bookings.sort((a, b) => a.start_at.localeCompare(b.start_at));
+    return { bookings, payments, squareError };
+  });

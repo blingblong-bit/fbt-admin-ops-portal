@@ -13,6 +13,7 @@ import { renewPackage } from "@/lib/renewal.functions";
 import { updateClientDetails } from "@/lib/admin-finance.functions";
 import { PaymentAllocationsCard } from "@/components/PaymentAllocationsCard";
 import { EditPackagesCard } from "@/components/EditPackagesCard";
+import { applyOverrides, type PackageOverride } from "@/lib/package-override";
 import { AppShell } from "@/components/AppShell";
 import { ArchiveClientButton } from "@/components/ArchiveClientButton";
 import { VisitSourceLine } from "@/components/VisitSourceLine";
@@ -98,9 +99,15 @@ function useClient(id: string) {
   return useQuery({
     queryKey: ["client", id],
     queryFn: async () => {
-      const { data, error } = await supabase.from("clients").select("*").eq("id", id).single();
+      const [{ data, error }, { data: ovr, error: oErr }] = await Promise.all([
+        supabase.from("clients").select("*").eq("id", id).single(),
+        supabase.from("package_overrides").select("*").eq("client_id", id).is("cleared_at", null),
+      ]);
       if (error) throw error;
-      return data as Client;
+      if (oErr) throw oErr;
+      // Admin package overrides are what the Hub shows; keep the raw row for the editor.
+      const eff = applyOverrides(data as never, (ovr ?? []) as PackageOverride[]) as unknown as Client;
+      return Object.assign(eff, { __raw: data as Client });
     },
   });
 }
@@ -504,7 +511,7 @@ function ClientDetailPage() {
 
         <MessagesCard clientId={id} client={c as never} />
 
-        {isAdminUser && <EditPackagesCard client={c} onDone={refresh} />}
+        {isAdminUser && <EditPackagesCard client={(c as Client & { __raw?: Client }).__raw ?? c} onDone={refresh} />}
         {isAdminUser && <PaymentAllocationsCard client={c} onDone={refresh} />}
         <Card className="lg:col-span-3">
           <CardHeader>

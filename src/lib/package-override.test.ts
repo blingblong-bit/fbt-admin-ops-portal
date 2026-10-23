@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyOverrides, blocksAutoActivation, needsConfirmation, type PackageOverride } from "./package-override";
+import { applyOverrides, applyOverridesToRows, blocksAutoActivation, needsConfirmation, type PackageOverride } from "./package-override";
 import { decidePreparedActivation } from "./effective-visit-state";
 import { computeMasterDues } from "./master-dues";
 
@@ -58,5 +58,30 @@ describe("package overrides", () => {
     expect(needsConfirmation(before, o({ price: 400, recognized_paid: 375 }))).toBe(false);
     expect(needsConfirmation(before, o({ recognized_paid: 200 }))).toBe(true);
     expect(needsConfirmation(before, o({ recognized_paid: 375, status: "completed" }))).toBe(true);
+  });
+});
+
+describe("override consistency across screens", () => {
+  const ovr = [{ client_id: "c1", ...o({ slot: "pending", total_visits: 4, visits_used: 1, price: 375, recognized_paid: 175, status: "active" }) }];
+  it("profile, renewals and dues read the same effective package", () => {
+    const [row] = (applyOverridesToRows([raw], ovr));
+    const prof = applyOverrides(raw, ovr);
+    expect(row.package_total_visits).toBe(prof.package_total_visits);
+    expect(row.pending_renewal_start_date).toBeNull(); // drops out of Scheduled
+    const r = dues(row).rows[0];
+    expect(r.renewal.amount).toBe(0);
+    expect(r.current.amount).toBe(200);
+  });
+  it("forces Hub visit tracking so Square notes can't contradict admin figures", () => {
+    expect(applyOverrides(raw, [o({ visits_used: 3 })]).visit_tracking_mode).toBe("hub");
+    expect(applyOverrides(raw, [o({ slot: "previous", price: 1, recognized_paid: 0 })]).visit_tracking_mode).toBeUndefined();
+  });
+  it("check-ins after the override keep counting on top of the admin figure, capped", () => {
+    const c = { ...raw, visits_used: 4 };
+    expect(applyOverrides(c, [o({ visits_used: 1, baseline_visits_used: 2 })]).visits_used).toBe(3);
+    expect(applyOverrides({ ...raw, visits_used: 20 }, [o({ visits_used: 7, baseline_visits_used: 2 })]).visits_used).toBe(8);
+  });
+  it("non-overridden rows are returned unchanged", () => {
+    expect(applyOverridesToRows([raw], [])[0]).toBe(raw);
   });
 });

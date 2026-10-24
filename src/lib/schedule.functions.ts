@@ -68,6 +68,10 @@ export type ScheduleAppointment = {
 
 export type NeedsScheduleClient = ScheduleClientLite & {
   last_appointment_at: string | null;
+  /** Effective visits left (Square notes when clean, else Hub). */
+  remaining_left?: number;
+  /** Set when Hub and Square counts disagree — review, never auto-fixed. */
+  visit_count_check?: string | null;
 };
 
 export type ScheduleCheckResult = {
@@ -82,6 +86,8 @@ export type ScheduleCheckResult = {
   unmatched: ScheduleAppointment[];
   needs_next_week_scheduling: NeedsScheduleClient[];
   not_scheduled_after: NeedsScheduleClient[];
+  /** Last live visit was in the previous work week; nothing booked since. */
+  last_week_nothing_booked: NeedsScheduleClient[];
   fetched_count: number;
   error: string | null;
 };
@@ -433,7 +439,9 @@ export const getScheduleCheck = createServerFn({ method: "GET" })
     // preceding Sat/Sun that roll INTO this week) through the last instant
     // of the Sun after next week's Friday (to include Sat/Sun that roll
     // into a following week we don't bucket — harmless, just extra data).
-    const fetchStart = ymdLocalToInstant(addDaysYmd(weekStartYmd, -2));
+    // Includes the whole previous work week (from its leading Saturday) so
+    // "last visit last week, nothing booked" survives the weekend rollover.
+    const fetchStart = ymdLocalToInstant(addDaysYmd(weekStartYmd, -9));
     const fetchEnd = new Date(ymdLocalToInstant(addDaysYmd(nextWeekEndYmd, 3)).getTime() - 1);
     const startIso = fetchStart.toISOString();
     const endIso = fetchEnd.toISOString();
@@ -450,6 +458,7 @@ export const getScheduleCheck = createServerFn({ method: "GET" })
       unmatched: [],
       needs_next_week_scheduling: [],
       not_scheduled_after: [],
+      last_week_nothing_booked: [],
       fetched_count: 0,
       error: null,
     };
@@ -577,47 +586,44 @@ export const getScheduleCheck = createServerFn({ method: "GET" })
       next_week.filter((a) => a.client).map((a) => a.client!.id),
     );
 
-    const visitsLeft = (c: ScheduleClientLite) =>
-      c.visits_used === null || c.visits_used === undefined
-        ? c.package_total_visits > 0
-          ? c.package_total_visits
-          : 0
-        : Math.max(0, (c.package_total_visits ?? 0) - c.visits_used);
+    const { effectiveRemaining, followUpEligible, groupFollowUps } = await import("@/lib/schedule-followup");
 
     // Reports must exclude archived clients — matching map above still
-    // contains them so appointments continue to resolve for display, but
-    // "Not Scheduled After Selected Date" / "Needs Next Week Scheduling"
-    // (and any other clientList-derived report) filter them out here.
+    // contains them so appointments continue to resolve for display.
     const clientList = ((clients ?? []) as ScheduleClientLite[]).filter(
       (c) => c.status !== "archived",
     );
 
-    // last appointment date per client across active bookings
     const lastApptByClient = new Map<string, string>();
     for (const a of active) {
       if (!a.client) continue;
       const prev = lastApptByClient.get(a.client.id);
       if (!prev || a.start_at > prev) lastApptByClient.set(a.client.id, a.start_at);
     }
-    // any appointment strictly after selected date
-    const hasApptAfter = new Map<string, boolean>();
-    for (const a of active) {
-      if (!a.client) continue;
-      if (dayOf(a.start_at) > selectedYmd) hasApptAfter.set(a.client.id, true);
-    }
+    const decorate = (c: ScheduleClientLite): NeedsScheduleClient => {
+      const r = effectiveRemaining(c);
+      return {
+        ...c,
+        last_appointment_at: lastApptByClient.get(c.id) ?? null,
+        remaining_left: r.left,
+        visit_count_check: r.check,
+      };
+    };
 
     const needs_next_week_scheduling: NeedsScheduleClient[] = clientList
       .filter(
-        (c) =>
-          visitsLeft(c) > 0 &&
-          thisWeekClientIds.has(c.id) &&
-          !nextWeekClientIds.has(c.id),
+        (c) => followUpEligible(c) && thisWeekClientIds.has(c.id) && !nextWeekClientIds.has(c.id),
       )
-      .map((c) => ({ ...c, last_appointment_at: lastApptByClient.get(c.id) ?? null }));
+      .map(decorate);
 
-    const not_scheduled_after: NeedsScheduleClient[] = clientList
-      .filter((c) => visitsLeft(c) > 0 && !hasApptAfter.get(c.id))
-      .map((c) => ({ ...c, last_appointment_at: lastApptByClient.get(c.id) ?? null }));
+    const groups = groupFollowUps(
+      clientList,
+      active.filter((a) => a.client).map((a) => ({ client_id: a.client!.id, day: dayOf(a.start_at) })),
+      selectedYmd,
+    );
+    const byId = new Map(clientList.map((c) => [c.id, c]));
+    const not_scheduled_after = groups.not_scheduled_after.map((id) => decorate(byId.get(id)!));
+    const last_week_nothing_booked = groups.last_week_nothing_booked.map((id) => decorate(byId.get(id)!));
 
     // Log the check (best-effort, never throws)
     try {
@@ -646,6 +652,7 @@ export const getScheduleCheck = createServerFn({ method: "GET" })
       unmatched,
       needs_next_week_scheduling,
       not_scheduled_after,
+      last_week_nothing_booked,
       fetched_count: bookings.length,
       error,
     };
@@ -1244,7 +1251,9 @@ export const getThisWeekScheduledClientIds = createServerFn({ method: "GET" })
       }
       // Widen fetch by ±2 days so weekend bookings that roll INTO this
       // work-week bucket are still returned by Square.
-      const fetchStart = ymdLocalToInstant(addDaysYmd(weekStartYmd, -2));
+      // Includes the whole previous work week (from its leading Saturday) so
+    // "last visit last week, nothing booked" survives the weekend rollover.
+    const fetchStart = ymdLocalToInstant(addDaysYmd(weekStartYmd, -9));
       const fetchEnd = new Date(
         ymdLocalToInstant(addDaysYmd(weekEndYmd, 3)).getTime() - 1,
       );
@@ -1310,7 +1319,9 @@ export const getNextWeekScheduledClientIds = createServerFn({ method: "GET" })
         };
       }
       // Widen fetch by ±2 days to catch weekend bookings that roll into this bucket.
-      const fetchStart = ymdLocalToInstant(addDaysYmd(weekStartYmd, -2));
+      // Includes the whole previous work week (from its leading Saturday) so
+    // "last visit last week, nothing booked" survives the weekend rollover.
+    const fetchStart = ymdLocalToInstant(addDaysYmd(weekStartYmd, -9));
       const fetchEnd = new Date(
         ymdLocalToInstant(addDaysYmd(weekEndYmd, 3)).getTime() - 1,
       );

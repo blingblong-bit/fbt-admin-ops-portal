@@ -9,6 +9,7 @@ import { VisitSourceLine } from "@/components/VisitSourceLine";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { followUpEligible } from "@/lib/schedule-followup";
 import {
   Table,
   TableBody,
@@ -72,7 +73,8 @@ function todayYmd(): string {
   return `${y}-${m}-${day}`;
 }
 
-function visitsRemaining(c: { package_total_visits: number; visits_used: number | null }) {
+function visitsRemaining(c: { package_total_visits: number; visits_used: number | null; remaining_left?: number }) {
+  if (typeof c.remaining_left === "number") return c.remaining_left;
   if (c.visits_used === null || c.visits_used === undefined) return c.package_total_visits;
   return Math.max(0, c.package_total_visits - c.visits_used);
 }
@@ -312,12 +314,7 @@ function ScheduleCheckPage() {
       (data?.this_week ?? []).filter((a) => {
         if (!a.client) return false;
         if (nextWeekClientIds.has(a.client.id)) return false;
-        if (a.client.status === "archived") return false;
-        const total = a.client.package_total_visits ?? 0;
-        const used = a.client.visits_used;
-        const left = used === null || used === undefined ? total : Math.max(0, total - used);
-        if (left <= 0) return false;
-        return true;
+        return followUpEligible(a.client);
       }),
     [data, nextWeekClientIds],
   );
@@ -508,8 +505,15 @@ function ScheduleCheckPage() {
 
 
         <ClientsNeedingCard
+          title="Last Visit Last Week — Nothing Booked"
+          description="Seen last work week, with visits remaining and no Square appointment since. Not repeated below."
+          clients={data?.last_week_nothing_booked ?? []}
+          hideOwed={isStaff}
+        />
+
+        <ClientsNeedingCard
           title="Not Scheduled After Selected Date"
-          description="Active clients with visits remaining and no Square appointment after this date."
+          description="Other active clients with visits remaining and no Square appointment after this date."
           clients={data?.not_scheduled_after ?? []}
           hideOwed={isStaff}
         />
@@ -1918,7 +1922,12 @@ function ClientsNeedingCard({
                       {c.first_name} {c.last_name}
                     </TableCell>
                     <TableCell className="text-sm text-slate-600">{c.phone ?? "—"}</TableCell>
-                    <TableCell className="text-sm">{remaining}</TableCell>
+                    <TableCell className="text-sm">
+                      {remaining}
+                      {c.visit_count_check && (
+                        <div className="text-xs text-amber-700">{c.visit_count_check}</div>
+                      )}
+                    </TableCell>
                     {!hideOwed && <TableCell className="text-sm">{formatCurrency(owed)}</TableCell>}
                     <TableCell className="text-sm">
                       {c.last_appointment_at ? formatDate(c.last_appointment_at.slice(0, 10)) : "—"}

@@ -41,6 +41,10 @@ export type WorklistResult = {
   hiddenKind?: "manual" | "auto";
   /** Set when a manual hide should be cleared (new booking / new package). */
   clearHide?: string;
+  /** Set when a staff restore (pin) should be cleared by new activity. */
+  clearPin?: string;
+  /** Shown only because staff restored an auto-hidden client. */
+  pinned?: boolean;
   left: number;
   check: string | null;
 };
@@ -90,34 +94,35 @@ export function classifyWorklist(
   const completed = r.left === 0 && !r.check && !c.pending_renewal_start_date;
   if (completed && (recentVisit || recentPackage)) {
     reasons.unshift(hasFuture ? "Package used up — has a booking, needs renewal review" : "Package used up — needs rescheduling or review");
-    return { list: "package_completed", reasons, clearHide, ...base };
+    return { list: "package_completed", reasons, clearHide, clearPin, ...base };
   }
   if (!hasFuture) {
     if (pin && !clearPin) {
       reasons.unshift("Restored by staff (stays until new activity or hidden again)");
-      return { list: "not_scheduled", reasons, clearHide: pin.id && undefined, clearPinId: pin.id, ...base, keepPin: true } as WorklistResult;
+      return { list: "not_scheduled", reasons, pinned: true, ...base };
     }
     if (f.sourceUnknown && !recentPackage && !r.check) {
       reasons.unshift("Not linked to Square — can't confirm last visit; check before hiding");
-      return { list: "not_scheduled", reasons, clearHide, ...base };
+      return { list: "not_scheduled", reasons, clearHide, clearPin, ...base };
     }
     if (recentVisit || recentPackage || r.check) {
       reasons.unshift(
         recentVisit ? `Last visit ${f.lastKeptYmd}; nothing booked` : recentPackage ? "New package; nothing booked" : "No booking; visit count needs review",
       );
-      return { list: "not_scheduled", reasons, clearHide, ...base };
+      return { list: "not_scheduled", reasons, clearHide, clearPin, ...base };
     }
     return {
       list: "hidden",
       hiddenKind: "auto",
       reasons: [f.lastKeptYmd ? `Last seen ${f.lastKeptYmd} (over ${RECENT_DAYS} days)` : `No visit in last ${RECENT_DAYS} days`],
       clearHide,
+      clearPin,
       ...base,
     };
   }
   if (f.thisWeekLiveCount === 1) {
     reasons.unshift("Only one appointment this week");
-    return { list: "only_once", reasons, clearHide, ...base };
+    return { list: "only_once", reasons, clearHide, clearPin, ...base };
   }
-  return { list: null, reasons, clearHide, ...base };
+  return { list: null, reasons, clearHide, clearPin, ...base };
 }

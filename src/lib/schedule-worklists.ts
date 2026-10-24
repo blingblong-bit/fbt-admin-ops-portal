@@ -18,6 +18,8 @@ export type ManualHide = {
   known_future_booking_ids: string[];
   package_start_snapshot: string | null;
   pending_renewal_snapshot: string | null;
+  /** "hide" = staff hid; "pin" = staff restored an auto-hidden client. */
+  kind?: "hide" | "pin";
 };
 
 export type ClientScheduleFacts = {
@@ -27,6 +29,8 @@ export type ClientScheduleFacts = {
   futureLiveIds: string[];
   /** Live appointments in the selected work week (past or future). */
   thisWeekLiveCount: number;
+  /** Not linked to Square: missing history is not evidence of inactivity. */
+  sourceUnknown?: boolean;
 };
 
 export type WorklistKey = "package_completed" | "not_scheduled" | "only_once" | "hidden" | null;
@@ -71,12 +75,16 @@ export function classifyWorklist(
   const reasons: string[] = [];
   if (r.check) reasons.push(r.check);
 
+  const pin = hide?.kind === "pin" ? hide : null;
+  if (pin) hide = null;
+  const clearPin = pin ? (hideReactivation(c, f, pin) ?? undefined) : undefined;
   const clearHide = hide ? (hideReactivation(c, f, hide) ?? undefined) : undefined;
   if (hide && !clearHide) {
     // Mismatched counts are never hidden — flag for review instead.
     if (!r.check) return { list: "hidden", hiddenKind: "manual", reasons: [hide.reason || "Hidden by staff"], ...base };
     reasons.push("Hidden by staff, but visit count needs review");
   }
+  if (clearPin) reasons.push(`Restore no longer needed: ${clearPin}`);
   if (clearHide) reasons.push(`Unhidden: ${clearHide}`);
 
   const completed = r.left === 0 && !r.check && !c.pending_renewal_start_date;
@@ -85,6 +93,14 @@ export function classifyWorklist(
     return { list: "package_completed", reasons, clearHide, ...base };
   }
   if (!hasFuture) {
+    if (pin && !clearPin) {
+      reasons.unshift("Restored by staff (stays until new activity or hidden again)");
+      return { list: "not_scheduled", reasons, clearHide: pin.id && undefined, clearPinId: pin.id, ...base, keepPin: true } as WorklistResult;
+    }
+    if (f.sourceUnknown && !recentPackage && !r.check) {
+      reasons.unshift("Not linked to Square — can't confirm last visit; check before hiding");
+      return { list: "not_scheduled", reasons, clearHide, ...base };
+    }
     if (recentVisit || recentPackage || r.check) {
       reasons.unshift(
         recentVisit ? `Last visit ${f.lastKeptYmd}; nothing booked` : recentPackage ? "New package; nothing booked" : "No booking; visit count needs review",

@@ -4,6 +4,7 @@
 // Future bookings, cancellations/no-shows, dates alone, payments alone,
 // conflicting numbers or Square errors never activate.
 import type { SequenceEntry } from "./square-visit-audit";
+import { applyOverrides, type PackageOverride, type RawPackageFields } from "./package-override";
 
 export type ActivationClient = {
   id: string;
@@ -54,31 +55,44 @@ export function decideSquareActivation(i: {
 }
 
 /**
- * A prepared package held in an admin override (financial/date-only) started
- * in Square. Same evidence bar as decideSquareActivation, applied to the
- * EFFECTIVE prepared start/size. Never for an admin visit-count override or an
- * already-started override. Pure.
+ * Clients whose package figures are admin financial/date-only overrides: has
+ * Square started their next package (override-prepared, or a later raw
+ * preparation)? Same evidence bar as decideSquareActivation, on the EFFECTIVE
+ * prepared start/size. Never for an admin visit count or an admin-started
+ * package. Returns the figures start_pending_override_from_square validates
+ * and writes, computed by applyOverrides (single money source). Pure.
  */
+export type PromotionFigures = {
+  gate: string; total: number; price: number; recognized_paid: number; prev_owed: number;
+  expect_current_id: string | null; expect_pending_id: string | null;
+};
 export function decideOverridePendingStart(i: {
-  clientId: string;
-  squareCustomerId: string | null;
-  rawPending: { start: string | null; total: number | null };
-  overrides: { slot: string; status: string; visits_used: number | null; start_date: string | null; total_visits: number | null }[];
+  client: RawPackageFields & { id: string; square_customer_id: string | null };
+  overrides: (PackageOverride & { id?: string })[];
   seq: SequenceEntry[] | null;
   currentUnreadable: boolean;
-}): SquareActivationDecision {
+}): SquareActivationDecision & { figures?: PromotionFigures } {
   const pen = i.overrides.find((o) => o.slot === "pending");
   const cur = i.overrides.find((o) => o.slot === "current");
-  if (!pen || pen.status !== "prepared") return { kind: "skip", reason: "No prepared package override waiting to start" };
+  if (!pen && !cur) return { kind: "skip", reason: "No package override" };
   if (cur && cur.visits_used !== null) return { kind: "skip", reason: "Current package has an admin visit count" };
+  if (pen && pen.status !== "prepared") return { kind: "skip", reason: "Prepared package was started or closed by an admin" };
+  const eff = applyOverrides(i.client, i.overrides);
+  if (!eff.pending_renewal_start_date) return { kind: "skip", reason: "No prepared renewal" };
+  const total = Number(eff.pending_renewal_total_visits ?? 0) || null;
   const d = decideSquareActivation({
-    client: {
-      id: i.clientId,
-      square_customer_id: i.squareCustomerId,
-      pending_renewal_start_date: pen.start_date ?? i.rawPending.start,
-      pending_renewal_total_visits: pen.total_visits ?? i.rawPending.total,
-    },
+    client: { id: i.client.id, square_customer_id: i.client.square_customer_id, pending_renewal_start_date: eff.pending_renewal_start_date, pending_renewal_total_visits: total },
     seq: i.seq, currentUnreadable: i.currentUnreadable, hasOverride: false, sinceYmd: "0000-00-00",
   });
-  return d;
+  if (d.kind !== "activate" && d.kind !== "backlog") return d;
+  const num = (v: unknown) => Number(v ?? 0);
+  return {
+    ...d,
+    figures: {
+      gate: eff.pending_renewal_start_date, total: d.total,
+      price: num(eff.pending_renewal_price), recognized_paid: num(eff.pending_renewal_paid),
+      prev_owed: num(eff.previous_package_owed) + Math.max(0, num(eff.package_price) - num(eff.amount_paid)),
+      expect_current_id: cur?.id ?? null, expect_pending_id: pen?.id ?? null,
+    },
+  };
 }

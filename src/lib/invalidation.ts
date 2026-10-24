@@ -59,7 +59,7 @@ export const EVENT_KEYS: Record<InvalidationEvent, readonly string[]> = {
   "visit-changed": [...MONEY, ...PROFILE, ...SCHEDULE],
   "client-archived": [...MONEY, ...PROFILE, ...SCHEDULE, "linkable-clients"],
   "client-info-changed": [...MONEY, ...PROFILE, "package_review_dismissals", "dues-messages"],
-  "schedule-hide-changed": [...SCHEDULE, ...PROFILE],
+  "schedule-hide-changed": [...MONEY, ...PROFILE, ...SCHEDULE],
   "square-link-changed": [...MONEY, ...PROFILE, ...SCHEDULE, "linkable-clients", "square-reviews"],
   "square-sync": [
     ...MONEY,

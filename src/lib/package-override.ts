@@ -95,8 +95,12 @@ export function applyOverrides<T extends RawPackageFields>(c: T, overrides: Pack
       if (!out.pending_renewal_start_date) flags.push("Prepared renewal override needs a start date");
     }
   }
-  // Admin figures drive visit position, not Square notes, while overridden.
-  if (cur || pen) out.visit_tracking_mode = "hub" as never;
+  // Admin figures drive visit position, not Square notes, only when the
+  // CURRENT package is overridden. A prepared-only override changes the next
+  // package's figures, not where the client is in Square — forcing Hub here
+  // hid Square's renewal timing and dropped owed renewals from Collections.
+  // (Activation is still held by blocksAutoActivation.)
+  if (cur) out.visit_tracking_mode = "hub" as never;
   return { ...out, override_flags: flags, has_override: overrides.length > 0 };
 }
 

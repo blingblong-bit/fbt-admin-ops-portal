@@ -15,6 +15,37 @@ import { SearchBox } from "@/components/SearchBox";
 import { filterByName, normalizeQuery } from "@/lib/name-search";
 import { useRole } from "@/hooks/useRole";
 import { getSquareActivationReport } from "@/lib/admin-finance.functions";
+import { getPackageSetupList } from "@/lib/package-setup.functions";
+
+const SETUP_LABEL = { urgent: "Urgent — booked without a package", assessment_scheduled: "Assessment booked", follow_up: "Follow up" } as const;
+
+/** Assessment clients awaiting a first package. Read-only; separate from renewals. */
+function PackageSetupList({ query }: { query: string }) {
+  const fn = useServerFn(getPackageSetupList);
+  const q = useQuery({ queryKey: ["renewal-forecast", "package-setup"], queryFn: () => fn(), staleTime: 60_000, retry: 1 });
+  if (q.isLoading) return <p className="text-sm text-muted-foreground">Loading… reading Square appointments.</p>;
+  if (q.isError) return <p role="alert" className="text-sm text-destructive">Couldn't load this list. <Button size="sm" variant="outline" onClick={() => q.refetch()}>Retry</Button></p>;
+  const rows = filterByName(q.data?.rows ?? [], query, (r) => r.name);
+  return (
+    <div className="space-y-3">
+      {q.data?.error && <p className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm">Appointments couldn't be read, so states below may be wrong: {q.data.error}</p>}
+      {rows.length === 0 ? <p className="text-sm text-muted-foreground">{query ? "No client here matches that name." : "Nobody is waiting for a first package."}</p> : rows.map((r) => (
+        <Card key={r.client_id} className={r.state === "urgent" ? "border-destructive/50" : ""}>
+          <CardContent className="flex flex-wrap items-center justify-between gap-2 p-4">
+            <div>
+              <div className="font-semibold">{r.name} <span className={`ml-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${r.state === "urgent" ? "bg-destructive/15 text-destructive" : "bg-muted text-muted-foreground"}`}>{SETUP_LABEL[r.state]}</span></div>
+              <div className="text-xs text-muted-foreground">
+                {r.reason} · Last visit {r.last_visit_ymd ? formatDate(r.last_visit_ymd) : "none"} · Next {r.next_appointment_ymd ? formatDate(r.next_appointment_ymd) : "no future appointment"}
+                {r.dismissed ? " · Marked \"No package needed\"" : ""}
+              </div>
+            </div>
+            <Button asChild size="sm" variant="outline"><Link to="/clients/$id" params={{ id: r.client_id }}>Open profile / set package</Link></Button>
+          </CardContent>
+        </Card>
+      ))}
+    </div>
+  );
+}
 
 /** Admin dry-run: prepared renewals Square already started. Read-only. */
 function SquareStartedReport() {
@@ -49,7 +80,7 @@ export const Route = createFileRoute("/_authenticated/renewals")({
   component: RenewalsPage,
 });
 
-type Tab = "needs" | "scheduled" | "attention";
+type Tab = "needs" | "scheduled" | "attention" | "setup";
 
 function RenewalsPage() {
   const { isAdmin: isAdminUser } = useRole();
@@ -81,12 +112,16 @@ function RenewalsPage() {
   const groups = useMemo(() => groupRenewals(rows), [rows]);
   const [tab, setTab] = useState<Tab>("needs");
 
+  const fetchSetup = useServerFn(getPackageSetupList);
+  const setupQ = useQuery({ queryKey: ["renewal-forecast", "package-setup"], queryFn: () => fetchSetup(), staleTime: 60_000, retry: 1 });
+  const setupRows = setupQ.data?.rows ?? [];
+  const setupUrgent = setupRows.filter((r) => r.state === "urgent").length;
   const tabs: { key: Tab; label: string; help: string; list: RenewalForecastRow[] }[] = [
     { key: "needs", label: "Needs Renewal", help: "Booked visits go past the current package. Prepare the next package.", list: groups.needs },
     { key: "scheduled", label: "Scheduled", help: "Next package is prepared. It starts only when Square shows visit 1 of N at check-in — never by date alone.", list: groups.scheduled },
     { key: "attention", label: "Needs Attention", help: "Something needs a staff look before this renewal can be trusted.", list: groups.attention },
   ];
-  const current = tabs.find((t) => t.key === tab)!;
+  const current = tabs.find((t) => t.key === tab) ?? tabs[0];
   const [query, setQuery] = useState("");
   const searching = normalizeQuery(query) !== "";
   const nameOf = (r: RenewalForecastRow) => namesQ.data?.get(r.client_id) ?? "";
@@ -110,7 +145,7 @@ function RenewalsPage() {
             Square couldn't be read just now, so this list may be incomplete: {forecastQ.data.error}
           </p>
         )}
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           {tabs.map((t) => (
             <button
               key={t.key}
@@ -122,9 +157,19 @@ function RenewalsPage() {
               {searching && <div className="text-xs text-muted-foreground">{matchCount(t.list)} match</div>}
             </button>
           ))}
+          <button
+            onClick={() => setTab("setup")}
+            className={`rounded-lg border p-4 text-left transition ${tab === "setup" ? "border-primary bg-primary/5" : "bg-card"}`}
+          >
+            <div className="text-sm text-muted-foreground">Needs Package Setup</div>
+            <div className="text-2xl font-semibold">{setupQ.data ? setupRows.length : "…"}</div>
+            {setupUrgent > 0 && <div className="text-xs font-semibold text-destructive">{setupUrgent} urgent</div>}
+            {searching && setupQ.data && <div className="text-xs text-muted-foreground">{filterByName(setupRows, query, (r) => r.name).length} match</div>}
+          </button>
         </div>
-        <p className="text-sm text-muted-foreground">{current.help}</p>
+        <p className="text-sm text-muted-foreground">{tab === "setup" ? "Assessment clients with no first package yet, including ones marked \"No package needed\". They leave this list once a package is set. Urgent = a follow-up is booked with no package." : current.help}</p>
         <SearchBox value={query} onChange={setQuery} />
+        {tab === "setup" ? <PackageSetupList query={query} /> : <>
         {forecastQ.data && (
           <p className="text-xs text-muted-foreground">
             {forecastQ.isFetching ? "Updating… " : ""}
@@ -167,6 +212,7 @@ function RenewalsPage() {
             ))}
           </div>
         )}
+        </>}
       </div>
     </AppShell>
   );

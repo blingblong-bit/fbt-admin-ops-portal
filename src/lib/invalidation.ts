@@ -12,6 +12,7 @@ export type InvalidationEvent =
   | "client-archived"
   | "client-info-changed"
   | "square-link-changed"
+  | "schedule-hide-changed"
   | "square-sync";
 
 /** Keys whose 2nd element is a client id; narrowed to that client when given. */
@@ -58,6 +59,7 @@ export const EVENT_KEYS: Record<InvalidationEvent, readonly string[]> = {
   "visit-changed": [...MONEY, ...PROFILE, ...SCHEDULE],
   "client-archived": [...MONEY, ...PROFILE, ...SCHEDULE, "linkable-clients"],
   "client-info-changed": [...MONEY, ...PROFILE, "package_review_dismissals", "dues-messages"],
+  "schedule-hide-changed": [...SCHEDULE, ...PROFILE],
   "square-link-changed": [...MONEY, ...PROFILE, ...SCHEDULE, "linkable-clients", "square-reviews"],
   "square-sync": [
     ...MONEY,

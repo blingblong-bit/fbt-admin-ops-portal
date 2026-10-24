@@ -18,6 +18,8 @@ export type PackageOverride = {
   created_at?: string;
   /** Raw visits_used when a current override was set; later check-ins add on top. */
   baseline_visits_used?: number | null;
+  /** Set only by start_pending_override_from_square: the verified past Square 1/N that started this prepared package. */
+  square_booking_id?: string | null;
 };
 
 export type RawPackageFields = {
@@ -80,11 +82,19 @@ export function applyOverrides<T extends RawPackageFields>(c: T, overrides: Pack
       out.amount_paid = pick(pen.recognized_paid, c.pending_renewal_paid ?? 0) as never;
       out.visits_used = (pen.visits_used ?? 0) as never;
       out.package_start_date = pick(pen.start_date, c.pending_renewal_start_date ?? null) as never;
-      out.pending_renewal_start_date = null as never;
-      out.pending_renewal_total_visits = null as never;
-      out.pending_renewal_price = null as never;
-      out.pending_renewal_paid = 0 as never;
-      flags.push("Prepared renewal started by admin override (not by Square 1/N)");
+      // The raw prepared row this override consumed is gone; a LATER raw
+      // preparation (after the started package) is a genuine new renewal.
+      const rawPen = c.pending_renewal_start_date ?? null;
+      const startedOn = String(out.package_start_date ?? "");
+      if (!rawPen || !startedOn || rawPen <= startedOn) {
+        out.pending_renewal_start_date = null as never;
+        out.pending_renewal_total_visits = null as never;
+        out.pending_renewal_price = null as never;
+        out.pending_renewal_paid = 0 as never;
+      }
+      flags.push(pen.square_booking_id
+        ? "Prepared renewal started by verified Square 1/N"
+        : "Prepared renewal started by admin override (not by Square 1/N)");
     } else if (pen.status === "completed") {
       flags.push("Pending package override marked completed — ignored; use current or prior package");
     } else {
@@ -95,12 +105,13 @@ export function applyOverrides<T extends RawPackageFields>(c: T, overrides: Pack
       if (!out.pending_renewal_start_date) flags.push("Prepared renewal override needs a start date");
     }
   }
-  // Admin figures drive visit position, not Square notes, only when the
-  // CURRENT package is overridden. A prepared-only override changes the next
-  // package's figures, not where the client is in Square — forcing Hub here
-  // hid Square's renewal timing and dropped owed renewals from Collections.
-  // (Activation is still held by blocksAutoActivation.)
-  if (cur || pen?.status === "active") out.visit_tracking_mode = "hub" as never;
+  // Admin figures drive visit position (Hub mode) only when an admin set an
+  // explicit visit count on the package in force, or started a prepared package
+  // by hand. Financial/date-only edits and Square-started packages keep Square
+  // as the source of visit numbers. (Activation is still held by blocksAutoActivation.)
+  const penActive = pen?.status === "active";
+  const manualCount = penActive ? !pen!.square_booking_id : !!cur && cur.visits_used !== null;
+  if (manualCount) out.visit_tracking_mode = "hub" as never;
   return { ...out, override_flags: flags, has_override: overrides.length > 0 };
 }
 

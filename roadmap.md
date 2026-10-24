@@ -86,3 +86,5 @@
 - [x] Phase 2: Renewals area (preview)
 - [x] Phase 3: Dashboard + Admin Tools (preview)
 - [x] Fix Renewals Needs Attention + gated Square 1-of-N activation (backlog awaiting review; enable flag + cron at go-live)
+
+- [x] Schedule Check worklists redesign (Package Completed / Not Scheduled / Only Once / Hidden) + manual hide audit

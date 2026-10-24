@@ -43,6 +43,7 @@ export type ScheduleClientLite = {
   payment_model?: string | null;
   /** Prepared next package — lets a fully-used client still be checked in. */
   pending_renewal_start_date?: string | null;
+  package_start_date?: string | null;
   /** Square-vs-Hub check-in presentation; absent = Hub tracks (manual check-in). */
   visit?: import("@/lib/effective-visit-state").VisitTracking | null;
 };
@@ -88,8 +89,25 @@ export type ScheduleCheckResult = {
   not_scheduled_after: NeedsScheduleClient[];
   /** Last live visit was in the previous work week; nothing booked since. */
   last_week_nothing_booked: NeedsScheduleClient[];
+  /** Redesigned worklists (priority Package Completed > Not Scheduled > Only Once). */
+  worklists: {
+    package_completed: WorklistRow[];
+    not_scheduled: WorklistRow[];
+    only_once: WorklistRow[];
+    hidden: WorklistRow[];
+    /** Non-null when Square history couldn't be loaded — nothing is auto-hidden. */
+    error: string | null;
+  };
   fetched_count: number;
   error: string | null;
+};
+
+export type WorklistRow = NeedsScheduleClient & {
+  reasons: string[];
+  hidden_kind?: "manual" | "auto";
+  hide_id?: string | null;
+  last_kept_visit: string | null;
+  next_appointment_at: string | null;
 };
 
 // Clinic operates in Tullahoma, TN. All week/day bucketing is done in this
@@ -459,6 +477,7 @@ export const getScheduleCheck = createServerFn({ method: "GET" })
       needs_next_week_scheduling: [],
       not_scheduled_after: [],
       last_week_nothing_booked: [],
+      worklists: { package_completed: [], not_scheduled: [], only_once: [], hidden: [], error: null },
       fetched_count: 0,
       error: null,
     };
@@ -480,7 +499,7 @@ export const getScheduleCheck = createServerFn({ method: "GET" })
         const { data: page, error: cErr } = await context.supabase
           .from("clients")
           .select(
-            "id, first_name, last_name, phone, package_total_visits, package_name, visits_used, package_price, amount_paid, internal_notes, square_customer_id, visit_tracking_mode, status, manual_active, payment_model, pending_renewal_start_date",
+            "id, first_name, last_name, phone, package_total_visits, package_name, visits_used, package_price, amount_paid, internal_notes, square_customer_id, visit_tracking_mode, status, manual_active, payment_model, pending_renewal_start_date, package_start_date",
           )
           .is("deleted_at", null)
           .range(from, from + pageSize - 1);

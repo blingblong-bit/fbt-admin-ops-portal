@@ -100,7 +100,7 @@ export function applyOverrides<T extends RawPackageFields>(c: T, overrides: Pack
   // package's figures, not where the client is in Square — forcing Hub here
   // hid Square's renewal timing and dropped owed renewals from Collections.
   // (Activation is still held by blocksAutoActivation.)
-  if (cur) out.visit_tracking_mode = "hub" as never;
+  if (cur || pen?.status === "active") out.visit_tracking_mode = "hub" as never;
   return { ...out, override_flags: flags, has_override: overrides.length > 0 };
 }
 

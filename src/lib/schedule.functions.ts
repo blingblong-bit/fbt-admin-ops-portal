@@ -169,7 +169,7 @@ function ymdLocalToInstant(s: string): Date {
 // Weekday (0=Sun..6=Sat) for a calendar date string. Purely calendar math —
 // no timezone needed since the date is already specified in local terms.
 import { addDaysYmd, workWeekStartFromYmd } from "@/lib/work-week";
-import { parseVisitNote } from "@/lib/square-visit-audit";
+import { readBookingNote } from "@/lib/square-visit-audit";
 import { applyOverridesToRows, blocksAutoActivation } from "@/lib/package-override";
 import { decidePreparedActivation, type ActivationNote, type PackageEvidence } from "@/lib/effective-visit-state";
 
@@ -184,7 +184,8 @@ async function squareNoteForBooking(bookingId: string): Promise<ActivationNote> 
     });
     if (!r.ok) return { status: "lookup_failed" };
     const j = (await r.json()) as { booking?: { seller_note?: string; customer_note?: string } };
-    const n = parseVisitNote(j.booking?.seller_note) ?? parseVisitNote(j.booking?.customer_note);
+    // Conflicting numbers are never guessed; treated like an unnumbered booking.
+    const n = readBookingNote(j.booking ?? {}).note;
     return n ? { status: "numbered", n: n.n, total: n.total } : { status: "unnumbered" };
   } catch {
     return { status: "lookup_failed" };

@@ -61,7 +61,7 @@ export const getVisitNoteReview = createServerFn({ method: "GET" })
     await assertAdmin(ctx);
 
     const counts: Record<NoteIssueKind, number> = {
-      skipped: 0, stale_future: 0, future_after_complete: 0, backward: 0, same_day_conflict: 0, package_size: 0, missing_note: 0,
+      skipped: 0, stale_future: 0, future_after_complete: 0, backward: 0, same_day_conflict: 0, package_size: 0, missing_note: 0, ambiguous_note: 0,
     };
     const nowIso = new Date().toISOString();
     const empty = (error: string | null, checked = 0): VisitNoteReview => ({

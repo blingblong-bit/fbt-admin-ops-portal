@@ -14,6 +14,12 @@ const RX = /(visit\s*#?\s*)?(?<![\d/])(\d{1,2})\s*(of|\/)\s*(\d{1,2})(?![\d]|\s*
  * notation when it uses the same package size ("1 of 8 ... 2/8").
  */
 export function parseVisitNote(note: string | null | undefined): ParsedNote | null {
+  const r = readVisitNote(note);
+  return r === "ambiguous" ? null : r;
+}
+
+/** Like parseVisitNote, but tells a conflicting note ("ambiguous") apart from no number at all (null). */
+export function readVisitNote(note: string | null | undefined): ParsedNote | "ambiguous" | null {
   if (!note) return null;
   const explicit = new Map<string, ParsedNote>();
   const bare = new Map<string, ParsedNote>();
@@ -25,12 +31,13 @@ export function parseVisitNote(note: string | null | undefined): ParsedNote | nu
     (isExplicit ? explicit : bare).set(`${n}/${total}`, { n, total });
   }
   if (explicit.size > 0) {
-    if (explicit.size !== 1) return null; // conflicting explicit numbers
+    if (explicit.size !== 1) return "ambiguous"; // conflicting explicit numbers
     const e = [...explicit.values()][0];
-    for (const b of bare.values()) if (b.total === e.total && b.n !== e.n) return null;
+    for (const b of bare.values()) if (b.total === e.total && b.n !== e.n) return "ambiguous";
     return e;
   }
-  if (bare.size !== 1) return null; // none, or conflicting notations
+  if (bare.size > 1) return "ambiguous";
+  if (bare.size === 0) return null;
   return [...bare.values()][0];
 }
 
@@ -159,7 +166,8 @@ export type NoteIssueKind =
   | "backward"
   | "same_day_conflict"
   | "package_size"
-  | "missing_note";
+  | "missing_note"
+  | "ambiguous_note";
 
 export type NoteIssue = { kind: NoteIssueKind; reason: string; expected: string | null; date: string };
 
@@ -170,7 +178,25 @@ export type SequenceEntry = {
   status?: string | null;
   cancelled?: boolean;
   note: ParsedNote | null;
+  /** The booking's notes contain conflicting visit numbers (never guessed). */
+  ambiguous?: boolean;
+  ambiguousText?: string;
 };
+
+/** Seller note first; a conflicting seller note is never hidden by the customer note. */
+export function readBookingNote(b: { seller_note?: string | null; customer_note?: string | null }): {
+  note: ParsedNote | null; ambiguous: boolean; text?: string;
+} {
+  const s = readVisitNote(b.seller_note);
+  const c = readVisitNote(b.customer_note);
+  if (s === "ambiguous") return { note: null, ambiguous: true, text: b.seller_note ?? "" };
+  if (s && c && c !== "ambiguous" && (c.n !== s.n || c.total !== s.total)) {
+    return { note: null, ambiguous: true, text: `${b.seller_note} / ${b.customer_note}` };
+  }
+  if (s) return { note: s, ambiguous: false };
+  if (c === "ambiguous") return { note: null, ambiguous: true, text: b.customer_note ?? "" };
+  return { note: c, ambiguous: false };
+}
 
 export const ISSUE_LABELS: Record<NoteIssueKind, string> = {
   skipped: "Skipped visit number",
@@ -180,6 +206,7 @@ export const ISSUE_LABELS: Record<NoteIssueKind, string> = {
   same_day_conflict: "Conflicting same-day notes",
   package_size: "Package size changed",
   missing_note: "Missing note in sequence",
+  ambiguous_note: "Conflicting visit numbers in one booking",
 };
 
 const CANCELLED = /CANCELLED|CANCELED|DECLINED|NO_SHOW/i;
@@ -195,7 +222,10 @@ export function buildSequence(bookings: ReviewBooking[], nowIso: string): Sequen
       past: b.start_at < nowIso,
       status: b.status ?? null,
       cancelled: CANCELLED.test(b.status ?? ""),
-      note: parseVisitNote(b.seller_note) ?? parseVisitNote(b.customer_note),
+      ...(() => {
+        const r = readBookingNote(b);
+        return { note: r.note, ...(r.ambiguous ? { ambiguous: true, ambiguousText: r.text } : {}) };
+      })(),
     }))
     .sort((a, b) => a.date.localeCompare(b.date));
 }
@@ -279,13 +309,21 @@ export function isReplacedCancellation(seq: SequenceEntry[], e: SequenceEntry): 
 /** Returns issues found in the recent Square sequence (last 6 past noted visits + all future). */
 export function detectNoteIssues(seq: SequenceEntry[]): NoteIssue[] {
   const superseded = (e: SequenceEntry) => isSupersededCancellation(seq, e) || isReplacedCancellation(seq, e);
+  const issues: NoteIssue[] = [];
+  // Conflicting numbers inside one booking are always reviewable (never guessed).
+  // A cancelled booking can't set position, so its ambiguity isn't flagged.
+  const recentCut = seq.filter((e) => e.past).slice(-12)[0]?.date ?? "";
+  for (const e of seq) {
+    if (e.ambiguous && !e.cancelled && e.date >= recentCut) {
+      issues.push({ kind: "ambiguous_note", reason: `Conflicting visit numbers in one booking: "${(e.ambiguousText ?? "").slice(0, 80)}"`, expected: null, date: e.date });
+    }
+  }
   const notedIdx = seq.map((e, i) => (e.note && !superseded(e) ? i : -1)).filter((i) => i >= 0);
-  if (notedIdx.length < 2) return []; // no/isolated notes → Hub fallback, no flag
+  if (notedIdx.length < 2) return issues; // no/isolated notes → Hub fallback
   const pastNoted = notedIdx.filter((i) => seq[i].past);
   const startIdx = pastNoted.length > PAST_WINDOW ? pastNoted[pastNoted.length - PAST_WINDOW] : notedIdx[0];
   const window = notedIdx.filter((i) => i >= startIdx);
 
-  const issues: NoteIssue[] = [];
   for (let k = 1; k < window.length; k++) {
     const ai = window[k - 1];
     const bi = window[k];

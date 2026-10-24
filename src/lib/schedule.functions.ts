@@ -644,6 +644,78 @@ export const getScheduleCheck = createServerFn({ method: "GET" })
     const not_scheduled_after = groups.not_scheduled_after.map((id) => decorate(byId.get(id)!));
     const last_week_nothing_booked = groups.last_week_nothing_booked.map((id) => decorate(byId.get(id)!));
 
+    // ---- Redesigned worklists (read-only from Square; only hide records may be auto-cleared) ----
+    const worklists: ScheduleCheckResult["worklists"] = {
+      package_completed: [], not_scheduled: [], only_once: [], hidden: [], error: null,
+    };
+    try {
+      const { loadSquareBookingIndex } = await import("@/lib/effective-visit-state.server");
+      const { classifyWorklist } = await import("@/lib/schedule-worklists");
+      const index = await loadSquareBookingIndex(token, 180, 60);
+      if (index.error) throw new Error(index.error);
+      const { data: hideRows, error: hErr } = await context.supabase
+        .from("schedule_hides")
+        .select("id, client_id, hidden_at, reason, known_future_booking_ids, package_start_snapshot, pending_renewal_snapshot")
+        .is("cleared_at", null);
+      if (hErr) throw hErr;
+      const hides = new Map((hideRows ?? []).map((h) => [h.client_id, h]));
+      const live = (s: string | null | undefined) => !/(CANCEL|DECLINE|NO_SHOW)/i.test(s ?? "");
+      const nowIso = index.nowIso;
+      const todayYmd = ymdInTz(new Date(nowIso));
+      for (const c of clientList) {
+        const bks = c.square_customer_id ? (index.byCustomer.get(c.square_customer_id) ?? []) : [];
+        let lastKept: string | null = null;
+        let nextAt: string | null = null;
+        const futureLiveIds: string[] = [];
+        for (const b of bks) {
+          if (!b.start_at || !live(b.status)) continue;
+          if (b.start_at < nowIso) {
+            if (!lastKept || b.start_at > lastKept) lastKept = b.start_at;
+          } else {
+            futureLiveIds.push(b.id);
+            if (!nextAt || b.start_at < nextAt) nextAt = b.start_at;
+          }
+        }
+        const thisWeekLiveCount = this_week.filter((a) => a.client?.id === c.id).length;
+        const hide = hides.get(c.id) ?? null;
+        const r = classifyWorklist(
+          c,
+          { lastKeptYmd: lastKept ? dayOf(lastKept) : null, futureLiveIds, thisWeekLiveCount },
+          todayYmd,
+          hide,
+        );
+        if (hide && r.clearHide) {
+          // Only the hide record changes — never the client, package or booking.
+          await context.supabase
+            .from("schedule_hides")
+            .update({ cleared_at: nowIso, clear_reason: r.clearHide, auto_cleared: true })
+            .eq("id", hide.id)
+            .is("cleared_at", null);
+          await context.supabase.from("client_activities").insert({
+            client_id: c.id,
+            activity_type: "schedule_hide_cleared",
+            description: `Schedule Check hide cleared automatically: ${r.clearHide}`,
+          });
+        }
+        if (!r.list) continue;
+        const row: WorklistRow = {
+          ...c,
+          last_appointment_at: lastApptByClient.get(c.id) ?? null,
+          remaining_left: r.left,
+          visit_count_check: r.check,
+          reasons: r.reasons,
+          hidden_kind: r.hiddenKind,
+          hide_id: r.hiddenKind === "manual" ? hide?.id ?? null : null,
+          last_kept_visit: lastKept,
+          next_appointment_at: nextAt,
+        };
+        worklists[r.list].push(row);
+      }
+      worklists.not_scheduled.sort((a, b) => (b.last_kept_visit ?? "").localeCompare(a.last_kept_visit ?? ""));
+    } catch (e) {
+      worklists.error = `Square history unavailable — worklists not built, nothing hidden (${(e as Error).message})`;
+    }
+
     // Log the check (best-effort, never throws)
     try {
       const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -672,6 +744,7 @@ export const getScheduleCheck = createServerFn({ method: "GET" })
       needs_next_week_scheduling,
       not_scheduled_after,
       last_week_nothing_booked,
+      worklists,
       fetched_count: bookings.length,
       error,
     };

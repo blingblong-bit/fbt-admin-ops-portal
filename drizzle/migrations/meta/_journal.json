@@ -43,6 +43,13 @@
       "when": 1792780715878,
       "tag": "0005_override_visit_baseline",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1792863149880,
+      "tag": "0006_schedule_hides",
+      "breakpoints": true
     }
   ]
 }

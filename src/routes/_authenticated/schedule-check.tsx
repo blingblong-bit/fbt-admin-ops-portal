@@ -6,6 +6,7 @@ import { toast } from "@/components/ui/sonner";
 import { ChevronDown, MessageSquare, Phone } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { VisitSourceLine } from "@/components/VisitSourceLine";
+import { ScheduleWorklists } from "@/components/ScheduleWorklists";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -497,6 +498,8 @@ function ScheduleCheckPage() {
           filter={q}
           hideOwed={isStaff}
         />
+
+        <ScheduleWorklists data={data?.worklists} filter={q} />
 
         <NotNextWeekSection
           appointments={thisWeekNotNextWeek}

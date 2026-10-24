@@ -43,6 +43,7 @@ export type ScheduleClientLite = {
   payment_model?: string | null;
   /** Prepared next package — lets a fully-used client still be checked in. */
   pending_renewal_start_date?: string | null;
+  package_start_date?: string | null;
   /** Square-vs-Hub check-in presentation; absent = Hub tracks (manual check-in). */
   visit?: import("@/lib/effective-visit-state").VisitTracking | null;
 };
@@ -88,8 +89,25 @@ export type ScheduleCheckResult = {
   not_scheduled_after: NeedsScheduleClient[];
   /** Last live visit was in the previous work week; nothing booked since. */
   last_week_nothing_booked: NeedsScheduleClient[];
+  /** Redesigned worklists (priority Package Completed > Not Scheduled > Only Once). */
+  worklists: {
+    package_completed: WorklistRow[];
+    not_scheduled: WorklistRow[];
+    only_once: WorklistRow[];
+    hidden: WorklistRow[];
+    /** Non-null when Square history couldn't be loaded — nothing is auto-hidden. */
+    error: string | null;
+  };
   fetched_count: number;
   error: string | null;
+};
+
+export type WorklistRow = NeedsScheduleClient & {
+  reasons: string[];
+  hidden_kind?: "manual" | "auto";
+  hide_id?: string | null;
+  last_kept_visit: string | null;
+  next_appointment_at: string | null;
 };
 
 // Clinic operates in Tullahoma, TN. All week/day bucketing is done in this
@@ -459,6 +477,7 @@ export const getScheduleCheck = createServerFn({ method: "GET" })
       needs_next_week_scheduling: [],
       not_scheduled_after: [],
       last_week_nothing_booked: [],
+      worklists: { package_completed: [], not_scheduled: [], only_once: [], hidden: [], error: null },
       fetched_count: 0,
       error: null,
     };
@@ -480,7 +499,7 @@ export const getScheduleCheck = createServerFn({ method: "GET" })
         const { data: page, error: cErr } = await context.supabase
           .from("clients")
           .select(
-            "id, first_name, last_name, phone, package_total_visits, package_name, visits_used, package_price, amount_paid, internal_notes, square_customer_id, visit_tracking_mode, status, manual_active, payment_model, pending_renewal_start_date",
+            "id, first_name, last_name, phone, package_total_visits, package_name, visits_used, package_price, amount_paid, internal_notes, square_customer_id, visit_tracking_mode, status, manual_active, payment_model, pending_renewal_start_date, package_start_date",
           )
           .is("deleted_at", null)
           .range(from, from + pageSize - 1);
@@ -625,6 +644,78 @@ export const getScheduleCheck = createServerFn({ method: "GET" })
     const not_scheduled_after = groups.not_scheduled_after.map((id) => decorate(byId.get(id)!));
     const last_week_nothing_booked = groups.last_week_nothing_booked.map((id) => decorate(byId.get(id)!));
 
+    // ---- Redesigned worklists (read-only from Square; only hide records may be auto-cleared) ----
+    const worklists: ScheduleCheckResult["worklists"] = {
+      package_completed: [], not_scheduled: [], only_once: [], hidden: [], error: null,
+    };
+    try {
+      const { loadSquareBookingIndex } = await import("@/lib/effective-visit-state.server");
+      const { classifyWorklist } = await import("@/lib/schedule-worklists");
+      const index = await loadSquareBookingIndex(token, 180, 60);
+      if (index.error) throw new Error(index.error);
+      const { data: hideRows, error: hErr } = await context.supabase
+        .from("schedule_hides")
+        .select("id, client_id, hidden_at, reason, known_future_booking_ids, package_start_snapshot, pending_renewal_snapshot")
+        .is("cleared_at", null);
+      if (hErr) throw hErr;
+      const hides = new Map((hideRows ?? []).map((h) => [h.client_id, h]));
+      const live = (s: string | null | undefined) => !/(CANCEL|DECLINE|NO_SHOW)/i.test(s ?? "");
+      const nowIso = index.nowIso;
+      const todayYmd = ymdInTz(new Date(nowIso));
+      for (const c of clientList) {
+        const bks = c.square_customer_id ? (index.byCustomer.get(c.square_customer_id) ?? []) : [];
+        let lastKept: string | null = null;
+        let nextAt: string | null = null;
+        const futureLiveIds: string[] = [];
+        for (const b of bks) {
+          if (!b.start_at || !live(b.status)) continue;
+          if (b.start_at < nowIso) {
+            if (!lastKept || b.start_at > lastKept) lastKept = b.start_at;
+          } else {
+            futureLiveIds.push(b.id);
+            if (!nextAt || b.start_at < nextAt) nextAt = b.start_at;
+          }
+        }
+        const thisWeekLiveCount = this_week.filter((a) => a.client?.id === c.id).length;
+        const hide = hides.get(c.id) ?? null;
+        const r = classifyWorklist(
+          c,
+          { lastKeptYmd: lastKept ? dayOf(lastKept) : null, futureLiveIds, thisWeekLiveCount },
+          todayYmd,
+          hide,
+        );
+        if (hide && r.clearHide) {
+          // Only the hide record changes — never the client, package or booking.
+          await context.supabase
+            .from("schedule_hides")
+            .update({ cleared_at: nowIso, clear_reason: r.clearHide, auto_cleared: true })
+            .eq("id", hide.id)
+            .is("cleared_at", null);
+          await context.supabase.from("client_activities").insert({
+            client_id: c.id,
+            activity_type: "schedule_hide_cleared",
+            description: `Schedule Check hide cleared automatically: ${r.clearHide}`,
+          });
+        }
+        if (!r.list) continue;
+        const row: WorklistRow = {
+          ...c,
+          last_appointment_at: lastApptByClient.get(c.id) ?? null,
+          remaining_left: r.left,
+          visit_count_check: r.check,
+          reasons: r.reasons,
+          hidden_kind: r.hiddenKind,
+          hide_id: r.hiddenKind === "manual" ? hide?.id ?? null : null,
+          last_kept_visit: lastKept,
+          next_appointment_at: nextAt,
+        };
+        worklists[r.list].push(row);
+      }
+      worklists.not_scheduled.sort((a, b) => (b.last_kept_visit ?? "").localeCompare(a.last_kept_visit ?? ""));
+    } catch (e) {
+      worklists.error = `Square history unavailable — worklists not built, nothing hidden (${(e as Error).message})`;
+    }
+
     // Log the check (best-effort, never throws)
     try {
       const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -653,6 +744,7 @@ export const getScheduleCheck = createServerFn({ method: "GET" })
       needs_next_week_scheduling,
       not_scheduled_after,
       last_week_nothing_booked,
+      worklists,
       fetched_count: bookings.length,
       error,
     };
@@ -2617,4 +2709,70 @@ export const undoVisitCheckIn = createServerFn({ method: "POST" })
       metadata: { ...meta, undone_activity_id: a.id },
     });
     return { ok: true, visits_used: visitsUsed };
+  });
+
+/** Staff hide a client from Schedule Check worklists (audited, restorable). */
+export const hideScheduleClient = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { clientId: string; reason?: string }) => {
+    if (!d?.clientId || typeof d.clientId !== "string") throw new Error("clientId required");
+    return { clientId: d.clientId, reason: (d.reason ?? "").trim().slice(0, 300) || null };
+  })
+  .handler(async ({ data, context }) => {
+    const token = process.env.SQUARE_PRODUCTION_ACCESS_TOKEN;
+    if (!token) throw new Error("Square is not configured");
+    const { data: c, error } = await context.supabase
+      .from("clients")
+      .select("id, square_customer_id, package_start_date, pending_renewal_start_date")
+      .eq("id", data.clientId)
+      .single();
+    if (error) throw error;
+    const { loadSquareBookingIndex } = await import("@/lib/effective-visit-state.server");
+    const index = await loadSquareBookingIndex(token, 180, 60);
+    if (index.error) throw new Error("Square could not be checked — try again");
+    const known = (c.square_customer_id ? index.byCustomer.get(c.square_customer_id) ?? [] : [])
+      .filter((b) => b.start_at && b.start_at >= index.nowIso)
+      .map((b) => b.id);
+    const { error: iErr } = await context.supabase.from("schedule_hides").insert({
+      client_id: c.id,
+      reason: data.reason,
+      hidden_by: context.userId,
+      known_future_booking_ids: known,
+      package_start_snapshot: c.package_start_date,
+      pending_renewal_snapshot: c.pending_renewal_start_date,
+    });
+    if (iErr) {
+      if (iErr.code === "23505") return { ok: true, already: true };
+      throw iErr;
+    }
+    await context.supabase.from("client_activities").insert({
+      client_id: c.id,
+      activity_type: "schedule_hidden",
+      description: `Hidden from Schedule Check${data.reason ? `: ${data.reason}` : ""}`,
+    });
+    return { ok: true, already: false };
+  });
+
+export const restoreScheduleClient = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { clientId: string }) => {
+    if (!d?.clientId || typeof d.clientId !== "string") throw new Error("clientId required");
+    return d;
+  })
+  .handler(async ({ data, context }) => {
+    const { data: rows, error } = await context.supabase
+      .from("schedule_hides")
+      .update({ cleared_at: new Date().toISOString(), cleared_by: context.userId, clear_reason: "Restored by staff" })
+      .eq("client_id", data.clientId)
+      .is("cleared_at", null)
+      .select("id");
+    if (error) throw error;
+    if (rows?.length) {
+      await context.supabase.from("client_activities").insert({
+        client_id: data.clientId,
+        activity_type: "schedule_restored",
+        description: "Restored to Schedule Check worklists",
+      });
+    }
+    return { ok: true, restored: rows?.length ?? 0 };
   });

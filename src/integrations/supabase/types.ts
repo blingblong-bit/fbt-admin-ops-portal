@@ -630,6 +630,59 @@ export type Database = {
           },
         ]
       }
+      schedule_hides: {
+        Row: {
+          auto_cleared: boolean
+          clear_reason: string | null
+          cleared_at: string | null
+          cleared_by: string | null
+          client_id: string
+          hidden_at: string
+          hidden_by: string | null
+          id: string
+          known_future_booking_ids: string[]
+          package_start_snapshot: string | null
+          pending_renewal_snapshot: string | null
+          reason: string | null
+        }
+        Insert: {
+          auto_cleared?: boolean
+          clear_reason?: string | null
+          cleared_at?: string | null
+          cleared_by?: string | null
+          client_id: string
+          hidden_at?: string
+          hidden_by?: string | null
+          id?: string
+          known_future_booking_ids?: string[]
+          package_start_snapshot?: string | null
+          pending_renewal_snapshot?: string | null
+          reason?: string | null
+        }
+        Update: {
+          auto_cleared?: boolean
+          clear_reason?: string | null
+          cleared_at?: string | null
+          cleared_by?: string | null
+          client_id?: string
+          hidden_at?: string
+          hidden_by?: string | null
+          id?: string
+          known_future_booking_ids?: string[]
+          package_start_snapshot?: string | null
+          pending_renewal_snapshot?: string | null
+          reason?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "schedule_hides_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       square_customer_reviews: {
         Row: {
           created_at: string

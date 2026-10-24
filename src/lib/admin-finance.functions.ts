@@ -216,3 +216,18 @@ export const getSquareActivationReport = createServerFn({ method: "GET" })
     const r = await runSquareActivationSweep(ctx.supabase, token, { apply: false });
     return { ...r, rows: r.rows.filter((x) => x.decision.kind !== "skip").map((x) => ({ name: x.name, ...x.decision })) };
   });
+
+/** Admin: copy the private cron bearer from server secrets into the database
+ *  vault so the scheduled job can reference it by name. Never returns it. */
+export const syncActivationCronSecret = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const ctx = context as unknown as Ctx;
+    await assertAdmin(ctx);
+    const s = (process.env.SQUARE_ACTIVATION_CRON_SECRET ?? "").trim();
+    if (s.length < 32) throw new Error("Cron secret is not set.");
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { error } = await supabaseAdmin.rpc("store_activation_cron_secret" as never, { p_secret: s } as never);
+    if (error) throw new Error(error.message);
+    return { stored: true };
+  });

@@ -57,6 +57,13 @@
       "when": 1792866564645,
       "tag": "0007_square_started_pending_override",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1792867054567,
+      "tag": "0008_override_cycle_promotion",
+      "breakpoints": true
     }
   ]
 }

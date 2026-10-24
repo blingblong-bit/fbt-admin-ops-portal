@@ -426,6 +426,7 @@ export type Database = {
           created_at: string
           id: string
           price: number | null
+          raw_baseline: Json | null
           reason: string
           recognized_paid: number | null
           slot: string
@@ -445,6 +446,7 @@ export type Database = {
           created_at?: string
           id?: string
           price?: number | null
+          raw_baseline?: Json | null
           reason: string
           recognized_paid?: number | null
           slot: string
@@ -464,6 +466,7 @@ export type Database = {
           created_at?: string
           id?: string
           price?: number | null
+          raw_baseline?: Json | null
           reason?: string
           recognized_paid?: number | null
           slot?: string
@@ -972,6 +975,7 @@ export type Database = {
         Args: {
           p_booking_id: string
           p_client_id: string
+          p_figures: Json
           p_start: string
           p_total: number
         }

@@ -76,6 +76,9 @@ export type HubVisitClient = {
 export function currentPositionUnreadable(seq: SequenceEntry[], issues: NoteIssue[]): boolean {
   const pastNoted = seq.filter((e) => e.past && e.note && !isSupersededCancellation(seq, e) && !isOutrankedCancellation(seq, e));
   const latest = pastNoted[pastNoted.length - 1];
+  // A past, live booking with conflicting numbers at/after the latest clear
+  // number may itself be the latest visit — position can't be read safely.
+  if (seq.some((e) => e.past && e.ambiguous && !e.cancelled && (!latest || e.date >= latest.date))) return true;
   if (!latest) return false;
   const day = latest.date.slice(0, 10);
   return issues.some((i) => {

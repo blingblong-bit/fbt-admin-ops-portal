@@ -18,19 +18,19 @@ export async function runSquareActivationSweep(admin: any, token: string, opts: 
   const write = opts.apply && enabled;
   const { data: clients, error } = await admin
     .from("clients")
-    .select("id, first_name, last_name, square_customer_id, pending_renewal_start_date, pending_renewal_total_visits, pending_renewal_price, pending_renewal_package_name")
+    .select("id, first_name, last_name, square_customer_id, package_total_visits, visits_used, package_price, amount_paid, package_start_date, previous_package_owed, pending_renewal_start_date, pending_renewal_total_visits, pending_renewal_price, pending_renewal_paid, pending_renewal_package_name")
     .is("deleted_at", null).neq("status", "archived").not("pending_renewal_start_date", "is", null);
   if (error) throw error;
-  const { data: ovr, error: oe } = await admin.from("package_overrides").select("client_id, slot, status, visits_used, start_date, total_visits").is("cleared_at", null);
+  const { data: ovr, error: oe } = await admin.from("package_overrides").select("*").is("cleared_at", null);
   if (oe) throw oe;
-  const ovrRows = (ovr ?? []) as { client_id: string; slot: string; status: string; visits_used: number | null; start_date: string | null; total_visits: number | null }[];
+  const ovrRows = (ovr ?? []) as any[];
   const overridden = new Set(ovrRows.filter((o) => o.slot !== "previous").map((o) => o.client_id));
   // Prepared packages held in an override may have no raw prepared row.
   const have = new Set(((clients ?? []) as any[]).map((c) => c.id));
-  const extraIds = [...new Set(ovrRows.filter((o) => o.slot === "pending" && o.status === "prepared" && !have.has(o.client_id)).map((o) => o.client_id))];
+  const extraIds = [...new Set(ovrRows.filter((o) => o.slot !== "previous" && !have.has(o.client_id)).map((o) => o.client_id))];
   if (extraIds.length) {
     const { data: more, error: me } = await admin.from("clients")
-      .select("id, first_name, last_name, square_customer_id, pending_renewal_start_date, pending_renewal_total_visits, pending_renewal_price, pending_renewal_package_name")
+      .select("id, first_name, last_name, square_customer_id, package_total_visits, visits_used, package_price, amount_paid, package_start_date, previous_package_owed, pending_renewal_start_date, pending_renewal_total_visits, pending_renewal_price, pending_renewal_paid, pending_renewal_package_name")
       .is("deleted_at", null).neq("status", "archived").in("id", extraIds);
     if (me) throw me;
     (clients as any[]).push(...(more ?? []));
@@ -43,18 +43,15 @@ export async function runSquareActivationSweep(admin: any, token: string, opts: 
     const seq = bks ? buildSequence(bks.filter((b: any) => b.start_at) as never, index.nowIso) : null;
     const currentUnreadable = seq ? currentPositionUnreadable(seq, detectNoteIssues(seq)) : false;
     const mine = ovrRows.filter((o) => o.client_id === c.id);
-    if (overridden.has(c.id) && mine.some((o) => o.slot === "pending" && o.status === "prepared")) {
-      // Admin-edited prepared package: Square start consumes the override (raw fields untouched).
-      const d = decideOverridePendingStart({
-        clientId: c.id, squareCustomerId: c.square_customer_id,
-        rawPending: { start: c.pending_renewal_start_date, total: c.pending_renewal_total_visits },
-        overrides: mine, seq, currentUnreadable,
-      });
+    if (overridden.has(c.id)) {
+      // Admin financial/date-only figures: Square's start promotes them into
+      // the next cycle atomically (raw fields untouched); visit counts stay manual.
+      const d = decideOverridePendingStart({ client: c, overrides: mine, seq, currentUnreadable });
       const decision: SquareActivationDecision = d.kind === "activate" && d.startYmd < sinceYmd ? { ...d, kind: "backlog" } : d;
       const row: SweepRow = { client_id: c.id, name: `${c.first_name} ${c.last_name}`, decision, via: "override" };
-      if (write && decision.kind === "activate") {
+      if (write && decision.kind === "activate" && d.figures) {
         const { error: re } = await admin.rpc("start_pending_override_from_square", {
-          p_client_id: c.id, p_booking_id: decision.bookingId, p_start: decision.startYmd, p_total: decision.total,
+          p_client_id: c.id, p_booking_id: decision.bookingId, p_start: decision.startYmd, p_total: decision.total, p_figures: d.figures,
         });
         if (re) row.error = re.message; else row.applied = true;
       }

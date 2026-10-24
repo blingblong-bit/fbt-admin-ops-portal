@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { classifyClient, parseBookings, parseVisitNote } from "./square-visit-audit";
+import { currentPositionUnreadable } from "./effective-visit-state";
 
 describe("parseVisitNote", () => {
   it("dates and payment references do not hide an explicit visit number", () => {
@@ -174,8 +175,32 @@ describe("visit note review with dated notes (Analeigh-style)", () => {
     const seq = buildSequence([b("a", "2026-09-10", "8/8"), b("b", "2026-09-15", "1 of 8 PD $100 9/15"), b("c", "2026-09-17", "2 of 8")], NOW);
     expect(detectNoteIssues(seq)).toEqual([]);
   });
-  it("genuine skips and same-day conflicts still flag", () => {
-    expect(detectNoteIssues(buildSequence([b("a", "2026-09-15", "1 of 8"), b("b", "2026-09-17", "3 of 8")], NOW)).length).toBeGreaterThan(0);
-    expect(detectNoteIssues(buildSequence([b("a", "2026-09-15", "1 of 8"), b("b", "2026-09-17", "1 of 8 or 2/8")], NOW)).length).toBeGreaterThan(0);
+  it("genuine skips still flag", () => {
+    const k = detectNoteIssues(buildSequence([b("a", "2026-09-15", "1 of 8"), b("b", "2026-09-17", "3 of 8")], NOW)).map((i) => i.kind);
+    expect(k).toContain("skipped");
+  });
+  it("conflicting numbers in one booking are flagged, even followed by a clean note", () => {
+    const alone = detectNoteIssues(buildSequence([b("a", "2026-09-15", "1 of 8"), b("b", "2026-09-17", "1 of 8 or 2/8")], NOW));
+    expect(alone.map((i) => i.kind)).toEqual(["ambiguous_note"]);
+    const seq = buildSequence([b("a", "2026-09-15", "1 of 8"), b("b", "2026-09-17", "2 of 8 3 of 8"), b("c", "2026-09-19", "3 of 8")], NOW);
+    expect(detectNoteIssues(seq).map((i) => i.kind)).toContain("ambiguous_note");
+  });
+  it("seller/customer notes that disagree are ambiguous; seller conflict isn't hidden by customer note", () => {
+    const x = { id: "x", start_at: "2026-09-17T15:00:00Z", status: "ACCEPTED" };
+    expect(buildSequence([{ ...x, seller_note: "2 of 8", customer_note: "3 of 8" }], NOW)[0]).toMatchObject({ note: null, ambiguous: true });
+    expect(buildSequence([{ ...x, seller_note: "2 of 8 or 3 of 8", customer_note: "2 of 8" }], NOW)[0]).toMatchObject({ note: null, ambiguous: true });
+    expect(buildSequence([{ ...x, seller_note: "2 of 8", customer_note: "2/8" }], NOW)[0].note).toEqual({ n: 2, total: 8 });
+    expect(buildSequence([{ ...x, seller_note: "knee", customer_note: "2 of 8" }], NOW)[0].note).toEqual({ n: 2, total: 8 });
+  });
+  it("a cancelled ambiguous booking is not flagged (numbered-cancellation policy unchanged)", () => {
+    const seq = buildSequence([b("a", "2026-09-15", "1 of 8"), b("b", "2026-09-17", "2 of 8 3 of 8", "CANCELLED_BY_CUSTOMER"), b("c", "2026-09-19", "2 of 8")], NOW);
+    expect(detectNoteIssues(seq)).toEqual([]);
+  });
+  it("past ambiguous latest booking blocks current position; future-only conflict does not", () => {
+    const past = buildSequence([b("a", "2026-10-15", "3 of 8"), b("b", "2026-10-20", "4 of 8 5 of 8")], NOW);
+    expect(currentPositionUnreadable(past, detectNoteIssues(past))).toBe(true);
+    const fut = buildSequence([b("a", "2026-10-15", "3 of 8"), b("b", "2026-10-28", "4 of 8 5 of 8")], NOW);
+    expect(detectNoteIssues(fut).map((i) => i.kind)).toEqual(["ambiguous_note"]);
+    expect(currentPositionUnreadable(fut, detectNoteIssues(fut))).toBe(false);
   });
 });

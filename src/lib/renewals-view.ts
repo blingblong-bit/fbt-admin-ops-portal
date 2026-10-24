@@ -14,6 +14,8 @@ export type RenewalGroups = {
 export function attentionReason(r: RenewalForecastRow): string | null {
   // Old note issues alone don't need attention; only an unreadable CURRENT position does.
   if (r.automation_usable === false) return "Current Square visit position is unclear";
+  // Never list an already-started package as "Scheduled" with its old date.
+  if (r.pre_renewed && r.square_started_ymd) return `Square started this package on ${r.square_started_ymd} — awaiting activation`;
   if (r.pre_renewed && r.no_upcoming) return "Prepared, but no upcoming appointment is booked";
   return null;
 }

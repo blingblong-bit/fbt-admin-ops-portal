@@ -52,3 +52,33 @@ export function decideSquareActivation(i: {
   if (base.startYmd < i.sinceYmd) return { kind: "backlog", reason: "Started in Square before automatic activation was turned on", ...base };
   return { kind: "activate", reason: `Square marked ${base.startYmd} as 1 of ${total}`, ...base };
 }
+
+/**
+ * A prepared package held in an admin override (financial/date-only) started
+ * in Square. Same evidence bar as decideSquareActivation, applied to the
+ * EFFECTIVE prepared start/size. Never for an admin visit-count override or an
+ * already-started override. Pure.
+ */
+export function decideOverridePendingStart(i: {
+  clientId: string;
+  squareCustomerId: string | null;
+  rawPending: { start: string | null; total: number | null };
+  overrides: { slot: string; status: string; visits_used: number | null; start_date: string | null; total_visits: number | null }[];
+  seq: SequenceEntry[] | null;
+  currentUnreadable: boolean;
+}): SquareActivationDecision {
+  const pen = i.overrides.find((o) => o.slot === "pending");
+  const cur = i.overrides.find((o) => o.slot === "current");
+  if (!pen || pen.status !== "prepared") return { kind: "skip", reason: "No prepared package override waiting to start" };
+  if (cur && cur.visits_used !== null) return { kind: "skip", reason: "Current package has an admin visit count" };
+  const d = decideSquareActivation({
+    client: {
+      id: i.clientId,
+      square_customer_id: i.squareCustomerId,
+      pending_renewal_start_date: pen.start_date ?? i.rawPending.start,
+      pending_renewal_total_visits: pen.total_visits ?? i.rawPending.total,
+    },
+    seq: i.seq, currentUnreadable: i.currentUnreadable, hasOverride: false, sinceYmd: "0000-00-00",
+  });
+  return d;
+}

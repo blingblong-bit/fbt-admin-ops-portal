@@ -1905,6 +1905,8 @@ export type RenewalForecastRow = {
   review_status?: "clean" | "needs_review";
   automation_usable?: boolean;
   hub_visits_used: number | null;
+  /** Square already opened the prepared package (verified past 1/N) — awaiting activation, not "scheduled". */
+  square_started_ymd?: string | null;
 };
 
 export type RenewalForecastResult = {
@@ -1934,25 +1936,15 @@ export const getRenewalForecast = createServerFn({ method: "GET" })
 
     // Past + upcoming Square bookings: past notes decide the effective visit
     // position, upcoming non-cancelled appointments drive the forecast.
-    const { loadSquareBookingIndex, effectiveStateFor, upcomingStarts } = await import(
-      "@/lib/effective-visit-state.server"
-    );
-    const { drivingCounts, forecastRenewal, currentPackageAlreadyCovers } = await import("@/lib/effective-visit-state");
+    const { loadSquareBookingIndex } = await import("@/lib/effective-visit-state.server");
+    const { buildRenewalForecastRows } = await import("@/lib/renewal-forecast");
     const index = await loadSquareBookingIndex(token, 180, FORECAST_DAYS);
     if (index.error) return { ...empty, error: index.error };
-    const byCustomer = new Map<string, string[]>();
-    for (const cid of index.byCustomer.keys()) {
-      const list = upcomingStarts(index, cid);
-      if (list.length > 0) byCustomer.set(cid, list);
-    }
-    // No early return when there are zero bookings: prepared renewals with no
-    // upcoming appointment must still be listed further down.
     const { data: ovrAll, error: oErr } = await context.supabase
       .from("package_overrides").select("*").is("cleared_at", null);
     if (oErr) throw oErr;
-    const ovr = (ovrAll ?? []) as any[];
-    let rows: unknown[] | null = [];
-    if (byCustomer.size > 0) {
+    const clients: any[] = [];
+    for (let from = 0; ; from += 1000) {
       const { data, error: cErr } = await context.supabase
         .from("clients")
         .select(
@@ -1960,156 +1952,15 @@ export const getRenewalForecast = createServerFn({ method: "GET" })
         )
         .is("deleted_at", null)
         .neq("status", "archived")
-        .in("square_customer_id", Array.from(byCustomer.keys()));
+        .range(from, from + 999);
       if (cErr) throw cErr;
-      // Admin overrides first, then the usual package filters on effective values.
-      rows = applyOverridesToRows((data ?? []) as any[], ovr).filter(
-        (r: any) => Number(r.package_total_visits ?? 0) > 0 && r.visits_used !== null && r.visits_used !== undefined,
-      );
+      clients.push(...(data ?? []));
+      if (!data || data.length < 1000) break;
     }
-
-    const out: RenewalForecastRow[] = [];
-    for (const r of (rows ?? []) as unknown as Array<{
-      id: string;
-      square_customer_id: string | null;
-      visits_used: number | null;
-      package_total_visits: number;
-      package_price: number | string | null;
-      next_package_price: number | string | null;
-      pending_renewal_start_date: string | null;
-      pending_renewal_price: number | string | null;
-      pending_renewal_paid?: number | string | null;
-      pending_renewal_total_visits: number | null;
-      pending_renewal_package_name: string | null;
-    }>) {
-      const starts = [...(byCustomer.get(r.square_customer_id ?? "") ?? [])].sort();
-      if (starts.length === 0) continue;
-      const state = effectiveStateFor(index, r);
-      const drive = drivingCounts(state);
-      const used = drive.used;
-      const total = drive.total;
-      const fc = forecastRenewal({
-        upcomingStarts: starts,
-        visitsUsed: used,
-        totalVisits: total,
-        nextPackageStart: drive.nextPackageStart,
-      });
-      if (!fc.needsRenewal || !fc.firstUncoveredStart) continue;
-      const remaining = fc.remaining;
-
-      const ymds = starts.map((s) => ymdInTz(new Date(s)));
-      const firstUncoveredYmd = ymdInTz(new Date(fc.firstUncoveredStart));
-      const pendingStart = r.pending_renewal_start_date;
-      // Hub already renewed ahead of time (current package starts then, unused):
-      // no separate next package is due, unless one was explicitly prepared.
-      if (!pendingStart && currentPackageAlreadyCovers((r as { package_start_date?: string | null }).package_start_date, r.visits_used, firstUncoveredYmd)) continue;
-      // Once staff pre-renews, the prepared start date drives the weekly
-      // bucket (they may have adjusted it); otherwise use the forecast.
-      const bucketStart = workWeekStartFromYmd(pendingStart ?? firstUncoveredYmd);
-      const week_bucket =
-        bucketStart === weekStartYmd ? "this" : bucketStart === nextWeekStartYmd ? "next" : "later";
-      const basePrice = Number(r.package_price ?? 0);
-      const override = r.next_package_price === null ? null : Number(r.next_package_price);
-      const pendingPrice =
-        r.pending_renewal_price === null || r.pending_renewal_price === undefined
-          ? null
-          : Number(r.pending_renewal_price);
-
-      out.push({
-        client_id: r.id,
-        visits_used: used,
-        package_total_visits: total,
-        remaining,
-        upcoming_count: starts.length,
-        appointment_ymds: ymds,
-        first_uncovered_index: fc.firstUncoveredIndex,
-        first_uncovered_ymd: firstUncoveredYmd,
-        visit_source: state.source,
-        review_status: state.reviewStatus,
-        automation_usable: state.automationUsable,
-        hub_visits_used: r.visits_used ?? null,
-        week_bucket,
-        package_price: basePrice,
-        next_package_price:
-          pendingPrice !== null
-            ? renewalAmountDue({ pending_renewal_price: pendingPrice, pending_renewal_paid: r.pending_renewal_paid ?? 0 } as never)
-            : (override ?? basePrice),
-        pre_renewed: !!pendingStart,
-        pending_start_ymd: pendingStart,
-        pending_total_visits: r.pending_renewal_total_visits ?? null,
-        pending_package_name: r.pending_renewal_package_name ?? null,
-        no_upcoming: false,
-      });
-    }
-
-    // Prepared renewals with no qualifying upcoming appointment must not
-    // vanish — surface them separately so staff can still edit or cancel.
-    const seen = new Set(out.map((r) => r.client_id));
-    const { data: pendingRows, error: pErr } = await context.supabase
-      .from("clients")
-      .select(
-        "id, square_customer_id, visits_used, package_total_visits, package_price, package_start_date, next_package_price, pending_renewal_start_date, pending_renewal_price, pending_renewal_paid, pending_renewal_total_visits, pending_renewal_package_name",
-      )
-      .is("deleted_at", null)
-      .neq("status", "archived")
-      .not("pending_renewal_start_date", "is", null);
-    if (pErr) throw pErr;
-    // Prepared renewal an admin marked Active is no longer pending.
-    const pendingEff = applyOverridesToRows((pendingRows ?? []) as any[], ovr).filter((r: any) => !!r.pending_renewal_start_date);
-    for (const r of pendingEff as unknown as Array<{
-      id: string;
-      visits_used: number | null;
-      package_total_visits: number;
-      package_price: number | string | null;
-      next_package_price: number | string | null;
-      pending_renewal_start_date: string | null;
-      pending_renewal_price: number | string | null;
-      pending_renewal_paid?: number | string | null;
-      pending_renewal_total_visits: number | null;
-      pending_renewal_package_name: string | null;
-    }>) {
-      if (seen.has(r.id)) continue;
-      // "No upcoming" only when Square truly has no future live appointment.
-      const ups = upcomingStarts(index, (r as { square_customer_id?: string | null }).square_customer_id ?? null);
-      const upYmds = ups.map((x) => ymdInTz(new Date(x)));
-      const firstAfter = upYmds.find((y) => y >= (r.pending_renewal_start_date ?? "")) ?? null;
-      const hasUpcoming = ups.length > 0;
-      const bStart = firstAfter ? workWeekStartFromYmd(firstAfter) : null;
-      const used = Number(r.visits_used ?? 0);
-      const total = Number(r.package_total_visits ?? 0);
-      const basePrice = Number(r.package_price ?? 0);
-      const pendingPrice =
-        r.pending_renewal_price === null || r.pending_renewal_price === undefined
-          ? null
-          : Number(r.pending_renewal_price);
-      const override = r.next_package_price === null ? null : Number(r.next_package_price);
-      out.push({
-        client_id: r.id,
-        visits_used: used,
-        package_total_visits: total,
-        remaining: Math.max(0, total - used),
-        upcoming_count: ups.length,
-        appointment_ymds: upYmds,
-        first_uncovered_index: Math.max(0, firstAfter ? upYmds.indexOf(firstAfter) : 0),
-        first_uncovered_ymd: firstAfter ?? r.pending_renewal_start_date ?? "",
-        visit_source: "hub_fallback",
-        hub_visits_used: r.visits_used ?? null,
-        // Only a real appointment on/after the prepared start puts it in This/Next Week.
-        week_bucket: bStart === weekStartYmd ? "this" : bStart === nextWeekStartYmd ? "next" : "later",
-        package_price: basePrice,
-        next_package_price:
-          pendingPrice !== null
-            ? renewalAmountDue({ pending_renewal_price: pendingPrice, pending_renewal_paid: r.pending_renewal_paid ?? 0 } as never)
-            : (override ?? basePrice),
-        pre_renewed: true,
-        pending_start_ymd: r.pending_renewal_start_date,
-        pending_total_visits: r.pending_renewal_total_visits ?? null,
-        pending_package_name: r.pending_renewal_package_name ?? null,
-        no_upcoming: !hasUpcoming,
-      });
-    }
-
-    out.sort((a, b) => a.first_uncovered_ymd.localeCompare(b.first_uncovered_ymd));
+    const out = buildRenewalForecastRows({
+      clients, overrides: (ovrAll ?? []) as any[], bookingsByCustomer: index.byCustomer as never,
+      nowIso: index.nowIso, weekStartYmd, nextWeekStartYmd,
+    });
     return { ...empty, rows: out };
   });
 

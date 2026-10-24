@@ -429,6 +429,7 @@ export type Database = {
           reason: string
           recognized_paid: number | null
           slot: string
+          square_booking_id: string | null
           start_date: string | null
           status: string
           total_visits: number | null
@@ -447,6 +448,7 @@ export type Database = {
           reason: string
           recognized_paid?: number | null
           slot: string
+          square_booking_id?: string | null
           start_date?: string | null
           status?: string
           total_visits?: number | null
@@ -465,6 +467,7 @@ export type Database = {
           reason?: string
           recognized_paid?: number | null
           slot?: string
+          square_booking_id?: string | null
           start_date?: string | null
           status?: string
           total_visits?: number | null
@@ -962,6 +965,15 @@ export type Database = {
           p_reason: string
           p_slot: string
           p_values: Json
+        }
+        Returns: Json
+      }
+      start_pending_override_from_square: {
+        Args: {
+          p_booking_id: string
+          p_client_id: string
+          p_start: string
+          p_total: number
         }
         Returns: Json
       }

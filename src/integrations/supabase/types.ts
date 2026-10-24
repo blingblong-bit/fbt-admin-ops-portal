@@ -984,6 +984,10 @@ export type Database = {
         }
         Returns: Json
       }
+      store_activation_cron_secret: {
+        Args: { p_secret: string }
+        Returns: boolean
+      }
       undo_last_renewal: {
         Args: { p_client_id: string; p_reason: string }
         Returns: Json

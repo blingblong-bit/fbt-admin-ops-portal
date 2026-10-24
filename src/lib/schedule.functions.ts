@@ -106,6 +106,8 @@ export type WorklistRow = NeedsScheduleClient & {
   reasons: string[];
   hidden_kind?: "manual" | "auto";
   hide_id?: string | null;
+  hidden_at?: string | null;
+  pinned?: boolean;
   last_kept_visit: string | null;
   next_appointment_at: string | null;
 };
@@ -655,7 +657,7 @@ export const getScheduleCheck = createServerFn({ method: "GET" })
       if (index.error) throw new Error(index.error);
       const { data: hideRows, error: hErr } = await context.supabase
         .from("schedule_hides")
-        .select("id, client_id, hidden_at, reason, known_future_booking_ids, package_start_snapshot, pending_renewal_snapshot")
+        .select("id, client_id, hidden_at, reason, known_future_booking_ids, package_start_snapshot, pending_renewal_snapshot, kind")
         .is("cleared_at", null);
       if (hErr) throw hErr;
       const hides = new Map((hideRows ?? []).map((h) => [h.client_id, h]));
@@ -677,13 +679,20 @@ export const getScheduleCheck = createServerFn({ method: "GET" })
           }
         }
         const thisWeekLiveCount = this_week.filter((a) => a.client?.id === c.id).length;
-        const hide = hides.get(c.id) ?? null;
+        const hide = (hides.get(c.id) as any) ?? null;
         const r = classifyWorklist(
           c,
-          { lastKeptYmd: lastKept ? dayOf(lastKept) : null, futureLiveIds, thisWeekLiveCount },
+          { lastKeptYmd: lastKept ? dayOf(lastKept) : null, futureLiveIds, thisWeekLiveCount, sourceUnknown: !c.square_customer_id },
           todayYmd,
           hide,
         );
+        if (hide && r.clearPin) {
+          await context.supabase
+            .from("schedule_hides")
+            .update({ cleared_at: nowIso, clear_reason: r.clearPin, auto_cleared: true })
+            .eq("id", hide.id)
+            .is("cleared_at", null);
+        }
         if (hide && r.clearHide) {
           // Only the hide record changes — never the client, package or booking.
           await context.supabase
@@ -705,13 +714,23 @@ export const getScheduleCheck = createServerFn({ method: "GET" })
           visit_count_check: r.check,
           reasons: r.reasons,
           hidden_kind: r.hiddenKind,
-          hide_id: r.hiddenKind === "manual" ? hide?.id ?? null : null,
+          hide_id: r.hiddenKind === "manual" || r.pinned ? hide?.id ?? null : null,
+          hidden_at: r.hiddenKind === "manual" ? hide?.hidden_at ?? null : null,
+          pinned: r.pinned,
           last_kept_visit: lastKept,
           next_appointment_at: nextAt,
         };
         worklists[r.list].push(row);
       }
       worklists.not_scheduled.sort((a, b) => (b.last_kept_visit ?? "").localeCompare(a.last_kept_visit ?? ""));
+      // Hidden: staff-hidden first (newest hide), then auto-hidden (most recently seen), then name.
+      const nm = (r: WorklistRow) => `${r.last_name} ${r.first_name}`.toLowerCase();
+      worklists.hidden.sort((a, b) =>
+        (a.hidden_kind === "manual" ? 0 : 1) - (b.hidden_kind === "manual" ? 0 : 1) ||
+        (b.hidden_at ?? "").localeCompare(a.hidden_at ?? "") ||
+        (b.last_kept_visit ?? "").localeCompare(a.last_kept_visit ?? "") ||
+        nm(a).localeCompare(nm(b)),
+      );
     } catch (e) {
       worklists.error = `Square history unavailable — worklists not built, nothing hidden (${(e as Error).message})`;
     }
@@ -2584,7 +2603,15 @@ export const hideScheduleClient = createServerFn({ method: "POST" })
     const known = (c.square_customer_id ? index.byCustomer.get(c.square_customer_id) ?? [] : [])
       .filter((b) => b.start_at && b.start_at >= index.nowIso)
       .map((b) => b.id);
+    // A staff restore (pin) is replaced by this deliberate hide.
+    await context.supabase
+      .from("schedule_hides")
+      .update({ cleared_at: new Date().toISOString(), cleared_by: context.userId, clear_reason: "Hidden by staff" })
+      .eq("client_id", c.id)
+      .eq("kind", "pin")
+      .is("cleared_at", null);
     const { error: iErr } = await context.supabase.from("schedule_hides").insert({
+      kind: "hide",
       client_id: c.id,
       reason: data.reason,
       hidden_by: context.userId,
@@ -2606,24 +2633,61 @@ export const hideScheduleClient = createServerFn({ method: "POST" })
 
 export const restoreScheduleClient = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { clientId: string }) => {
+  .inputValidator((d: { clientId: string; kind?: "manual" | "auto" }) => {
     if (!d?.clientId || typeof d.clientId !== "string") throw new Error("clientId required");
-    return d;
+    return { clientId: d.clientId, kind: d.kind === "auto" ? ("auto" as const) : ("manual" as const) };
   })
   .handler(async ({ data, context }) => {
-    const { data: rows, error } = await context.supabase
-      .from("schedule_hides")
-      .update({ cleared_at: new Date().toISOString(), cleared_by: context.userId, clear_reason: "Restored by staff" })
-      .eq("client_id", data.clientId)
-      .is("cleared_at", null)
-      .select("id");
-    if (error) throw error;
-    if (rows?.length) {
-      await context.supabase.from("client_activities").insert({
-        client_id: data.clientId,
-        activity_type: "schedule_restored",
-        description: "Restored to Schedule Check worklists",
-      });
+    if (data.kind === "manual") {
+      const { data: rows, error } = await context.supabase
+        .from("schedule_hides")
+        .update({ cleared_at: new Date().toISOString(), cleared_by: context.userId, clear_reason: "Restored by staff" })
+        .eq("client_id", data.clientId)
+        .eq("kind", "hide")
+        .is("cleared_at", null)
+        .select("id");
+      if (error) throw error;
+      if (rows?.length) {
+        await context.supabase.from("client_activities").insert({
+          client_id: data.clientId,
+          activity_type: "schedule_restored",
+          description: "Restored to Schedule Check worklists",
+        });
+      }
+      return { ok: true, restored: rows?.length ?? 0 };
     }
-    return { ok: true, restored: rows?.length ?? 0 };
+    // Auto-hidden: pin visible (snapshot so only NEW activity clears the pin).
+    const token = process.env.SQUARE_PRODUCTION_ACCESS_TOKEN;
+    if (!token) throw new Error("Square is not configured");
+    const { data: c, error } = await context.supabase
+      .from("clients")
+      .select("id, square_customer_id, package_start_date, pending_renewal_start_date")
+      .eq("id", data.clientId)
+      .single();
+    if (error) throw error;
+    const { loadSquareBookingIndex } = await import("@/lib/effective-visit-state.server");
+    const index = await loadSquareBookingIndex(token, 180, 60);
+    if (index.error) throw new Error("Square could not be checked — try again");
+    const known = (c.square_customer_id ? index.byCustomer.get(c.square_customer_id) ?? [] : [])
+      .filter((b) => b.start_at && b.start_at >= index.nowIso)
+      .map((b) => b.id);
+    const { error: iErr } = await context.supabase.from("schedule_hides").insert({
+      kind: "pin",
+      client_id: c.id,
+      reason: "Restored by staff",
+      hidden_by: context.userId,
+      known_future_booking_ids: known,
+      package_start_snapshot: c.package_start_date,
+      pending_renewal_snapshot: c.pending_renewal_start_date,
+    });
+    if (iErr) {
+      if (iErr.code === "23505") return { ok: true, restored: 0 };
+      throw iErr;
+    }
+    await context.supabase.from("client_activities").insert({
+      client_id: c.id,
+      activity_type: "schedule_restored",
+      description: "Auto-hidden client restored to Schedule Check worklists",
+    });
+    return { ok: true, restored: 1 };
   });

@@ -76,6 +76,17 @@ describe("override consistency across screens", () => {
     expect(applyOverrides(raw, [o({ visits_used: 3 })]).visit_tracking_mode).toBe("hub");
     expect(applyOverrides(raw, [o({ slot: "previous", price: 1, recognized_paid: 0 })]).visit_tracking_mode).toBeUndefined();
   });
+  it("a prepared-only override keeps Square tracking so the renewal stays due (Leann Uselton)", () => {
+    const e = applyOverrides({ ...raw, visit_tracking_mode: "auto" }, [o({ slot: "pending", total_visits: 8, visits_used: 0, price: 375, recognized_paid: 0, start_date: "2026-10-08", status: "prepared" })]);
+    expect(e.visit_tracking_mode).toBe("auto");
+    expect(e.pending_renewal_paid).toBe(0);
+    expect(blocksAutoActivation([{ slot: "pending" }])).toBe(true);
+    const r = computeMasterDues([e as never], { todayYmd: "2026-10-24", nextAppointmentYmd: new Map(), renewalTiming: new Map([["c1", { kind: "upcoming", ymd: "2026-10-29" }]]) }).rows[0];
+    expect(r.renewal).toMatchObject({ amount: 375, status: "upcoming", expected_ymd: "2026-10-29" });
+  });
+  it("a pending override marked active (admin started it) still uses Hub figures", () => {
+    expect(applyOverrides(raw, [o({ slot: "pending", visits_used: 1, status: "active" })]).visit_tracking_mode).toBe("hub");
+  });
   it("check-ins after the override keep counting on top of the admin figure, capped", () => {
     const c = { ...raw, visits_used: 4 };
     expect(applyOverrides(c, [o({ visits_used: 1, baseline_visits_used: 2 })]).visits_used).toBe(3);

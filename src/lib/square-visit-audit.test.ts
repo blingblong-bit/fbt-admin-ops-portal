@@ -167,7 +167,6 @@ describe("future numbering after the latest past visit", () => {
   });
 });
 
-import { buildSequence, detectNoteIssues } from "./square-visit-audit";
 describe("visit note review with dated notes (Analeigh-style)", () => {
   const b = (id: string, d: string, note: string, status = "ACCEPTED") => ({ id, start_at: `${d}T15:00:00Z`, status, seller_note: note, customer_note: null });
   const NOW = "2026-10-24T18:00:00Z";

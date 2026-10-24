@@ -90,4 +90,21 @@ describe("schedule worklists", () => {
     expect(classifyWorklist(c({ status: "inactive" }), f("2026-10-22"), TODAY, null).list).toBeNull();
     expect(classifyWorklist(c({ package_total_visits: 0 }), f("2026-10-22"), TODAY, null).list).toBeNull();
   });
+
+  it("staff restore (pin) keeps an auto-hidden client visible across weeks until new activity", () => {
+    const pin = hide({ kind: "pin", reason: "Restored by staff" });
+    const r = classifyWorklist(c(), f("2026-08-01"), TODAY, pin);
+    expect(r).toMatchObject({ list: "not_scheduled", pinned: true });
+    expect(classifyWorklist(c(), f("2026-08-01"), "2026-11-16", pin).list).toBe("not_scheduled");
+    const n = classifyWorklist(c(), f("2026-08-01", ["new"], 1), TODAY, pin);
+    expect(n.clearPin).toBe("New appointment booked");
+    expect(n.list).toBe("only_once");
+    expect(classifyWorklist(c(), f("2026-08-01"), TODAY, null).list).toBe("hidden");
+  });
+
+  it("unlinked Square clients are never auto-hidden from missing history", () => {
+    const r = classifyWorklist(c(), { ...f(null), sourceUnknown: true }, TODAY, null);
+    expect(r.list).toBe("not_scheduled");
+    expect(r.reasons[0]).toMatch(/Not linked to Square/);
+  });
 });

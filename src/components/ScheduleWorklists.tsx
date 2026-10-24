@@ -21,7 +21,7 @@ const TABS: { key: Key; label: string; help: string }[] = [
   { key: "package_completed", label: "Package Completed", help: "Package used up recently — reschedule or review renewal." },
   { key: "not_scheduled", label: "Not Scheduled", help: "No future Square booking; seen in the last 60 days or has a new package." },
   { key: "only_once", label: "Only Once This Week", help: "Exactly one appointment in this work week." },
-  { key: "hidden", label: "Hidden", help: "Not seen in 60+ days, or hidden by staff. New bookings or packages bring them back." },
+  { key: "hidden", label: "Hidden", help: "Every hidden client: not seen in 60+ days (auto) or hidden by staff. New bookings or packages bring them back; Restore brings them back now." },
 ];
 
 const fmt = (iso: string | null) => (iso ? formatDate(iso.slice(0, 10)) : "—");
@@ -29,10 +29,11 @@ const fmt = (iso: string | null) => (iso ? formatDate(iso.slice(0, 10)) : "—")
 export function ScheduleWorklists({ data, filter }: { data: ScheduleCheckResult["worklists"] | undefined; filter: string }) {
   const [tab, setTab] = useState<Key>("not_scheduled");
   const [q, setQ] = useState("");
+  const [limit, setLimit] = useState(100);
   const term = (q || filter).trim().toLowerCase();
   const rows = useMemo(() => {
     const list = data?.[tab] ?? [];
-    if (!term) return tab === "hidden" ? list.filter((r) => r.hidden_kind === "manual") : list;
+    if (!term) return list;
     return list.filter((r) => `${r.first_name} ${r.last_name}`.toLowerCase().includes(term));
   }, [data, tab, term]);
 
@@ -59,16 +60,25 @@ export function ScheduleWorklists({ data, filter }: { data: ScheduleCheckResult[
               <p className="text-xs text-muted-foreground">{t.help}</p>
               {t.key === "hidden" && (
                 <>
-                  <Input placeholder="Search hidden clients…" value={q} onChange={(e) => setQ(e.target.value)} className="h-11" />
-                  {!term && <p className="text-xs text-muted-foreground">Showing staff-hidden clients. Search to find auto-hidden ones.</p>}
+                  <Input type="search" placeholder="Filter hidden clients by name…" value={q} onChange={(e) => { setQ(e.target.value); setLimit(100); }} className="h-11" />
+                  <p className="text-xs text-muted-foreground">
+                    {term ? `${rows.length} of ${data?.hidden.length ?? 0} hidden match` : `${data?.hidden.length ?? 0} hidden`}
+                    {" · "}{data?.hidden.filter((r) => r.hidden_kind === "manual").length ?? 0} by staff, {data?.hidden.filter((r) => r.hidden_kind === "auto").length ?? 0} auto
+                  </p>
                 </>
               )}
               {rows.length === 0 ? (
                 <p className="py-6 text-center text-sm text-muted-foreground">{term ? "No matching clients." : "Nothing here."}</p>
               ) : (
                 <ul className="divide-y rounded-md border">
-                  {rows.slice(0, 300).map((r) => <Row key={r.id} r={r} tab={t.key} />)}
+                  {rows.slice(0, limit).map((r) => <Row key={r.id} r={r} tab={t.key} />)}
                 </ul>
+              )}
+              {rows.length > limit && (
+                <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+                  <span>Showing {limit} of {rows.length}</span>
+                  <Button size="sm" variant="outline" className="h-10 md:h-8" onClick={() => setLimit((l) => l + 100)}>Show more</Button>
+                </div>
               )}
             </TabsContent>
           ))}
@@ -88,7 +98,7 @@ function Row({ r, tab }: { r: WorklistRow; tab: Key }) {
     onError: (e) => toast.error((e as Error).message),
   });
   const restore = useMutation({
-    mutationFn: () => restoreFn({ data: { clientId: r.id } }),
+    mutationFn: () => restoreFn({ data: { clientId: r.id, kind: r.hidden_kind === "auto" ? "auto" : "manual" } }),
     onSuccess: () => { toast.success("Restored"); invalidateFor(qc, "schedule-hide-changed", { clientId: r.id }); },
     onError: (e) => toast.error((e as Error).message),
   });
@@ -99,9 +109,10 @@ function Row({ r, tab }: { r: WorklistRow; tab: Key }) {
           {r.first_name} {r.last_name}
           {r.hidden_kind && (
             <span className="ml-2 rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
-              {r.hidden_kind === "manual" ? "Hidden by staff" : "Auto-hidden"}
+              {r.hidden_kind === "manual" ? `Hidden by staff${r.hidden_at ? ` ${fmt(r.hidden_at)}` : ""}` : "Auto-hidden"}
             </span>
           )}
+          {r.pinned && <span className="ml-2 rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">Restored by staff</span>}
         </div>
         <div className="text-xs text-muted-foreground">
           {r.phone ?? "No phone"} · {r.remaining_left ?? "—"} visits left · Last visit {fmt(r.last_kept_visit)}
@@ -115,11 +126,11 @@ function Row({ r, tab }: { r: WorklistRow; tab: Key }) {
         <Button asChild size="sm" variant="outline" className="h-10 md:h-8">
           <Link to="/clients/$id" params={{ id: r.id }}>View</Link>
         </Button>
-        {tab === "hidden" && r.hidden_kind === "manual" ? (
+        {tab === "hidden" ? (
           <Button size="sm" variant="outline" className="h-10 md:h-8" disabled={restore.isPending} onClick={() => restore.mutate()}>
             Restore
           </Button>
-        ) : tab !== "hidden" ? (
+        ) : (
           <Button
             size="sm"
             variant="ghost"
@@ -132,7 +143,7 @@ function Row({ r, tab }: { r: WorklistRow; tab: Key }) {
           >
             Hide
           </Button>
-        ) : null}
+        )}
       </div>
     </li>
   );

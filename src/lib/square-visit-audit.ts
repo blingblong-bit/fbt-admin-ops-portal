@@ -3,21 +3,35 @@
 
 export type ParsedNote = { n: number; total: number };
 
-const RX = /(?:visit\s*#?\s*)?\b(\d{1,2})\s*(?:of|\/)\s*(\d{1,2})\b/gi;
+// Explicit forms ("1 of 8", "visit 1/8", "visit #1 of 8") vs bare slash ("1/8").
+// Bare slash parts of a full date (9/15/26) are never read as visits.
+const RX = /(visit\s*#?\s*)?(?<![\d/])(\d{1,2})\s*(of|\/)\s*(\d{1,2})(?![\d]|\s*\/\s*\d)/gi;
 
-/** Returns the visit notation, or null when missing or ambiguous. */
+/**
+ * Returns the visit notation, or null when missing or ambiguous.
+ * Explicit "N of M" / "visit N/M" wins over bare slashes, which are often
+ * dates ("1 of 8 PD $100 9/15"). A bare slash only conflicts with an explicit
+ * notation when it uses the same package size ("1 of 8 ... 2/8").
+ */
 export function parseVisitNote(note: string | null | undefined): ParsedNote | null {
   if (!note) return null;
-  const found = new Map<string, ParsedNote>();
+  const explicit = new Map<string, ParsedNote>();
+  const bare = new Map<string, ParsedNote>();
   for (const m of note.matchAll(RX)) {
-    const n = Number(m[1]);
-    const total = Number(m[2]);
-    // Skip things that look like dates (e.g. 9/24) — invalid positions.
+    const n = Number(m[2]);
+    const total = Number(m[4]);
     if (total < 1 || n < 1 || n > total || total > 40) continue;
-    found.set(`${n}/${total}`, { n, total });
+    const isExplicit = !!m[1] || m[3].toLowerCase() === "of";
+    (isExplicit ? explicit : bare).set(`${n}/${total}`, { n, total });
   }
-  if (found.size !== 1) return null; // none, or conflicting notations
-  return [...found.values()][0];
+  if (explicit.size > 0) {
+    if (explicit.size !== 1) return null; // conflicting explicit numbers
+    const e = [...explicit.values()][0];
+    for (const b of bare.values()) if (b.total === e.total && b.n !== e.n) return null;
+    return e;
+  }
+  if (bare.size !== 1) return null; // none, or conflicting notations
+  return [...bare.values()][0];
 }
 
 export type AuditBooking = {

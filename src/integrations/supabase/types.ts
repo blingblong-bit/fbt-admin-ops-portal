@@ -646,6 +646,7 @@ export type Database = {
           hidden_at: string
           hidden_by: string | null
           id: string
+          kind: string
           known_future_booking_ids: string[]
           package_start_snapshot: string | null
           pending_renewal_snapshot: string | null
@@ -660,6 +661,7 @@ export type Database = {
           hidden_at?: string
           hidden_by?: string | null
           id?: string
+          kind?: string
           known_future_booking_ids?: string[]
           package_start_snapshot?: string | null
           pending_renewal_snapshot?: string | null
@@ -674,6 +676,7 @@ export type Database = {
           hidden_at?: string
           hidden_by?: string | null
           id?: string
+          kind?: string
           known_future_booking_ids?: string[]
           package_start_snapshot?: string | null
           pending_renewal_snapshot?: string | null

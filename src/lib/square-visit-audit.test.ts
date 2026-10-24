@@ -2,6 +2,20 @@ import { describe, expect, it } from "vitest";
 import { classifyClient, parseBookings, parseVisitNote } from "./square-visit-audit";
 
 describe("parseVisitNote", () => {
+  it("dates and payment references do not hide an explicit visit number", () => {
+    expect(parseVisitNote("1 of 8 PD $100 9/15")).toEqual({ n: 1, total: 8 });
+    expect(parseVisitNote("1 of 8 paid 9/30")).toEqual({ n: 1, total: 8 });
+    expect(parseVisitNote("visit 3/8 next 10/2")).toEqual({ n: 3, total: 8 });
+    expect(parseVisitNote("2 of 12 paid 9/15/26")).toEqual({ n: 2, total: 12 });
+    expect(parseVisitNote("5/8 pd 9/15/2026")).toEqual({ n: 5, total: 8 });
+  });
+  it("ordinary dates alone are not visit numbers; real conflicts stay ambiguous", () => {
+    expect(parseVisitNote("seen 9/15/26")).toBeNull();
+    expect(parseVisitNote("1 of 8 2 of 8")).toBeNull();
+    expect(parseVisitNote("1 of 8 or 2/8")).toBeNull();
+    expect(parseVisitNote("1 OF 8")).toEqual({ n: 1, total: 8 });
+  });
+
   it("recognizes common formats", () => {
     expect(parseVisitNote("5 of 8")).toEqual({ n: 5, total: 8 });
     expect(parseVisitNote("5/8")).toEqual({ n: 5, total: 8 });
@@ -150,5 +164,18 @@ describe("future numbering after the latest past visit", () => {
   });
   it("past 1/8 + future 2/8 is fine", () => {
     expect(run([["2026-09-15", "8/8"], ["2026-09-20", "1/8"], ["2026-09-28", "2/8"]])).toEqual([]);
+  });
+});
+
+describe("visit note review with dated notes (Analeigh-style)", () => {
+  const b = (id: string, d: string, note: string, status = "ACCEPTED") => ({ id, start_at: `${d}T15:00:00Z`, status, seller_note: note, customer_note: null });
+  const NOW = "2026-10-24T18:00:00Z";
+  it("a dated 1 of 8 opener no longer creates a false backward/missing flag", () => {
+    const seq = buildSequence([b("a", "2026-09-10", "8/8"), b("b", "2026-09-15", "1 of 8 PD $100 9/15"), b("c", "2026-09-17", "2 of 8")], NOW);
+    expect(detectNoteIssues(seq)).toEqual([]);
+  });
+  it("genuine skips and same-day conflicts still flag", () => {
+    expect(detectNoteIssues(buildSequence([b("a", "2026-09-15", "1 of 8"), b("b", "2026-09-17", "3 of 8")], NOW)).length).toBeGreaterThan(0);
+    expect(detectNoteIssues(buildSequence([b("a", "2026-09-15", "1 of 8"), b("b", "2026-09-17", "1 of 8 or 2/8")], NOW)).length).toBeGreaterThan(0);
   });
 });

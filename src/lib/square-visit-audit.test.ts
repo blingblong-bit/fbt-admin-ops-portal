@@ -2,6 +2,20 @@ import { describe, expect, it } from "vitest";
 import { classifyClient, parseBookings, parseVisitNote } from "./square-visit-audit";
 
 describe("parseVisitNote", () => {
+  it("dates and payment references do not hide an explicit visit number", () => {
+    expect(parseVisitNote("1 of 8 PD $100 9/15")).toEqual({ n: 1, total: 8 });
+    expect(parseVisitNote("1 of 8 paid 9/30")).toEqual({ n: 1, total: 8 });
+    expect(parseVisitNote("visit 3/8 next 10/2")).toEqual({ n: 3, total: 8 });
+    expect(parseVisitNote("2 of 12 paid 9/15/26")).toEqual({ n: 2, total: 12 });
+    expect(parseVisitNote("5/8 pd 9/15/2026")).toEqual({ n: 5, total: 8 });
+  });
+  it("ordinary dates alone are not visit numbers; real conflicts stay ambiguous", () => {
+    expect(parseVisitNote("seen 9/15/26")).toBeNull();
+    expect(parseVisitNote("1 of 8 2 of 8")).toBeNull();
+    expect(parseVisitNote("1 of 8 or 2/8")).toBeNull();
+    expect(parseVisitNote("1 OF 8")).toEqual({ n: 1, total: 8 });
+  });
+
   it("recognizes common formats", () => {
     expect(parseVisitNote("5 of 8")).toEqual({ n: 5, total: 8 });
     expect(parseVisitNote("5/8")).toEqual({ n: 5, total: 8 });

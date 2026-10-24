@@ -20,6 +20,8 @@ export type PackageOverride = {
   baseline_visits_used?: number | null;
   /** Set only by start_pending_override_from_square: the verified past Square 1/N that started this prepared package. */
   square_booking_id?: string | null;
+  /** Raw money fields when the override row was written; later recorded payments count on top. */
+  raw_baseline?: { amount_paid?: number | string | null; pending_paid?: number | string | null; prev_owed?: number | string | null } | null;
 };
 
 export type RawPackageFields = {
@@ -61,7 +63,7 @@ export function applyOverrides<T extends RawPackageFields>(c: T, overrides: Pack
     out.package_price = pick(cur.price, c.package_price ?? null) as never;
     out.amount_paid = pick(cur.recognized_paid, c.amount_paid ?? null) as never;
     out.package_start_date = pick(cur.start_date, c.package_start_date ?? null) as never;
-    if (cur.recognized_paid !== null && n(cur.recognized_paid) !== n(c.amount_paid))
+    if (!cur.square_booking_id && cur.recognized_paid !== null && n(cur.recognized_paid) !== n(c.amount_paid))
       flags.push(`Recorded paid $${n(c.amount_paid)} differs from admin-recognized $${n(cur.recognized_paid)}`);
     if (cur.visits_used !== null && n(out.visits_used) !== n(c.visits_used))
       flags.push(`Tracked visits ${n(c.visits_used)} differ from admin figure ${n(out.visits_used)}`);
@@ -70,6 +72,14 @@ export function applyOverrides<T extends RawPackageFields>(c: T, overrides: Pack
     const owed = Math.max(0, n(prev.price) - n(prev.recognized_paid));
     if (owed !== n(c.previous_package_owed)) flags.push(`Recorded prior-package owed $${n(c.previous_package_owed)} differs from admin figure $${owed}`);
     out.previous_package_owed = owed as never;
+  }
+  // A package Square started (promoted override) consumes every raw prepared
+  // row dated on/before its start; its raw prepaid stays in history, unused.
+  const promoted = !!cur?.square_booking_id;
+  if (promoted && cur!.start_date && c.pending_renewal_start_date && c.pending_renewal_start_date <= cur!.start_date) {
+    out.pending_renewal_start_date = null as never;
+    out.pending_renewal_total_visits = null as never;
+    out.pending_renewal_price = null as never;
   }
   if (pen) {
     if (pen.status === "active") {
@@ -109,10 +119,48 @@ export function applyOverrides<T extends RawPackageFields>(c: T, overrides: Pack
   // explicit visit count on the package in force, or started a prepared package
   // by hand. Financial/date-only edits and Square-started packages keep Square
   // as the source of visit numbers. (Activation is still held by blocksAutoActivation.)
+  applyNewPayments(c, out, overrides, { cur, pen, prev, promoted });
   const penActive = pen?.status === "active";
   const manualCount = penActive ? !pen!.square_booking_id : !!cur && cur.visits_used !== null;
   if (manualCount) out.visit_tracking_mode = "hub" as never;
   return { ...out, override_flags: flags, has_override: overrides.length > 0 };
+}
+
+/**
+ * Payments recorded after the latest override write (raw money moved since its
+ * baseline) are added on top of the admin figures, for the money fields the
+ * overrides mask only, oldest debt first: prior → current → prepared. Unmasked
+ * fields already show raw payments, so nothing is counted twice.
+ */
+function applyNewPayments(c: RawPackageFields, out: RawPackageFields, overrides: PackageOverride[], s: { cur?: PackageOverride; pen?: PackageOverride; prev?: PackageOverride; promoted: boolean }) {
+  const withB = overrides.filter((o) => o.raw_baseline);
+  const prevMasked = !!s.prev;
+  const curMasked = (!!s.cur && s.cur.recognized_paid !== null) || s.pen?.status === "active";
+  const penMasked = s.promoted || (!!s.pen && s.pen.status !== "completed" && (s.pen.status === "active" || s.pen.recognized_paid !== null));
+  // Under a Square-promoted package, raw prepaid at promotion was consumed or stale.
+  if (s.promoted && !(s.pen && s.pen.status === "prepared" && s.pen.recognized_paid !== null)) out.pending_renewal_paid = 0 as never;
+  if (!withB.length) return;
+  const b = [...withB].sort((x, y) => String(y.created_at ?? "").localeCompare(String(x.created_at ?? "")))[0].raw_baseline!;
+  let pool =
+    (curMasked ? n(c.amount_paid) - n(b.amount_paid) : 0) +
+    (penMasked ? n(c.pending_renewal_paid) - n(b.pending_paid) : 0) +
+    (prevMasked ? n(b.prev_owed) - n(c.previous_package_owed) : 0);
+  if (!(pool > 0)) return;
+  if (prevMasked) {
+    const t = Math.min(pool, n(out.previous_package_owed));
+    out.previous_package_owed = (n(out.previous_package_owed) - t) as never;
+    pool -= t;
+  }
+  if (curMasked && pool > 0) {
+    const t = Math.min(pool, Math.max(0, n(out.package_price) - n(out.amount_paid)));
+    out.amount_paid = (n(out.amount_paid) + t) as never;
+    pool -= t;
+  }
+  if (penMasked && pool > 0 && out.pending_renewal_start_date) {
+    out.pending_renewal_paid = (n(out.pending_renewal_paid) + pool) as never;
+    pool = 0;
+  }
+  if (pool > 0) out.amount_paid = (n(out.amount_paid) + pool) as never; // overpayment stays visible as credit-on-current
 }
 
 /** Overrides block automatic renewal activation so Square/check-in can't silently replace admin figures. */

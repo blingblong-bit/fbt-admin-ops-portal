@@ -51,17 +51,21 @@ function collections(nowIso: string, bookings: ForecastBooking[], overrides: Ovr
   const row = computeMasterDues([e as never], { todayYmd: chicagoYmd(new Date(nowIso)), nextAppointmentYmd: new Map(), renewalTiming: new Map([[ID, t]]) }).rows[0];
   return { row, state: st, eff: e };
 }
-const sweep = (nowIso: string, bookings: ForecastBooking[], overrides: Ovr[], client = raw) => {
+const sweep = (nowIso: string, bookings: ForecastBooking[], overrides: Ovr[], client: typeof raw = raw) => {
   const seq = buildSequence(bookings.map((b) => ({ ...b, start_at: b.start_at! })) as never, nowIso);
-  return decideOverridePendingStart({
-    clientId: ID, squareCustomerId: client.square_customer_id,
-    rawPending: { start: client.pending_renewal_start_date, total: client.pending_renewal_total_visits },
-    overrides, seq, currentUnreadable: currentPositionUnreadable(seq, detectNoteIssues(seq)),
-  });
+  return decideOverridePendingStart({ client, overrides, seq, currentUnreadable: currentPositionUnreadable(seq, detectNoteIssues(seq)) });
 };
-/** What start_pending_override_from_square writes: pending override becomes active, tied to the Square booking. */
-const startedOverride = (bookingId: string, ymd: string): Ovr => ({ ...nextPrepared, status: "active", visits_used: null, start_date: ymd, square_booking_id: bookingId });
-
+const moneyOf = (c: typeof raw) => ({ amount_paid: c.amount_paid, pending_paid: c.pending_renewal_paid, prev_owed: c.previous_package_owed });
+/** Mirrors start_pending_override_from_square (exercised for real in the SQL rollback test). */
+function promote(overrides: Ovr[], d: ReturnType<typeof sweep>, client: typeof raw = raw): Ovr[] {
+  if (d.kind !== "activate" || !d.figures) throw new Error("not eligible: " + d.reason);
+  const f = d.figures;
+  const keep = overrides.filter((o) => o.slot !== "current" && o.slot !== "pending" && o.slot !== "previous");
+  return [...keep,
+    { client_id: ID, slot: "previous", total_visits: null, visits_used: null, price: f.prev_owed, recognized_paid: 0, start_date: null, status: "completed", raw_baseline: moneyOf(client) },
+    { client_id: ID, slot: "current", total_visits: f.total, visits_used: null, price: f.price, recognized_paid: f.recognized_paid, start_date: d.startYmd, status: "active", square_booking_id: d.bookingId, raw_baseline: moneyOf(client) },
+  ];
+}
 const TODAY = "2026-10-24T18:00:00Z"; // Sat 1pm Chicago
 const AFTER_START = "2026-10-29T23:00:00Z"; // Thu 6pm Chicago, after the 4:30pm 1/8
 
@@ -101,7 +105,7 @@ describe("Leann lifecycle — Oct 29 1/8 verified in the past", () => {
   it("sweep decides to start it from the Oct 29 booking", () => {
     expect(sweep(AFTER_START, base, [cur, nextPrepared])).toMatchObject({ kind: "activate", bookingId: "b1", startYmd: "2026-10-29", total: 8 });
   });
-  const after = [cur, startedOverride("b1", "2026-10-29")];
+  const after = promote([cur, nextPrepared], sweep(AFTER_START, base, [cur, nextPrepared]));
   it("after the sweep: completely absent from Renewals, still absent on refresh", () => {
     expect(forecast(AFTER_START, base, after)).toEqual([]);
     expect(forecast(AFTER_START, base, after)).toEqual([]);
@@ -120,8 +124,9 @@ describe("Leann lifecycle — Oct 29 1/8 verified in the past", () => {
     expect(Number(eff.previous_package_owed)).toBe(0);
     expect(row.total).toBe(375);
   });
-  it("re-running the sweep is a no-op", () => {
+  it("re-running the sweep is a no-op (stale Oct 8 raw prepared row is consumed, not reused)", () => {
     expect(sweep(AFTER_START, base, after).kind).toBe("skip");
+    expect(applyOverrides(raw, after).pending_renewal_start_date).toBeNull();
   });
   it("bookings beyond the new package bring back only the NEW renewal with the right date", () => {
     const more = [...base,
@@ -151,7 +156,7 @@ describe("Square evidence guards", () => {
     expect(sweep(at, base, [cur, { ...nextPrepared, total_visits: 4 }]).kind).toBe("ambiguous");
   });
   it("failed Square lookup never starts it", () => {
-    expect(decideOverridePendingStart({ clientId: ID, squareCustomerId: "SQ", rawPending: { start: null, total: null }, overrides: [cur, nextPrepared], seq: null, currentUnreadable: false }).kind).toBe("not_ready");
+    expect(decideOverridePendingStart({ client: raw, overrides: [cur, nextPrepared], seq: null, currentUnreadable: false }).kind).toBe("not_ready");
   });
   it("a manual current visit-count override stays authoritative: Hub mode, no auto start", () => {
     const manual: Ovr = { ...cur, visits_used: 7 };
@@ -173,5 +178,48 @@ describe("Non-override stale prepared renewal", () => {
     const g = groupRenewals(forecast(AFTER_START, base, [], plain));
     expect(g.scheduled).toHaveLength(0);
     expect(g.attention[0].square_started_ymd).toBe("2026-10-29");
+  });
+});
+
+describe("Second cycle: staff prepares Nov 10, Square 1/8 on Nov 10", () => {
+  const cycle1 = promote([cur, nextPrepared], sweep(AFTER_START, base, [cur, nextPrepared]));
+  const later = [...base,
+    bk("b3", "2026-11-02T15:00:00Z", "3/8"), bk("b4", "2026-11-03T15:00:00Z", "4/8"), bk("b5", "2026-11-04T15:00:00Z", "5/8"),
+    bk("b6", "2026-11-05T15:00:00Z", "6/8"), bk("b7", "2026-11-06T15:00:00Z", "7/8"), bk("b8", "2026-11-09T15:00:00Z", "8/8"),
+    bk("c1", "2026-11-10T21:00:00Z", "1/8"), bk("c2", "2026-11-12T15:00:00Z", "2/8")];
+  // preRenewNextPackage writes only raw pending fields; raw pending paid still holds the old $750.
+  const prepared = { ...raw, pending_renewal_start_date: "2026-11-10", pending_renewal_price: 400, pending_renewal_total_visits: 8 };
+  const PRE = "2026-11-07T18:00:00Z", POST = "2026-11-11T18:00:00Z";
+  it("the new raw preparation is visible (not shadowed) and Scheduled with $400 due, old $750 not reused", () => {
+    const e = applyOverrides(prepared, cycle1);
+    expect(e.pending_renewal_start_date).toBe("2026-11-10");
+    expect(Number(e.pending_renewal_paid)).toBe(0);
+    const rows = forecast(PRE, later, cycle1, prepared);
+    expect(groupRenewals(rows).scheduled.map((r) => [r.pending_start_ymd, r.next_package_price, r.square_started_ymd])).toEqual([["2026-11-10", 400, null]]);
+  });
+  it("unpaid Oct 29 $375 remains owed before the second start", () => {
+    const e = applyOverrides(prepared, cycle1);
+    expect(Number(e.package_price) - Number(e.amount_paid)).toBe(375);
+  });
+  it("the earlier correction does not block the next automatic start", () => {
+    expect(sweep(PRE, later, cycle1, prepared).kind).toBe("not_ready"); // future 1/8 only
+    const d = sweep(POST, later, cycle1, prepared);
+    expect(d).toMatchObject({ kind: "activate", bookingId: "c1", startYmd: "2026-11-10" });
+    expect(d.figures).toMatchObject({ price: 400, recognized_paid: 0, prev_owed: 375, total: 8 });
+  });
+  const cycle2 = promote(cycle1, sweep(POST, later, cycle1, prepared), prepared);
+  it("after the second start: Renewals clear, $375 is prior debt once, $400 current, no $750", () => {
+    expect(forecast(POST, later, cycle2, prepared)).toEqual([]);
+    expect(forecast(POST, later, cycle2, prepared)).toEqual([]);
+    const e = applyOverrides(prepared, cycle2);
+    expect([Number(e.previous_package_owed), Number(e.package_price) - Number(e.amount_paid), e.package_start_date, e.pending_renewal_start_date]).toEqual([375, 400, "2026-11-10", null]);
+    expect(e.visit_tracking_mode).toBe("auto");
+    expect(sweep(POST, later, cycle2, prepared).kind).toBe("skip");
+  });
+  it("a Square payment recorded later counts once, prior debt first", () => {
+    // apply_square_payment put $500 on the raw row (raw prior owed 0, raw current full → raw prepared paid).
+    const paid = { ...prepared, pending_renewal_paid: 750 + 500 };
+    const e = applyOverrides(paid, cycle2);
+    expect([Number(e.previous_package_owed), Number(e.package_price) - Number(e.amount_paid)]).toEqual([0, 275]);
   });
 });

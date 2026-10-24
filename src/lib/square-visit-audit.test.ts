@@ -166,3 +166,17 @@ describe("future numbering after the latest past visit", () => {
     expect(run([["2026-09-15", "8/8"], ["2026-09-20", "1/8"], ["2026-09-28", "2/8"]])).toEqual([]);
   });
 });
+
+import { buildSequence, detectNoteIssues } from "./square-visit-audit";
+describe("visit note review with dated notes (Analeigh-style)", () => {
+  const b = (id: string, d: string, note: string, status = "ACCEPTED") => ({ id, start_at: `${d}T15:00:00Z`, status, seller_note: note, customer_note: null });
+  const NOW = "2026-10-24T18:00:00Z";
+  it("a dated 1 of 8 opener no longer creates a false backward/missing flag", () => {
+    const seq = buildSequence([b("a", "2026-09-10", "8/8"), b("b", "2026-09-15", "1 of 8 PD $100 9/15"), b("c", "2026-09-17", "2 of 8")], NOW);
+    expect(detectNoteIssues(seq)).toEqual([]);
+  });
+  it("genuine skips and same-day conflicts still flag", () => {
+    expect(detectNoteIssues(buildSequence([b("a", "2026-09-15", "1 of 8"), b("b", "2026-09-17", "3 of 8")], NOW)).length).toBeGreaterThan(0);
+    expect(detectNoteIssues(buildSequence([b("a", "2026-09-15", "1 of 8"), b("b", "2026-09-17", "1 of 8 or 2/8")], NOW)).length).toBeGreaterThan(0);
+  });
+});

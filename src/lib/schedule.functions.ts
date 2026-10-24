@@ -2710,3 +2710,69 @@ export const undoVisitCheckIn = createServerFn({ method: "POST" })
     });
     return { ok: true, visits_used: visitsUsed };
   });
+
+/** Staff hide a client from Schedule Check worklists (audited, restorable). */
+export const hideScheduleClient = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { clientId: string; reason?: string }) => {
+    if (!d?.clientId || typeof d.clientId !== "string") throw new Error("clientId required");
+    return { clientId: d.clientId, reason: (d.reason ?? "").trim().slice(0, 300) || null };
+  })
+  .handler(async ({ data, context }) => {
+    const token = process.env.SQUARE_PRODUCTION_ACCESS_TOKEN;
+    if (!token) throw new Error("Square is not configured");
+    const { data: c, error } = await context.supabase
+      .from("clients")
+      .select("id, square_customer_id, package_start_date, pending_renewal_start_date")
+      .eq("id", data.clientId)
+      .single();
+    if (error) throw error;
+    const { loadSquareBookingIndex } = await import("@/lib/effective-visit-state.server");
+    const index = await loadSquareBookingIndex(token, 180, 60);
+    if (index.error) throw new Error("Square could not be checked — try again");
+    const known = (c.square_customer_id ? index.byCustomer.get(c.square_customer_id) ?? [] : [])
+      .filter((b) => b.start_at && b.start_at >= index.nowIso)
+      .map((b) => b.id);
+    const { error: iErr } = await context.supabase.from("schedule_hides").insert({
+      client_id: c.id,
+      reason: data.reason,
+      hidden_by: context.userId,
+      known_future_booking_ids: known,
+      package_start_snapshot: c.package_start_date,
+      pending_renewal_snapshot: c.pending_renewal_start_date,
+    });
+    if (iErr) {
+      if (iErr.code === "23505") return { ok: true, already: true };
+      throw iErr;
+    }
+    await context.supabase.from("client_activities").insert({
+      client_id: c.id,
+      activity_type: "schedule_hidden",
+      description: `Hidden from Schedule Check${data.reason ? `: ${data.reason}` : ""}`,
+    });
+    return { ok: true, already: false };
+  });
+
+export const restoreScheduleClient = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { clientId: string }) => {
+    if (!d?.clientId || typeof d.clientId !== "string") throw new Error("clientId required");
+    return d;
+  })
+  .handler(async ({ data, context }) => {
+    const { data: rows, error } = await context.supabase
+      .from("schedule_hides")
+      .update({ cleared_at: new Date().toISOString(), cleared_by: context.userId, clear_reason: "Restored by staff" })
+      .eq("client_id", data.clientId)
+      .is("cleared_at", null)
+      .select("id");
+    if (error) throw error;
+    if (rows?.length) {
+      await context.supabase.from("client_activities").insert({
+        client_id: data.clientId,
+        activity_type: "schedule_restored",
+        description: "Restored to Schedule Check worklists",
+      });
+    }
+    return { ok: true, restored: rows?.length ?? 0 };
+  });

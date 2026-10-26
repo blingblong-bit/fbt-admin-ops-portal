@@ -30,6 +30,12 @@ export function ScheduleWorklists({ data, filter }: { data: ScheduleCheckResult[
   const [tab, setTab] = useState<Key>("not_scheduled");
   const [q, setQ] = useState("");
   const [limit, setLimit] = useState(100);
+  const [collapsed, setCollapsed] = useState<Record<Key, boolean>>({
+    package_completed: true,
+    not_scheduled: true,
+    only_once: true,
+    hidden: true,
+  });
   const term = (q || filter).trim().toLowerCase();
   const rows = useMemo(() => {
     const list = data?.[tab] ?? [];
@@ -57,28 +63,43 @@ export function ScheduleWorklists({ data, filter }: { data: ScheduleCheckResult[
           </TabsList>
           {TABS.map((t) => (
             <TabsContent key={t.key} value={t.key} className="space-y-2">
-              <p className="text-xs text-muted-foreground">{t.help}</p>
-              {t.key === "hidden" && (
+              <div className="flex items-start justify-between gap-2">
+                <p className="text-xs text-muted-foreground">{t.help}</p>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-8 shrink-0"
+                  aria-expanded={!collapsed[t.key]}
+                  onClick={() => setCollapsed((c) => ({ ...c, [t.key]: !c[t.key] }))}
+                >
+                  {collapsed[t.key] ? `Show list (${data?.[t.key].length ?? 0})` : "Collapse list"}
+                </Button>
+              </div>
+              {!collapsed[t.key] && (
                 <>
-                  <Input type="search" placeholder="Filter hidden clients by name…" value={q} onChange={(e) => { setQ(e.target.value); setLimit(100); }} className="h-11" />
-                  <p className="text-xs text-muted-foreground">
-                    {term ? `${rows.length} of ${data?.hidden.length ?? 0} hidden match` : `${data?.hidden.length ?? 0} hidden`}
-                    {" · "}{data?.hidden.filter((r) => r.hidden_kind === "manual").length ?? 0} by staff, {data?.hidden.filter((r) => r.hidden_kind === "auto").length ?? 0} auto
-                  </p>
+                  {t.key === "hidden" && (
+                    <>
+                      <Input type="search" placeholder="Filter hidden clients by name…" value={q} onChange={(e) => { setQ(e.target.value); setLimit(100); }} className="h-11" />
+                      <p className="text-xs text-muted-foreground">
+                        {term ? `${rows.length} of ${data?.hidden.length ?? 0} hidden match` : `${data?.hidden.length ?? 0} hidden`}
+                        {" · "}{data?.hidden.filter((r) => r.hidden_kind === "manual").length ?? 0} by staff, {data?.hidden.filter((r) => r.hidden_kind === "auto").length ?? 0} auto
+                      </p>
+                    </>
+                  )}
+                  {rows.length === 0 ? (
+                    <p className="py-6 text-center text-sm text-muted-foreground">{term ? "No matching clients." : "Nothing here."}</p>
+                  ) : (
+                    <ul className="divide-y rounded-md border">
+                      {rows.slice(0, limit).map((r) => <Row key={r.id} r={r} tab={t.key} />)}
+                    </ul>
+                  )}
+                  {rows.length > limit && (
+                    <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+                      <span>Showing {limit} of {rows.length}</span>
+                      <Button size="sm" variant="outline" className="h-10 md:h-8" onClick={() => setLimit((l) => l + 100)}>Show more</Button>
+                    </div>
+                  )}
                 </>
-              )}
-              {rows.length === 0 ? (
-                <p className="py-6 text-center text-sm text-muted-foreground">{term ? "No matching clients." : "Nothing here."}</p>
-              ) : (
-                <ul className="divide-y rounded-md border">
-                  {rows.slice(0, limit).map((r) => <Row key={r.id} r={r} tab={t.key} />)}
-                </ul>
-              )}
-              {rows.length > limit && (
-                <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
-                  <span>Showing {limit} of {rows.length}</span>
-                  <Button size="sm" variant="outline" className="h-10 md:h-8" onClick={() => setLimit((l) => l + 100)}>Show more</Button>
-                </div>
               )}
             </TabsContent>
           ))}

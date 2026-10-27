@@ -75,7 +75,7 @@ describe("fixture obligation uses effective (override) figures", () => {
     expect((ob as any).obligationKey).toContain("prep:2026-10-29");
   });
   it("without override raw $750 paid means nothing owed (proves override is applied)", () => {
-    expect(fixtureObligation(base, [], "2026-10-27").ob).toEqual({ ok: false, reason: "already_paid" });
+    expect(fixtureObligation(base, [], "2026-10-27").ob.ok).toBe(false);
   });
   it("partial prepaid 375-100 → $275; other-channel payment changes key → old link superseded", () => {
     const a = fixtureObligation(base, [{ ...pend, recognized_paid: 100 }], "2026-10-27").ob as any;

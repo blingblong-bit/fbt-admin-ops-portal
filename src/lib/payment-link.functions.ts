@@ -4,7 +4,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { computeMasterDues } from "./master-dues";
+import { computeMasterDues, type RenewalTiming } from "./master-dues";
 import { obligationFor, decideLink, idempotencyKeyFor } from "./payment-link";
 import { applyOverridesToRows } from "./package-override";
 
@@ -22,7 +22,11 @@ async function assertAdmin(supabase: any, userId: string) {
 /** Effective (override-applied) obligation for one client row. Exported for tests. */
 export function fixtureObligation(raw: any, overrides: any[], todayYmd: string) {
   const eff: any = applyOverridesToRows([raw], overrides)[0];
-  const dues = computeMasterDues([eff], { todayYmd, nextAppointmentYmd: new Map(), renewalTiming: new Map() });
+  // Fixtures have no Square bookings, so their (effective) prepared date stands in
+  // for Square timing. Fixture-only; real clients get timing from getMasterDues.
+  const timing = new Map<string, RenewalTiming>();
+  if (eff.pending_renewal_start_date) timing.set(raw.id, { kind: "upcoming", ymd: eff.pending_renewal_start_date });
+  const dues = computeMasterDues([eff], { todayYmd, nextAppointmentYmd: new Map(), renewalTiming: timing });
   const row = dues.rows.find((r) => r.client_id === raw.id);
   return { eff, ob: obligationFor(row, { currentStart: eff.package_start_date ?? null, preparedStart: eff.pending_renewal_start_date ?? null }) };
 }

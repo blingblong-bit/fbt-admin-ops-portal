@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { createHmac, timingSafeEqual } from "crypto";
 import type { Database } from "@/integrations/supabase/types";
 import { applyPaymentOnce } from "@/lib/payment-apply";
+import { reconcileLinkPayment } from "@/lib/payment-link";
 
 
 // Square sends webhook events with this shape:
@@ -320,6 +321,22 @@ async function handleCustomerEvent(supabaseAdmin: SupabaseClient<Database>, even
   });
 }
 
+async function markLinkPaid(supabaseAdmin: SupabaseClient<Database>, orderId: string | null, paymentId: string, amountCents: number) {
+  if (!orderId) return;
+  const { data: link } = await supabaseAdmin.from("square_payment_links")
+    .select("id, client_id, amount_cents, status, square_payment_id").eq("square_order_id", orderId).maybeSingle();
+  if (!link) return;
+  const r = reconcileLinkPayment(link, paymentId, amountCents);
+  if (link.square_payment_id && link.square_payment_id !== paymentId) {
+    await supabaseAdmin.from("square_payment_links").update({ status: "review" }).eq("id", link.id);
+  } else {
+    await supabaseAdmin.from("square_payment_links").update({
+      status: r.review ? "review" : "paid", square_payment_id: paymentId, paid_at: new Date().toISOString(),
+    }).eq("id", link.id);
+  }
+  if (r.review) await supabaseAdmin.from("square_payments").update({ needs_review: true }).eq("square_payment_id", paymentId);
+}
+
 async function matchClient(
   supabaseAdmin: SupabaseClient<Database>,
   {
@@ -498,6 +515,7 @@ async function handlePaymentEvent(supabaseAdmin: SupabaseClient<Database>, event
 
     const promotedAppliedZero = !result.alreadyApplied && !(result.appliedAmount > 0);
     const overCredit = await detectOverpayment(supabaseAdmin, clientId);
+    if (method === "payment_link") await markLinkPaid(supabaseAdmin, payment?.order_id ?? null, squarePaymentId, amountCents);
 
     await supabaseAdmin
       .from("square_payments")
@@ -566,6 +584,7 @@ async function handlePaymentEvent(supabaseAdmin: SupabaseClient<Database>, event
   // A credit that pushes amount_paid past package_price is never silent: the
   // package may have been renewed as "already paid", so staff must inspect it.
   const overCredit = applied ? await detectOverpayment(supabaseAdmin, clientId) : 0;
+  if (applied && method === "payment_link") await markLinkPaid(supabaseAdmin, payment?.order_id ?? null, squarePaymentId, amountCents);
 
   // Needs review when we can't identify the customer OR a COMPLETED matched
   // payment failed to apply (trigger blocked) OR it credited $0 (silent cap)

@@ -67,7 +67,7 @@ describe("checkout-link payment handler", () => {
 describe("fixture obligation uses effective (override) figures", () => {
   const base = { id: "fx", status: "active", package_price: 375, amount_paid: 375, package_total_visits: 8, visits_used: 7, package_start_date: "2026-10-06",
     pending_renewal_price: 375, pending_renewal_paid: 750, pending_renewal_total_visits: 8, pending_renewal_start_date: "2026-10-08" };
-  const pend = { client_id: "fx", slot: "pending", total_visits: 8, visits_used: null, price: 375, recognized_paid: 0, start_date: "2026-10-29", status: "active" };
+  const pend = { client_id: "fx", slot: "pending", total_visits: 8, visits_used: null, price: 375, recognized_paid: 0, start_date: "2026-10-29", status: "prepared" };
   it("Leann-style raw Oct 8/$750 → effective Oct 29/$0 owes $375 with Oct 29 in key", () => {
     const { ob, eff } = fixtureObligation(base, [pend], "2026-10-27");
     expect(eff.pending_renewal_start_date).toBe("2026-10-29");
@@ -87,5 +87,18 @@ describe("fixture obligation uses effective (override) figures", () => {
     const a = fixtureObligation(base, [pend], "2026-10-27").ob as any;
     const b = fixtureObligation({ ...base, amount_paid: 300 }, [pend], "2026-10-27").ob as any;
     expect(b.amountCents).toBe(45000); expect(b.obligationKey).not.toBe(a.obligationKey);
+  });
+});
+
+describe("prepared → current transition before payment", () => {
+  it("override marked started: same $375 still owed; key changes so a pre-activation link is superseded, not reused", () => {
+    const base = { id: "fx", status: "active", package_price: 375, amount_paid: 375, package_total_visits: 8, visits_used: 7, package_start_date: "2026-10-06",
+      pending_renewal_price: 375, pending_renewal_paid: 0, pending_renewal_total_visits: 8, pending_renewal_start_date: "2026-10-29" };
+    const p = { client_id: "fx", slot: "pending", total_visits: 8, visits_used: null, price: 375, recognized_paid: 0, start_date: "2026-10-29" };
+    const before = fixtureObligation(base, [{ ...p, status: "prepared" }], "2026-10-28").ob as any;
+    const after = fixtureObligation(base, [{ ...p, status: "active" }], "2026-10-29").ob as any;
+    expect(before.amountCents).toBe(37500);
+    expect(after.amountCents).toBe(37500);
+    expect(after.obligationKey).not.toBe(before.obligationKey);
   });
 });

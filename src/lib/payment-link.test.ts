@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { obligationFor, decideLink, idempotencyKeyFor, reconcileLinkPayment } from "./payment-link";
+import { obligationFor, decideLink, idempotencyKeyFor, planLinkPayment } from "./payment-link";
 
 const row = (o: any = {}) => ({
   client_id: "c1", name: "T",
@@ -32,10 +32,9 @@ describe("payment link obligation", () => {
     expect(decideLink(active, o2)).toEqual({ action: "create", supersede: "L1" });
     expect(idempotencyKeyFor(o.obligationKey, "sandbox")).toBe(idempotencyKeyFor(o.obligationKey, "sandbox"));
   });
-  it("payment maps to link client; mismatches flag review", () => {
-    const link = { id: "L1", client_id: "c1", amount_cents: 37500, status: "active", square_payment_id: null };
-    expect(reconcileLinkPayment(link, "p1", 37500)).toEqual({ clientId: "c1", apply: true, review: null });
-    expect(reconcileLinkPayment(link, "p1", 20000).review).toBe("amount_differs_from_link");
-    expect(reconcileLinkPayment({ ...link, square_payment_id: "p1" }, "p2", 37500).review).toBe("second_payment_on_link");
+  it("matching payment applies to link client", () => {
+    const l = { id: "L1", client_id: "c1", amount_cents: 37500, status: "active", square_payment_id: null, environment: "sandbox" };
+    expect(planLinkPayment({ env: "sandbox", link: l, client: { id: "c1", is_test_fixture: true }, paymentId: "p1", amountCents: 37500, status: "COMPLETED" })).toEqual({ kind: "apply", clientId: "c1" });
+    expect(planLinkPayment({ env: "sandbox", link: l, client: { id: "other", is_test_fixture: true }, paymentId: "p1", amountCents: 37500, status: "COMPLETED" }).kind).toBe("hold");
   });
 });

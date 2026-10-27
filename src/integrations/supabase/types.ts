@@ -60,6 +60,7 @@ export type Database = {
           first_name: string
           id: string
           internal_notes: string | null
+          is_test_fixture: boolean
           last_name: string
           last_renewal_key: string | null
           manual_active: boolean
@@ -102,6 +103,7 @@ export type Database = {
           first_name: string
           id?: string
           internal_notes?: string | null
+          is_test_fixture?: boolean
           last_name: string
           last_renewal_key?: string | null
           manual_active?: boolean
@@ -144,6 +146,7 @@ export type Database = {
           first_name?: string
           id?: string
           internal_notes?: string | null
+          is_test_fixture?: boolean
           last_name?: string
           last_renewal_key?: string | null
           manual_active?: boolean
@@ -752,10 +755,14 @@ export type Database = {
           created_at: string
           created_by: string | null
           environment: string
+          generation: number
+          hold_reason: string | null
           id: string
           idempotency_key: string
           obligation_key: string
           paid_at: string | null
+          payment_amount_cents: number | null
+          payment_status: string | null
           square_link_id: string | null
           square_order_id: string | null
           square_payment_id: string | null
@@ -768,10 +775,14 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           environment: string
+          generation?: number
+          hold_reason?: string | null
           id?: string
           idempotency_key: string
           obligation_key: string
           paid_at?: string | null
+          payment_amount_cents?: number | null
+          payment_status?: string | null
           square_link_id?: string | null
           square_order_id?: string | null
           square_payment_id?: string | null
@@ -784,10 +795,14 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           environment?: string
+          generation?: number
+          hold_reason?: string | null
           id?: string
           idempotency_key?: string
           obligation_key?: string
           paid_at?: string | null
+          payment_amount_cents?: number | null
+          payment_status?: string | null
           square_link_id?: string | null
           square_order_id?: string | null
           square_payment_id?: string | null

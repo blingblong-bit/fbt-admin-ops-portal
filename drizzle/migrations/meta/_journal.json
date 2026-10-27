@@ -85,6 +85,13 @@
       "when": 1792873321775,
       "tag": "0011_activation_cron_secret_vault",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1793116364456,
+      "tag": "0012_square_payment_links",
+      "breakpoints": true
     }
   ]
 }

@@ -745,6 +745,57 @@ export type Database = {
           },
         ]
       }
+      square_payment_links: {
+        Row: {
+          amount_cents: number
+          client_id: string
+          created_at: string
+          created_by: string | null
+          environment: string
+          id: string
+          idempotency_key: string
+          obligation_key: string
+          paid_at: string | null
+          square_link_id: string | null
+          square_order_id: string | null
+          square_payment_id: string | null
+          status: string
+          url: string | null
+        }
+        Insert: {
+          amount_cents: number
+          client_id: string
+          created_at?: string
+          created_by?: string | null
+          environment: string
+          id?: string
+          idempotency_key: string
+          obligation_key: string
+          paid_at?: string | null
+          square_link_id?: string | null
+          square_order_id?: string | null
+          square_payment_id?: string | null
+          status?: string
+          url?: string | null
+        }
+        Update: {
+          amount_cents?: number
+          client_id?: string
+          created_at?: string
+          created_by?: string | null
+          environment?: string
+          id?: string
+          idempotency_key?: string
+          obligation_key?: string
+          paid_at?: string | null
+          square_link_id?: string | null
+          square_order_id?: string | null
+          square_payment_id?: string | null
+          status?: string
+          url?: string | null
+        }
+        Relationships: []
+      }
       square_payments: {
         Row: {
           amount_cents: number

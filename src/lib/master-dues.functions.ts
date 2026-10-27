@@ -31,7 +31,7 @@ export const getMasterDues = createServerFn({ method: "GET" })
     const clients: any[] = [];
     for (let from = 0; ; from += 1000) {
       const { data, error } = await supabase
-        .from("clients").select("*").is("deleted_at", null).neq("status", "archived").range(from, from + 999);
+        .from("clients").select("*").is("deleted_at", null).neq("status", "archived").eq("is_test_fixture", false).range(from, from + 999);
       if (error) throw error;
       clients.push(...(data ?? []));
       if (!data || data.length < 1000) break;

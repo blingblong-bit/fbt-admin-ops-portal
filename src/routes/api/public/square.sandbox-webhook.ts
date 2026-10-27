@@ -23,7 +23,14 @@ export const Route = createFileRoute("/api/public/square/sandbox-webhook")({
         if (!key || !url) return new Response("Sandbox webhook not configured", { status: 503 });
         const body = await request.text();
         const sig = request.headers.get("x-square-hmacsha256-signature") ?? "";
-        if (!sig || !verify(url, body, sig, key)) return new Response("Invalid signature", { status: 401 });
+        const ok = !!sig && verify(url, body, sig, key);
+        // TEMP sandbox diagnostics (no secrets/body/signature values). Remove after test.
+        try {
+          const { createHash } = await import("crypto");
+          const hdrs = [...request.headers.keys()].filter((h) => /square|encoding|content-length|forwarded|host/i.test(h));
+          console.info(`[sbx-diag] ok=${ok} sig_present=${!!sig} sig_len=${sig.length} body_len=${body.length} body_sha=${createHash("sha256").update(body).digest("hex").slice(0, 16)} req_url_eq=${request.url === url} req_path=${new URL(request.url).pathname} hdrs=${hdrs.join(",")} ce=${request.headers.get("content-encoding") ?? "-"} cl=${request.headers.get("content-length") ?? "-"} alt_url_ok=${!!sig && request.url !== url && verify(request.url, body, sig, key)}`);
+        } catch { /* ignore */ }
+        if (!ok) return new Response("Invalid signature", { status: 401 });
 
         let ev: any;
         try { ev = JSON.parse(body); } catch { return new Response("ok"); }

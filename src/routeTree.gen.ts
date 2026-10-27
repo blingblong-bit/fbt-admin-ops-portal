@@ -44,6 +44,7 @@ import { Route as ApiPublicRenewalTickRouteImport } from './routes/api/public/re
 import { Route as ApiPublicRenewalWebhookRouteImport } from './routes/api/public/renewal.webhook'
 import { Route as ApiPublicSmsInboundRouteImport } from './routes/api/public/sms.inbound'
 import { Route as ApiPublicSmsStatusRouteImport } from './routes/api/public/sms.status'
+import { Route as ApiPublicSquareSandboxWebhookRouteImport } from './routes/api/public/square.sandbox-webhook'
 import { Route as ApiPublicSquareWebhookRouteImport } from './routes/api/public/square.webhook'
 
 const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
@@ -236,6 +237,12 @@ const ApiPublicSmsStatusRoute = ApiPublicSmsStatusRouteImport.update({
   path: '/api/public/sms/status',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicSquareSandboxWebhookRoute =
+  ApiPublicSquareSandboxWebhookRouteImport.update({
+    id: '/api/public/square/sandbox-webhook',
+    path: '/api/public/square/sandbox-webhook',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicSquareWebhookRoute = ApiPublicSquareWebhookRouteImport.update({
   id: '/api/public/square/webhook',
   path: '/api/public/square/webhook',
@@ -277,6 +284,7 @@ export interface FileRoutesByFullPath {
   '/api/public/renewal/webhook': typeof ApiPublicRenewalWebhookRoute
   '/api/public/sms/inbound': typeof ApiPublicSmsInboundRoute
   '/api/public/sms/status': typeof ApiPublicSmsStatusRoute
+  '/api/public/square/sandbox-webhook': typeof ApiPublicSquareSandboxWebhookRoute
   '/api/public/square/webhook': typeof ApiPublicSquareWebhookRoute
 }
 export interface FileRoutesByTo {
@@ -314,6 +322,7 @@ export interface FileRoutesByTo {
   '/api/public/renewal/webhook': typeof ApiPublicRenewalWebhookRoute
   '/api/public/sms/inbound': typeof ApiPublicSmsInboundRoute
   '/api/public/sms/status': typeof ApiPublicSmsStatusRoute
+  '/api/public/square/sandbox-webhook': typeof ApiPublicSquareSandboxWebhookRoute
   '/api/public/square/webhook': typeof ApiPublicSquareWebhookRoute
 }
 export interface FileRoutesById {
@@ -353,6 +362,7 @@ export interface FileRoutesById {
   '/api/public/renewal/webhook': typeof ApiPublicRenewalWebhookRoute
   '/api/public/sms/inbound': typeof ApiPublicSmsInboundRoute
   '/api/public/sms/status': typeof ApiPublicSmsStatusRoute
+  '/api/public/square/sandbox-webhook': typeof ApiPublicSquareSandboxWebhookRoute
   '/api/public/square/webhook': typeof ApiPublicSquareWebhookRoute
 }
 export interface FileRouteTypes {
@@ -392,6 +402,7 @@ export interface FileRouteTypes {
     | '/api/public/renewal/webhook'
     | '/api/public/sms/inbound'
     | '/api/public/sms/status'
+    | '/api/public/square/sandbox-webhook'
     | '/api/public/square/webhook'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -429,6 +440,7 @@ export interface FileRouteTypes {
     | '/api/public/renewal/webhook'
     | '/api/public/sms/inbound'
     | '/api/public/sms/status'
+    | '/api/public/square/sandbox-webhook'
     | '/api/public/square/webhook'
   id:
     | '__root__'
@@ -467,6 +479,7 @@ export interface FileRouteTypes {
     | '/api/public/renewal/webhook'
     | '/api/public/sms/inbound'
     | '/api/public/sms/status'
+    | '/api/public/square/sandbox-webhook'
     | '/api/public/square/webhook'
   fileRoutesById: FileRoutesById
 }
@@ -482,6 +495,7 @@ export interface RootRouteChildren {
   ApiPublicRenewalWebhookRoute: typeof ApiPublicRenewalWebhookRoute
   ApiPublicSmsInboundRoute: typeof ApiPublicSmsInboundRoute
   ApiPublicSmsStatusRoute: typeof ApiPublicSmsStatusRoute
+  ApiPublicSquareSandboxWebhookRoute: typeof ApiPublicSquareSandboxWebhookRoute
   ApiPublicSquareWebhookRoute: typeof ApiPublicSquareWebhookRoute
 }
 
@@ -732,6 +746,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicSmsStatusRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/square/sandbox-webhook': {
+      id: '/api/public/square/sandbox-webhook'
+      path: '/api/public/square/sandbox-webhook'
+      fullPath: '/api/public/square/sandbox-webhook'
+      preLoaderRoute: typeof ApiPublicSquareSandboxWebhookRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/square/webhook': {
       id: '/api/public/square/webhook'
       path: '/api/public/square/webhook'
@@ -812,6 +833,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicRenewalWebhookRoute: ApiPublicRenewalWebhookRoute,
   ApiPublicSmsInboundRoute: ApiPublicSmsInboundRoute,
   ApiPublicSmsStatusRoute: ApiPublicSmsStatusRoute,
+  ApiPublicSquareSandboxWebhookRoute: ApiPublicSquareSandboxWebhookRoute,
   ApiPublicSquareWebhookRoute: ApiPublicSquareWebhookRoute,
 }
 export const routeTree = rootRouteImport

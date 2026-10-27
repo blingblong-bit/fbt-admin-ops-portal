@@ -6,6 +6,7 @@ import { applyPaymentOnce } from "@/lib/payment-apply";
 // Square SANDBOX webhook — separate key/URL from production. Only sandbox
 // checkout-link orders are looked up, and only test-fixture clients are ever
 // credited; it never writes the production payment ledger.
+// Returns 503 until both sandbox webhook secrets are bound to the running build.
 function verify(url: string, body: string, sig: string, key: string) {
   const a = Buffer.from(sig);
   const b = Buffer.from(createHmac("sha256", key).update(url + body).digest("base64"));

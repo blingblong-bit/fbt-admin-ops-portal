@@ -26,6 +26,7 @@ type SquarePayment = {
   customer_id?: string | null;
   buyer_email_address?: string | null;
   note?: string | null;
+  order_id?: string | null;
 };
 
 type SquareBookingSegment = {
@@ -325,8 +326,15 @@ async function matchClient(
     existingClientId,
     squareCustomerId,
     buyerEmail,
-  }: { existingClientId: string | null; squareCustomerId: string | null; buyerEmail: string | null },
+    orderId,
+  }: { existingClientId: string | null; squareCustomerId: string | null; buyerEmail: string | null; orderId?: string | null },
 ): Promise<{ clientId: string | null; method: string | null }> {
+  // Checkout links: the stored order→client mapping wins over buyer-editable fields.
+  if (orderId) {
+    const { data: link } = await supabaseAdmin
+      .from("square_payment_links").select("client_id").eq("square_order_id", orderId).maybeSingle();
+    if (link) return { clientId: link.client_id, method: "payment_link" };
+  }
   if (existingClientId) return { clientId: existingClientId, method: "existing_client_id" };
 
   if (squareCustomerId) {
@@ -437,6 +445,7 @@ async function handlePaymentEvent(supabaseAdmin: SupabaseClient<Database>, event
       existingClientId: existingPayment.client_id,
       squareCustomerId,
       buyerEmail,
+      orderId: payment?.order_id ?? null,
     });
 
     if (!clientId) {
@@ -530,6 +539,7 @@ async function handlePaymentEvent(supabaseAdmin: SupabaseClient<Database>, event
     existingClientId: null,
     squareCustomerId,
     buyerEmail,
+    orderId: payment?.order_id ?? null,
   });
 
   let applied = false;

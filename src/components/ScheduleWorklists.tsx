@@ -52,7 +52,7 @@ export function ScheduleWorklists({ data: serverData, filter }: { data: Schedule
       const r = all.get(id);
       if (!r) continue;
       if (m === "hidden") out.hidden = [{ ...r, hidden_kind: "manual", hidden_at: new Date().toISOString() }, ...out.hidden];
-      else out.not_scheduled = [{ ...r, hidden_kind: null, pinned: true }, ...out.not_scheduled];
+      else out.not_scheduled = [{ ...r, hidden_kind: undefined, pinned: true }, ...out.not_scheduled];
     }
     return out;
   }, [serverData, moves]);

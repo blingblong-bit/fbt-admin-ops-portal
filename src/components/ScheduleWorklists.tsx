@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -26,7 +26,9 @@ const TABS: { key: Key; label: string; help: string }[] = [
 
 const fmt = (iso: string | null) => (iso ? formatDate(iso.slice(0, 10)) : "—");
 
-export function ScheduleWorklists({ data, filter }: { data: ScheduleCheckResult["worklists"] | undefined; filter: string }) {
+type Moves = Record<string, "hidden" | "restored">;
+
+export function ScheduleWorklists({ data: serverData, filter }: { data: ScheduleCheckResult["worklists"] | undefined; filter: string }) {
   const [tab, setTab] = useState<Key>("not_scheduled");
   const [q, setQ] = useState("");
   const [limit, setLimit] = useState(100);
@@ -36,6 +38,24 @@ export function ScheduleWorklists({ data, filter }: { data: ScheduleCheckResult[
     only_once: true,
     hidden: true,
   });
+  // Instant feedback: move rows locally on Hide/Restore; fresh server data replaces this.
+  const [moves, setMoves] = useState<Moves>({});
+  useEffect(() => { setMoves({}); }, [serverData]);
+  const data = useMemo(() => {
+    if (!serverData || Object.keys(moves).length === 0) return serverData;
+    const keys: Key[] = ["package_completed", "not_scheduled", "only_once", "hidden"];
+    const all = new Map<string, WorklistRow>();
+    keys.forEach((k) => serverData[k].forEach((r) => all.set(r.id, r)));
+    const out = { ...serverData } as typeof serverData;
+    keys.forEach((k) => { out[k] = serverData[k].filter((r) => !moves[r.id]); });
+    for (const [id, m] of Object.entries(moves)) {
+      const r = all.get(id);
+      if (!r) continue;
+      if (m === "hidden") out.hidden = [{ ...r, hidden_kind: "manual", hidden_at: new Date().toISOString() }, ...out.hidden];
+      else out.not_scheduled = [{ ...r, hidden_kind: null, pinned: true }, ...out.not_scheduled];
+    }
+    return out;
+  }, [serverData, moves]);
   const term = (q || filter).trim().toLowerCase();
   const rows = useMemo(() => {
     const list = data?.[tab] ?? [];
@@ -90,7 +110,7 @@ export function ScheduleWorklists({ data, filter }: { data: ScheduleCheckResult[
                     <p className="py-6 text-center text-sm text-muted-foreground">{term ? "No matching clients." : "Nothing here."}</p>
                   ) : (
                     <ul className="divide-y rounded-md border">
-                      {rows.slice(0, limit).map((r) => <Row key={r.id} r={r} tab={t.key} />)}
+                      {rows.slice(0, limit).map((r) => <Row key={r.id} r={r} tab={t.key} onMoved={(m) => setMoves((x) => ({ ...x, [r.id]: m }))} onFailed={() => setMoves((x) => { const n = { ...x }; delete n[r.id]; return n; })} />)}
                     </ul>
                   )}
                   {rows.length > limit && (
@@ -109,19 +129,21 @@ export function ScheduleWorklists({ data, filter }: { data: ScheduleCheckResult[
   );
 }
 
-function Row({ r, tab }: { r: WorklistRow; tab: Key }) {
+function Row({ r, tab, onMoved, onFailed }: { r: WorklistRow; tab: Key; onMoved: (m: "hidden" | "restored") => void; onFailed: () => void }) {
   const qc = useQueryClient();
   const hideFn = useServerFn(hideScheduleClient);
   const restoreFn = useServerFn(restoreScheduleClient);
   const hide = useMutation({
     mutationFn: (reason: string) => hideFn({ data: { clientId: r.id, reason } }),
+    onMutate: () => onMoved("hidden"),
     onSuccess: () => { toast.success("Hidden from worklists"); invalidateFor(qc, "schedule-hide-changed", { clientId: r.id }); },
-    onError: (e) => toast.error((e as Error).message),
+    onError: (e) => { onFailed(); toast.error((e as Error).message); },
   });
   const restore = useMutation({
+    onMutate: () => onMoved("restored"),
     mutationFn: () => restoreFn({ data: { clientId: r.id, kind: r.hidden_kind === "auto" ? "auto" : "manual" } }),
     onSuccess: () => { toast.success("Restored"); invalidateFor(qc, "schedule-hide-changed", { clientId: r.id }); },
-    onError: (e) => toast.error((e as Error).message),
+    onError: (e) => { onFailed(); toast.error((e as Error).message); },
   });
   return (
     <li className="flex flex-col gap-2 p-3 md:flex-row md:items-center md:justify-between">

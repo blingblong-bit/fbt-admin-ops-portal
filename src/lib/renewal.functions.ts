@@ -68,3 +68,26 @@ export const renewPackage = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     return renewClientPackage(supabaseAdmin as never, { ...data, source: "manual_renewal" });
   });
+
+/** Staff: activate ONE client's prepared renewal from verified Square 1/N
+ *  (same evidence rules as the scheduled sweep, no backlog cutoff). */
+export const activatePreparedFromSquare = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { clientId: string }) => {
+    if (!d?.clientId) throw new Error("clientId required");
+    return d;
+  })
+  .handler(async ({ data, context }) => {
+    const { data: staff } = await context.supabase.rpc("is_staff", { _user_id: context.userId });
+    if (!staff) throw new Error("Forbidden");
+    const token = (process.env.SQUARE_PRODUCTION_ACCESS_TOKEN ?? "").replace(/^[\s"'`]+|[\s"'`]+$/g, "").trim();
+    if (!token) throw new Error("Square is not configured.");
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { runSquareActivationSweep } = await import("./square-activation.server");
+    const r = await runSquareActivationSweep(supabaseAdmin, token, { apply: true, clientId: data.clientId, manual: true });
+    if (r.squareError) throw new Error("Couldn't read Square right now. Nothing was changed.");
+    const row = r.rows[0];
+    if (!row) throw new Error("No prepared renewal found for this client.");
+    const d = row.decision as any;
+    return { applied: !!row.applied, error: row.error ?? null, kind: d.kind as string, reason: (d.reason ?? null) as string | null, startYmd: (d.startYmd ?? null) as string | null };
+  });

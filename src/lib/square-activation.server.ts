@@ -12,10 +12,13 @@ export const DEFAULT_ACTIVATION_SINCE = "2026-10-24";
 
 export type SweepRow = { client_id: string; name: string; decision: SquareActivationDecision; applied?: boolean; error?: string; via?: "renewal" | "override" };
 
-export async function runSquareActivationSweep(admin: any, token: string, opts: { apply: boolean }) {
+export async function runSquareActivationSweep(admin: any, token: string, opts: { apply: boolean; clientId?: string; manual?: boolean }) {
   const enabled = process.env.SQUARE_AUTO_ACTIVATION_ENABLED === "true";
-  const sinceYmd = process.env.SQUARE_AUTO_ACTIVATION_SINCE || DEFAULT_ACTIVATION_SINCE;
-  const write = opts.apply && enabled;
+  // Manual = a staff member clicked "Activate from Square" for ONE client:
+  // same Square evidence rules, but the backlog cutoff and global flag don't apply.
+  const manual = !!opts.manual && !!opts.clientId;
+  const sinceYmd = manual ? "0000-01-01" : (process.env.SQUARE_AUTO_ACTIVATION_SINCE || DEFAULT_ACTIVATION_SINCE);
+  const write = opts.apply && (enabled || manual);
   const { data: clients, error } = await admin
     .from("clients")
     .select("id, first_name, last_name, square_customer_id, package_total_visits, visits_used, package_price, amount_paid, package_start_date, previous_package_owed, pending_renewal_start_date, pending_renewal_total_visits, pending_renewal_price, pending_renewal_paid, pending_renewal_package_name")
@@ -39,6 +42,7 @@ export async function runSquareActivationSweep(admin: any, token: string, opts: 
   const index = await loadSquareBookingIndex(token, 120, 1, { fresh: true });
   const rows: SweepRow[] = [];
   for (const c of (clients ?? []) as any[]) {
+    if (opts.clientId && c.id !== opts.clientId) continue;
     const bks = index.error ? null : (c.square_customer_id ? index.byCustomer.get(c.square_customer_id) ?? [] : []);
     const seq = bks ? buildSequence(bks.filter((b: any) => b.start_at) as never, index.nowIso) : null;
     const currentUnreadable = seq ? currentPositionUnreadable(seq, detectNoteIssues(seq)) : false;

@@ -17,11 +17,11 @@ const hide = (over: Partial<ManualHide> = {}): ManualHide => ({
 });
 
 describe("schedule worklists", () => {
-  it("Maddox (Square 6/8, last visit Oct 22, nothing booked) is Not Scheduled with a review flag", () => {
+  it("Maddox (Square 6/8, last visit Oct 22, nothing booked) is Not Scheduled using Square, no Hub flag", () => {
     const r = classifyWorklist(c({ visits_used: 0, visit: vt("square", 6) }), f("2026-10-22"), TODAY, null);
     expect(r.list).toBe("not_scheduled");
     expect(r.left).toBe(2);
-    expect(r.check).toMatch(/Square notes show 2 left/);
+    expect(r.check).toBeNull();
   });
 
   it("21 similar last-week clients all stay in Not Scheduled after the Saturday rollover and on Monday", () => {
@@ -38,8 +38,8 @@ describe("schedule worklists", () => {
     expect(classifyWorklist(c({ package_start_date: "2026-10-10" }), f("2026-08-01"), TODAY, null).list).toBe("not_scheduled");
   });
 
-  it("mismatched counts are never auto-hidden", () => {
-    const r = classifyWorklist(c({ visits_used: 8, visit: vt("square", 3) }), f("2026-07-01"), TODAY, null);
+  it("Square notes needing review are never auto-hidden", () => {
+    const r = classifyWorklist(c({ visits_used: 8, visit: vt("square_review", 3) }), f("2026-07-01"), TODAY, null);
     expect(r.list).toBe("not_scheduled");
   });
 
@@ -79,8 +79,8 @@ describe("schedule worklists", () => {
     expect(p.clearHide).toBe("New package purchased");
   });
 
-  it("manual hide is not applied when visit counts disagree", () => {
-    const r = classifyWorklist(c({ visits_used: 0, visit: vt("square", 6) }), f("2026-10-22"), TODAY, hide());
+  it("manual hide is not applied when Square notes need review", () => {
+    const r = classifyWorklist(c({ visits_used: 0, visit: vt("square_review", 6) }), f("2026-10-22"), TODAY, hide());
     expect(r.list).toBe("not_scheduled");
     expect(r.reasons.join(" ")).toMatch(/needs review/);
   });

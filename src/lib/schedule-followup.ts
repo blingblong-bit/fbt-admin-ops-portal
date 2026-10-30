@@ -24,22 +24,18 @@ const hubLeft = (c: FollowUpClient) =>
     : Math.max(0, (c.package_total_visits ?? 0) - c.visits_used);
 
 /**
- * Effective visits left. Square notes win when they're clean; when they're
- * flagged/held we keep Hub's number but never hide the client because of a
- * stale Hub count — a disagreement is surfaced as a check, not a decision.
+ * Effective visits left. Square appointment notes are the default source.
+ * Hub's count is used only when Square notes are unavailable or Hub tracking
+ * was manually selected (both arrive as mode "hub_fallback"/"hub").
+ * When Square notes need review, Square's number is still shown and flagged —
+ * Hub is never compared or blended in.
  */
 export function effectiveRemaining(c: FollowUpClient): Remaining {
-  const hub = hubLeft(c);
   const v = c.visit;
-  if (!v || v.mode === "hub_fallback" || !(v.total > 0)) return { left: hub, check: null };
+  if (!v || v.mode === "hub_fallback" || !(v.total > 0)) return { left: hubLeft(c), check: null };
   const sq = Math.max(0, v.total - v.used);
-  if (v.mode === "square") {
-    const check = sq !== hub ? `Hub shows ${hub} left, Square notes show ${sq} left` : null;
-    return { left: sq, check };
-  }
-  // square_review / held: Square position is uncertain — don't invent a count.
-  if (sq === hub) return { left: hub, check: null };
-  return { left: Math.max(hub, sq), check: `Visit count unclear — Hub ${hub} left, Square ${sq} left` };
+  if (v.mode === "square") return { left: sq, check: null };
+  return { left: sq, check: "Square visit notes need review" };
 }
 
 /** Eligible for scheduling follow-up: real, non-archived client with visits left (or a prepared next package). */

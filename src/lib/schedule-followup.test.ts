@@ -54,8 +54,8 @@ describe("schedule follow-up", () => {
     expect(new Set([...g.last_week_nothing_booked, ...g.not_scheduled_after]).size).toBe(22);
   });
 
-  it("clean Square count wins over a stale Hub zero and is flagged", () => {
-    expect(effectiveRemaining(maddox)).toEqual({ left: 2, check: "Hub shows 8 left, Square notes show 2 left" });
+  it("clean Square count wins over a stale Hub zero with no Hub comparison", () => {
+    expect(effectiveRemaining(maddox)).toEqual({ left: 2, check: null });
   });
 
   it("stale Hub 'used up' doesn't hide a client Square shows has visits left", () => {
@@ -67,7 +67,7 @@ describe("schedule follow-up", () => {
   it("flagged Square notes never invent a count; the client stays visible for review", () => {
     const x = c("x", { visits_used: 8, visit: vt("square_review", 4) });
     const r = effectiveRemaining(x);
-    expect(r.check).toMatch(/unclear/);
+    expect(r.left).toBe(4); expect(r.check).toMatch(/need review/);
     expect(followUpEligible(x)).toBe(true);
   });
 

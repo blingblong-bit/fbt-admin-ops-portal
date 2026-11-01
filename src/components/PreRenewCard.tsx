@@ -101,7 +101,9 @@ export function PreRenewCard({
               variant="ghost"
               className="h-7 text-xs"
               disabled={cancelMutation.isPending}
-              onClick={() => cancelMutation.mutate()}
+              onClick={() => {
+                if (window.confirm("Cancel this prepared renewal? Any money prepaid on it moves to the current package.")) cancelMutation.mutate();
+              }}
             >
               Cancel renewal
             </Button>

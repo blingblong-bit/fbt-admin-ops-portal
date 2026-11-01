@@ -2111,19 +2111,22 @@ export const cancelPendingRenewal = createServerFn({ method: "POST" })
     if (!d?.clientId || typeof d.clientId !== "string") throw new Error("clientId required");
     return { clientId: d.clientId };
   })
-  .handler(async ({ data, context }): Promise<{ ok: true }> => {
+  .handler(async ({ data, context }): Promise<{ ok: true; movedToCurrent: number }> => {
     const { data: cur, error: readErr } = await context.supabase
       .from("clients")
-      .select("pending_renewal_paid")
+      .select("pending_renewal_paid, amount_paid")
       .eq("id", data.clientId)
       .single();
     if (readErr) throw readErr;
-    if (Number(cur?.pending_renewal_paid ?? 0) > 0) {
-      throw new Error(
-        `This prepared package already has $${Number(cur!.pending_renewal_paid).toFixed(2)} prepaid. Move that payment to the right package on the client page before cancelling, so it doesn't carry into the next renewal.`,
-      );
+    const prepaid = Number(cur?.pending_renewal_paid ?? 0);
+    const paid = Number(cur?.amount_paid ?? 0);
+    if (prepaid > 0) {
+      // Moving money needs an admin; it stays on the current package (never a general credit).
+      const { data: isAdmin } = await context.supabase.rpc("is_admin", { _user_id: context.userId });
+      if (!isAdmin) throw new Error(`This renewal has $${prepaid.toFixed(2)} prepaid. Only an admin can cancel it (the money moves to the current package).`);
     }
-    const { error } = await context.supabase
+    // Guarded update: only applies if the money didn't change since we read it.
+    const { data: upd, error } = await context.supabase
       .from("clients")
       .update({
         pending_renewal_start_date: null,
@@ -2131,16 +2134,28 @@ export const cancelPendingRenewal = createServerFn({ method: "POST" })
         pending_renewal_total_visits: null,
         pending_renewal_package_name: null,
         pending_renewal_created_at: null,
+        pending_renewal_paid: 0,
+        amount_paid: paid + prepaid,
       })
-      .eq("id", data.clientId);
+      .eq("id", data.clientId)
+      .eq("pending_renewal_paid", cur?.pending_renewal_paid ?? 0)
+      .eq("amount_paid", cur?.amount_paid ?? 0)
+      .select("id");
     if (error) throw error;
+    if (!upd?.length) throw new Error("A payment just came in for this client. Refresh and try again.");
     await context.supabase.from("client_activities").insert({
       client_id: data.clientId,
       activity_type: "pre_renewal_cancelled",
-      description: "Prepared next package cancelled — current package unchanged.",
-      metadata: null,
+      description: prepaid > 0
+        ? `Prepared next package cancelled — $${prepaid.toFixed(2)} prepaid moved to the current package.`
+        : "Prepared next package cancelled — current package unchanged.",
+      metadata: prepaid > 0
+        ? { money_changed: true, moved_to_current: prepaid, actor: context.userId,
+            before: { amount_paid: paid, pending_renewal_paid: prepaid },
+            after: { amount_paid: paid + prepaid, pending_renewal_paid: 0 } }
+        : null,
     });
-    return { ok: true };
+    return { ok: true, movedToCurrent: prepaid };
   });
 
 // ---------------------------------------------------------------------------

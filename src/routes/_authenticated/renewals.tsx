@@ -8,6 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { PreRenewCard } from "@/components/PreRenewCard";
 import { ActivateFromSquareButton } from "@/components/ActivateFromSquareButton";
+import { formatDate } from "@/lib/clients";
 import { getRenewalForecast, type RenewalForecastRow } from "@/lib/schedule.functions";
 import { attentionReason, groupRenewals } from "@/lib/renewals-view";
 import { chunk } from "@/lib/chunk";

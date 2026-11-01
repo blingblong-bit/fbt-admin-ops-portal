@@ -46,8 +46,10 @@ export function PreRenewCard({
 
   const cancelMutation = useMutation({
     mutationFn: () => cancelPending({ data: { clientId: forecast.client_id } }),
-    onSuccess: () => {
-      toast.success("Prepared package cancelled");
+    onSuccess: (r) => {
+      toast.success(r.movedToCurrent > 0
+        ? `Renewal cancelled — ${formatCurrency(r.movedToCurrent)} prepaid moved to the current package`
+        : "Prepared package cancelled");
       refresh();
     },
     onError: (e: Error) => toast.error(e.message),
@@ -99,7 +101,9 @@ export function PreRenewCard({
               variant="ghost"
               className="h-7 text-xs"
               disabled={cancelMutation.isPending}
-              onClick={() => cancelMutation.mutate()}
+              onClick={() => {
+                if (window.confirm("Cancel this prepared renewal? Any money prepaid on it moves to the current package.")) cancelMutation.mutate();
+              }}
             >
               Cancel renewal
             </Button>

@@ -202,9 +202,12 @@ function RenewalsPage() {
                         {r.pending_start_ymd ? ` · Can start on or after ${formatDate(r.pending_start_ymd)}` : ""}
                       </div>
                     </div>
-                    <Button asChild size="sm" variant="outline">
-                      <Link to="/clients/$id" params={{ id: r.client_id }}>Open profile</Link>
-                    </Button>
+                    <div className="flex flex-wrap gap-2">
+                      {tab === "attention" && r.pending_start_ymd && <ActivateFromSquareButton clientId={r.client_id} />}
+                      <Button asChild size="sm" variant="outline">
+                        <Link to="/clients/$id" params={{ id: r.client_id }}>Open profile</Link>
+                      </Button>
+                    </div>
                   </div>
                   <PreRenewCard forecast={r} />
                 </CardContent>

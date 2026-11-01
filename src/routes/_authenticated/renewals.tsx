@@ -7,7 +7,7 @@ import { AppShell } from "@/components/AppShell";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { PreRenewCard } from "@/components/PreRenewCard";
-import { formatDate } from "@/lib/clients";
+import { ActivateFromSquareButton } from "@/components/ActivateFromSquareButton";
 import { getRenewalForecast, type RenewalForecastRow } from "@/lib/schedule.functions";
 import { attentionReason, groupRenewals } from "@/lib/renewals-view";
 import { chunk } from "@/lib/chunk";

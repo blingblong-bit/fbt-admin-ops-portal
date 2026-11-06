@@ -88,3 +88,9 @@
 - [x] Fix Renewals Needs Attention + gated Square 1-of-N activation (backlog awaiting review; enable flag + cron at go-live)
 
 - [x] Schedule Check worklists redesign (Package Completed / Not Scheduled / Only Once / Hidden) + manual hide audit
+
+## Scheduler web push (review only)
+- [ ] Home Screen metadata and push-only device onboarding
+- [ ] Scheduler selection and persistent scheduling follow-ups
+- [ ] Secure bounded checker, attempts and deduplication tests
+- [ ] Preview checks; leave publication and automatic alerts off

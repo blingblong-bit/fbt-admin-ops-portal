@@ -6,6 +6,7 @@ import { toast } from "@/components/ui/sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { SchedulingFollowupDialog } from "@/components/SchedulingFollowupDialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatDate } from "@/lib/clients";
 import { invalidateFor } from "@/lib/invalidation";
@@ -165,7 +166,8 @@ function Row({ r, tab, onMoved, onFailed }: { r: WorklistRow; tab: Key; onMoved:
           <div key={x} className="text-xs text-amber-700">{x}</div>
         ))}
       </div>
-      <div className="flex shrink-0 gap-2">
+      <div className="flex shrink-0 flex-wrap gap-2">
+        <SchedulingFollowupDialog clientId={r.id} clientName={`${r.first_name} ${r.last_name}`} worklist={TABS.find(t => t.key === tab)?.label ?? tab} />
         <Button asChild size="sm" variant="outline" className="h-10 md:h-8">
           <Link to="/clients/$id" params={{ id: r.id }}>View</Link>
         </Button>

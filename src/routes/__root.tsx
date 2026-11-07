@@ -91,12 +91,15 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "twitter:title", content: "FIT Beyond Therapy Admin" },
       { property: "og:description", content: "Internal staff portal for FIT Beyond Therapy" },
       { name: "twitter:description", content: "Internal staff portal for FIT Beyond Therapy" },
-      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/fe7584b7-d0b8-4ca9-99cd-61d574cf22bd/id-preview-e7d2d773--10a029f2-197e-4508-8221-cf530b01b259.lovable.app-1782707536167.png" },
-      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/fe7584b7-d0b8-4ca9-99cd-61d574cf22bd/id-preview-e7d2d773--10a029f2-197e-4508-8221-cf530b01b259.lovable.app-1782707536167.png" },
+      { name: "theme-color", content: "#0f172a" },
+      { name: "apple-mobile-web-app-capable", content: "yes" },
+      { name: "apple-mobile-web-app-title", content: "FIT Hub" },
       { name: "twitter:card", content: "summary_large_image" },
       { property: "og:type", content: "website" },
     ],
     links: [
+      { rel: "manifest", href: "/manifest.webmanifest" },
+      { rel: "apple-touch-icon", href: "/icons/fit-hub-180.png" },
       {
         rel: "stylesheet",
         href: appCss,
@@ -184,6 +187,12 @@ function RootComponent() {
       const firstKnown = currentUserId === undefined;
       currentUserId = nextId;
       if (event === "SIGNED_OUT" || (userChanged && !firstKnown)) {
+        // Account transitions remove this browser's push consent server-side;
+        // no notification worker reads auth tokens or cached client data.
+        import("@/lib/scheduling-push.browser").then(async ({ currentPushSubscription }) => {
+          const subscription = await currentPushSubscription();
+          await subscription?.unsubscribe();
+        }).catch(() => {});
         router.invalidate();
         if (nextId) queryClient.invalidateQueries();
         return;

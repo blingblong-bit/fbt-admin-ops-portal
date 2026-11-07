@@ -912,6 +912,24 @@ export type Database = {
         }
         Relationships: []
       }
+      scheduling_push_runs: {
+        Row: {
+          expires_at: string
+          id: boolean
+          token: string
+        }
+        Insert: {
+          expires_at: string
+          id?: boolean
+          token: string
+        }
+        Update: {
+          expires_at?: string
+          id?: boolean
+          token?: string
+        }
+        Relationships: []
+      }
       scheduling_push_secrets: {
         Row: {
           created_at: string
@@ -1210,6 +1228,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      acquire_scheduling_push_run: {
+        Args: { p_token: string }
+        Returns: boolean
+      }
       apply_square_payment: {
         Args: {
           p_amount_cents: number
@@ -1244,6 +1266,10 @@ export type Database = {
           isOneToOne: false
           isSetofReturn: true
         }
+      }
+      claim_scheduling_push_test: {
+        Args: { p_device: string; p_user: string }
+        Returns: string
       }
       clear_package_override: {
         Args: { p_client_id: string; p_reason: string; p_slot: string }
@@ -1280,6 +1306,20 @@ export type Database = {
           amount: number
           bucket: string
         }[]
+      }
+      register_scheduling_push_device: {
+        Args: {
+          p_auth: string
+          p_endpoint: string
+          p_label: string
+          p_origin: string
+          p_p256dh: string
+        }
+        Returns: string
+      }
+      release_scheduling_push_run: {
+        Args: { p_token: string }
+        Returns: undefined
       }
       renew_client_package: {
         Args: {

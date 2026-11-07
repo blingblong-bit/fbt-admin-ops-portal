@@ -90,7 +90,9 @@
 - [x] Schedule Check worklists redesign (Package Completed / Not Scheduled / Only Once / Hidden) + manual hide audit
 
 ## Scheduler web push (review only)
-- [ ] Home Screen metadata and push-only device onboarding
-- [ ] Scheduler selection and persistent scheduling follow-ups
-- [ ] Secure bounded checker, attempts and deduplication tests
-- [ ] Preview checks; leave publication and automatic alerts off
+- [x] Home Screen metadata and push-only device onboarding
+- [x] Scheduler selection and persistent scheduling follow-ups
+- [x] Secure bounded checker, attempts and deduplication tests
+- [x] Preview checks; leave publication and automatic alerts off
+- [ ] Secure background job preparation — blocked by protected secret-storage access; no job created
+- [ ] Scheduler selection, reminder window, opt-in and real iPhone test — requires publication approval and scheduler device consent

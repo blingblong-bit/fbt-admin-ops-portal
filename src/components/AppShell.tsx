@@ -18,6 +18,8 @@ export function AppShell({ children }: { children: ReactNode }) {
     { to: "/renewals", label: "Renewals" },
     { to: "/clients", label: "All Clients" },
     { to: "/schedule-check", label: "Schedule Check" },
+    { to: "/follow-ups", label: "Follow-ups" },
+    { to: "/notifications", label: "Notifications" },
     { to: "/clients/new", label: "Add Client" },
   ] as const;
 
@@ -64,7 +66,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
       <header className="border-b bg-white">
-        <div className="mx-auto grid max-w-7xl grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-4 py-3 sm:px-6 sm:py-4 lg:flex lg:justify-between">
+        <div className="mx-auto grid max-w-7xl grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-4 py-3 sm:px-6 sm:py-4">
           <Link to="/" className="flex min-w-0 items-center gap-3">
             <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-900 text-sm font-bold text-white">
               FB
@@ -78,7 +80,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           </Link>
 
           {/* Desktop nav */}
-          <nav className="hidden items-center gap-1 lg:flex">
+          <nav className="order-3 col-span-2 hidden flex-wrap items-center gap-1 lg:flex">
             {primaryNav.map((n) => (
               <Link
                 key={n.to}

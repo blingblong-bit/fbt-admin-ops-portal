@@ -82,7 +82,7 @@ import { invalidateFor } from "@/lib/invalidation";
 
 
 export const Route = createFileRoute("/_authenticated/")({
-  head: () => ({ meta: [{ title: "Dashboard · FIT Beyond Therapy Admin" }] }),
+  head: () => ({ meta: [{ title: "Dashboard · FIT Beyond Therapy Hub" }, { name: "description", content: "FIT Beyond Therapy staff scheduling and client operations." }, { property: "og:title", content: "Dashboard · FIT Beyond Therapy Hub" }, { property: "og:description", content: "FIT Beyond Therapy staff scheduling and client operations." }, { property: "og:type", content: "website" }, { name: "twitter:card", content: "summary" }] }),
   component: Dashboard,
 });
 

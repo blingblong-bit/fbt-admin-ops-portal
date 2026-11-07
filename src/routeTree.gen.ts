@@ -16,11 +16,13 @@ import { Route as AuthenticatedBackupRouteImport } from './routes/_authenticated
 import { Route as AuthenticatedCollectionsRouteImport } from './routes/_authenticated/collections'
 import { Route as AuthenticatedDuesQueueRouteImport } from './routes/_authenticated/dues-queue'
 import { Route as AuthenticatedDuesTextsRouteImport } from './routes/_authenticated/dues-texts'
+import { Route as AuthenticatedFollowUpsRouteImport } from './routes/_authenticated/follow-ups'
 import { Route as AuthenticatedImportRouteImport } from './routes/_authenticated/import'
 import { Route as AuthenticatedMergeCenterRouteImport } from './routes/_authenticated/merge-center'
 import { Route as AuthenticatedMessagingPreviewRouteImport } from './routes/_authenticated/messaging-preview'
 import { Route as AuthenticatedMissedCheckInsRouteImport } from './routes/_authenticated/missed-check-ins'
 import { Route as AuthenticatedNotesLedgerRouteImport } from './routes/_authenticated/notes-ledger'
+import { Route as AuthenticatedNotificationsRouteImport } from './routes/_authenticated/notifications'
 import { Route as AuthenticatedPaymentDueRouteImport } from './routes/_authenticated/payment-due'
 import { Route as AuthenticatedPaymentHistoryRouteImport } from './routes/_authenticated/payment-history'
 import { Route as AuthenticatedRenewalReviewRouteImport } from './routes/_authenticated/renewal-review'
@@ -83,6 +85,11 @@ const AuthenticatedDuesTextsRoute = AuthenticatedDuesTextsRouteImport.update({
   path: '/dues-texts',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedFollowUpsRoute = AuthenticatedFollowUpsRouteImport.update({
+  id: '/follow-ups',
+  path: '/follow-ups',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedImportRoute = AuthenticatedImportRouteImport.update({
   id: '/import',
   path: '/import',
@@ -110,6 +117,12 @@ const AuthenticatedNotesLedgerRoute =
   AuthenticatedNotesLedgerRouteImport.update({
     id: '/notes-ledger',
     path: '/notes-ledger',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedNotificationsRoute =
+  AuthenticatedNotificationsRouteImport.update({
+    id: '/notifications',
+    path: '/notifications',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
 const AuthenticatedPaymentDueRoute = AuthenticatedPaymentDueRouteImport.update({
@@ -263,11 +276,13 @@ export interface FileRoutesByFullPath {
   '/collections': typeof AuthenticatedCollectionsRoute
   '/dues-queue': typeof AuthenticatedDuesQueueRoute
   '/dues-texts': typeof AuthenticatedDuesTextsRoute
+  '/follow-ups': typeof AuthenticatedFollowUpsRoute
   '/import': typeof AuthenticatedImportRoute
   '/merge-center': typeof AuthenticatedMergeCenterRoute
   '/messaging-preview': typeof AuthenticatedMessagingPreviewRoute
   '/missed-check-ins': typeof AuthenticatedMissedCheckInsRoute
   '/notes-ledger': typeof AuthenticatedNotesLedgerRoute
+  '/notifications': typeof AuthenticatedNotificationsRoute
   '/payment-due': typeof AuthenticatedPaymentDueRoute
   '/payment-history': typeof AuthenticatedPaymentHistoryRoute
   '/renewal-review': typeof AuthenticatedRenewalReviewRoute
@@ -301,11 +316,13 @@ export interface FileRoutesByTo {
   '/collections': typeof AuthenticatedCollectionsRoute
   '/dues-queue': typeof AuthenticatedDuesQueueRoute
   '/dues-texts': typeof AuthenticatedDuesTextsRoute
+  '/follow-ups': typeof AuthenticatedFollowUpsRoute
   '/import': typeof AuthenticatedImportRoute
   '/merge-center': typeof AuthenticatedMergeCenterRoute
   '/messaging-preview': typeof AuthenticatedMessagingPreviewRoute
   '/missed-check-ins': typeof AuthenticatedMissedCheckInsRoute
   '/notes-ledger': typeof AuthenticatedNotesLedgerRoute
+  '/notifications': typeof AuthenticatedNotificationsRoute
   '/payment-due': typeof AuthenticatedPaymentDueRoute
   '/payment-history': typeof AuthenticatedPaymentHistoryRoute
   '/renewal-review': typeof AuthenticatedRenewalReviewRoute
@@ -342,11 +359,13 @@ export interface FileRoutesById {
   '/_authenticated/collections': typeof AuthenticatedCollectionsRoute
   '/_authenticated/dues-queue': typeof AuthenticatedDuesQueueRoute
   '/_authenticated/dues-texts': typeof AuthenticatedDuesTextsRoute
+  '/_authenticated/follow-ups': typeof AuthenticatedFollowUpsRoute
   '/_authenticated/import': typeof AuthenticatedImportRoute
   '/_authenticated/merge-center': typeof AuthenticatedMergeCenterRoute
   '/_authenticated/messaging-preview': typeof AuthenticatedMessagingPreviewRoute
   '/_authenticated/missed-check-ins': typeof AuthenticatedMissedCheckInsRoute
   '/_authenticated/notes-ledger': typeof AuthenticatedNotesLedgerRoute
+  '/_authenticated/notifications': typeof AuthenticatedNotificationsRoute
   '/_authenticated/payment-due': typeof AuthenticatedPaymentDueRoute
   '/_authenticated/payment-history': typeof AuthenticatedPaymentHistoryRoute
   '/_authenticated/renewal-review': typeof AuthenticatedRenewalReviewRoute
@@ -384,11 +403,13 @@ export interface FileRouteTypes {
     | '/collections'
     | '/dues-queue'
     | '/dues-texts'
+    | '/follow-ups'
     | '/import'
     | '/merge-center'
     | '/messaging-preview'
     | '/missed-check-ins'
     | '/notes-ledger'
+    | '/notifications'
     | '/payment-due'
     | '/payment-history'
     | '/renewal-review'
@@ -422,11 +443,13 @@ export interface FileRouteTypes {
     | '/collections'
     | '/dues-queue'
     | '/dues-texts'
+    | '/follow-ups'
     | '/import'
     | '/merge-center'
     | '/messaging-preview'
     | '/missed-check-ins'
     | '/notes-ledger'
+    | '/notifications'
     | '/payment-due'
     | '/payment-history'
     | '/renewal-review'
@@ -462,11 +485,13 @@ export interface FileRouteTypes {
     | '/_authenticated/collections'
     | '/_authenticated/dues-queue'
     | '/_authenticated/dues-texts'
+    | '/_authenticated/follow-ups'
     | '/_authenticated/import'
     | '/_authenticated/merge-center'
     | '/_authenticated/messaging-preview'
     | '/_authenticated/missed-check-ins'
     | '/_authenticated/notes-ledger'
+    | '/_authenticated/notifications'
     | '/_authenticated/payment-due'
     | '/_authenticated/payment-history'
     | '/_authenticated/renewal-review'
@@ -564,6 +589,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedDuesTextsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/follow-ups': {
+      id: '/_authenticated/follow-ups'
+      path: '/follow-ups'
+      fullPath: '/follow-ups'
+      preLoaderRoute: typeof AuthenticatedFollowUpsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/import': {
       id: '/_authenticated/import'
       path: '/import'
@@ -597,6 +629,13 @@ declare module '@tanstack/react-router' {
       path: '/notes-ledger'
       fullPath: '/notes-ledger'
       preLoaderRoute: typeof AuthenticatedNotesLedgerRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/notifications': {
+      id: '/_authenticated/notifications'
+      path: '/notifications'
+      fullPath: '/notifications'
+      preLoaderRoute: typeof AuthenticatedNotificationsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/payment-due': {
@@ -789,11 +828,13 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedCollectionsRoute: typeof AuthenticatedCollectionsRoute
   AuthenticatedDuesQueueRoute: typeof AuthenticatedDuesQueueRoute
   AuthenticatedDuesTextsRoute: typeof AuthenticatedDuesTextsRoute
+  AuthenticatedFollowUpsRoute: typeof AuthenticatedFollowUpsRoute
   AuthenticatedImportRoute: typeof AuthenticatedImportRoute
   AuthenticatedMergeCenterRoute: typeof AuthenticatedMergeCenterRoute
   AuthenticatedMessagingPreviewRoute: typeof AuthenticatedMessagingPreviewRoute
   AuthenticatedMissedCheckInsRoute: typeof AuthenticatedMissedCheckInsRoute
   AuthenticatedNotesLedgerRoute: typeof AuthenticatedNotesLedgerRoute
+  AuthenticatedNotificationsRoute: typeof AuthenticatedNotificationsRoute
   AuthenticatedPaymentDueRoute: typeof AuthenticatedPaymentDueRoute
   AuthenticatedPaymentHistoryRoute: typeof AuthenticatedPaymentHistoryRoute
   AuthenticatedRenewalReviewRoute: typeof AuthenticatedRenewalReviewRoute
@@ -816,11 +857,13 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedCollectionsRoute: AuthenticatedCollectionsRoute,
   AuthenticatedDuesQueueRoute: AuthenticatedDuesQueueRoute,
   AuthenticatedDuesTextsRoute: AuthenticatedDuesTextsRoute,
+  AuthenticatedFollowUpsRoute: AuthenticatedFollowUpsRoute,
   AuthenticatedImportRoute: AuthenticatedImportRoute,
   AuthenticatedMergeCenterRoute: AuthenticatedMergeCenterRoute,
   AuthenticatedMessagingPreviewRoute: AuthenticatedMessagingPreviewRoute,
   AuthenticatedMissedCheckInsRoute: AuthenticatedMissedCheckInsRoute,
   AuthenticatedNotesLedgerRoute: AuthenticatedNotesLedgerRoute,
+  AuthenticatedNotificationsRoute: AuthenticatedNotificationsRoute,
   AuthenticatedPaymentDueRoute: AuthenticatedPaymentDueRoute,
   AuthenticatedPaymentHistoryRoute: AuthenticatedPaymentHistoryRoute,
   AuthenticatedRenewalReviewRoute: AuthenticatedRenewalReviewRoute,

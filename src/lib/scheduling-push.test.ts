@@ -77,7 +77,7 @@ describe('push authorization and device validation', () => {
 
 describe('actual checker orchestration', () => {
   it('repeated/disabled empty claims do not send or load subscriptions', async () => {
-    const db: any = { rpc: vi.fn(async () => ({ data: [], error: null })), from: vi.fn() };
+    const db: any = { rpc: vi.fn(async (name: string) => ({ data: name === 'acquire_scheduling_push_run' ? true : [], error: null })), from: vi.fn() };
     expect((await runSchedulingPush(db, undefined)).claimed).toBe(0);
     expect((await runSchedulingPush(db, undefined)).claimed).toBe(0);
     expect(db.from).not.toHaveBeenCalled();
@@ -85,7 +85,7 @@ describe('actual checker orchestration', () => {
   it('completion after claim suppresses send in real orchestration path', async () => {
     const updates: unknown[] = [];
     const db: any = {
-      rpc: vi.fn(async (name: string) => ({ data: name === 'claim_scheduling_push' ? [{ id: 'attempt', task_id: 'task', device_id: 'device', recipient_id: scheduler, revision: 1 }] : name === 'has_role' ? true : false, error: null })),
+      rpc: vi.fn(async (name: string) => ({ data: name === 'claim_scheduling_push' ? [{ id: 'attempt', task_id: 'task', device_id: 'device', recipient_id: scheduler, revision: 1 }] : ['has_role', 'acquire_scheduling_push_run'].includes(name) ? true : false, error: null })),
       from: (name: string) => {
         const chain: any = { select: () => chain, eq: () => chain,
           update: (v: unknown) => { updates.push(v); return chain; },

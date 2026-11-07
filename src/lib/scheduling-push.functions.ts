@@ -56,19 +56,12 @@ export const registerSchedulingDevice = createServerFn({ method: 'POST' }).middl
   .handler(async ({ data, context }) => {
     const role = await context.supabase.rpc('is_staff', { _user_id: context.userId });
     if (role.error || !role.data) throw new Error('Staff access required');
-    const { supabaseAdmin } = await import('@/integrations/supabase/client.server');
-    const key = await supabaseAdmin.from('scheduling_push_secrets').select('public_key').maybeSingle();
-    if (!key.data) throw new Error('Admin must prepare notification keys first');
-    const existing = await supabaseAdmin.from('scheduling_push_devices').select('id,user_id').eq('endpoint', data.subscription.endpoint).maybeSingle();
-    if (existing.error) throw new Error('Could not verify this device');
-    if (existing.data && existing.data.user_id !== context.userId) throw new Error('This device belongs to another account; disable it there first');
-    const count = await supabaseAdmin.from('scheduling_push_devices').select('id', { count: 'exact', head: true }).eq('user_id', context.userId);
-    if (count.error || (!existing.data && (count.count ?? 0) >= 10)) throw new Error('Device limit reached');
-    const result = await supabaseAdmin.from('scheduling_push_devices').upsert({ user_id: context.userId, endpoint: data.subscription.endpoint,
-      p256dh: data.subscription.keys.p256dh, auth_key: data.subscription.keys.auth, label: data.label,
-      origin: data.origin, enabled: true, last_error: null, updated_at: new Date().toISOString() }, { onConflict: 'endpoint' }).select('id').single();
+    const result = await context.supabase.rpc('register_scheduling_push_device', {
+      p_endpoint: data.subscription.endpoint, p_p256dh: data.subscription.keys.p256dh,
+      p_auth: data.subscription.keys.auth, p_origin: data.origin, p_label: data.label,
+    });
     if (result.error || !result.data) throw new Error('Could not register your device');
-    return { id: result.data.id };
+    return { id: result.data };
   });
 
 export const removeSchedulingDevice = createServerFn({ method: 'POST' }).middleware([requireSupabaseAuth])

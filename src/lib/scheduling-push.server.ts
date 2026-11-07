@@ -64,14 +64,17 @@ async function sendDevice(db: DB, attemptId: string, device: Database['public'][
 export async function selfTestPush(db: DB, userId: string, deviceId: string, secret: string | undefined) {
   const { data: device } = await db.from('scheduling_push_devices').select('*').eq('id', deviceId).eq('user_id', userId).eq('enabled', true).single();
   if (!device) throw new Error('This device is not registered to your account');
-  const recent = await db.from('scheduling_push_attempts').select('id', { count: 'exact', head: true }).eq('recipient_id', userId).eq('kind', 'test').gte('created_at', new Date(Date.now() - 60000).toISOString());
-  if (recent.error || (recent.count ?? 0) >= 1) throw new Error('Wait one minute before another test');
-  const { data, error } = await db.from('scheduling_push_attempts').insert({ recipient_id: userId, device_id: device.id, kind: 'test' }).select('id').single();
+  const { data, error } = await db.rpc('claim_scheduling_push_test', { p_user: userId, p_device: device.id });
   if (!data || error) throw new Error('Could not record notification attempt');
-  return sendDevice(db, data.id, device, null, secret);
+  return sendDevice(db, data, device, null, secret);
 }
 
 export async function runSchedulingPush(db: DB, secret: string | undefined, origin = PUSH_ORIGIN) {
+  const runToken = crypto.randomUUID();
+  const lease = await db.rpc('acquire_scheduling_push_run', { p_token: runToken });
+  if (lease.error) throw new Error('Could not acquire scheduling reminder run');
+  if (!lease.data) return { claimed: 0, accepted: 0, failed: 0, expired: 0, suppressed: 0, unknown: 0 };
+  try {
   const claimed = await db.rpc('claim_scheduling_push', { p_origin: origin });
   if (claimed.error) throw new Error('Could not claim scheduling reminders');
   const counts = { claimed: claimed.data.length, accepted: 0, failed: 0, expired: 0, suppressed: 0, unknown: 0 };
@@ -95,6 +98,9 @@ export async function runSchedulingPush(db: DB, secret: string | undefined, orig
     counts[status]++;
   }
   return counts;
+  } finally {
+    await db.rpc('release_scheduling_push_run', { p_token: runToken });
+  }
 }
 
 export async function handleSchedulingPushTick(request: Request, deps: { cronSecret: string | undefined; run: () => Promise<unknown> }) {

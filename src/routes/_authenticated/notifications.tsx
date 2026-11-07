@@ -66,7 +66,7 @@ function NotificationsPage() {
             const result = await register({ data: { subscription: sub.toJSON() as { endpoint: string; keys: { p256dh: string; auth: string } }, origin: PUSH_ORIGIN, label } });
             if (settings.data) localStorage.setItem(`fit-push-device:${settings.data.userId}`, result.id);
             setDeviceId(result.id); setLocalSubscribed(true); toast.success('This device is enabled');
-          } catch (e) { if (!current) await sub.unsubscribe(); throw e; } });
+          } catch (e) { await sub.unsubscribe(); setLocalSubscribed(false); throw e; } });
         }}><Bell className="size-4" />Enable this device</Button>
         <Button variant="outline" disabled={busy || !current?.enabled || !localSubscribed} onClick={() => act(async () => { if (!current) return; const result = await testPush({ data: { deviceId: current.id } }); toast.message(result.status === 'accepted' ? 'Push service accepted the test. Device receipt is not yet confirmed.' : `Test status: ${result.status}`); })}>Send test to this device</Button></div>
       </section>

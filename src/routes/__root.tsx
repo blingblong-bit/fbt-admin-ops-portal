@@ -187,7 +187,7 @@ function RootComponent() {
       const firstKnown = currentUserId === undefined;
       currentUserId = nextId;
       if (event === "SIGNED_OUT" || (userChanged && !firstKnown)) {
-        // Account transitions remove this browser's push consent server-side;
+        // Account transitions unsubscribe this browser's messaging endpoint;
         // no notification worker reads auth tokens or cached client data.
         import("@/lib/scheduling-push.browser").then(async ({ currentPushSubscription }) => {
           const subscription = await currentPushSubscription();

@@ -41,7 +41,7 @@ function TaskRow({ task, settings }: { task: Awaited<ReturnType<typeof getSchedu
   const canEdit = settings && (settings.isAdmin || task.owner_id === settings.userId || task.created_by === settings.userId);
   async function submit(done: boolean) { setBusy(true); try {
     await save({ data: { id: task.id, clientId: null, ownerId: done ? null : owner, due: done ? null : chicagoDueToIso(day, time), context: null, outcome: done ? outcome : null } });
-    await qc.invalidateQueries({ queryKey: ['scheduling-followups'] }); setEditing(false); toast.success(done ? 'Outcome recorded; follow-up completed' : 'Assignment updated');
+    await qc.invalidateQueries({ queryKey: ["scheduling-followups"] }); setEditing(false); toast.success(done ? 'Outcome recorded; follow-up completed' : 'Assignment updated');
   } catch (e) { toast.error(e instanceof Error ? e.message : 'Could not save follow-up'); } finally { setBusy(false); } }
   return <li className="space-y-3 py-5"><div className="flex flex-wrap items-start justify-between gap-3"><div className="min-w-0"><h2 className="font-semibold">{task.clients?.first_name} {task.clients?.last_name}</h2><p className="text-sm text-muted-foreground">Due {new Date(task.due_at).toLocaleString('en-US', { timeZone: 'America/Chicago' })} Chicago · {task.status}</p><p className="text-sm text-muted-foreground">Assigned: {settings?.staffAccounts.find(a => a.id === task.owner_id)?.label ?? 'Staff account'}</p></div><Button asChild variant="outline" size="sm"><Link to="/clients/$id" params={{ id: task.client_id }}>Client</Link></Button></div><p className="break-words text-sm">{task.context}</p>
     {task.status === 'completed' && <p className="text-sm">Outcome: {task.outcome}</p>}

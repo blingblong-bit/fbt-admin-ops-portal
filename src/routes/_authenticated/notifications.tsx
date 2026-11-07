@@ -36,7 +36,7 @@ function NotificationsPage() {
   const [start, setStart] = useState('');
   const [end, setEnd] = useState('');
   const [enabled, setEnabled] = useState(false);
-  const refresh = () => qc.invalidateQueries({ queryKey: ['scheduling-settings'] });
+  const refresh = () => qc.invalidateQueries({ queryKey: ["scheduling-settings"] });
   useEffect(() => {
     setCap(readPushCapability());
     currentPushSubscription().then(s => setLocalSubscribed(!!s)).catch(() => setLocalSubscribed(false));

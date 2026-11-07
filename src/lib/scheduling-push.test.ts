@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { canNotifyTask, deviceCapability, subscriptionSchema } from './scheduling-push';
-import { handleSchedulingPushTick, runSchedulingPush, selfTestPush } from './scheduling-push.server';
+import { handleSchedulingPushTick, provisionPushKeys, runSchedulingPush, selfTestPush } from './scheduling-push.server';
 import { chicagoDueToIso } from '@/components/SchedulingFollowupDialog';
 
 const scheduler = 'scheduler';
@@ -76,6 +76,11 @@ describe('push authorization and device validation', () => {
 });
 
 describe('actual checker orchestration', () => {
+  it('overlapping runs do not claim tasks', async () => {
+    const db: any = { rpc: vi.fn(async () => ({ data: false, error: null })), from: vi.fn() };
+    expect((await runSchedulingPush(db, undefined)).claimed).toBe(0);
+    expect(db.rpc).toHaveBeenCalledTimes(1);
+  });
   it('repeated/disabled empty claims do not send or load subscriptions', async () => {
     const db: any = { rpc: vi.fn(async (name: string) => ({ data: name === 'acquire_scheduling_push_run' ? true : [], error: null })), from: vi.fn() };
     expect((await runSchedulingPush(db, undefined)).claimed).toBe(0);
@@ -96,5 +101,28 @@ describe('actual checker orchestration', () => {
     };
     const result = await runSchedulingPush(db, undefined);
     expect(result.suppressed).toBe(1); expect(result.accepted).toBe(0); expect(updates).toContainEqual(expect.objectContaining({ status: 'suppressed' }));
+  });
+  it('real encryption/send path marks expired subscription disabled and never delivered', async () => {
+    let stored: any = null; const updates: { table: string; values: any }[] = [];
+    const encode = (v: Uint8Array) => Buffer.from(v).toString('base64url');
+    const clientPair = await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveBits']);
+    const publicKey = await crypto.subtle.exportKey('raw', clientPair.publicKey);
+    const dev = { ...device, endpoint: 'https://web.push.apple.com/test', p256dh: encode(new Uint8Array(publicKey)), auth_key: encode(crypto.getRandomValues(new Uint8Array(16))) };
+    const db: any = { rpc: vi.fn(async () => ({ data: 'attempt', error: null })), from: (table: string) => {
+      const chain: any = { select: () => chain, eq: () => chain,
+        maybeSingle: async () => ({ data: stored, error: null }), single: async () => ({ data: table === 'scheduling_push_secrets' ? stored : dev, error: null }),
+        upsert: (v: any) => { stored = v; return chain; },
+        update: (v: any) => { updates.push({ table, values: v }); return chain; },
+        then: (resolve: (v: unknown) => unknown) => resolve({ error: null }) };
+      return chain;
+    } };
+    await provisionPushKeys(db, 'test-only-encryption-secret'.repeat(4));
+    const fetchMock = vi.fn(async () => new Response('', { status: 410 })); vi.stubGlobal('fetch', fetchMock);
+    try {
+      expect(await selfTestPush(db, scheduler, 'device', 'test-only-encryption-secret'.repeat(4))).toBe('expired');
+      expect(fetchMock).toHaveBeenCalledOnce();
+      expect(updates).toContainEqual({ table: 'scheduling_push_devices', values: { enabled: false, last_error: 'push-service-410' } });
+      expect(updates).toContainEqual({ table: 'scheduling_push_attempts', values: expect.objectContaining({ status: 'expired' }) });
+    } finally { vi.unstubAllGlobals(); }
   });
 });

@@ -695,6 +695,244 @@ export type Database = {
           },
         ]
       }
+      scheduling_followup_events: {
+        Row: {
+          action: string
+          actor: string
+          created_at: string
+          details: Json
+          id: string
+          task_id: string
+        }
+        Insert: {
+          action: string
+          actor: string
+          created_at?: string
+          details?: Json
+          id?: string
+          task_id: string
+        }
+        Update: {
+          action?: string
+          actor?: string
+          created_at?: string
+          details?: Json
+          id?: string
+          task_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scheduling_followup_events_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "scheduling_followups"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      scheduling_followups: {
+        Row: {
+          client_id: string
+          completed_at: string | null
+          context: string
+          created_at: string
+          created_by: string
+          due_at: string
+          id: string
+          outcome: string | null
+          owner_id: string
+          revision: number
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          client_id: string
+          completed_at?: string | null
+          context: string
+          created_at?: string
+          created_by: string
+          due_at: string
+          id?: string
+          outcome?: string | null
+          owner_id: string
+          revision?: number
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          client_id?: string
+          completed_at?: string | null
+          context?: string
+          created_at?: string
+          created_by?: string
+          due_at?: string
+          id?: string
+          outcome?: string | null
+          owner_id?: string
+          revision?: number
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scheduling_followups_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      scheduling_push_attempts: {
+        Row: {
+          created_at: string
+          device_id: string | null
+          error_code: string | null
+          finished_at: string | null
+          id: string
+          kind: string
+          recipient_id: string
+          reminder_day: string | null
+          revision: number | null
+          status: string
+          task_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          device_id?: string | null
+          error_code?: string | null
+          finished_at?: string | null
+          id?: string
+          kind: string
+          recipient_id: string
+          reminder_day?: string | null
+          revision?: number | null
+          status?: string
+          task_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          device_id?: string | null
+          error_code?: string | null
+          finished_at?: string | null
+          id?: string
+          kind?: string
+          recipient_id?: string
+          reminder_day?: string | null
+          revision?: number | null
+          status?: string
+          task_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scheduling_push_attempts_device_id_fkey"
+            columns: ["device_id"]
+            isOneToOne: false
+            referencedRelation: "scheduling_push_devices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "scheduling_push_attempts_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "scheduling_followups"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      scheduling_push_config: {
+        Row: {
+          enabled: boolean
+          id: boolean
+          reminder_end: string | null
+          reminder_start: string | null
+          scheduler_id: string | null
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          enabled?: boolean
+          id?: boolean
+          reminder_end?: string | null
+          reminder_start?: string | null
+          scheduler_id?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          enabled?: boolean
+          id?: boolean
+          reminder_end?: string | null
+          reminder_start?: string | null
+          scheduler_id?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
+      scheduling_push_devices: {
+        Row: {
+          auth_key: string
+          created_at: string
+          enabled: boolean
+          endpoint: string
+          id: string
+          label: string
+          last_error: string | null
+          origin: string
+          p256dh: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          auth_key: string
+          created_at?: string
+          enabled?: boolean
+          endpoint: string
+          id?: string
+          label: string
+          last_error?: string | null
+          origin: string
+          p256dh: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          auth_key?: string
+          created_at?: string
+          enabled?: boolean
+          endpoint?: string
+          id?: string
+          label?: string
+          last_error?: string | null
+          origin?: string
+          p256dh?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      scheduling_push_secrets: {
+        Row: {
+          created_at: string
+          encrypted_private_key: string
+          id: boolean
+          public_key: string
+        }
+        Insert: {
+          created_at?: string
+          encrypted_private_key: string
+          id?: boolean
+          public_key: string
+        }
+        Update: {
+          created_at?: string
+          encrypted_private_key?: string
+          id?: boolean
+          public_key?: string
+        }
+        Relationships: []
+      }
       square_customer_reviews: {
         Row: {
           created_at: string
@@ -985,9 +1223,40 @@ export type Database = {
           newly_applied: boolean
         }[]
       }
+      claim_scheduling_push: {
+        Args: { p_origin: string }
+        Returns: {
+          created_at: string
+          device_id: string | null
+          error_code: string | null
+          finished_at: string | null
+          id: string
+          kind: string
+          recipient_id: string
+          reminder_day: string | null
+          revision: number | null
+          status: string
+          task_id: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "scheduling_push_attempts"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       clear_package_override: {
         Args: { p_client_id: string; p_reason: string; p_slot: string }
         Returns: Json
+      }
+      configure_scheduling_push: {
+        Args: {
+          p_enabled: boolean
+          p_end: string
+          p_scheduler: string
+          p_start: string
+        }
+        Returns: undefined
       }
       has_role: {
         Args: {
@@ -1030,6 +1299,17 @@ export type Database = {
           previous_package_owed: number
           unpaid_carried_forward: number
         }[]
+      }
+      save_scheduling_followup: {
+        Args: {
+          p_client: string
+          p_context: string
+          p_due: string
+          p_id: string
+          p_outcome: string
+          p_owner: string
+        }
+        Returns: string
       }
       set_package_override: {
         Args: {

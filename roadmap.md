@@ -1,9 +1,9 @@
 # Roadmap
 
 ## Prepared cancellation
-- [ ] Atomically cancel raw preparation and prepared override without silently moving money
-- [ ] Clear Krislyn's prepared override through authenticated cancellation; preserve current package/history
-- [ ] Run cancellation regressions and signed-in refresh verification
+- [x] Atomically cancel raw preparation and prepared override without silently moving money
+- [x] Clear Krislyn's prepared override through authenticated cancellation; preserve current package/history
+- [x] 472 regression tests passed; signed-in cancellation and reload confirmed (no publication)
 
 ## Prepared renewal cycle correction
 - [x] Correct Abby only through audited prepared override; verified published/preview Collections and Master Dues once, raw balances and receipts unchanged

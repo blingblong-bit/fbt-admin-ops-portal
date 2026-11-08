@@ -1125,7 +1125,7 @@ function UnmatchedAppointmentsCard({ appointments }: { appointments: ScheduleApp
                   id={`unmatched-${anchorKey}`}
                   className="scroll-mt-24 rounded-md border border-slate-200 bg-slate-50 p-3 text-sm transition-shadow"
                 >
-                  <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="grid min-w-0 gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start">
                     <div className="space-y-1">
                       <div className="font-medium text-slate-900">
                         {fullName || <span className="text-slate-500">Unknown name</span>}
@@ -1158,7 +1158,7 @@ function UnmatchedAppointmentsCard({ appointments }: { appointments: ScheduleApp
                       </div>
                     </div>
                     {first.square_customer_id && !linkedElsewhere && (
-                      <div className="flex flex-col items-end gap-2">
+                      <div className="flex min-w-0 w-full flex-col gap-2 sm:w-auto sm:items-end">
                         <LinkClientControl
                           clients={clientsQuery.data ?? []}
                           loading={clientsQuery.isLoading}
@@ -1238,7 +1238,7 @@ function UnmatchedAppointmentsCard({ appointments }: { appointments: ScheduleApp
                               key={c.id}
                               className="rounded border border-orange-200 bg-white p-2 text-xs"
                             >
-                              <div className="flex flex-wrap items-start justify-between gap-2">
+                              <div className="grid min-w-0 gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start">
                                 <div className="space-y-1">
                                   <div className="font-medium text-slate-900">
                                     <Link
@@ -1308,7 +1308,7 @@ function UnmatchedAppointmentsCard({ appointments }: { appointments: ScheduleApp
                                         : undefined
                                     }
                                   >
-                                    Link Square customer to {c.first_name}
+                                    Link to {c.first_name}
                                   </Button>
                                 </div>
                               </div>
@@ -1403,16 +1403,16 @@ function LinkClientControl({
   }, [clients, query]);
 
   return (
-    <div className="flex flex-col items-end gap-2">
+    <div className="flex min-w-0 w-full flex-col gap-2 sm:w-auto sm:items-end">
       <Input
         placeholder="Search clients…"
         value={query}
         onChange={(e) => setQuery(e.target.value)}
-        className="h-8 w-56 text-xs"
+        className="h-11 min-w-0 w-full text-xs sm:w-56"
       />
-      <div className="flex items-center gap-2">
+      <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
         <Select value={selected} onValueChange={setSelected} disabled={loading}>
-          <SelectTrigger className="h-8 w-56 text-xs">
+          <SelectTrigger className="h-11 min-w-0 w-full text-xs sm:w-56">
             <SelectValue placeholder={loading ? "Loading…" : "Select a client"} />
           </SelectTrigger>
           <SelectContent>
@@ -1877,7 +1877,7 @@ function SquareReviewCard() {
   const reviews = reviewsQuery.data ?? [];
 
   const tabs: { key: typeof filter; label: string }[] = [
-    { key: "relevant", label: "Needs Review (Scheduled · Recent · Possible Match)" },
+    { key: "relevant", label: "Scheduled / Recent / Match" },
     { key: "hidden", label: "Hidden Old Customers" },
     { key: "all", label: "Show All" },
   ];
@@ -1959,7 +1959,7 @@ function ReviewRow({
   const suggested = review.suggested_client;
   return (
     <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm">
-      <div className="flex flex-wrap items-start justify-between gap-3">
+      <div className="grid min-w-0 gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start">
         <div className="space-y-1">
           <div className="font-medium text-slate-900">
             {fullName || <span className="text-slate-500">Unknown name</span>}
@@ -2007,7 +2007,7 @@ function ReviewRow({
             </div>
           )}
         </div>
-        <div className="flex flex-col items-end gap-2">
+        <div className="flex min-w-0 w-full flex-col gap-2 sm:w-auto sm:items-end">
           {suggested && (
             <Button
               size="sm"

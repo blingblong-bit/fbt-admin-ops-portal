@@ -199,7 +199,7 @@ export function VisitNoteReviewContent() {
     <div>
       <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Visit Note Review</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Visit Automation</h1>
           <p className="mt-1 max-w-2xl text-sm text-slate-600">
             Square notes decide visit position. This list only shows clients whose Square visit numbers don't
             follow on from each other. Fix the notes in Square, then refresh — or mark the client correct if the

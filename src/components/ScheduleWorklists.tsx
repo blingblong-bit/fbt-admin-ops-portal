@@ -44,7 +44,7 @@ export function ScheduleWorklists({ data: sourceData, filter, lastWeek = [] }: {
   });
   // Instant feedback: move rows locally on Hide/Restore; fresh server data replaces this.
   const [moves, setMoves] = useState<Moves>({});
-  useEffect(() => { setMoves({}); }, [serverData]);
+  useEffect(() => { setMoves({}); }, [sourceData]);
   const data = useMemo(() => {
     if (!serverData || Object.keys(moves).length === 0) return serverData;
     const keys: Key[] = ["last_week", "package_completed", "not_scheduled", "only_once", "hidden"];

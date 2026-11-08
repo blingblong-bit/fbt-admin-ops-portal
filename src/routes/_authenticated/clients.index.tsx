@@ -157,7 +157,7 @@ function ClientsListPage() {
       <div className="mb-6 grid grid-cols-[minmax(0,1fr)_auto] items-end gap-3 sm:flex sm:justify-between">
         <div className="min-w-0">
           <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">Clients</h1>
-          <p className="mt-1 text-sm text-slate-500">
+          <p className="mt-1 text-sm text-muted-foreground">
             {isLoading ? "Loading…" : `${filtered.length} of ${clients.length}`}
           </p>
         </div>
@@ -174,7 +174,7 @@ function ClientsListPage() {
             ))}
           </select>
           <Link to="/clients/new">
-            <Button>+ Add Client</Button>
+            <Button className="min-h-11">+ Add Client</Button>
           </Link>
         </div>
       </div>
@@ -184,7 +184,7 @@ function ClientsListPage() {
       {clientError && <p role="alert" className="mb-4 text-destructive">Clients could not load. <Button variant="outline" onClick={() => retryClients()}>Retry</Button></p>}
       {viewError && <p role="alert" className="mb-4 text-destructive">Could not fully read this filter: {viewError} <Button variant="outline" onClick={() => { schedule.refetch(); renewals.refetch(); setup.refetch(); }}>Retry</Button></p>}
       {(viewBusy || isLoading) && <p role="status" className="mb-4 text-muted-foreground">Loading clients…</p>}
-      <div className="sticky top-0 z-20 -mx-4 mb-3 border-b bg-slate-50/95 px-4 py-2 backdrop-blur md:hidden">
+      <div className="sticky top-0 z-20 -mx-4 mb-3 border-b bg-background/95 px-4 py-2 backdrop-blur md:hidden">
         <Input
           aria-label="Search clients" placeholder="Search clients…"
           value={search}
@@ -203,13 +203,13 @@ function ClientsListPage() {
               key={c.id}
               to="/clients/$id"
               params={{ id: c.id }}
-              className="block rounded-xl border bg-white p-4 shadow-sm active:bg-slate-50"
+              className="block rounded-md border bg-background p-4 shadow-sm active:bg-muted"
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-base font-semibold">{fullName(c)}</div>
                   {c.phone && (
-                    <div className="mt-0.5 truncate text-sm text-slate-500">📞 {c.phone}</div>
+                    <div className="mt-0.5 truncate text-sm text-muted-foreground">📞 {c.phone}</div>
                   )}
                 </div>
                 <StatusBadge
@@ -219,18 +219,18 @@ function ClientsListPage() {
                 />
               </div>
               <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1.5 text-sm">
-                <div className="text-slate-500">Package</div>
-                <div className="text-right text-slate-800 truncate">{c.package_name ?? "—"}</div>
-                <div className="text-slate-500">Visits</div>
-                <div className="text-right text-slate-800">{progress(c)}</div>
-                <div className="text-slate-500">Scheduled</div>
+                <div className="text-muted-foreground">Package</div>
+                <div className="text-right text-foreground truncate">{c.package_name ?? "—"}</div>
+                <div className="text-muted-foreground">Visits</div>
+                <div className="text-right text-foreground">{progress(c)}</div>
+                <div className="text-muted-foreground">Scheduled</div>
                 <div className="text-right">{scheduledSet.has(c.id) ? "✅" : "⭕"}</div>
                 {!isStaff && (
                   <>
-                    <div className="text-slate-500">Owed</div>
+                    <div className="text-muted-foreground">Owed</div>
                     <div
                       className={`text-right font-semibold ${
-                        priceUnknown ? "text-amber-800" : owed > 0 ? "text-red-600" : "text-slate-700"
+                        priceUnknown ? "text-amber-800" : owed > 0 ? "text-red-600" : "text-foreground"
                       }`}
                     >
                       {priceUnknown ? "Package info needed" : formatCurrency(owed)}
@@ -242,7 +242,7 @@ function ClientsListPage() {
           );
         })}
         {filtered.length === 0 && !isLoading && !viewBusy && !clientError && !viewError && (
-          <div className="rounded-lg border border-dashed bg-white p-6 text-center text-sm text-slate-500">
+          <div className="rounded-lg border border-dashed bg-background p-6 text-center text-sm text-muted-foreground">
             No clients found.
           </div>
         )}
@@ -320,7 +320,7 @@ function ClientsListPage() {
                 ))}
                 {filtered.length === 0 && !isLoading && !viewBusy && !clientError && !viewError && (
                   <TableRow>
-                    <TableCell colSpan={8} className="py-10 text-center text-sm text-slate-500">
+                    <TableCell colSpan={8} className="py-10 text-center text-sm text-muted-foreground">
                       No clients found.
                     </TableCell>
                   </TableRow>

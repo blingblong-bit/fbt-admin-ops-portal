@@ -4,6 +4,7 @@ import { countsAsMissedCheckIn } from "@/lib/effective-visit-state";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { matchLooseVisitBookingIds } from "@/lib/check-in-matching";
 import { preparedEditGuard, preparationTimestamp } from "@/lib/prepared-renewal-edit";
+import { cancelPreparedTransaction } from "@/lib/prepared-cancellation";
 
 // Read-only Square Production integration. Webhooks (customer/payment/booking)
 // are also handled against Production — see src/routes/api/public/square.webhook.ts.
@@ -2150,50 +2151,9 @@ export const cancelPendingRenewal = createServerFn({ method: "POST" })
     return { clientId: d.clientId };
   })
   .handler(async ({ data, context }): Promise<{ ok: true; movedToCurrent: number }> => {
-    const { data: cur, error: readErr } = await context.supabase
-      .from("clients")
-      .select("pending_renewal_paid, amount_paid")
-      .eq("id", data.clientId)
-      .single();
-    if (readErr) throw readErr;
-    const prepaid = Number(cur?.pending_renewal_paid ?? 0);
-    const paid = Number(cur?.amount_paid ?? 0);
-    if (prepaid > 0) {
-      // Moving money needs an admin; it stays on the current package (never a general credit).
-      const { data: isAdmin } = await context.supabase.rpc("is_admin", { _user_id: context.userId });
-      if (!isAdmin) throw new Error(`This renewal has $${prepaid.toFixed(2)} prepaid. Only an admin can cancel it (the money moves to the current package).`);
-    }
-    // Guarded update: only applies if the money didn't change since we read it.
-    const { data: upd, error } = await context.supabase
-      .from("clients")
-      .update({
-        pending_renewal_start_date: null,
-        pending_renewal_price: null,
-        pending_renewal_total_visits: null,
-        pending_renewal_package_name: null,
-        pending_renewal_created_at: null,
-        pending_renewal_paid: 0,
-        amount_paid: paid + prepaid,
-      })
-      .eq("id", data.clientId)
-      .eq("pending_renewal_paid", cur?.pending_renewal_paid ?? 0)
-      .eq("amount_paid", cur?.amount_paid ?? 0)
-      .select("id");
-    if (error) throw error;
-    if (!upd?.length) throw new Error("A payment just came in for this client. Refresh and try again.");
-    await context.supabase.from("client_activities").insert({
-      client_id: data.clientId,
-      activity_type: "pre_renewal_cancelled",
-      description: prepaid > 0
-        ? `Prepared next package cancelled — $${prepaid.toFixed(2)} prepaid moved to the current package.`
-        : "Prepared next package cancelled — current package unchanged.",
-      metadata: prepaid > 0
-        ? { money_changed: true, moved_to_current: prepaid, actor: context.userId,
-            before: { amount_paid: paid, pending_renewal_paid: prepaid },
-            after: { amount_paid: paid + prepaid, pending_renewal_paid: 0 } }
-        : null,
-    });
-    return { ok: true, movedToCurrent: prepaid };
+    return cancelPreparedTransaction(data.clientId, (clientId) => context.supabase.rpc("cancel_prepared_renewal", {
+      p_client_id: clientId,
+    }));
   });
 
 // ---------------------------------------------------------------------------

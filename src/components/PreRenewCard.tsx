@@ -104,12 +104,16 @@ export function PreRenewCard({
               className="h-7 text-xs"
               disabled={cancelMutation.isPending}
               onClick={() => {
-                if (window.confirm("Cancel this prepared renewal? Any money prepaid on it moves to the current package.")) cancelMutation.mutate();
+                if (window.confirm("Cancel this prepared renewal and its prepared correction? Current package and payments stay unchanged. Prepaid funds require reconciliation first.")) cancelMutation.mutate();
               }}
             >
               Cancel renewal
             </Button>
           </div>
+          {cancelMutation.isError && <div role="alert" className="text-destructive">
+            <p>{cancelMutation.error.message}</p>
+            <Button asChild size="sm" variant="outline" className="mt-1"><Link to="/clients/$id" params={{ id: forecast.client_id }}>Open package correction</Link></Button>
+          </div>}
         </div>
       ) : (
         <div className="mt-2 space-y-1">

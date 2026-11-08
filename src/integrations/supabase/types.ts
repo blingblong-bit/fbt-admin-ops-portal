@@ -1245,6 +1245,7 @@ export type Database = {
           newly_applied: boolean
         }[]
       }
+      cancel_prepared_renewal: { Args: { p_client_id: string }; Returns: Json }
       claim_scheduling_push: {
         Args: { p_origin: string }
         Returns: {

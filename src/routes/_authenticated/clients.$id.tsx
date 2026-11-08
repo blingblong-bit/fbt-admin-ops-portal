@@ -333,7 +333,7 @@ function ClientDetailPage() {
                   <span className="text-sm text-muted-foreground">{hasVisitData ? `${remaining} visits remaining` : "Visits unavailable"}</span>
                 </div>
                 <Progress value={pct} className="my-3 h-2" />
-                {visitTracking && <VisitSourceLine visit={visitTracking} />}
+                {visitTracking && <VisitSourceLine visit={visitTracking} compact />}
                 {hubDiffers && <p className="mt-2 text-xs text-muted-foreground">Showing Square appointment notes; Hub stored {c.visits_used ?? "—"}/{c.package_total_visits}. No counts changed.</p>}
                 <Button size="sm" variant="link" className="px-0" onClick={() => setSection("packages")}>Visit source &amp; check-in</Button>
               </div>
@@ -480,9 +480,9 @@ function ClientDetailPage() {
       </Tabs>
 
       <Dialog open={correctOpen} onOpenChange={setCorrectOpen}>
-        <DialogContent className="max-h-[85dvh] overflow-y-auto">
+        <DialogContent className="w-[calc(100%-2rem)] min-w-0 max-h-[85dvh] overflow-y-auto">
           <DialogHeader><DialogTitle>Correct record</DialogTitle><DialogDescription>Corrections update the record, not a new payment. Required reasons and confirmations still apply.</DialogDescription></DialogHeader>
-          <div className="space-y-4">
+          <div className="min-w-0 space-y-4 [&_button]:min-w-0 [&_button]:max-w-full [&_button]:whitespace-normal [&_button]:h-auto [&_button]:min-h-10 [&_button]:py-2 [&_button]:px-2">
             <Button variant="outline" className="min-h-11 w-full justify-start" onClick={() => { setCorrectOpen(false); setEditOpen(true); }}>Edit client details</Button>
             {isAdminUser && <><div><h3 className="mb-2 text-sm font-semibold">Correct a package</h3><div className="grid grid-cols-3 gap-2"><Button variant="outline" onClick={() => openPackage("current")}>Current</Button><Button variant="outline" onClick={() => openPackage("pending")}>Upcoming</Button><Button variant="outline" onClick={() => openPackage("previous")}>Prior</Button></div><p className="mt-2 text-xs text-muted-foreground">Price, recognized paid, date and package details. Recognized paid is a correction, not money received.</p></div><Button variant="outline" className="min-h-11 w-full whitespace-normal justify-start text-left" onClick={() => { setCorrectOpen(false); setSection("packages"); }}>Review where a payment went / Undo last renewal</Button></>}
             <Button variant="outline" className="min-h-11 w-full justify-start" onClick={() => { setCorrectOpen(false); setSection("packages"); }}>Visit source &amp; other record actions</Button>

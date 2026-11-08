@@ -22,7 +22,7 @@ export function chicagoDueToIso(day: string, time: string) {
   return matches[0].toISOString();
 }
 
-export function SchedulingFollowupDialog({ clientId, clientName, worklist, outreach = false }: { clientId: string; clientName: string; worklist: string; outreach?: boolean }) {
+export function SchedulingFollowupDialog({ clientId, clientName, worklist, outreach = false, triggerLabel }: { clientId: string; clientName: string; worklist: string; outreach?: boolean; triggerLabel?: string }) {
   const qc = useQueryClient();
   const markContacted = useServerFn(markClientContacted);
   const [open, setOpen] = useState(false);
@@ -35,7 +35,7 @@ export function SchedulingFollowupDialog({ clientId, clientName, worklist, outre
   const save = useServerFn(saveSchedulingFollowup);
   const settings = useQuery({ queryKey: ['scheduling-settings'], queryFn: () => fetchSettings(), enabled: open });
   return <Dialog open={open} onOpenChange={setOpen}>
-    <DialogTrigger asChild><Button size="sm" variant="outline" className="min-h-11 whitespace-normal"><CalendarPlus className="size-4" />{outreach ? "Record outreach / follow-up" : "Follow up"}</Button></DialogTrigger>
+    <DialogTrigger asChild><Button size="sm" variant="outline" className="min-h-11 whitespace-normal"><CalendarPlus className="size-4" />{triggerLabel ?? (outreach ? "Record outreach / follow-up" : "Follow up")}</Button></DialogTrigger>
     <DialogContent><DialogHeader><DialogTitle>Follow up · {clientName}</DialogTitle></DialogHeader>
       {settings.isError && <p role="alert" className="text-destructive">Could not load staff accounts. Try again.</p>}
       <form className="space-y-4" onSubmit={async e => { e.preventDefault(); setBusy(true); try {

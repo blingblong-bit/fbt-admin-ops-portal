@@ -37,3 +37,4 @@
 - Hub navigation uses one shared five-section mapping for mobile tabs and desktop sidebar so preserved detail/task links select the same section.
 - Scheduling queue presentation only regroups existing Square/worklist memberships; week-scoped contact markers mean waiting, reminders are optional and retain due priority. Contact undo preserves the activity and original actor as `contacted_undone` so existing active-marker reads stay compatible.
 - Schedule reads derive hide/pin reactivation without deleting stored audit state or writing sync logs; explicit staff actions remain audited writes.
+- Client profile sections preserve mounted state; correction shortcuts open the existing audited package editor rather than introducing another mutation path.

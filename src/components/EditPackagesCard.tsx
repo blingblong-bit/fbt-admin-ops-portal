@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "@/components/ui/sonner";
@@ -32,7 +32,7 @@ function startForm(c: Client, slot: OverrideSlot, o?: PackageOverride): Form {
 const num = (v: string) => (v.trim() === "" ? null : Number(v));
 
 /** Admin-only: set admin-authoritative package figures. Never changes the Square payment ledger. */
-export function EditPackagesCard({ client, onDone }: { client: Client; onDone: () => void }) {
+export function EditPackagesCard({ client, onDone, editRequest }: { client: Client; onDone: () => void; editRequest?: { slot: OverrideSlot; key: number } | null }) {
   const qc = useQueryClient();
   const listFn = useServerFn(listPackageOverrides);
   const setFn = useServerFn(setPackageOverride);
@@ -43,40 +43,50 @@ export function EditPackagesCard({ client, onDone }: { client: Client; onDone: (
   const [slot, setSlot] = useState<OverrideSlot | null>(null);
   const [form, setForm] = useState<Form | null>(null);
   const [reason, setReason] = useState("");
+  const openedRequest = useRef<number | null>(null);
   const current = slot ? overrides.find((o) => o.slot === slot) : undefined;
 
   const open = (sl: OverrideSlot) => { setSlot(sl); setForm(startForm(client, sl, overrides.find((o) => o.slot === sl))); setReason(""); };
   const close = () => { setSlot(null); setForm(null); };
+  useEffect(() => {
+    if (!editRequest || !q.data || openedRequest.current === editRequest.key) return;
+    openedRequest.current = editRequest.key;
+    const sl = editRequest.slot;
+    setSlot(sl);
+    setForm(startForm(client, sl, q.data.find((o) => o.slot === sl)));
+    setReason("");
+  }, [editRequest, q.data, client]);
   const done = () => { invalidateFor(qc, "package-edited", { clientId: client.id }); onDone(); close(); };
 
   const save = useMutation({
     mutationFn: () => {
-      const values = { total_visits: num(form!.total_visits), visits_used: num(form!.visits_used), price: num(form!.price), recognized_paid: num(form!.recognized_paid), start_date: form!.start_date || null, status: form!.status };
-      if (needsConfirmation(current ?? startForm(client, slot!) as never, { slot: slot!, ...values } as PackageOverride)
+      if (!form || !slot) throw new Error("Choose a package first");
+      const values = { total_visits: num(form.total_visits), visits_used: num(form.visits_used), price: num(form.price), recognized_paid: num(form.recognized_paid), start_date: form.start_date || null, status: form.status };
+      if (needsConfirmation(current ?? startForm(client, slot) as never, { slot, ...values } as PackageOverride)
         && !window.confirm("This changes the paid amount or package status that Payment Due uses. Save?")) throw new Error("cancelled");
-      return setFn({ data: { clientId: client.id, slot: slot!, values, reason } });
+      return setFn({ data: { clientId: client.id, slot, values, reason } });
     },
     onSuccess: (r) => { toast.success(r.changed ? "Package override saved" : "No changes — already saved"); done(); },
     onError: (e: Error) => { if (e.message !== "cancelled") toast.error(e.message); },
   });
   const clear = useMutation({
-    mutationFn: () => clearFn({ data: { clientId: client.id, slot: slot!, reason } }),
+    mutationFn: () => { if (!slot) throw new Error("Choose a package first"); return clearFn({ data: { clientId: client.id, slot, reason } }); },
     onSuccess: () => { toast.success("Override cleared — automatic tracking resumed"); done(); },
     onError: (e: Error) => toast.error(e.message),
   });
 
   const owed = form ? Math.max(0, Number(num(form.price) ?? 0) - Number(num(form.recognized_paid) ?? 0)) : 0;
-  const f = (k: keyof Form, label: string, type = "number") => (
+  const f = (k: keyof Form, label: string, type = "number") => form && (
     <div className="space-y-1">
-      <Label className="text-xs">{label}</Label>
-      <Input type={type} value={form![k]} onChange={(e) => setForm({ ...form!, [k]: e.target.value })} />
+      <Label htmlFor={`package-${k}`} className="text-xs">{label}</Label>
+      <Input id={`package-${k}`} type={type} value={form[k]} onChange={(e) => setForm({ ...form, [k]: e.target.value })} />
     </div>
   );
 
   return (
     <Card className="lg:col-span-3">
       <CardHeader className="flex flex-row items-center justify-between space-y-0">
-        <CardTitle>Edit packages</CardTitle>
+        <CardTitle>Correct a package</CardTitle>
       </CardHeader>
       <CardContent className="space-y-3 text-sm">
         <div className="flex flex-wrap gap-2">
@@ -97,13 +107,13 @@ export function EditPackagesCard({ client, onDone }: { client: Client; onDone: (
       </CardContent>
 
       <Dialog open={!!slot} onOpenChange={(o) => !o && close()}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-lg max-h-[85dvh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{SLOTS.find((x) => x.slot === slot)?.label}</DialogTitle>
             <DialogDescription>{current ? "Override active. Edit or clear it." : "Saving creates an admin override."}</DialogDescription>
           </DialogHeader>
           {form && (
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               {slot !== "previous" && f("total_visits", "Package size")}
               {slot !== "previous" && f("visits_used", "Visits used")}
               {f("price", "Price")}
@@ -111,16 +121,16 @@ export function EditPackagesCard({ client, onDone }: { client: Client; onDone: (
               {slot !== "previous" && f("start_date", "Start date", "date")}
               {slot !== "previous" && (
                 <div className="space-y-1">
-                  <Label className="text-xs">Status</Label>
-                  <select className="h-9 w-full rounded-md border bg-background px-2" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value as OverrideStatus })}>
+                  <Label htmlFor="package-status" className="text-xs">Status</Label>
+                  <select id="package-status" className="h-9 w-full rounded-md border bg-background px-2" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value as OverrideStatus })}>
                     {slot === "pending" ? <><option value="prepared">Prepared</option><option value="active">Active (started)</option></> : <><option value="active">Active</option><option value="completed">Completed</option></>}
                   </select>
                 </div>
               )}
-              <p className="col-span-2 text-sm">Owed: <strong>{formatCurrency(owed)}</strong></p>
-              <div className="col-span-2 space-y-1">
-                <Label className="text-xs">Reason (required)</Label>
-                <Textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={2} />
+              <p className="sm:col-span-2 text-sm">Owed: <strong>{formatCurrency(owed)}</strong></p>
+              <div className="sm:col-span-2 space-y-1">
+                <Label htmlFor="package-reason" className="text-xs">Reason (required)</Label>
+                <Textarea id="package-reason" value={reason} onChange={(e) => setReason(e.target.value)} rows={2} />
               </div>
             </div>
           )}

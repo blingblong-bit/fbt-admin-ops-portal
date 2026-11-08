@@ -29,7 +29,7 @@ export function PaymentAllocationsCard({ client, onDone }: { client: Client; onD
 
   return (
     <Card className="lg:col-span-3">
-      <CardHeader className="flex flex-row items-center justify-between space-y-0">
+      <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 space-y-0">
         <CardTitle>Payments and where they went</CardTitle>
         <Button variant="outline" size="sm" onClick={() => setUndoOpen(true)}>
           Undo last renewal

@@ -80,7 +80,7 @@ export function ScheduleWorklists({ data: sourceData, filter, lastWeek = [] }: {
         <Tabs value={tab} onValueChange={(v) => setTab(v as Key)}>
           <TabsList className="grid h-auto w-full grid-cols-2 gap-1 sm:grid-cols-3">
             {TABS.map((t) => (
-              <TabsTrigger key={t.key} value={t.key} className="min-h-12 whitespace-normal text-left">
+              <TabsTrigger key={t.key} value={t.key} className="min-h-12 min-w-0 whitespace-normal px-1 text-xs text-left sm:text-sm">
                 {t.label} ({data?.[t.key].length ?? 0})
               </TabsTrigger>
             ))}
@@ -92,7 +92,7 @@ export function ScheduleWorklists({ data: sourceData, filter, lastWeek = [] }: {
                 <Button
                   size="sm"
                   variant="outline"
-                  className="h-8 shrink-0"
+                  className="min-h-11 shrink-0"
                   aria-expanded={!collapsed[t.key]}
                   onClick={() => setCollapsed((c) => ({ ...c, [t.key]: !c[t.key] }))}
                 >

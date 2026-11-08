@@ -291,9 +291,9 @@ function ScheduleCheckPage() {
         <header><h1 className="mb-4 text-2xl font-semibold">Schedule</h1><ScheduleNavigation view={view} />
           <Button variant="link" className="h-auto whitespace-normal px-0 text-left" onClick={() => document.getElementById("schedule-issues")?.scrollIntoView({ behavior: "smooth" })}>Square Needs Review{data?.unmatched.length ? ` · ${data.unmatched.length} unmatched appointments` : ""} ↓</Button>
         </header>
-        <Card>
-          <CardHeader>
-            <div className="flex flex-wrap items-end justify-between gap-4">
+        <section className="border-y py-4">
+          <div>
+            <div className="grid min-w-0 gap-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
               <div>
                 <CardTitle>Selected Date</CardTitle>
                 <CardDescription>
@@ -305,14 +305,15 @@ function ScheduleCheckPage() {
                   )}
                 </CardDescription>
               </div>
-              <div className="flex items-end gap-2">
+              <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-end gap-2">
                 <div>
                   <label className="mb-1 block text-xs font-medium text-slate-600">Date</label>
                   <Input
                     type="date"
+                    aria-label="Selected date"
                     value={date}
                     onChange={(e) => setDate(e.target.value || todayYmd())}
-                    className="w-44"
+                    className="min-w-0 w-full sm:w-44"
                   />
                 </div>
                 <Button variant="outline" onClick={() => setDate(todayYmd())}>
@@ -320,8 +321,8 @@ function ScheduleCheckPage() {
                 </Button>
               </div>
             </div>
-          </CardHeader>
-          <CardContent className="text-sm text-slate-600">
+          </div>
+          <div className="mt-3 text-sm text-muted-foreground">
             {query.isLoading && <div>Loading…</div>}
             {query.error && (
               <div className="rounded-md border border-red-200 bg-red-50 p-3 text-red-800">
@@ -338,8 +339,8 @@ function ScheduleCheckPage() {
                 Fetched {data.fetched_count} bookings · {data.unmatched.length} unmatched
               </div>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </section>
 
         {view === "appointments" && <>
         <ScheduleSection

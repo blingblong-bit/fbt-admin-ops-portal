@@ -91,7 +91,14 @@ const searchSchema = z.object({
 
 export const Route = createFileRoute("/_authenticated/clients/$id")({
   validateSearch: zodValidator(searchSchema),
-  head: () => ({ meta: [{ title: "Client · FIT Beyond Therapy Admin" }] }),
+  head: () => ({ meta: [
+    { title: "Client Packages & History · FIT Beyond Therapy Hub" },
+    { name: "description", content: "Review client visits, package corrections and payment history in FIT Beyond Therapy Hub." },
+    { property: "og:title", content: "Client Packages & History · FIT Beyond Therapy Hub" },
+    { property: "og:description", content: "Client scheduling, packages and audited payment history." },
+    { property: "og:type", content: "website" },
+    { name: "twitter:card", content: "summary" },
+  ] }),
   component: ClientDetailPage,
 });
 

@@ -19,6 +19,8 @@ import {
   type RenewalForecastRow,
 } from "@/lib/schedule.functions";
 import { invalidateFor } from "@/lib/invalidation";
+import { Link } from "@tanstack/react-router";
+import { preparedEditAmounts } from "@/lib/prepared-renewal-edit";
 
 /**
  * Needs Renewal detail + "Pre-Renew Next Package".
@@ -159,7 +161,7 @@ function PreRenewDialog({
 }) {
   const [form, setForm] = useState({
     startYmd: forecast.pending_start_ymd ?? forecast.first_uncovered_ymd,
-    price: forecast.next_package_price,
+    price: forecast.pending_price ?? forecast.next_package_price,
     totalVisits: forecast.pending_total_visits ?? forecast.package_total_visits,
     packageName: forecast.pending_package_name ?? "",
   });
@@ -168,7 +170,7 @@ function PreRenewDialog({
     if (!open) return;
     setForm({
       startYmd: forecast.pending_start_ymd ?? forecast.first_uncovered_ymd,
-      price: forecast.next_package_price,
+      price: forecast.pending_price ?? forecast.next_package_price,
       totalVisits: forecast.pending_total_visits ?? forecast.package_total_visits,
       packageName: forecast.pending_package_name ?? "",
     });
@@ -186,6 +188,8 @@ function PreRenewDialog({
 
   const up = <K extends keyof typeof form>(k: K, v: (typeof form)[K]) =>
     setForm((f) => ({ ...f, [k]: v }));
+  const amounts = preparedEditAmounts(form.price, forecast.pending_recognized_paid ?? 0);
+  const reconciliation = forecast.preparation_reconciliation;
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
@@ -198,6 +202,14 @@ function PreRenewDialog({
           first uncovered appointment is checked in.
         </p>
         <div className="grid gap-3">
+          <dl className="grid grid-cols-2 gap-2 text-sm">
+            <dt>Existing recognized prepaid</dt><dd>{formatCurrency(amounts.prepaid)}</dd>
+            <dt>Resulting amount due</dt><dd className="font-semibold">{formatCurrency(amounts.due)}</dd>
+          </dl>
+          {reconciliation && <div role="alert" className="border-l-2 border-destructive pl-3 text-sm">
+            <p>{reconciliation}</p>
+            <Button asChild variant="outline" size="sm" className="mt-2"><Link to="/clients/$id" params={{ id: forecast.client_id }}>Open package correction</Link></Button>
+          </div>}
           <div>
             <Label>Package Name</Label>
             <Input
@@ -243,7 +255,7 @@ function PreRenewDialog({
           <Button variant="outline" onClick={onClose}>
             Cancel
           </Button>
-          <Button onClick={() => mutation.mutate()} disabled={mutation.isPending}>
+          <Button onClick={() => mutation.mutate()} disabled={mutation.isPending || !!reconciliation}>
             Schedule Renewal
           </Button>
         </DialogFooter>

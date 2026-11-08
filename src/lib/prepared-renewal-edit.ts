@@ -11,7 +11,7 @@ export function preparedEditGuard(i: {
   if (!(i.prepaid > 0)) return null;
   if (!i.gate || !i.bookings) return "Prepaid money cannot be assigned to a package safely. Reconcile it in Profile → Edit packages → Prepared renewal before saving.";
   const live = i.bookings.filter((b) => /^(ACCEPTED|COMPLETED)$/i.test(b.status ?? ""));
-  if (live.some((b) => readBookingNote(b) === "ambiguous")) return "Square package numbering is ambiguous. Reconcile prepaid money in Profile → Edit packages → Prepared renewal before saving.";
+  if (live.some((b) => readBookingNote(b).ambiguous)) return "Square package numbering is ambiguous. Reconcile prepaid money in Profile → Edit packages → Prepared renewal before saving.";
   const seq = buildSequence(live.map((b, index) => ({ ...b, id: String(index) })), i.nowIso);
   const ymd = (iso: string) => new Date(iso).toLocaleDateString("en-CA", { timeZone: "America/Chicago" });
   const opened = seq.findIndex((e) => e.past && e.note?.n === 1 && ymd(e.date) >= (i.gate ?? ""));

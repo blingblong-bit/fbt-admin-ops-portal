@@ -2092,7 +2092,7 @@ export const preRenewNextPackage = createServerFn({ method: "POST" })
         pending_renewal_price: data.price,
         pending_renewal_total_visits: data.totalVisits,
         pending_renewal_package_name: name,
-        pending_renewal_created_at: preparationTimestamp(existing.pending_renewal_created_at, nowIso),
+        pending_renewal_created_at: wasPending ? preparationTimestamp(existing.pending_renewal_created_at, nowIso) : nowIso,
       })
       .eq("id", data.clientId)
       .eq("pending_renewal_paid", existing.pending_renewal_paid);

@@ -28,6 +28,7 @@ describe("prepared renewal edits", () => {
   });
   it("lookup failure and conflicting seller/customer notes require reconciliation", () => {
     expect(preparedEditGuard({ prepaid: 100, gate: "2026-11-10", bookings: null, nowIso: now })).not.toBeNull();
+    expect(preparedEditGuard({ prepaid: 100, gate: "2026-11-10", bookings: [], nowIso: now })).not.toBeNull();
     expect(preparedEditGuard({ prepaid: 100, gate: "2026-11-10", bookings: [{ ...booking("2026-11-10", "1 of 4"), customer_note: "2 of 4" }], nowIso: now })).toContain("ambiguous");
   });
   it("does not bypass existing audited pending corrections", () => {

@@ -13,6 +13,7 @@ export function preparedEditGuard(i: {
   const live = i.bookings.filter((b) => /^(ACCEPTED|COMPLETED)$/i.test(b.status ?? ""));
   if (live.some((b) => readBookingNote(b).ambiguous)) return "Square package numbering is ambiguous. Reconcile prepaid money in Profile → Edit packages → Prepared renewal before saving.";
   const seq = buildSequence(live.map((b, index) => ({ ...b, id: String(index) })), i.nowIso);
+  if (!seq.some((e) => e.note)) return "Square has no usable package numbering to confirm which cycle was prepaid. Reconcile it in Profile → Edit packages → Prepared renewal before saving.";
   const ymd = (iso: string) => new Date(iso).toLocaleDateString("en-CA", { timeZone: "America/Chicago" });
   const opened = seq.findIndex((e) => e.past && e.note?.n === 1 && ymd(e.date) >= (i.gate ?? ""));
   if (opened >= 0) return "Square already started a package after this prepared date. The existing prepaid money may belong to that older cycle. Reconcile it in Profile → Edit packages → Prepared renewal before preparing another cycle.";

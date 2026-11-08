@@ -5,6 +5,8 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { matchLooseVisitBookingIds } from "@/lib/check-in-matching";
 import { preparedEditGuard, preparationTimestamp } from "@/lib/prepared-renewal-edit";
 import { cancelPreparedTransaction } from "@/lib/prepared-cancellation";
+import { changeContact } from "@/lib/schedule-contact";
+import { activityWeek } from "@/lib/scheduling-queue-view";
 
 // Read-only Square Production integration. Webhooks (customer/payment/booking)
 // are also handled against Production — see src/routes/api/public/square.webhook.ts.
@@ -1737,7 +1739,7 @@ export const getContactedClientIds = createServerFn({ method: "GET" })
       }
       const { data: rows, error } = await context.supabase
         .from("client_activities")
-        .select("client_id, created_at")
+        .select("client_id, created_at, metadata")
         .eq("activity_type", "contacted")
         .in("client_id", data.clientIds);
       if (error) throw error;
@@ -1747,7 +1749,7 @@ export const getContactedClientIds = createServerFn({ method: "GET" })
         if (!r.client_id) continue;
         const id = r.client_id as string;
         const ts = r.created_at as string | null;
-        if (ts && ts >= weekStartInstant) current.add(id);
+        if (ts && activityWeek(r) === weekStartYmd) current.add(id);
         else prior.add(id);
       }
       // A client that has been contacted this week is "active", not "prior".
@@ -1767,13 +1769,7 @@ export const markClientContacted = createServerFn({ method: "POST" })
     return d;
   })
   .handler(async ({ data, context }) => {
-    const { error } = await context.supabase.from("client_activities").insert({
-      client_id: data.clientId,
-      activity_type: "contacted",
-      description: "Marked as contacted — from Schedule Check (This Week But Not Next Week)",
-    });
-    if (error) throw error;
-    return { ok: true };
+    return changeContact(context.supabase, data.clientId, context.userId, true);
   });
 
 export const unmarkClientContacted = createServerFn({ method: "POST" })
@@ -1782,19 +1778,8 @@ export const unmarkClientContacted = createServerFn({ method: "POST" })
     if (!d?.clientId || typeof d.clientId !== "string") throw new Error("clientId required");
     return d;
   })
-  .handler(async ({ data, context }): Promise<{ ok: true; deleted: number }> => {
-    const todayYmd = ymdInTz(new Date());
-    const weekStartYmd = workWeekStartFromYmd(todayYmd);
-    const weekStartInstant = ymdLocalToInstant(weekStartYmd).toISOString();
-    const { data: rows, error } = await context.supabase
-      .from("client_activities")
-      .delete()
-      .eq("client_id", data.clientId)
-      .eq("activity_type", "contacted")
-      .gte("created_at", weekStartInstant)
-      .select("id");
-    if (error) throw error;
-    return { ok: true, deleted: rows?.length ?? 0 };
+  .handler(async ({ data, context }) => {
+    return changeContact(context.supabase, data.clientId, context.userId, false);
   });
 
 

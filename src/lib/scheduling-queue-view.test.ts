@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { outreachState, primaryQueueIds, type QueueTask } from './scheduling-queue-view';
+import { contactAttribution, outreachState, primaryQueueIds, type QueueTask } from './scheduling-queue-view';
 
 const week = '2026-11-09';
 const task: QueueTask = { id: 'task', client_id: 'c', owner_id: 'staff', due_at: '2026-11-10T16:00:00Z', status: 'open', context: 'This Week but Not Next [rebooking:2026-11-09]: Called; awaiting reply', created_at: '2026-11-08T03:00:00Z' };
 describe('rebooking presentation', () => {
-  it('does not call a contact alone waiting or done', () => {
+  it('moves a contact alone to waiting without requiring a reminder', () => {
     const s = outreachState('c',week,[],[{client_id:'c',activity_type:'contacted',created_at:'2026-11-09T16:00:00Z',description:'Contacted'}],'2026-11-09T18:00:00Z');
-    expect(s.group).toBe('outreach'); expect(s.contacted).toBe(true);
+    expect(s.group).toBe('waiting'); expect(s.contacted).toBe(true); expect(s.task).toBeUndefined();
   });
   it('waits only with a linked open task, owner and due time', () => {
     expect(outreachState('c',week,[task],[],'2026-11-09T18:00:00Z').group).toBe('waiting');
@@ -31,5 +31,19 @@ describe('rebooking presentation', () => {
   it('does not confuse another client task or generic task with outreach', () => {
     expect(outreachState('other',week,[task],[],'2026-11-10T17:00:00Z').group).toBe('outreach');
     expect(outreachState('c',week,[{...task,context:'Not Scheduled: call'}],[],'2026-11-10T17:00:00Z').group).toBe('outreach');
+  });
+  it('reopens undone contact markers without losing their history', () => {
+    const a = [{client_id:'c',activity_type:'contacted_undone',created_at:'2026-11-09T16:00:00Z',description:'Contacted'}];
+    expect(outreachState('c',week,[],a,'2026-11-09T18:00:00Z').group).toBe('outreach');
+  });
+  it('does not carry simple outreach into the next Chicago work week', () => {
+    const a = [{client_id:'c',activity_type:'contacted',created_at:'2026-11-09T16:00:00Z',description:'Contacted'}];
+    expect(outreachState('c','2026-11-16',[],a,'2026-11-16T18:00:00Z').group).toBe('outreach');
+  });
+  it('uses safe attribution and never guesses a legacy actor or displays email', () => {
+    const a = {client_id:'c',activity_type:'contacted',created_at:'2026-11-09T16:00:00Z',description:'Contacted'};
+    expect(contactAttribution({...a,metadata:{actor_name:'Zane'}})).toBe('Zane');
+    expect(contactAttribution({...a,metadata:{actor_name:'private@example.com'}})).toBe('Staff');
+    expect(contactAttribution(a)).toBe('Staff');
   });
 });

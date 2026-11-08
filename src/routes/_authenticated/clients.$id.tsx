@@ -12,6 +12,8 @@ import { recordManualPayment } from "@/lib/payments.functions";
 import { renewPackage } from "@/lib/renewal.functions";
 import { updateClientDetails } from "@/lib/admin-finance.functions";
 import { PaymentAllocationsCard } from "@/components/PaymentAllocationsCard";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import type { OverrideSlot } from "@/lib/package-override";
 import { EditPackagesCard } from "@/components/EditPackagesCard";
 import { applyOverrides, type PackageOverride } from "@/lib/package-override";
 import { AppShell } from "@/components/AppShell";
@@ -151,6 +153,14 @@ function ClientDetailPage() {
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [renewOpen, setRenewOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+  const [section, setSection] = useState("overview");
+  const [correctOpen, setCorrectOpen] = useState(false);
+  const [editRequest, setEditRequest] = useState<{ slot: OverrideSlot; key: number } | null>(null);
+  const openPackage = (slot: OverrideSlot) => {
+    setCorrectOpen(false);
+    setSection("packages");
+    setEditRequest({ slot, key: Date.now() });
+  };
 
 
   useEffect(() => {
@@ -282,45 +292,81 @@ function ClientDetailPage() {
       </div>
 
 
-      <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <div className="flex flex-wrap items-center gap-3">
-            <h1 className="text-3xl font-semibold tracking-tight">{fullName(c)}</h1>
-            <StatusBadge
-              client={c}
-              isScheduled={isScheduled}
-              dismissedFromPackageReview={isDismissedFromReview}
-            />
-            {renewalFlagged && <RenewalFlagBadge />}
-            {packageReviewNeeded && <PackageReviewBadge priceNeeded={!!c && packagePriceNeeded(c)} />}
-            {c.pending_renewal_start_date && (
-              <span className="inline-flex items-center rounded-full border border-emerald-300 bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-900">
-                {renewalRow && !renewalRow.no_upcoming
-                  ? `✅ Renewal prepared — expected ${formatDate(renewalRow.first_uncovered_ymd)} (from Square)`
-                  : renewalRow
-                    ? "Prepared — No Scheduled Start"
-                    : "✅ Renewal prepared"}
-                <span className="font-normal opacity-75">
-                  {" "}· can start on or after {formatDate(c.pending_renewal_start_date)}
-                </span>
-              </span>
-            )}
+      <header className="mb-5 space-y-3">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h1 className="break-words text-2xl font-semibold">{fullName(c)}</h1>
+            <p className="mt-1 break-words text-sm text-muted-foreground">{c.phone ?? "No phone"} · {c.email ?? "No email"}</p>
           </div>
-
-
-          <p className="mt-1 text-sm text-slate-500">
-            {c.phone ?? "no phone"} · {c.email ?? "no email"}
-          </p>
-          <p className="mt-1 text-xs text-slate-400">
-            Schedule status is read live from Square — manage appointments in Square.
-          </p>
-          {renewalRow && c.pending_renewal_start_date && (
-            <div className="mt-3 max-w-xl">
-              <PreRenewCard forecast={renewalRow as unknown as RenewalForecastRow} hideAmount={!isAdminUser} />
-            </div>
-          )}
+          <div className="flex flex-wrap gap-2">
+            <Button onClick={() => setPaymentOpen(true)} disabled={totalOwed(c) === 0}>Record Payment</Button>
+            <Button variant="outline" onClick={() => setCorrectOpen(true)}>Correct record</Button>
+          </div>
         </div>
-        <div className="flex flex-col items-end gap-1">
+        <div className="flex flex-wrap items-center gap-2">
+          <StatusBadge client={c} isScheduled={isScheduled} dismissedFromPackageReview={isDismissedFromReview} />
+          {renewalFlagged && <RenewalFlagBadge />}
+          {packageReviewNeeded && <PackageReviewBadge priceNeeded={packagePriceNeeded(c)} />}
+        </div>
+      </header>
+
+      <Tabs value={section} onValueChange={setSection}>
+        <TabsList aria-label="Client profile sections" className="mb-4 grid h-auto w-full grid-cols-2 gap-1 sm:grid-cols-4">
+          <TabsTrigger value="overview" className="min-h-10">Overview</TabsTrigger>
+          <TabsTrigger value="packages" className="min-h-10">Packages &amp; Payments</TabsTrigger>
+          <TabsTrigger value="activity" className="min-h-10">Activity</TabsTrigger>
+          <TabsTrigger value="messages" className="min-h-10">Messages</TabsTrigger>
+        </TabsList>
+        <TabsContent forceMount value="overview" className="space-y-5 data-[state=inactive]:hidden">
+          <section aria-label="Current package summary" className="border-y py-5">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h2 className="text-lg font-semibold">Current package</h2>
+                <p className="text-sm text-muted-foreground">{c.package_name ?? "Package"} · Started {formatDate(c.package_start_date)}</p>
+              </div>
+              {isAdminUser && <Button size="sm" variant="outline" onClick={() => openPackage("current")}>Correct package</Button>}
+            </div>
+            <div className="grid gap-5 sm:grid-cols-2">
+              <div>
+                <div className="flex items-end justify-between gap-2">
+                  <strong className="text-3xl">{hasVisitData ? `${shownUsed} / ${shownTotal}` : "—"}</strong>
+                  <span className="text-sm text-muted-foreground">{hasVisitData ? `${remaining} visits remaining` : "Visits unavailable"}</span>
+                </div>
+                <Progress value={pct} className="my-3 h-2" />
+                {visitTracking && <VisitSourceLine visit={visitTracking} />}
+                {hubDiffers && <p className="mt-2 text-xs text-muted-foreground">Showing Square appointment notes; Hub stored {c.visits_used ?? "—"}/{c.package_total_visits}. No counts changed.</p>}
+                <Button size="sm" variant="link" className="px-0" onClick={() => setSection("packages")}>Visit source &amp; check-in</Button>
+              </div>
+              <div className="space-y-2 text-sm">
+                <Row label="Package price" value={formatCurrency(c.package_price)} />
+                <Row label="Paid toward this package" value={formatCurrency(c.amount_paid)} />
+                <Row label="Current package owed" value={priceUnknown ? "Package info needed" : formatCurrency(owed)} valueClass={owed > 0 ? "font-semibold text-destructive" : "font-semibold"} />
+                {previousOwed(c) > 0 && <Row label="Prior package owed" value={formatCurrency(previousOwed(c))} />}
+                <div className="border-t pt-2">
+                  {(() => {
+                    const last = activities.find((a) => a.activity_type === "payment");
+                    if (!last) return <p className="text-xs text-muted-foreground">Last payment received: no receipt in this history.</p>;
+                    const meta = last.metadata as Record<string, unknown> | null;
+                    const amount = Number(meta?.amount ?? meta?.applied_amount);
+                    return <><Row label="Last payment received" value={`${Number.isFinite(amount) ? formatCurrency(amount) : "Receipt"} · ${formatDate(last.created_at)}`} /><p className="mt-1 text-xs text-muted-foreground">Receipt history is separate from package paid figures; cycle allocation is not verified here.</p></>;
+                  })()}
+                  <Button size="sm" variant="link" className="px-0" onClick={() => setSection("packages")}>Review payment history</Button>
+                </div>
+              </div>
+            </div>
+          </section>
+          <NextAppointment clientId={id} onDetails={() => setSection("activity")} />
+          {c.pending_renewal_start_date && <section className="border-t pt-4" aria-label="Upcoming renewal">
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2"><h2 className="text-lg font-semibold">Upcoming renewal</h2>{isAdminUser && <Button size="sm" variant="outline" onClick={() => openPackage("pending")}>Correct upcoming package</Button>}</div>
+            {renewalRow ? <PreRenewCard forecast={renewalRow as unknown as RenewalForecastRow} hideAmount={!isAdminUser} /> : <p className="text-sm text-muted-foreground">Prepared on or after {formatDate(c.pending_renewal_start_date)}. {forecastQ.isError ? "Renewal details could not load." : forecastQ.isFetching ? "Checking Square timing…" : "No verified start shown."}</p>}
+          </section>}
+        </TabsContent>
+        <TabsContent forceMount value="packages" className="space-y-5 data-[state=inactive]:hidden">
+          {isAdminUser && <EditPackagesCard client={(c as Client & { __raw?: Client }).__raw ?? c} onDone={refresh} editRequest={editRequest} />}
+          {isAdminUser && <PaymentAllocationsCard client={c} onDone={refresh} />}
+          <section className="border-y py-4" aria-label="Visit controls">
+            <h2 className="mb-3 text-lg font-semibold">Visit source &amp; check-in</h2>
+            <div className="flex flex-wrap items-center gap-3">
           {visitTracking && <VisitSourceLine visit={visitTracking} />}
           {c.square_customer_id && (c.package_total_visits ?? 0) > 0 && (
             <label className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -337,7 +383,7 @@ function ClientDetailPage() {
               </select>
             </label>
           )}
-          <div className="flex flex-wrap gap-2">
+
 
             {(c.package_total_visits ?? 0) > 0 &&
               (remaining !== 0 || !!c.pending_renewal_start_date) && (
@@ -356,12 +402,11 @@ function ClientDetailPage() {
                 {squareTracks ? "Manual check-in" : "Complete Visit"}
               </Button>
             )}
-            <Button variant="outline" onClick={() => setPaymentOpen(true)} disabled={totalOwed(c) === 0}>
-              Record Payment
-            </Button>
-            <Button variant="outline" onClick={() => setEditOpen(true)}>
-              Edit Client
-            </Button>
+
+            </div>
+            {(c.package_total_visits ?? 0) > 0 && (!hasVisitData || remaining === 0) && <p className="mt-2 text-sm text-muted-foreground">{!hasVisitData ? "Visits unknown" : "No visits remaining"} — verify in Square before completing.</p>}
+          </section>
+          <section className="space-y-3 border-b pb-4"><h2 className="text-lg font-semibold">Other record actions</h2><div className="flex flex-wrap gap-2">
             <Button variant="outline" onClick={() => setRenewOpen(true)}>
               Renew Package
             </Button>
@@ -384,142 +429,12 @@ function ClientDetailPage() {
                 Undo “no package needed”
               </Button>
             )}
-          </div>
 
-          {(c.package_total_visits ?? 0) > 0 && !hasVisitData && (
-            <span className="text-xs text-amber-700">
-              ⚠ Visits unknown — verify before completing.
-            </span>
-          )}
-          {(c.package_total_visits ?? 0) > 0 && remaining === 0 && (
-            <span className="text-xs text-amber-700">
-              ⚠ Visits show 0 — verify in Square before completing.
-            </span>
-          )}
-        </div>
-      </div>
-
-
-      <div className="grid gap-6 lg:grid-cols-3">
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle>Visit Progress</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {hasVisitData ? (
-              <>
-                <div className="mb-2 flex items-end justify-between">
-                  <div className="text-4xl font-semibold tracking-tight">
-                    {sqShown ? `${sqShown.used} / ${sqShown.total}` : progress(c)}
-                  </div>
-                  <div className="text-sm text-slate-500">{remaining} remaining</div>
-                </div>
-                <Progress value={pct} className="h-3" />
-                {sqShown && (
-                  <p className="mt-2 text-xs text-slate-500">
-                    From Square visit notes{hubDiffers ? ` · Hub stored ${c.visits_used ?? "—"}/${c.package_total_visits}` : ""}
-                  </p>
-                )}
-              </>
-            ) : (
-              <div className="space-y-2">
-                <div className="text-4xl font-semibold tracking-tight text-slate-700">—</div>
-                <p className="text-sm text-slate-500">
-                  Visit count is tracked in Square. Set Visits Used on Edit Client to mirror
-                  the current count.
-                </p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Financial</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2 text-sm">
-            <Row label="Package Price" value={formatCurrency(c.package_price)} />
-            <Row label="Amount Paid" value={formatCurrency(c.amount_paid)} />
-            {previousOwed(c) > 0 && (
-              <Row
-                label="Previous Package Owed"
-                value={formatCurrency(previousOwed(c))}
-                valueClass="text-red-600 font-semibold"
-              />
-            )}
-            <Row
-              label="Current Package Owed"
-              value={priceUnknown ? "Package info needed" : formatCurrency(owed)}
-              valueClass={
-                priceUnknown
-                  ? "text-amber-800 font-semibold"
-                  : owed > 0
-                    ? "text-red-600 font-semibold"
-                    : ""
-              }
-            />
-            {previousOwed(c) > 0 && (
-              <Row
-                label="Total Owed"
-                value={formatCurrency(totalOwed(c))}
-                valueClass="text-red-700 font-semibold"
-              />
-            )}
-            {(() => {
-              const last = activities.find(
-                (a) =>
-                  a.activity_type === "payment" &&
-                  (a.metadata as Record<string, unknown> | null)?.source === "square",
-              );
-              if (!last) {
-                return <Row label="Last paid" value="No Square payment on record" />;
-              }
-              const meta = last.metadata as Record<string, unknown> | null;
-              const amt = Number(meta?.applied_amount ?? meta?.amount ?? 0);
-              return (
-                <Row
-                  label="Last paid"
-                  value={`${formatCurrency(amt)} on ${formatDate(last.created_at)}`}
-                />
-              );
-            })()}
-          </CardContent>
-        </Card>
-
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle>Package</CardTitle>
-          </CardHeader>
-          <CardContent className="grid gap-2 text-sm sm:grid-cols-2">
-            <Row label="Name" value={c.package_name ?? "—"} />
-            <Row label="Start Date" value={formatDate(c.package_start_date)} />
-            <Row label="Total Visits" value={c.package_total_visits} />
-            <Row label="Visits Used" value={hasVisitData ? (sqShown ? `${shownUsed} (Square)` : c.visits_used) : "—"} />
-            
-          </CardContent>
-        </Card>
-
-        <AppointmentsCard clientId={id} />
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Internal Notes</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="whitespace-pre-wrap text-sm text-slate-700">
-              {c.internal_notes ?? <span className="text-slate-400">No notes.</span>}
-            </p>
-          </CardContent>
-        </Card>
-
-
-
-
-
-        <MessagesCard clientId={id} client={c as never} />
-
-        {isAdminUser && <EditPackagesCard client={(c as Client & { __raw?: Client }).__raw ?? c} onDone={refresh} />}
-        {isAdminUser && <PaymentAllocationsCard client={c} onDone={refresh} />}
+          </div></section>
+        </TabsContent>
+        <TabsContent forceMount value="activity" className="space-y-5 data-[state=inactive]:hidden">
+          <AppointmentsCard clientId={id} />
+          <section className="border-y py-4"><div className="mb-2 flex items-center justify-between gap-2"><h2 className="text-lg font-semibold">Internal notes</h2><Button size="sm" variant="outline" onClick={() => setEditOpen(true)}>Edit details</Button></div><p className="whitespace-pre-wrap text-sm">{c.internal_notes ?? "No notes."}</p></section>
         <Card className="lg:col-span-3">
           <CardHeader>
             <CardTitle>Timeline</CardTitle>
@@ -530,7 +445,7 @@ function ClientDetailPage() {
             ) : (
               <ul className="divide-y">
                 {activities.map((a) => (
-                  <li key={a.id} className="flex items-center justify-between py-3">
+                  <li key={a.id} className="flex flex-wrap items-start justify-between gap-2 py-3">
                     <div>
                       <div className="text-sm font-medium capitalize">
                         {a.activity_type.replace(/_/g, " ")}
@@ -559,7 +474,21 @@ function ClientDetailPage() {
             )}
           </CardContent>
         </Card>
-      </div>
+
+        </TabsContent>
+        <TabsContent forceMount value="messages" className="data-[state=inactive]:hidden"><MessagesCard clientId={id} client={c as never} /></TabsContent>
+      </Tabs>
+
+      <Dialog open={correctOpen} onOpenChange={setCorrectOpen}>
+        <DialogContent className="max-h-[85dvh] overflow-y-auto">
+          <DialogHeader><DialogTitle>Correct record</DialogTitle><DialogDescription>Corrections update the record, not a new payment. Required reasons and confirmations still apply.</DialogDescription></DialogHeader>
+          <div className="space-y-4">
+            <Button variant="outline" className="min-h-11 w-full justify-start" onClick={() => { setCorrectOpen(false); setEditOpen(true); }}>Edit client details</Button>
+            {isAdminUser && <><div><h3 className="mb-2 text-sm font-semibold">Correct a package</h3><div className="grid grid-cols-3 gap-2"><Button variant="outline" onClick={() => openPackage("current")}>Current</Button><Button variant="outline" onClick={() => openPackage("pending")}>Upcoming</Button><Button variant="outline" onClick={() => openPackage("previous")}>Prior</Button></div><p className="mt-2 text-xs text-muted-foreground">Price, recognized paid, date and package details. Recognized paid is a correction, not money received.</p></div><Button variant="outline" className="min-h-11 w-full whitespace-normal justify-start text-left" onClick={() => { setCorrectOpen(false); setSection("packages"); }}>Review where a payment went / Undo last renewal</Button></>}
+            <Button variant="outline" className="min-h-11 w-full justify-start" onClick={() => { setCorrectOpen(false); setSection("packages"); }}>Visit source &amp; other record actions</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={visitPickerOpen} onOpenChange={(o) => !o && setVisitPickerOpen(false)}>
         <DialogContent>
@@ -577,7 +506,7 @@ function ClientDetailPage() {
                 No recent appointment without a check-in was found.
               </p>
             ) : (
-              uncheckedQ.data!.appointments.map((a) => (
+              (uncheckedQ.data?.appointments ?? []).map((a) => (
                 <Button
                   key={a.booking_id}
                   variant="outline"
@@ -639,8 +568,8 @@ function ClientDetailPage() {
 
 function Row({ label, value, valueClass }: { label: string; value: React.ReactNode; valueClass?: string }) {
   return (
-    <div className="flex justify-between gap-4">
-      <span className="text-slate-500">{label}</span>
+    <div className="flex flex-wrap justify-between gap-x-4 gap-y-1">
+      <span className="text-muted-foreground">{label}</span>
       <span className={valueClass}>{value}</span>
     </div>
   );
@@ -1340,6 +1269,13 @@ function windowIso(offsetDaysStart: number, offsetDaysEnd: number) {
   };
 }
 
+function NextAppointment({ clientId, onDetails }: { clientId: string; onDetails: () => void }) {
+  const fetchAppts = useServerFn(getClientAppointments);
+  const q = useQuery({ queryKey: ["client-appointments", clientId, "upcoming"], queryFn: () => fetchAppts({ data: { clientId, ...windowIso(0, WINDOW_DAYS) } }), staleTime: 60_000 });
+  const next = (q.data?.appointments ?? []).filter((a) => !/CANCEL|DECLINE|NO_SHOW/i.test(a.status)).sort((a, b) => a.start_at.localeCompare(b.start_at))[0];
+  return <section className="flex flex-wrap items-center justify-between gap-3 border-b pb-4"><div><h2 className="text-lg font-semibold">Next appointment</h2><p className="text-sm text-muted-foreground">{q.isLoading ? "Loading appointments…" : q.isError || q.data?.error ? "Appointments unavailable — try again in Activity." : next ? `${formatApptDate(next.start_at)} · ${formatApptTime(next.start_at)} · ${next.service_name ?? "Appointment"}` : "No upcoming appointment in the next 31 days."}</p></div><Button size="sm" variant="outline" onClick={onDetails}>Appointments &amp; details</Button></section>;
+}
+
 function AppointmentsCard({ clientId }: { clientId: string }) {
   const fetchAppts = useServerFn(getClientAppointments);
   const [showPrev, setShowPrev] = useState(false);
@@ -1403,14 +1339,15 @@ function AppointmentsCard({ clientId }: { clientId: string }) {
         </section>
 
         <section>
-          <button
-            type="button"
+          <Button
+            variant="ghost"
+            aria-expanded={showPrev}
             onClick={() => setShowPrev((s) => !s)}
             className="mb-2 flex min-h-11 w-full items-center justify-between text-sm font-semibold text-slate-700 cursor-pointer hover:underline"
           >
             <span>Previous Appointments</span>
             <span className="text-xs text-slate-400">{showPrev ? "Hide" : "Show"}</span>
-          </button>
+          </Button>
           {showPrev && (
             <>
               {previousQuery.isLoading ? (

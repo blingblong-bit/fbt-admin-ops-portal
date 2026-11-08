@@ -3,6 +3,8 @@ import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { RefreshCw } from "lucide-react";
+import { VisitNoteReviewContent } from "./visit-note-review";
+import { hubHead } from "@/lib/hub-navigation";
 import { AppShell } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -12,21 +14,12 @@ import { getVisitAutomationReview } from "@/lib/visit-automation-review.function
 import { SOURCE_LABELS, type UpcomingVisit, type VisitSource } from "@/lib/effective-visit-state";
 import { statusLabel } from "@/lib/square-visit-audit";
 
-const TITLE = "Visit Automation Review · FIT Beyond Therapy Admin";
+const TITLE = "Visit Automation · FIT Beyond Therapy Admin";
 const DESC = "What the Hub worked out from Square visit notes and what renewal and dues actions follow.";
 
 export const Route = createFileRoute("/_authenticated/visit-automation-review")({
   beforeLoad: requireAdmin,
-  head: () => ({
-    meta: [
-      { title: TITLE },
-      { name: "description", content: DESC },
-      { property: "og:title", content: TITLE },
-      { property: "og:description", content: DESC },
-      { property: "og:type", content: "website" },
-      { name: "twitter:card", content: "summary" },
-    ],
-  }),
+  head: () => hubHead("Visit Automation", "Visit note review, confirmation history and automation status."),
   component: VisitAutomationReviewPage,
 });
 
@@ -101,7 +94,7 @@ function VisitAutomationReviewPage() {
     <AppShell>
       <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Visit Automation Review</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Visit Automation</h1>
           <p className="mt-1 max-w-2xl text-sm text-slate-600">
             What the Hub worked out from Square visit notes and what it does because of it. Stored Hub visit counts are
             never changed here. A review flag is a warning only — Square still drives. Automation is held only when a client's

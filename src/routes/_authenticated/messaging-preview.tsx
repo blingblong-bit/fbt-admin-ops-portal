@@ -30,7 +30,7 @@ export const Route = createFileRoute("/_authenticated/messaging-preview")({
   component: MessagingPreviewPage,
 });
 
-function MessagingPreviewPage() {
+export function MessagingPreviewContent() {
   const qc = useQueryClient();
   const flagFn = useServerFn(getMessagingFlag);
   const listFn = useServerFn(listDuesMessages);
@@ -83,3 +83,5 @@ function MessagingPreviewPage() {
     </AppShell>
   );
 }
+
+function MessagingPreviewPage() { return <AppShell><MessagingPreviewContent /></AppShell>; }

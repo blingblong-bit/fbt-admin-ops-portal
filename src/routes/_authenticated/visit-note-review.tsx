@@ -169,7 +169,7 @@ function ReviewCard({ c, onChanged }: { c: VisitNoteReviewCard; onChanged: () =>
   );
 }
 
-function VisitNoteReviewPage() {
+export function VisitNoteReviewContent() {
   const fetchReview = useServerFn(getVisitNoteReview);
   const qc = useQueryClient();
   const q = useQuery({
@@ -267,3 +267,5 @@ function VisitNoteReviewPage() {
     </AppShell>
   );
 }
+
+function VisitNoteReviewPage() { return <AppShell><VisitNoteReviewContent /></AppShell>; }

@@ -45,7 +45,7 @@ export const Route = createFileRoute("/_authenticated/dues-queue")({
   component: DuesQueuePage,
 });
 
-function DuesQueuePage() {
+export function DuesQueueContent() {
   const qc = useQueryClient();
   const queueFn = useServerFn(getDuesQueue);
   const flagFn = useServerFn(getMessagingFlag);
@@ -173,3 +173,5 @@ function DuesQueuePage() {
     </AppShell>
   );
 }
+
+function DuesQueuePage() { return <AppShell><DuesQueueContent /></AppShell>; }

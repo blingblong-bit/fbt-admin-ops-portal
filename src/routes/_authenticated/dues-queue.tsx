@@ -72,7 +72,7 @@ export function DuesQueueContent() {
   const rows = queue.data?.rows ?? [];
 
   return (
-    <AppShell>
+    <div>
       <h1 className="mb-1 text-2xl font-semibold tracking-tight">Send Dues Message</h1>
       <p className="mb-4 text-sm text-slate-500">
         Package clients who currently owe money. Messages are drafted only.
@@ -170,7 +170,7 @@ export function DuesQueueContent() {
           )}
         </DialogContent>
       </Dialog>
-    </AppShell>
+    </div>
   );
 }
 

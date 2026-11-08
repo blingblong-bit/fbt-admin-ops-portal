@@ -196,7 +196,7 @@ export function VisitNoteReviewContent() {
   const busy = q.isFetching || refreshing;
 
   return (
-    <AppShell>
+    <div>
       <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Visit Note Review</h1>
@@ -264,7 +264,7 @@ export function VisitNoteReviewContent() {
           )}
         </>
       )}
-    </AppShell>
+    </div>
   );
 }
 

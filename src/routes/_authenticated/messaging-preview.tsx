@@ -55,7 +55,7 @@ export function MessagingPreviewContent() {
   });
 
   return (
-    <AppShell>
+    <div>
       <h1 className="mb-1 text-2xl font-semibold tracking-tight">Messaging Preview</h1>
       <p className="mb-4 text-sm text-slate-500">
         Every drafted dues message, newest first. Nothing is sent.
@@ -80,7 +80,7 @@ export function MessagingPreviewContent() {
           )}
         </CardContent>
       </Card>
-    </AppShell>
+    </div>
   );
 }
 

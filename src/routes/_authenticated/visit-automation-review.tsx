@@ -92,6 +92,8 @@ function VisitAutomationReviewPage() {
 
   return (
     <AppShell>
+      <VisitNoteReviewContent />
+      <details className="mt-8 border-t pt-4"><summary className="cursor-pointer text-lg font-semibold">Automation status</summary><div className="pt-4">
       <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Visit Automation</h1>
@@ -177,6 +179,7 @@ function VisitAutomationReviewPage() {
           </div>
         </>
       )}
+      </div></details>
     </AppShell>
   );
 }

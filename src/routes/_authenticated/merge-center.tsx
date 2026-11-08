@@ -1,3 +1,4 @@
+import { hubHead } from "@/lib/hub-navigation";
 import { createFileRoute } from "@tanstack/react-router";
 import { requireAdmin } from "@/lib/require-admin";
 import { useMemo, useState } from "react";
@@ -32,6 +33,7 @@ import { formatCurrency, formatDate, fullName, totalOwed, visitsRemaining } from
 
 export const Route = createFileRoute("/_authenticated/merge-center")({
   beforeLoad: requireAdmin,
+  head: () => hubHead("Merge Center", "Authorized duplicate-client review and merge history."),
   component: MergeCenterPage,
 });
 

@@ -1,3 +1,4 @@
+import { hubHead } from "@/lib/hub-navigation";
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { requireAdmin } from "@/lib/require-admin";
 import { useServerFn } from "@tanstack/react-start";
@@ -14,6 +15,7 @@ import { Badge } from "@/components/ui/badge";
 
 export const Route = createFileRoute("/_authenticated/square-diagnostic")({
   beforeLoad: requireAdmin,
+  head: () => hubHead("Square Diagnostic", "Authorized Square customer and payment diagnostics."),
   component: SquareDiagnosticPage,
   errorComponent: ({ error, reset }) => {
     const router = useRouter();

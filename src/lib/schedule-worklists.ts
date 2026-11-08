@@ -5,7 +5,7 @@
 import { effectiveRemaining, type FollowUpClient } from "@/lib/schedule-followup";
 import { addDaysYmd } from "@/lib/work-week";
 
-export const RECENT_DAYS = 60;
+export const RECENT_DAYS = 30;
 
 export type WorklistClient = FollowUpClient & {
   package_start_date?: string | null;

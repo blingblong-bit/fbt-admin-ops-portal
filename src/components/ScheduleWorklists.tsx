@@ -21,9 +21,9 @@ type Key = "last_week" | "package_completed" | "not_scheduled" | "only_once" | "
 const TABS: { key: Key; label: string; help: string }[] = [
   { key: "last_week", label: "Last Visit Last Week — Nothing Booked", help: "Last week’s visitors with nothing booked." },
   { key: "package_completed", label: "Package Completed", help: "Package used up recently — reschedule or review renewal." },
-  { key: "not_scheduled", label: "Not Scheduled", help: "No future Square booking; seen in the last 60 days or has a new package." },
+  { key: "not_scheduled", label: "Not Scheduled", help: "No future Square booking; seen in the last 30 days or has a new package." },
   { key: "only_once", label: "Only Once This Week", help: "Exactly one appointment in this work week." },
-  { key: "hidden", label: "Hidden", help: "Every hidden client: not seen in 60+ days (auto) or hidden by staff. New bookings or packages bring them back; Restore brings them back now." },
+  { key: "hidden", label: "Hidden", help: "Every hidden client: not seen in over 30 days (auto) or hidden by staff. New bookings or packages bring them back; Restore brings them back now." },
 ];
 
 const fmt = (iso: string | null) => (iso ? formatDate(iso.slice(0, 10)) : "—");

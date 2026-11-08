@@ -33,9 +33,19 @@ describe("schedule worklists", () => {
     }
   });
 
-  it("last seen over 60 days ago is auto-hidden; new package even if old visit stays Not Scheduled", () => {
+  it("last seen over 30 days ago is auto-hidden; new package even if old visit stays Not Scheduled", () => {
     expect(classifyWorklist(c(), f("2026-08-01"), TODAY, null)).toMatchObject({ list: "hidden", hiddenKind: "auto" });
     expect(classifyWorklist(c({ package_start_date: "2026-10-10" }), f("2026-08-01"), TODAY, null).list).toBe("not_scheduled");
+  });
+
+  it("keeps a visit exactly 30 days ago visible and hides a visit 31 days ago", () => {
+    expect(classifyWorklist(c(), f("2026-09-24"), TODAY, null).list).toBe("not_scheduled");
+    expect(classifyWorklist(c(), f("2026-09-23"), TODAY, null)).toMatchObject({ list: "hidden", hiddenKind: "auto" });
+  });
+
+  it("uses the same 30-day boundary for a new package with no recent visit", () => {
+    expect(classifyWorklist(c({ package_start_date: "2026-09-24" }), f(null), TODAY, null).list).toBe("not_scheduled");
+    expect(classifyWorklist(c({ package_start_date: "2026-09-23" }), f(null), TODAY, null).list).toBe("hidden");
   });
 
   it("Square notes needing review are never auto-hidden", () => {

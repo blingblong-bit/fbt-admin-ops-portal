@@ -4,6 +4,7 @@ import { countsAsMissedCheckIn } from "@/lib/effective-visit-state";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { matchLooseVisitBookingIds } from "@/lib/check-in-matching";
 import { preparedEditGuard, preparationTimestamp } from "@/lib/prepared-renewal-edit";
+import { cancelPreparedTransaction } from "@/lib/prepared-cancellation";
 
 // Read-only Square Production integration. Webhooks (customer/payment/booking)
 // are also handled against Production — see src/routes/api/public/square.webhook.ts.
@@ -2150,11 +2151,9 @@ export const cancelPendingRenewal = createServerFn({ method: "POST" })
     return { clientId: d.clientId };
   })
   .handler(async ({ data, context }): Promise<{ ok: true; movedToCurrent: number }> => {
-    const { error } = await context.supabase.rpc("cancel_prepared_renewal", {
-      p_client_id: data.clientId,
-    });
-    if (error) throw new Error(error.message);
-    return { ok: true, movedToCurrent: 0 };
+    return cancelPreparedTransaction(data.clientId, (clientId) => context.supabase.rpc("cancel_prepared_renewal", {
+      p_client_id: clientId,
+    }));
   });
 
 // ---------------------------------------------------------------------------

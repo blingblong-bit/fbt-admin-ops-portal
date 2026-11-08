@@ -31,7 +31,7 @@ import {
 import { getScheduleCheck, getRenewalForecast, getScheduledClientIds, type ScheduleAppointment } from "@/lib/schedule.functions";
 import { chicagoYmd } from "@/lib/work-week";
 import { hubHead } from "@/lib/hub-navigation";
-import { applyOverridesToRows } from "@/lib/package-override";
+import { applyOverridesToRows, type PackageOverride } from "@/lib/package-override";
 import { getPackageSetupList } from "@/lib/package-setup.functions";
 import { useRole } from "@/hooks/useRole";
 import { usePackageReviewDismissedIds } from "@/components/PackageReviewBadge";
@@ -116,7 +116,7 @@ function ClientsListPage() {
       }
       const overrides = await supabase.from("package_overrides").select("*").is("cleared_at", null);
       if (overrides.error) throw overrides.error;
-      return applyOverridesToRows(all, overrides.data ?? []);
+      return applyOverridesToRows(all, (overrides.data ?? []) as (PackageOverride & { client_id: string })[]);
     },
   });
 

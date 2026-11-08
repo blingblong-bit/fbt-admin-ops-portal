@@ -83,8 +83,8 @@ export function DuesQueueContent() {
         <Button onClick={() => generate.mutate()} disabled={generate.isPending}>
           {generate.isPending ? "Refreshing…" : "Generate / Refresh Drafts"}
         </Button>
-        <Link to="/messaging-preview" className="text-sm font-medium text-slate-600 underline">
-          Messaging Preview
+        <Link to="/dues-texts" className="text-sm font-medium text-slate-600 underline">
+          Dues Texts
         </Link>
       </div>
 

@@ -64,7 +64,6 @@ import {
 import { getDuesTextsBoard } from "@/lib/dues-messaging.functions";
 import { getVisitNoteReview } from "@/lib/visit-note-review.functions";
 import { getVisitAutomationReview } from "@/lib/visit-automation-review.functions";
-import { autofillPackagesFromSquare } from "@/lib/package-autofill.functions";
 import type { ScheduleStatus } from "@/components/SmartClientCard";
 import { useRole } from "@/hooks/useRole";
 import { useDuesFreshness } from "@/components/DuesFreshnessBanner";
@@ -462,236 +461,7 @@ function Dashboard() {
   // package info (price left blank, flagged for review). Runs once per
   // dashboard visit for staff; idempotent on the server.
   const queryClient = useQueryClient();
-  const autofillRan = useRef(false);
-  useEffect(() => {
-    // Runs for every signed-in role (staff, admin, owner).
-    if (autofillRan.current) return;
-    autofillRan.current = true;
-    autofillPackagesFromSquare()
-      .then((r) => {
-        if (r?.ok && (r.filled?.length ?? 0) > 0) {
-          invalidateFor(queryClient, "package-edited");
-        }
-      })
-      .catch(() => {});
-  }, [isStaff, queryClient]);
-
-
-
-
-
-  const [search, setSearch] = usePersistentState("dash:search", "");
-  // Staff never see the payment-due (aggregate) list — default to "all" instead.
-  const [filter, setFilter] = usePersistentState<FilterKey>("dash:filter", isStaff ? "all" : "payment_due");
-  const [statusFilter, setStatusFilter] = usePersistentState<StatusFilter>("dash:status", "active_assessment");
-
-  // New-clients-per-month view state. Activated by the "New Clients" tile.
-  const [newClientsActive, setNewClientsActive] = usePersistentState("dash:newClients", false);
-  const [newClientsMonth, setNewClientsMonth] = usePersistentState<string>("dash:newClientsMonth", currentClinicMonth());
-
-  // Role can resolve after first render; force off payment-due filters for staff.
-  useEffect(() => {
-    if (
-      isStaff &&
-      (filter === "payment_due" ||
-        filter === "payment_due_this_week" ||
-        filter === "payment_due_next_week" ||
-        filter === "overdue_prior_weeks")
-    ) {
-      setFilter("all");
-    }
-  }, [isStaff, filter]);
-
-  // Apply lifecycle status filter first — by default this hides archived clients.
-  const visibleClients = useMemo(() => {
-    return clients.filter((c) =>
-      matchesStatus(effectiveStatus(c, isScheduled(c.id)), statusFilter),
-    );
-  }, [clients, statusFilter, scheduledSet]);
-
-  // New-clients-per-month grouping. Includes archived clients (they were
-  // genuinely added that month); excludes soft-deleted records. Derived from
-  // the full `clients` list, independent of the status filter.
-  const newClientsByMonth = useMemo(
-    () => groupNewClientsByMonth(clients),
-    [clients],
-  );
-  const newClientsMonthMap = useMemo(() => {
-    const m = new Map<string, NewClientsMonth>();
-    for (const mc of newClientsByMonth) m.set(mc.month, mc);
-    return m;
-  }, [newClientsByMonth]);
-  const currentMonthNewCount =
-    newClientsMonthMap.get(currentClinicMonth())?.clients.length ?? 0;
-  const selectedNewClients =
-    newClientsMonthMap.get(newClientsMonth)?.clients ?? [];
-
-  const counts = useMemo(() => {
-    const c = {
-      all: 0,
-      payment_due: 0,
-      payment_due_total: 0,
-      payment_due_this_week: 0,
-      payment_due_this_week_total: 0,
-      payment_due_next_week: 0,
-      payment_due_next_week_total: 0,
-      overdue_prior_weeks: 0,
-      overdue_prior_weeks_total: 0,
-      not_scheduled: 0,
-      almost_finished: 0,
-      critical: 0,
-      critical_total: 0,
-      package_complete: 0,
-      needs_renewal: 0,
-      renewal_scheduled: 0,
-      needs_package_review: 0,
-      // Money owed for the NEXT package, tracked separately from the
-      // current-package balance above.
-      next_package_this_week_total: 0,
-      next_package_next_week_total: 0,
-      // Split of all forecasted next-package money by whether staff has
-      // already prepared the renewal. Keeps the two renewal tiles from
-      // reporting the same dollars twice.
-      next_package_prepared_total: 0,
-      next_package_unprepared_total: 0,
-    };
-
-    for (const cl of visibleClients) {
-      const currentOwed = amountOwed(cl);
-      const prevOwed = previousOwed(cl);
-      const owed = currentOwed + prevOwed;
-      const r = visitsRemaining(cl);
-      c.all += 1;
-      if (owed > 0) {
-        const bucket = startBucketOf(cl);
-        c.payment_due += 1;
-        c.payment_due_total += owed;
-        const currentIsThisWeek = bucket ? bucket === "this" : isScheduledThisWeek(cl.id);
-        if (currentOwed > 0 && currentIsThisWeek) {
-          c.payment_due_this_week += 1;
-          c.payment_due_this_week_total += currentOwed;
-        }
-        // Old-package debt is always overdue; current debt is overdue only
-        // when there's no booking this week, none next week, and no future
-        // package start. Mirrors the row helper so each dollar lands once.
-        const currentIsNextWeek = bucket ? bucket === "next" : isScheduledNextWeek(cl.id);
-        const currentIsOverdue =
-          currentOwed > 0 && !bucket && !currentIsThisWeek && !currentIsNextWeek;
-        if (prevOwed > 0 || currentIsOverdue) {
-          c.overdue_prior_weeks += 1;
-          c.overdue_prior_weeks_total += prevOwed + (currentIsOverdue ? currentOwed : 0);
-        }
-
-        if (currentOwed > 0 && (bucket ? bucket === "next" : isScheduledNextWeek(cl.id))) {
-          c.payment_due_next_week += 1;
-          c.payment_due_next_week_total += currentOwed;
-        }
-      }
-
-      const forecast = renewalMap.get(cl.id);
-      if (forecast) {
-        // Prepared renewals are "handled" and leave the action queue, but
-        // their next-package money still counts in the weekly totals.
-        if (forecast.pre_renewed) {
-          c.renewal_scheduled += 1;
-          c.next_package_prepared_total += forecast.next_package_price;
-        } else {
-          c.needs_renewal += 1;
-          c.next_package_unprepared_total += forecast.next_package_price;
-        }
-        if (forecast.week_bucket === "this") {
-          c.next_package_this_week_total += forecast.next_package_price;
-        } else if (forecast.week_bucket === "next") {
-          c.next_package_next_week_total += forecast.next_package_price;
-        }
-      }
-
-
-      if (!isScheduled(cl.id)) c.not_scheduled += 1;
-      if (r !== null && r > 0 && r <= 2) c.almost_finished += 1;
-      if (owed > 0 && r !== null && r <= 2) {
-        c.critical += 1;
-        c.critical_total += owed;
-      }
-      if (r !== null && cl.package_total_visits > 0 && r === 0) {
-        c.package_complete += 1;
-      }
-      if (needsPackageReview(cl, dismissedIds, cl.id)) c.needs_package_review += 1;
-    }
-    return c;
-  }, [visibleClients, scheduledSet, thisWeekSet, nextWeekSet, carriedOverRecentMap, overduePriorMap, thisWeekEndYmd, nextWeekEndYmd, dismissedIds, renewalMap]);
-
-  const weeklyPaymentGroups = useMemo(() => {
-    if (filter !== "payment_due_this_week" && filter !== "payment_due_next_week") return null;
-    const bucket = filter === "payment_due_this_week" ? "this" : "next";
-    return groupWeeklyPayments(visibleClients, renewalMap, bucket, (client) => {
-      const owed = amountOwed(client);
-      const startBucket = startBucketOf(client);
-      const scheduledForWeek = bucket === "this"
-        ? isScheduledThisWeek(client.id)
-        : isScheduledNextWeek(client.id);
-      return owed > 0 && (startBucket ? startBucket === bucket : scheduledForWeek);
-    });
-  }, [filter, visibleClients, renewalMap, thisWeekSet, nextWeekSet, thisWeekEndYmd, nextWeekEndYmd]);
-
-
-  const filtered = useMemo(() => {
-    const list = visibleClients.filter((c) =>
-      matchesFilter(
-        c,
-        filter,
-        isScheduled(c.id),
-        isScheduledThisWeek(c.id),
-        isScheduledNextWeek(c.id),
-        isCarriedOver(c.id),
-        isOverduePrior(c.id),
-        startBucketOf(c),
-        needsPackageReview(c, dismissedIds, c.id),
-        renewalMap.has(c.id),
-        renewalMap.get(c.id)?.pre_renewed === true,
-      ),
-    );
-
-
-    const q = search.trim().toLowerCase();
-
-    const searched = q
-      ? list.filter((c) =>
-          `${c.first_name} ${c.last_name} ${c.phone ?? ""}`
-            .toLowerCase()
-            .includes(q),
-        )
-      : list;
-    // Sort: payment-due-ish filters by balance desc; others by name
-    if (
-      filter === "payment_due" ||
-      filter === "payment_due_this_week" ||
-      filter === "payment_due_next_week" ||
-      filter === "overdue_prior_weeks" ||
-      filter === "critical"
-    ) {
-      return [...searched].sort((a, b) => totalOwed(b) - totalOwed(a));
-    }
-    if (filter === "almost_finished") {
-      return [...searched].sort(
-        (a, b) => (visitsRemaining(a) ?? 0) - (visitsRemaining(b) ?? 0),
-      );
-    }
-    if (filter === "needs_renewal" || filter === "renewal_scheduled") {
-      // Soonest new-package start first.
-      return [...searched].sort((a, b) =>
-        (renewalMap.get(a.id)?.first_uncovered_ymd ?? "").localeCompare(
-          renewalMap.get(b.id)?.first_uncovered_ymd ?? "",
-        ),
-      );
-    }
-    return [...searched].sort((a, b) => fullName(a).localeCompare(fullName(b)));
-  }, [visibleClients, filter, search, scheduledSet, thisWeekSet, nextWeekSet, carriedOverRecentMap, overduePriorMap, thisWeekEndYmd, nextWeekEndYmd, renewalMap, dismissedIds]);
-
-  const reviewCountQuery = useQuery({
-    queryKey: ["square_payments_needs_review_count"],
-    queryFn: async () => {
-      const { count, error } = await supabase
+  const { count, error } = await supabase
         .from("square_payments")
         .select("id", { count: "exact", head: true })
         .eq("needs_review", true);
@@ -1095,34 +865,16 @@ function Dashboard() {
 
   return (
     <AppShell>
-      <div className="mb-4 flex flex-wrap items-end justify-between gap-3 md:mb-8">
+      <div className="mb-4 grid grid-cols-[minmax(0,1fr)_auto] items-end gap-3 md:mb-8">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">Today</h1>
+          <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">Dash</h1>
           <p className="mt-1 text-sm text-slate-500">
             {isLoading
               ? "Loading…"
               : `${visibleClients.length} shown · ${clients.length} total`}
           </p>
         </div>
-        <div className="flex w-full flex-wrap items-center gap-2 md:w-auto">
-          <label className="text-xs font-medium uppercase tracking-wide text-slate-500">
-            Status
-          </label>
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
-            className="h-11 flex-1 rounded-md border border-slate-300 bg-white px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-400 md:h-9 md:flex-none md:py-2"
-          >
-            {(Object.keys(STATUS_FILTER_LABEL) as StatusFilter[]).map((k) => (
-              <option key={k} value={k}>
-                {STATUS_FILTER_LABEL[k]}
-              </option>
-            ))}
-          </select>
-          <Link to="/clients/new" className="shrink-0">
-            <Button className="h-11 md:h-9">+ Add</Button>
-          </Link>
-        </div>
+        <Button asChild variant="outline" className="min-h-11"><Link to="/clients">Clients</Link></Button>
       </div>
 
 
@@ -1139,61 +891,9 @@ function Dashboard() {
           }}
         />
       )}
-      {!isStaff && (
-        <div className="mb-2 mt-6 flex items-center justify-between">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Admin Tools</h2>
-          <button type="button" onClick={() => setAdminToolsOpen((v) => !v)} className="text-xs font-medium underline-offset-2 hover:underline">
-            {adminToolsOpen ? "Hide admin tools" : "Show admin tools"}
-          </button>
-        </div>
-      )}
-      {(isStaff || adminToolsOpen) && (<>
-      {!isStaff && <AdminToolLinks />}
-      {/* Tiles */}
-      <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 lg:grid-cols-4 xl:grid-cols-7">
-        {visibleTiles.filter((t) => isStaff || t.key !== "new_clients").map((t) => (
-          <Tile
-            key={t.key}
-            tile={t}
-            hideMoney={true}
-            active={
-              t.key === "new_clients"
-                ? newClientsActive
-                : !t.href && filter === t.key
-            }
-            onClick={() => {
-              if (t.href) return;
-              if (t.key === "new_clients") {
-                setNewClientsMonth(currentClinicMonth());
-                setNewClientsActive(true);
-              } else {
-                setFilter(t.key as FilterKey);
-                setNewClientsActive(false);
-              }
-            }}
-            editing={showAllTiles}
-            hidden={hiddenTiles.has(t.key)}
-            onToggleHidden={() => toggleTileHidden(t.key)}
-          />
-        ))}
-      </div>
-      <div className="mb-6 flex justify-end md:mb-8">
-        <button
-          type="button"
-          onClick={() => setShowAllTiles((v) => !v)}
-          className="text-xs font-medium text-slate-500 underline-offset-2 hover:text-slate-800 hover:underline"
-        >
-          {showAllTiles
-            ? "Done customizing"
-            : hiddenCount > 0
-              ? `Show more tiles (${hiddenCount} hidden)`
-              : "Customize tiles"}
-        </button>
-      </div>
-      </>)}
-
-
-
+      <div className="my-6"><DashboardTodaySchedule /></div>
+      <div className="mb-6 grid grid-cols-2 gap-2 sm:grid-cols-4"><Button asChild variant="outline" className="min-h-11 whitespace-normal"><Link to="/schedule-check" search={{view:"worklists"}}>Scheduling Worklists</Link></Button><Button asChild variant="outline" className="min-h-11"><Link to="/follow-ups" search={{task:undefined}}>Follow-ups</Link></Button><Button asChild variant="outline" className="min-h-11"><Link to="/renewals">Renewals</Link></Button><Button asChild variant="outline" className="min-h-11"><Link to="/more">More</Link></Button></div>
+      <details className="mb-6 border-b pb-4"><summary className="cursor-pointer py-3 text-sm font-semibold">Client action queues</summary><div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">{visibleTiles.filter(t=>!t.href).map(t=><Tile key={t.key} tile={t} hideMoney={true} active={filter===t.key} onClick={()=>{setFilter(t.key as FilterKey);setNewClientsActive(false);}} editing={false} hidden={false} onToggleHidden={()=>{}} />)}</div></details>
       {/* New Clients per month — admin tile view */}
       {newClientsActive && (
         <NewClientsByMonthView

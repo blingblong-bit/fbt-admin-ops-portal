@@ -3,6 +3,7 @@ import { useServerFn } from '@tanstack/react-start';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { toast } from 'sonner';
+import { ScheduleNavigation } from '@/components/ScheduleNavigation';
 import { AppShell } from '@/components/AppShell';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -25,7 +26,8 @@ function FollowupsPage() {
   const [completed, setCompleted] = useState(false);
   const { task: selected } = Route.useSearch();
   const rows = (tasks.data ?? []).filter(t => selected ? t.id === selected : (t.status === 'completed') === completed);
-  return <AppShell><div className="mx-auto max-w-4xl space-y-6"><header className="flex flex-wrap items-center justify-between gap-3"><h1 className="text-2xl font-semibold">Scheduling Follow-ups</h1><div className="flex gap-2"><Button asChild variant="outline"><Link to="/schedule-check">Schedule Check</Link></Button><Button asChild variant="outline"><Link to="/notifications">Notifications</Link></Button></div></header>
+  return <AppShell><div className="mx-auto max-w-4xl space-y-6"><header className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 sm:flex sm:justify-between"><h1 className="text-2xl font-semibold">Follow-ups</h1></header>
+    <ScheduleNavigation />
     {!selected && <div className="flex gap-2"><Button variant={!completed ? 'default' : 'outline'} onClick={() => setCompleted(false)}>Open</Button><Button variant={completed ? 'default' : 'outline'} onClick={() => setCompleted(true)}>Completed</Button></div>}
     {selected && <Button asChild variant="outline"><Link to="/follow-ups" search={{ task: undefined }}>All follow-ups</Link></Button>}
     {tasks.isPending && <p role="status">Loading follow-ups…</p>}{(tasks.isError || settings.isError) && <p role="alert" className="text-destructive">Could not load scheduling follow-ups. Refresh to try again.</p>}

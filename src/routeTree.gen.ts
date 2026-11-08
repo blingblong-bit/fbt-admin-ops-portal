@@ -19,6 +19,7 @@ import { Route as AuthenticatedDuesTextsRouteImport } from './routes/_authentica
 import { Route as AuthenticatedFollowUpsRouteImport } from './routes/_authenticated/follow-ups'
 import { Route as AuthenticatedImportRouteImport } from './routes/_authenticated/import'
 import { Route as AuthenticatedMergeCenterRouteImport } from './routes/_authenticated/merge-center'
+import { Route as AuthenticatedMessagingRouteImport } from './routes/_authenticated/messaging'
 import { Route as AuthenticatedMessagingPreviewRouteImport } from './routes/_authenticated/messaging-preview'
 import { Route as AuthenticatedMissedCheckInsRouteImport } from './routes/_authenticated/missed-check-ins'
 import { Route as AuthenticatedNotesLedgerRouteImport } from './routes/_authenticated/notes-ledger'
@@ -101,6 +102,11 @@ const AuthenticatedMergeCenterRoute =
     path: '/merge-center',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedMessagingRoute = AuthenticatedMessagingRouteImport.update({
+  id: '/messaging',
+  path: '/messaging',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedMessagingPreviewRoute =
   AuthenticatedMessagingPreviewRouteImport.update({
     id: '/messaging-preview',
@@ -279,6 +285,7 @@ export interface FileRoutesByFullPath {
   '/follow-ups': typeof AuthenticatedFollowUpsRoute
   '/import': typeof AuthenticatedImportRoute
   '/merge-center': typeof AuthenticatedMergeCenterRoute
+  '/messaging': typeof AuthenticatedMessagingRoute
   '/messaging-preview': typeof AuthenticatedMessagingPreviewRoute
   '/missed-check-ins': typeof AuthenticatedMissedCheckInsRoute
   '/notes-ledger': typeof AuthenticatedNotesLedgerRoute
@@ -319,6 +326,7 @@ export interface FileRoutesByTo {
   '/follow-ups': typeof AuthenticatedFollowUpsRoute
   '/import': typeof AuthenticatedImportRoute
   '/merge-center': typeof AuthenticatedMergeCenterRoute
+  '/messaging': typeof AuthenticatedMessagingRoute
   '/messaging-preview': typeof AuthenticatedMessagingPreviewRoute
   '/missed-check-ins': typeof AuthenticatedMissedCheckInsRoute
   '/notes-ledger': typeof AuthenticatedNotesLedgerRoute
@@ -362,6 +370,7 @@ export interface FileRoutesById {
   '/_authenticated/follow-ups': typeof AuthenticatedFollowUpsRoute
   '/_authenticated/import': typeof AuthenticatedImportRoute
   '/_authenticated/merge-center': typeof AuthenticatedMergeCenterRoute
+  '/_authenticated/messaging': typeof AuthenticatedMessagingRoute
   '/_authenticated/messaging-preview': typeof AuthenticatedMessagingPreviewRoute
   '/_authenticated/missed-check-ins': typeof AuthenticatedMissedCheckInsRoute
   '/_authenticated/notes-ledger': typeof AuthenticatedNotesLedgerRoute
@@ -406,6 +415,7 @@ export interface FileRouteTypes {
     | '/follow-ups'
     | '/import'
     | '/merge-center'
+    | '/messaging'
     | '/messaging-preview'
     | '/missed-check-ins'
     | '/notes-ledger'
@@ -446,6 +456,7 @@ export interface FileRouteTypes {
     | '/follow-ups'
     | '/import'
     | '/merge-center'
+    | '/messaging'
     | '/messaging-preview'
     | '/missed-check-ins'
     | '/notes-ledger'
@@ -488,6 +499,7 @@ export interface FileRouteTypes {
     | '/_authenticated/follow-ups'
     | '/_authenticated/import'
     | '/_authenticated/merge-center'
+    | '/_authenticated/messaging'
     | '/_authenticated/messaging-preview'
     | '/_authenticated/missed-check-ins'
     | '/_authenticated/notes-ledger'
@@ -608,6 +620,13 @@ declare module '@tanstack/react-router' {
       path: '/merge-center'
       fullPath: '/merge-center'
       preLoaderRoute: typeof AuthenticatedMergeCenterRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/messaging': {
+      id: '/_authenticated/messaging'
+      path: '/messaging'
+      fullPath: '/messaging'
+      preLoaderRoute: typeof AuthenticatedMessagingRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/messaging-preview': {
@@ -831,6 +850,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedFollowUpsRoute: typeof AuthenticatedFollowUpsRoute
   AuthenticatedImportRoute: typeof AuthenticatedImportRoute
   AuthenticatedMergeCenterRoute: typeof AuthenticatedMergeCenterRoute
+  AuthenticatedMessagingRoute: typeof AuthenticatedMessagingRoute
   AuthenticatedMessagingPreviewRoute: typeof AuthenticatedMessagingPreviewRoute
   AuthenticatedMissedCheckInsRoute: typeof AuthenticatedMissedCheckInsRoute
   AuthenticatedNotesLedgerRoute: typeof AuthenticatedNotesLedgerRoute
@@ -860,6 +880,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedFollowUpsRoute: AuthenticatedFollowUpsRoute,
   AuthenticatedImportRoute: AuthenticatedImportRoute,
   AuthenticatedMergeCenterRoute: AuthenticatedMergeCenterRoute,
+  AuthenticatedMessagingRoute: AuthenticatedMessagingRoute,
   AuthenticatedMessagingPreviewRoute: AuthenticatedMessagingPreviewRoute,
   AuthenticatedMissedCheckInsRoute: AuthenticatedMissedCheckInsRoute,
   AuthenticatedNotesLedgerRoute: AuthenticatedNotesLedgerRoute,

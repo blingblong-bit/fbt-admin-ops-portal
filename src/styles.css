@@ -142,3 +142,12 @@
     color: var(--color-foreground);
   }
 }
+
+/* Persistent Hub navigation reserves the iPhone home indicator and focus space. */
+.hub-content { padding-bottom: calc(6rem + env(safe-area-inset-bottom)); overflow-wrap: anywhere; }
+.hub-bottom-nav { padding-bottom: env(safe-area-inset-bottom); }
+.hub-mobile-header { padding-top: max(0.75rem, env(safe-area-inset-top)); }
+html { scroll-padding-bottom: calc(6rem + env(safe-area-inset-bottom)); }
+.hub-shell :focus-visible { scroll-margin-bottom: calc(6rem + env(safe-area-inset-bottom)); }
+@media (min-width: 1024px) { .hub-content { padding-bottom: 2rem; } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; } }

@@ -24,23 +24,28 @@ import {
   formatCurrency,
   fullName,
   progress,
+  needsPackageReview,
   type Client,
   type LifecycleStatus,
 } from "@/lib/clients";
-import { getScheduledClientIds } from "@/lib/schedule.functions";
+import { getScheduleCheck, getRenewalForecast, getScheduledClientIds, type ScheduleAppointment } from "@/lib/schedule.functions";
+import { chicagoYmd } from "@/lib/work-week";
+import { hubHead } from "@/lib/hub-navigation";
+import { applyOverridesToRows, type PackageOverride } from "@/lib/package-override";
+import { getPackageSetupList } from "@/lib/package-setup.functions";
 import { useRole } from "@/hooks/useRole";
 import { usePackageReviewDismissedIds } from "@/components/PackageReviewBadge";
 
 
 export const Route = createFileRoute("/_authenticated/clients/")({
-  head: () => ({ meta: [{ title: "All Clients · FIT Beyond Therapy Admin" }] }),
+  head: () => hubHead("Clients", "Search clients and existing package, renewal and scheduling queues."),
   component: ClientsListPage,
 });
 
 type StatusFilter = "active_assessment" | "active" | "assessment" | "archived" | "deleted" | "all";
 
 const STATUS_FILTER_LABEL: Record<StatusFilter, string> = {
-  active_assessment: "Active + Assessment",
+  active_assessment: "All Active",
   active: "Active only",
   assessment: "Assessment only",
   archived: "Archived",
@@ -70,6 +75,14 @@ function ClientsListPage() {
   const dismissedIds = usePackageReviewDismissedIds().data ?? null;
   const [search, setSearch] = usePersistentState("clients:search", "");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("active_assessment");
+  const [view, setView] = useState("all");
+  const scheduleFn = useServerFn(getScheduleCheck);
+  const renewalFn = useServerFn(getRenewalForecast);
+  const setupFn = useServerFn(getPackageSetupList);
+  const today = chicagoYmd();
+  const schedule = useQuery({ queryKey: ["schedule-check", today], queryFn: () => scheduleFn({ data: { date: today } }), enabled: ["today", "week", "not_next", "not_scheduled"].includes(view), staleTime: 60_000 });
+  const renewals = useQuery({ queryKey: ["renewal-forecast"], queryFn: () => renewalFn(), enabled: view === "renewals", staleTime: 60_000 });
+  const setup = useQuery({ queryKey: ["renewal-forecast", "package-setup"], queryFn: () => setupFn(), enabled: view === "package", staleTime: 60_000 });
   const fetchScheduledIds = useServerFn(getScheduledClientIds);
   const scheduledQuery = useQuery({
     queryKey: ["scheduled-client-ids"],
@@ -81,7 +94,7 @@ function ClientsListPage() {
     [scheduledQuery.data],
   );
 
-  const { data: clients = [], isLoading } = useQuery({
+  const { data: clients = [], isLoading, error: clientError, refetch: retryClients } = useQuery({
     queryKey: ["clients", "all-with-deleted"],
     queryFn: async () => {
       // Paginate in 1000-row chunks to bypass PostgREST's default cap
@@ -101,15 +114,31 @@ function ClientsListPage() {
         if (page.length < pageSize) break;
         from += pageSize;
       }
-      return all;
+      const overrides = await supabase.from("package_overrides").select("*").is("cleared_at", null);
+      if (overrides.error) throw overrides.error;
+      return applyOverridesToRows(all, (overrides.data ?? []) as (PackageOverride & { client_id: string })[]);
     },
   });
 
+  const viewIds = useMemo(() => {
+    if (view === "renewals") return new Set(renewals.data?.rows.map(r => r.client_id) ?? []);
+    if (view === "package") return new Set([...clients.filter(c => needsPackageReview(c, dismissedIds, c.id)).map(c => c.id), ...(setup.data?.rows.map(r => r.client_id) ?? [])]);
+    const d = schedule.data;
+    const ids = (list: ScheduleAppointment[]) => new Set<string>(list.flatMap(a => a.client ? [a.client.id] : []));
+    if (view === "today") return ids(d?.selected_day ?? []);
+    if (view === "week") return ids(d?.this_week ?? []);
+    if (view === "not_next") { const next = ids(d?.next_week ?? []); return ids((d?.this_week ?? []).filter(a => a.client && !next.has(a.client.id))); }
+    if (view === "not_scheduled") return new Set([...(d?.worklists.not_scheduled ?? []), ...(d?.last_week_nothing_booked ?? []), ...(d?.not_scheduled_after ?? [])].map(c => c.id));
+    return null;
+  }, [view, clients, dismissedIds, setup.data, renewals.data, schedule.data]);
+  const viewBusy = (["today", "week", "not_next", "not_scheduled"].includes(view) && schedule.isPending) || (view === "renewals" && renewals.isPending) || (view === "package" && setup.isPending);
+  const viewError = (["today", "week", "not_next", "not_scheduled"].includes(view) && (schedule.error?.message || schedule.data?.error || schedule.data?.worklists.error)) || (view === "renewals" && (renewals.error?.message || renewals.data?.error)) || (view === "package" && (setup.error?.message || setup.data?.error));
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     const byStatus = clients.filter((c) => {
       if (statusFilter === "deleted") return c.deleted_at !== null;
       if (c.deleted_at !== null) return false;
+      if (viewIds && !viewIds.has(c.id)) return false;
       const eff = effectiveStatus(c, scheduledSet.has(c.id));
       return matchesStatusFilter(eff, statusFilter);
     });
@@ -118,25 +147,25 @@ function ClientsListPage() {
           `${c.first_name} ${c.last_name} ${c.phone ?? ""}`.toLowerCase().includes(q),
         )
       : byStatus;
-  }, [search, clients, statusFilter, scheduledSet]);
+  }, [search, clients, statusFilter, scheduledSet, viewIds]);
 
 
 
 
   return (
     <AppShell>
-      <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">All Clients</h1>
-          <p className="mt-1 text-sm text-slate-500">
+      <div className="mb-6 grid grid-cols-[minmax(0,1fr)_auto] items-end gap-3 sm:flex sm:justify-between">
+        <div className="min-w-0">
+          <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">Clients</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
             {isLoading ? "Loading…" : `${filtered.length} of ${clients.length}`}
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex min-w-0 flex-col gap-2 sm:flex-row">
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
-            className="h-11 rounded-md border border-slate-300 bg-white px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-400 md:h-9 md:py-2"
+            aria-label="Client status" className="h-11 w-36 rounded-md border border-input bg-background px-2 text-xs sm:w-auto sm:text-sm"
           >
             {(Object.keys(STATUS_FILTER_LABEL) as StatusFilter[]).map((k) => (
               <option key={k} value={k}>
@@ -145,15 +174,19 @@ function ClientsListPage() {
             ))}
           </select>
           <Link to="/clients/new">
-            <Button>+ Add Client</Button>
+            <Button className="min-h-11">+ Add Client</Button>
           </Link>
         </div>
       </div>
 
 
-      <div className="sticky top-0 z-20 -mx-4 mb-3 border-b bg-slate-50/95 px-4 py-2 backdrop-blur md:hidden">
+      <div className="mb-4"><label htmlFor="clients-view" className="mb-1 block text-xs font-medium text-muted-foreground">Client filter</label><select id="clients-view" value={view} onChange={e => setView(e.target.value)} className="h-11 w-full rounded-md border border-input bg-background px-3 text-sm sm:max-w-sm">{[["all","All Active"],["package","Needs Package Info"],["renewals","Renewals"],["today","Scheduled Today"],["week","Scheduled This Week"],["not_next","This Week but Not Next"],["not_scheduled","Not Scheduled"]].map(([key,label]) => <option key={key} value={key}>{label}</option>)}</select></div>
+      {clientError && <p role="alert" className="mb-4 text-destructive">Clients could not load. <Button variant="outline" onClick={() => retryClients()}>Retry</Button></p>}
+      {viewError && <p role="alert" className="mb-4 text-destructive">Could not fully read this filter: {viewError} <Button variant="outline" onClick={() => { schedule.refetch(); renewals.refetch(); setup.refetch(); }}>Retry</Button></p>}
+      {(viewBusy || isLoading) && <p role="status" className="mb-4 text-muted-foreground">Loading clients…</p>}
+      <div className="sticky top-0 z-20 -mx-4 mb-3 border-b bg-background/95 px-4 py-2 backdrop-blur md:hidden">
         <Input
-          placeholder="Search clients…"
+          aria-label="Search clients" placeholder="Search clients…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="h-11 text-base"
@@ -170,13 +203,13 @@ function ClientsListPage() {
               key={c.id}
               to="/clients/$id"
               params={{ id: c.id }}
-              className="block rounded-xl border bg-white p-4 shadow-sm active:bg-slate-50"
+              className="block rounded-md border bg-background p-4 shadow-sm active:bg-muted"
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-base font-semibold">{fullName(c)}</div>
                   {c.phone && (
-                    <div className="mt-0.5 truncate text-sm text-slate-500">📞 {c.phone}</div>
+                    <div className="mt-0.5 truncate text-sm text-muted-foreground">📞 {c.phone}</div>
                   )}
                 </div>
                 <StatusBadge
@@ -186,18 +219,18 @@ function ClientsListPage() {
                 />
               </div>
               <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1.5 text-sm">
-                <div className="text-slate-500">Package</div>
-                <div className="text-right text-slate-800 truncate">{c.package_name ?? "—"}</div>
-                <div className="text-slate-500">Visits</div>
-                <div className="text-right text-slate-800">{progress(c)}</div>
-                <div className="text-slate-500">Scheduled</div>
+                <div className="text-muted-foreground">Package</div>
+                <div className="text-right text-foreground truncate">{c.package_name ?? "—"}</div>
+                <div className="text-muted-foreground">Visits</div>
+                <div className="text-right text-foreground">{progress(c)}</div>
+                <div className="text-muted-foreground">Scheduled</div>
                 <div className="text-right">{scheduledSet.has(c.id) ? "✅" : "⭕"}</div>
                 {!isStaff && (
                   <>
-                    <div className="text-slate-500">Owed</div>
+                    <div className="text-muted-foreground">Owed</div>
                     <div
                       className={`text-right font-semibold ${
-                        priceUnknown ? "text-amber-800" : owed > 0 ? "text-red-600" : "text-slate-700"
+                        priceUnknown ? "text-amber-800" : owed > 0 ? "text-red-600" : "text-foreground"
                       }`}
                     >
                       {priceUnknown ? "Package info needed" : formatCurrency(owed)}
@@ -208,8 +241,8 @@ function ClientsListPage() {
             </Link>
           );
         })}
-        {filtered.length === 0 && (
-          <div className="rounded-lg border border-dashed bg-white p-6 text-center text-sm text-slate-500">
+        {filtered.length === 0 && !isLoading && !viewBusy && !clientError && !viewError && (
+          <div className="rounded-lg border border-dashed bg-background p-6 text-center text-sm text-muted-foreground">
             No clients found.
           </div>
         )}
@@ -219,7 +252,7 @@ function ClientsListPage() {
       <Card className="hidden md:block">
         <CardContent className="pt-6">
           <Input
-            placeholder="Search…"
+            aria-label="Search clients" placeholder="Search…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="mb-4 max-w-md"
@@ -285,9 +318,9 @@ function ClientsListPage() {
                     </TableCell>
                   </TableRow>
                 ))}
-                {filtered.length === 0 && (
+                {filtered.length === 0 && !isLoading && !viewBusy && !clientError && !viewError && (
                   <TableRow>
-                    <TableCell colSpan={8} className="py-10 text-center text-sm text-slate-500">
+                    <TableCell colSpan={8} className="py-10 text-center text-sm text-muted-foreground">
                       No clients found.
                     </TableCell>
                   </TableRow>

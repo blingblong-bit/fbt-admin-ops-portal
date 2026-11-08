@@ -40,7 +40,7 @@ export function AdminPrimaryAreas({
 
   return (
     <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-      <Link to="/collections" className="rounded-xl border bg-card p-4 shadow-sm transition hover:border-primary">
+      <Link to="/collections" className="rounded-md border bg-card p-4 shadow-sm transition hover:border-primary">
         <div className="flex items-center gap-2 font-semibold"><Wallet className="h-5 w-5" /> Collections</div>
         <dl className="mt-3 grid grid-cols-2 gap-2 text-sm">
           <Stat label="This Week" value={money(col?.totals.thisWeekAll.dollars)} />
@@ -49,7 +49,7 @@ export function AdminPrimaryAreas({
           <Stat label="Master total" value={money(col?.totals.masterTotal)} />
         </dl>
       </Link>
-      <Link to="/renewals" className="rounded-xl border bg-card p-4 shadow-sm transition hover:border-primary">
+      <Link to="/renewals" className="rounded-md border bg-card p-4 shadow-sm transition hover:border-primary">
         <div className="flex items-center gap-2 font-semibold"><RefreshCw className="h-5 w-5" /> Renewals</div>
         <dl className="mt-3 grid grid-cols-3 gap-2 text-sm">
           <Stat label="Needs Renewal" value={String(ren.needs.length)} />
@@ -60,7 +60,7 @@ export function AdminPrimaryAreas({
       <button
         type="button"
         onClick={onNewClients}
-        className={`rounded-xl border bg-card p-4 text-left shadow-sm transition hover:border-primary ${newClientsActive ? "border-primary" : ""}`}
+        className={`rounded-md border bg-card p-4 text-left shadow-sm transition hover:border-primary ${newClientsActive ? "border-primary" : ""}`}
       >
         <div className="flex items-center gap-2 font-semibold"><UserPlus className="h-5 w-5" /> New Clients</div>
         <div className="mt-3 text-2xl font-semibold">{newClientsCount}</div>
@@ -79,35 +79,4 @@ function Stat({ label, value }: { label: string; value: string }) {
   );
 }
 
-const TOOL_LINKS = [
-  ["/payment-due", "Payment Due ledger"],
-  ["/weekly-dues", "Weekly Dues"],
-  ["/payment-history", "Payment History"],
-  ["/missed-check-ins", "Missed Check-ins"],
-  ["/renewal-review", "Renewal Review"],
-  ["/schedule-check", "Schedule Check"],
-  ["/dues-texts", "Dues Texts"],
-  ["/dues-queue", "Send Dues Message"],
-  ["/messaging-preview", "Messaging Preview"],
-  ["/visit-note-review", "Visit Note Review"],
-  ["/visit-automation-review", "Visit Automation"],
-  ["/merge-center", "Merge Center"],
-  ["/notes-ledger", "Notes Ledger"],
-  ["/import", "Import"],
-  ["/backup", "Backup"],
-  ["/sync-log", "Sync Log"],
-  ["/square-diagnostic", "Square Diagnostic"],
-  ["/clients/deleted", "Deleted Clients"],
-] as const;
-
-export function AdminToolLinks() {
-  return (
-    <div className="mb-3 flex flex-wrap gap-2">
-      {TOOL_LINKS.map(([to, label]) => (
-        <Link key={to} to={to} className="rounded-md border bg-card px-3 py-1.5 text-xs font-medium hover:border-primary">
-          {label}
-        </Link>
-      ))}
-    </div>
-  );
-}
+export function AdminToolLinks() { return <Link to="/more" className="text-sm font-medium underline">More administration tools</Link>; }

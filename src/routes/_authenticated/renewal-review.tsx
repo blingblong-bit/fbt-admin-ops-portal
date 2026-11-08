@@ -1,3 +1,4 @@
+import { hubHead } from "@/lib/hub-navigation";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -8,7 +9,7 @@ import { formatDateTimeLocal } from "@/lib/clients";
 import { toast } from "@/components/ui/sonner";
 
 export const Route = createFileRoute("/_authenticated/renewal-review")({
-  head: () => ({ meta: [{ title: "Renewal Review · FIT Beyond Therapy Admin" }] }),
+  head: () => hubHead("Renewal Review", "Review existing renewal responses and follow-up history."),
   component: RenewalReviewPage,
 });
 

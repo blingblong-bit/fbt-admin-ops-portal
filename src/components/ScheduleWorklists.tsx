@@ -17,8 +17,9 @@ import {
   type WorklistRow,
 } from "@/lib/schedule.functions";
 
-type Key = "package_completed" | "not_scheduled" | "only_once" | "hidden";
+type Key = "last_week" | "package_completed" | "not_scheduled" | "only_once" | "hidden";
 const TABS: { key: Key; label: string; help: string }[] = [
+  { key: "last_week", label: "Last Visit Last Week — Nothing Booked", help: "Last week’s visitors with nothing booked." },
   { key: "package_completed", label: "Package Completed", help: "Package used up recently — reschedule or review renewal." },
   { key: "not_scheduled", label: "Not Scheduled", help: "No future Square booking; seen in the last 60 days or has a new package." },
   { key: "only_once", label: "Only Once This Week", help: "Exactly one appointment in this work week." },
@@ -29,11 +30,13 @@ const fmt = (iso: string | null) => (iso ? formatDate(iso.slice(0, 10)) : "—")
 
 type Moves = Record<string, "hidden" | "restored">;
 
-export function ScheduleWorklists({ data: serverData, filter }: { data: ScheduleCheckResult["worklists"] | undefined; filter: string }) {
+export function ScheduleWorklists({ data: sourceData, filter, lastWeek = [] }: { data: ScheduleCheckResult["worklists"] | undefined; filter: string; lastWeek?: WorklistRow[] }) {
+  const serverData = useMemo(() => sourceData ? { ...sourceData, last_week: lastWeek } : undefined, [sourceData, lastWeek]);
   const [tab, setTab] = useState<Key>("not_scheduled");
   const [q, setQ] = useState("");
   const [limit, setLimit] = useState(100);
   const [collapsed, setCollapsed] = useState<Record<Key, boolean>>({
+    last_week: true,
     package_completed: true,
     not_scheduled: true,
     only_once: true,
@@ -41,10 +44,10 @@ export function ScheduleWorklists({ data: serverData, filter }: { data: Schedule
   });
   // Instant feedback: move rows locally on Hide/Restore; fresh server data replaces this.
   const [moves, setMoves] = useState<Moves>({});
-  useEffect(() => { setMoves({}); }, [serverData]);
+  useEffect(() => { setMoves({}); }, [sourceData]);
   const data = useMemo(() => {
     if (!serverData || Object.keys(moves).length === 0) return serverData;
-    const keys: Key[] = ["package_completed", "not_scheduled", "only_once", "hidden"];
+    const keys: Key[] = ["last_week", "package_completed", "not_scheduled", "only_once", "hidden"];
     const all = new Map<string, WorklistRow>();
     keys.forEach((k) => serverData[k].forEach((r) => all.set(r.id, r)));
     const out = { ...serverData } as typeof serverData;
@@ -65,31 +68,31 @@ export function ScheduleWorklists({ data: serverData, filter }: { data: Schedule
   }, [data, tab, term]);
 
   return (
-    <Card>
-      <CardHeader>
+    <section className="min-w-0">
+      <div className="py-3">
         <CardTitle>Scheduling Worklists</CardTitle>
-        <CardDescription>Each client appears in one list only. Read from Square; nothing is changed in Square.</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-3">
+        <CardDescription></CardDescription>
+      </div>
+      <div className="space-y-3">
         {data?.error && (
           <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">{data.error}</div>
         )}
         <Tabs value={tab} onValueChange={(v) => setTab(v as Key)}>
-          <TabsList className="flex h-auto flex-wrap justify-start">
+          <TabsList className="grid h-auto w-full grid-cols-2 gap-1 sm:grid-cols-3">
             {TABS.map((t) => (
-              <TabsTrigger key={t.key} value={t.key} className="min-h-10">
+              <TabsTrigger key={t.key} value={t.key} className="min-h-12 min-w-0 whitespace-normal px-1 text-xs text-left sm:text-sm">
                 {t.label} ({data?.[t.key].length ?? 0})
               </TabsTrigger>
             ))}
           </TabsList>
           {TABS.map((t) => (
             <TabsContent key={t.key} value={t.key} className="space-y-2">
-              <div className="flex items-start justify-between gap-2">
+              <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-2">
                 <p className="text-xs text-muted-foreground">{t.help}</p>
                 <Button
                   size="sm"
                   variant="outline"
-                  className="h-8 shrink-0"
+                  className="min-h-11 shrink-0"
                   aria-expanded={!collapsed[t.key]}
                   onClick={() => setCollapsed((c) => ({ ...c, [t.key]: !c[t.key] }))}
                 >
@@ -125,8 +128,8 @@ export function ScheduleWorklists({ data: serverData, filter }: { data: Schedule
             </TabsContent>
           ))}
         </Tabs>
-      </CardContent>
-    </Card>
+      </div>
+    </section>
   );
 }
 
@@ -147,7 +150,7 @@ function Row({ r, tab, onMoved, onFailed }: { r: WorklistRow; tab: Key; onMoved:
     onError: (e) => { onFailed(); toast.error((e as Error).message); },
   });
   return (
-    <li className="flex flex-col gap-2 p-3 md:flex-row md:items-center md:justify-between">
+    <li data-action-client={r.id} className="flex flex-col gap-2 p-3 md:flex-row md:items-center md:justify-between">
       <div className="min-w-0 space-y-0.5">
         <div className="font-medium">
           {r.first_name} {r.last_name}
@@ -163,7 +166,7 @@ function Row({ r, tab, onMoved, onFailed }: { r: WorklistRow; tab: Key; onMoved:
           {r.next_appointment_at && <> · Next {fmt(r.next_appointment_at)}</>}
         </div>
         {r.reasons.map((x) => (
-          <div key={x} className="text-xs text-amber-700">{x}</div>
+          <div key={x} className="text-xs text-muted-foreground">{x}</div>
         ))}
       </div>
       <div className="flex shrink-0 flex-wrap gap-2">

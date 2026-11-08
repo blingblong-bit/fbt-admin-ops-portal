@@ -3,6 +3,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "@/components/ui/sonner";
+import { DuesQueueContent } from "./dues-queue";
+import { MessagingPreviewContent } from "./messaging-preview";
 import { AppShell } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -139,6 +141,7 @@ function DuesTextsPage() {
     send.mutate(id);
   };
 
+  const [location, setLocation] = useState("board");
   const data = board.data;
 
   return (
@@ -154,14 +157,11 @@ function DuesTextsPage() {
         <Button onClick={() => generate.mutate()} disabled={generate.isPending}>
           {generate.isPending ? "Refreshing…" : "Refresh Drafts"}
         </Button>
-        <Link to="/dues-queue" className="text-sm font-medium text-slate-600 underline">
-          Send Dues Message queue
-        </Link>
-        <Link to="/messaging-preview" className="text-sm font-medium text-slate-600 underline">
-          Messaging Preview
-        </Link>
       </div>
 
+      <div role="group" aria-label="Dues Texts views" className="mb-5 grid grid-cols-3 gap-1 rounded-md bg-muted p-1">{[["board","Dues & delivery"],["preview","Preview"],["queue","Send queue"]].map(([key,label]) => <Button key={key} variant={location===key?"default":"ghost"} aria-pressed={location===key} className="min-h-11 whitespace-normal px-1 text-xs sm:text-sm" onClick={()=>setLocation(key)}>{label}</Button>)}</div>
+      {location === "preview" ? <MessagingPreviewContent /> : location === "queue" ? <DuesQueueContent /> : <>
+      {board.isError && <p role="alert" className="text-destructive">Dues texts could not load. <Button variant="outline" onClick={()=>board.refetch()}>Retry</Button></p>}
       {board.isLoading || !data ? (
         <p className="text-sm text-slate-500">Loading…</p>
       ) : (
@@ -318,6 +318,7 @@ function DuesTextsPage() {
           </Section>
         </>
       )}
+      </>}
     </AppShell>
   );
 }

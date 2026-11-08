@@ -45,7 +45,7 @@ export const Route = createFileRoute("/_authenticated/dues-queue")({
   component: DuesQueuePage,
 });
 
-function DuesQueuePage() {
+export function DuesQueueContent() {
   const qc = useQueryClient();
   const queueFn = useServerFn(getDuesQueue);
   const flagFn = useServerFn(getMessagingFlag);
@@ -72,7 +72,7 @@ function DuesQueuePage() {
   const rows = queue.data?.rows ?? [];
 
   return (
-    <AppShell>
+    <div>
       <h1 className="mb-1 text-2xl font-semibold tracking-tight">Send Dues Message</h1>
       <p className="mb-4 text-sm text-slate-500">
         Package clients who currently owe money. Messages are drafted only.
@@ -83,8 +83,8 @@ function DuesQueuePage() {
         <Button onClick={() => generate.mutate()} disabled={generate.isPending}>
           {generate.isPending ? "Refreshing…" : "Generate / Refresh Drafts"}
         </Button>
-        <Link to="/messaging-preview" className="text-sm font-medium text-slate-600 underline">
-          Messaging Preview
+        <Link to="/dues-texts" className="text-sm font-medium text-slate-600 underline">
+          Dues Texts
         </Link>
       </div>
 
@@ -170,6 +170,8 @@ function DuesQueuePage() {
           )}
         </DialogContent>
       </Dialog>
-    </AppShell>
+    </div>
   );
 }
+
+function DuesQueuePage() { return <AppShell><DuesQueueContent /></AppShell>; }

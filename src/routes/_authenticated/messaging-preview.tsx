@@ -30,7 +30,7 @@ export const Route = createFileRoute("/_authenticated/messaging-preview")({
   component: MessagingPreviewPage,
 });
 
-function MessagingPreviewPage() {
+export function MessagingPreviewContent() {
   const qc = useQueryClient();
   const flagFn = useServerFn(getMessagingFlag);
   const listFn = useServerFn(listDuesMessages);
@@ -55,7 +55,7 @@ function MessagingPreviewPage() {
   });
 
   return (
-    <AppShell>
+    <div>
       <h1 className="mb-1 text-2xl font-semibold tracking-tight">Messaging Preview</h1>
       <p className="mb-4 text-sm text-slate-500">
         Every drafted dues message, newest first. Nothing is sent.
@@ -80,6 +80,8 @@ function MessagingPreviewPage() {
           )}
         </CardContent>
       </Card>
-    </AppShell>
+    </div>
   );
 }
+
+function MessagingPreviewPage() { return <AppShell><MessagingPreviewContent /></AppShell>; }

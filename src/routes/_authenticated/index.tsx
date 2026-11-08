@@ -1,3 +1,4 @@
+import { DashboardTodaySchedule } from "@/components/DashboardTodaySchedule";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -64,7 +65,6 @@ import {
 import { getDuesTextsBoard } from "@/lib/dues-messaging.functions";
 import { getVisitNoteReview } from "@/lib/visit-note-review.functions";
 import { getVisitAutomationReview } from "@/lib/visit-automation-review.functions";
-import { autofillPackagesFromSquare } from "@/lib/package-autofill.functions";
 import type { ScheduleStatus } from "@/components/SmartClientCard";
 import { useRole } from "@/hooks/useRole";
 import { useDuesFreshness } from "@/components/DuesFreshnessBanner";
@@ -462,24 +462,6 @@ function Dashboard() {
   // package info (price left blank, flagged for review). Runs once per
   // dashboard visit for staff; idempotent on the server.
   const queryClient = useQueryClient();
-  const autofillRan = useRef(false);
-  useEffect(() => {
-    // Runs for every signed-in role (staff, admin, owner).
-    if (autofillRan.current) return;
-    autofillRan.current = true;
-    autofillPackagesFromSquare()
-      .then((r) => {
-        if (r?.ok && (r.filled?.length ?? 0) > 0) {
-          invalidateFor(queryClient, "package-edited");
-        }
-      })
-      .catch(() => {});
-  }, [isStaff, queryClient]);
-
-
-
-
-
   const [search, setSearch] = usePersistentState("dash:search", "");
   // Staff never see the payment-due (aggregate) list — default to "all" instead.
   const [filter, setFilter] = usePersistentState<FilterKey>("dash:filter", isStaff ? "all" : "payment_due");
@@ -691,7 +673,7 @@ function Dashboard() {
   const reviewCountQuery = useQuery({
     queryKey: ["square_payments_needs_review_count"],
     queryFn: async () => {
-      const { count, error } = await supabase
+  const { count, error } = await supabase
         .from("square_payments")
         .select("id", { count: "exact", head: true })
         .eq("needs_review", true);
@@ -1095,34 +1077,16 @@ function Dashboard() {
 
   return (
     <AppShell>
-      <div className="mb-4 flex flex-wrap items-end justify-between gap-3 md:mb-8">
+      <div className="mb-4 grid grid-cols-[minmax(0,1fr)_auto] items-end gap-3 md:mb-8">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">Today</h1>
+          <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">Dash</h1>
           <p className="mt-1 text-sm text-slate-500">
             {isLoading
               ? "Loading…"
               : `${visibleClients.length} shown · ${clients.length} total`}
           </p>
         </div>
-        <div className="flex w-full flex-wrap items-center gap-2 md:w-auto">
-          <label className="text-xs font-medium uppercase tracking-wide text-slate-500">
-            Status
-          </label>
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
-            className="h-11 flex-1 rounded-md border border-slate-300 bg-white px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-400 md:h-9 md:flex-none md:py-2"
-          >
-            {(Object.keys(STATUS_FILTER_LABEL) as StatusFilter[]).map((k) => (
-              <option key={k} value={k}>
-                {STATUS_FILTER_LABEL[k]}
-              </option>
-            ))}
-          </select>
-          <Link to="/clients/new" className="shrink-0">
-            <Button className="h-11 md:h-9">+ Add</Button>
-          </Link>
-        </div>
+        <Button asChild variant="outline" className="min-h-11"><Link to="/clients">Clients</Link></Button>
       </div>
 
 
@@ -1139,61 +1103,9 @@ function Dashboard() {
           }}
         />
       )}
-      {!isStaff && (
-        <div className="mb-2 mt-6 flex items-center justify-between">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Admin Tools</h2>
-          <button type="button" onClick={() => setAdminToolsOpen((v) => !v)} className="text-xs font-medium underline-offset-2 hover:underline">
-            {adminToolsOpen ? "Hide admin tools" : "Show admin tools"}
-          </button>
-        </div>
-      )}
-      {(isStaff || adminToolsOpen) && (<>
-      {!isStaff && <AdminToolLinks />}
-      {/* Tiles */}
-      <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 lg:grid-cols-4 xl:grid-cols-7">
-        {visibleTiles.filter((t) => isStaff || t.key !== "new_clients").map((t) => (
-          <Tile
-            key={t.key}
-            tile={t}
-            hideMoney={true}
-            active={
-              t.key === "new_clients"
-                ? newClientsActive
-                : !t.href && filter === t.key
-            }
-            onClick={() => {
-              if (t.href) return;
-              if (t.key === "new_clients") {
-                setNewClientsMonth(currentClinicMonth());
-                setNewClientsActive(true);
-              } else {
-                setFilter(t.key as FilterKey);
-                setNewClientsActive(false);
-              }
-            }}
-            editing={showAllTiles}
-            hidden={hiddenTiles.has(t.key)}
-            onToggleHidden={() => toggleTileHidden(t.key)}
-          />
-        ))}
-      </div>
-      <div className="mb-6 flex justify-end md:mb-8">
-        <button
-          type="button"
-          onClick={() => setShowAllTiles((v) => !v)}
-          className="text-xs font-medium text-slate-500 underline-offset-2 hover:text-slate-800 hover:underline"
-        >
-          {showAllTiles
-            ? "Done customizing"
-            : hiddenCount > 0
-              ? `Show more tiles (${hiddenCount} hidden)`
-              : "Customize tiles"}
-        </button>
-      </div>
-      </>)}
-
-
-
+      <div className="my-6"><DashboardTodaySchedule /></div>
+      <div className="mb-6 grid grid-cols-2 gap-2 sm:grid-cols-4"><Button asChild variant="outline" className="min-h-11 whitespace-normal"><Link to="/schedule-check" search={{view:"worklists"}}>Scheduling Worklists</Link></Button><Button asChild variant="outline" className="min-h-11"><Link to="/follow-ups" search={{task:undefined}}>Follow-ups</Link></Button><Button asChild variant="outline" className="min-h-11"><Link to="/clients/new">Add Client</Link></Button><Button asChild variant="outline" className="min-h-11"><Link to="/more">More</Link></Button></div>
+      <details className="mb-6 border-b pb-4"><summary className="cursor-pointer py-3 text-sm font-semibold">Client action queues</summary><div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">{visibleTiles.filter(t=>!t.href).map(t=><Tile key={t.key} tile={t} hideMoney={true} active={filter===t.key} onClick={()=>{setFilter(t.key as FilterKey);setNewClientsActive(false);}} editing={false} hidden={false} onToggleHidden={()=>{}} />)}</div></details>
       {/* New Clients per month — admin tile view */}
       {newClientsActive && (
         <NewClientsByMonthView

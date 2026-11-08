@@ -1,3 +1,4 @@
+import { hubHead } from "@/lib/hub-navigation";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
@@ -13,7 +14,7 @@ import { formatCurrency } from "@/lib/clients";
 import { invalidateFor } from "@/lib/invalidation";
 
 export const Route = createFileRoute("/_authenticated/clients/new")({
-  head: () => ({ meta: [{ title: "Add Client · FIT Beyond Therapy Admin" }] }),
+  head: () => hubHead("Add Client", "Create a client through the existing staff management workflow."),
   component: AddClientPage,
 });
 

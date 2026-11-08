@@ -1,3 +1,4 @@
+import { hubHead } from "@/lib/hub-navigation";
 import { createFileRoute } from "@tanstack/react-router";
 import { requireAdmin } from "@/lib/require-admin";
 import { useServerFn } from "@tanstack/react-start";
@@ -190,7 +191,7 @@ function downloadMigrationAuditCsv(
 
 export const Route = createFileRoute("/_authenticated/notes-ledger")({
   beforeLoad: requireAdmin,
-  head: () => ({ meta: [{ title: "Notes Ledger Import · FBT Admin" }] }),
+  head: () => hubHead("Notes Ledger", "Authorized legacy notes ledger and import history."),
   component: NotesLedgerPage,
 });
 

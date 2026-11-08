@@ -691,26 +691,8 @@ export const getScheduleCheck = createServerFn({ method: "GET" })
           todayYmd,
           hide,
         );
-        if (hide && r.clearPin) {
-          await context.supabase
-            .from("schedule_hides")
-            .update({ cleared_at: nowIso, clear_reason: r.clearPin, auto_cleared: true })
-            .eq("id", hide.id)
-            .is("cleared_at", null);
-        }
-        if (hide && r.clearHide) {
-          // Only the hide record changes — never the client, package or booking.
-          await context.supabase
-            .from("schedule_hides")
-            .update({ cleared_at: nowIso, clear_reason: r.clearHide, auto_cleared: true })
-            .eq("id", hide.id)
-            .is("cleared_at", null);
-          await context.supabase.from("client_activities").insert({
-            client_id: c.id,
-            activity_type: "schedule_hide_cleared",
-            description: `Schedule Check hide cleared automatically: ${r.clearHide}`,
-          });
-        }
+        // Reactivation is derived from new activity at read time. Keep the
+        // original hide/pin audit evidence; reads and refreshes write nothing.
         if (!r.list) continue;
         const row: WorklistRow = {
           ...c,
@@ -738,21 +720,6 @@ export const getScheduleCheck = createServerFn({ method: "GET" })
       );
     } catch (e) {
       worklists.error = `Square history unavailable — worklists not built, nothing hidden (${(e as Error).message})`;
-    }
-
-    // Log the check (best-effort, never throws)
-    try {
-      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-      await supabaseAdmin.from("square_sync_log").insert({
-        event_type: "schedule.check",
-        status: error ? "error" : "success",
-        action: "schedule_check",
-        message: error
-          ? `Schedule check ${data.date} failed: ${error}`
-          : `Schedule check ${data.date}: ${bookings.length} bookings, ${unmatched.length} unmatched`,
-      });
-    } catch {
-      // ignore logging errors
     }
 
     return {

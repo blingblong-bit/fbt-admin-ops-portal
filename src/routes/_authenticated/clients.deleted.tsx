@@ -1,3 +1,4 @@
+import { hubHead } from "@/lib/hub-navigation";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { requireAdmin } from "@/lib/require-admin";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -28,7 +29,7 @@ import { invalidateFor } from "@/lib/invalidation";
 
 export const Route = createFileRoute("/_authenticated/clients/deleted")({
   beforeLoad: requireAdmin,
-  head: () => ({ meta: [{ title: "Deleted Clients · FIT Beyond Therapy Admin" }] }),
+  head: () => hubHead("Deleted Clients", "Authorized deleted-client review and restoration."),
   component: DeletedClientsPage,
 });
 

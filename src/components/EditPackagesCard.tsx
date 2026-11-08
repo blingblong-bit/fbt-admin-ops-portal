@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "@/components/ui/sonner";
@@ -43,12 +43,14 @@ export function EditPackagesCard({ client, onDone, editRequest }: { client: Clie
   const [slot, setSlot] = useState<OverrideSlot | null>(null);
   const [form, setForm] = useState<Form | null>(null);
   const [reason, setReason] = useState("");
+  const openedRequest = useRef<number | null>(null);
   const current = slot ? overrides.find((o) => o.slot === slot) : undefined;
 
   const open = (sl: OverrideSlot) => { setSlot(sl); setForm(startForm(client, sl, overrides.find((o) => o.slot === sl))); setReason(""); };
   const close = () => { setSlot(null); setForm(null); };
   useEffect(() => {
-    if (!editRequest || !q.data) return;
+    if (!editRequest || !q.data || openedRequest.current === editRequest.key) return;
+    openedRequest.current = editRequest.key;
     const sl = editRequest.slot;
     setSlot(sl);
     setForm(startForm(client, sl, q.data.find((o) => o.slot === sl)));

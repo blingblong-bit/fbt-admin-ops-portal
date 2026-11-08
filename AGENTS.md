@@ -35,5 +35,5 @@
 - Scheduling follow-ups use separate RLS tables and audited RPCs; they never alter classification, hides, Square or financial state. Push claims are unique per task revision/device/Chicago day, rechecked before send, with a private independent cron bearer. The messaging-only worker has no fetch/cache handlers; VAPID private keys are encrypted server-side and never returned to clients.
 
 - Hub navigation uses one shared five-section mapping for mobile tabs and desktop sidebar so preserved detail/task links select the same section.
-- Scheduling queue presentation only regroups existing Square/worklist memberships; week-scoped outreach waits on a linked open owned/due task, never on a contact marker alone.
+- Scheduling queue presentation only regroups existing Square/worklist memberships; week-scoped contact markers mean waiting, reminders are optional and retain due priority. Contact undo preserves the activity and original actor as `contacted_undone` so existing active-marker reads stay compatible.
 - Schedule reads derive hide/pin reactivation without deleting stored audit state or writing sync logs; explicit staff actions remain audited writes.

@@ -14,6 +14,7 @@ import { decideSquareActivation } from "@/lib/square-activation";
 import { buildSequence, detectNoteIssues } from "@/lib/square-visit-audit";
 import { chicagoYmd, workWeekStartFromYmd } from "@/lib/work-week";
 import type { RenewalForecastRow } from "@/lib/schedule.functions";
+import { preparedEditGuard } from "./prepared-renewal-edit";
 
 export type ForecastBooking = { id: string; start_at?: string | null; status?: string | null; seller_note?: string | null; customer_note?: string | null };
 
@@ -80,6 +81,13 @@ export function buildRenewalForecastRows(i: {
     const pendingPrice = r.pending_renewal_price === null || r.pending_renewal_price === undefined ? null : Number(r.pending_renewal_price);
     return {
       package_price: basePrice,
+      pending_price: pendingPrice ?? (override ?? basePrice),
+      pending_recognized_paid: Number(r.pending_renewal_paid ?? 0),
+      preparation_reconciliation: preparedEditGuard({
+        prepaid: Number(r.pending_renewal_paid ?? 0), gate: r.pending_renewal_start_date,
+        bookings: live(bookingsOf(r)), nowIso,
+        hasPendingOverride: i.overrides.some((o) => o.client_id === r.id && o.slot === "pending"),
+      }),
       next_package_price:
         pendingPrice !== null
           ? renewalAmountDue({ pending_renewal_price: pendingPrice, pending_renewal_paid: r.pending_renewal_paid ?? 0 } as never)

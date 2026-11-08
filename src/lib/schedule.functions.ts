@@ -3,6 +3,7 @@ import { renewalAmountDue } from "@/lib/dues-messaging";
 import { countsAsMissedCheckIn } from "@/lib/effective-visit-state";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { matchLooseVisitBookingIds } from "@/lib/check-in-matching";
+import { preparedEditGuard, preparationTimestamp } from "@/lib/prepared-renewal-edit";
 
 // Read-only Square Production integration. Webhooks (customer/payment/booking)
 // are also handled against Production — see src/routes/api/public/square.webhook.ts.
@@ -218,6 +219,7 @@ export async function fetchSquareBookings(
   token: string,
   startIso: string,
   endIso: string,
+  customerId?: string,
 ): Promise<{ bookings: SquareBooking[]; error: string | null }> {
   const all: SquareBooking[] = [];
   let cursor: string | undefined;
@@ -243,6 +245,7 @@ export async function fetchSquareBookings(
       url.searchParams.set("limit", "200");
       url.searchParams.set("start_at_min", startIso);
       url.searchParams.set("start_at_max", endIso);
+      if (customerId) url.searchParams.set("customer_id", customerId);
       if (cursor) url.searchParams.set("cursor", cursor);
       let res: Response;
       // Square rate-limits bursts (429). Back off and retry instead of failing
@@ -1914,6 +1917,9 @@ export type RenewalForecastRow = {
   pending_start_ymd: string | null;
   pending_total_visits: number | null;
   pending_package_name: string | null;
+  pending_price?: number;
+  pending_recognized_paid?: number;
+  preparation_reconciliation?: string | null;
   /**
    * Prepared renewal whose upcoming appointments were all cancelled (or which
    * never had one). Kept visible so staff can edit or cancel it, but excluded
@@ -1968,7 +1974,7 @@ export const getRenewalForecast = createServerFn({ method: "GET" })
       const { data, error: cErr } = await context.supabase
         .from("clients")
         .select(
-          "id, square_customer_id, visit_tracking_mode, visits_used, package_total_visits, package_price, package_start_date, next_package_price, status, pending_renewal_start_date, pending_renewal_price, pending_renewal_paid, pending_renewal_total_visits, pending_renewal_package_name",
+          "id, square_customer_id, visit_tracking_mode, visits_used, package_total_visits, package_price, package_start_date, next_package_price, status, pending_renewal_start_date, pending_renewal_price, pending_renewal_paid, pending_renewal_total_visits, pending_renewal_package_name, pending_renewal_created_at",
         )
         .is("deleted_at", null)
         .neq("status", "archived")
@@ -2037,10 +2043,34 @@ export const preRenewNextPackage = createServerFn({ method: "POST" })
   .handler(async ({ data, context }): Promise<{ ok: true }> => {
     const { data: existing, error: rErr } = await context.supabase
       .from("clients")
-      .select("package_name, pending_renewal_start_date, package_start_date, visits_used")
+      .select("package_name, pending_renewal_start_date, pending_renewal_paid, pending_renewal_created_at, square_customer_id, package_start_date, visits_used")
       .eq("id", data.clientId)
       .single();
     if (rErr) throw rErr;
+    const { data: overrides, error: oErr } = await context.supabase.from("package_overrides")
+      .select("slot").eq("client_id", data.clientId).is("cleared_at", null);
+    if (oErr) throw oErr;
+    const nowIso = new Date().toISOString();
+    const prepaid = Number(existing.pending_renewal_paid ?? 0);
+    const hasPendingOverride = (overrides ?? []).some((o) => o.slot === "pending");
+    let evidence: { start_at: string; status?: string | null; seller_note?: string | null; customer_note?: string | null }[] | null = null;
+    if (prepaid > 0 && !hasPendingOverride && existing.square_customer_id) {
+      const token = process.env.SQUARE_PRODUCTION_ACCESS_TOKEN;
+      if (token) {
+        const bookings: SquareBooking[] = [];
+        const day = 864e5;
+        const now = Date.parse(nowIso);
+        let failed = false;
+        for (let offset = -180; offset < 30; offset += 30) {
+          const result = await fetchSquareBookings(token, new Date(now + offset * day).toISOString(), new Date(now + (offset + 30) * day).toISOString(), existing.square_customer_id);
+          if (result.error) { failed = true; break; }
+          bookings.push(...result.bookings);
+        }
+        if (!failed) evidence = bookings.filter((b): b is SquareBooking & { start_at: string } => !!b.start_at);
+      }
+    }
+    const reconcile = preparedEditGuard({ prepaid, gate: existing.pending_renewal_start_date, bookings: evidence, nowIso, hasPendingOverride });
+    if (reconcile) throw new Error(reconcile);
     {
       const { currentPackageAlreadyCovers } = await import("@/lib/effective-visit-state");
       const ex = existing as { package_start_date: string | null; visits_used: number | null } | null;
@@ -2055,17 +2085,23 @@ export const preRenewNextPackage = createServerFn({ method: "POST" })
     const name =
       data.packageName ?? ((existing as { package_name: string | null } | null)?.package_name ?? null);
 
-    const { error } = await context.supabase
+    let update = context.supabase
       .from("clients")
       .update({
         pending_renewal_start_date: data.startYmd,
         pending_renewal_price: data.price,
         pending_renewal_total_visits: data.totalVisits,
         pending_renewal_package_name: name,
-        pending_renewal_created_at: new Date().toISOString(),
+        pending_renewal_created_at: wasPending ? preparationTimestamp(existing.pending_renewal_created_at, nowIso) : nowIso,
       })
-      .eq("id", data.clientId);
+      .eq("id", data.clientId)
+      .eq("pending_renewal_paid", existing.pending_renewal_paid);
+    update = existing.pending_renewal_start_date
+      ? update.eq("pending_renewal_start_date", existing.pending_renewal_start_date)
+      : update.is("pending_renewal_start_date", null);
+    const { data: saved, error } = await update.select("id");
     if (error) throw error;
+    if (!saved?.length) throw new Error("The prepared package changed while saving. Refresh and review its prepaid amount before trying again.");
 
     await context.supabase.from("client_activities").insert({
       client_id: data.clientId,
@@ -2076,6 +2112,8 @@ export const preRenewNextPackage = createServerFn({ method: "POST" })
         pending_price: data.price,
         pending_total_visits: data.totalVisits,
         pending_package_name: name,
+        recognized_prepaid_preserved: prepaid,
+        original_prepared_at: existing.pending_renewal_created_at,
       },
     });
 

@@ -6,6 +6,11 @@ import { toast } from "@/components/ui/sonner";
 import { ChevronDown, MessageSquare, Phone } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { VisitSourceLine } from "@/components/VisitSourceLine";
+import { ScheduleNavigation } from "@/components/ScheduleNavigation";
+import { RebookingQueue } from "@/components/RebookingQueue";
+import { SchedulingQueues } from "@/components/SchedulingQueues";
+import { hubHead } from "@/lib/hub-navigation";
+import { chicagoYmd } from "@/lib/work-week";
 import { ScheduleWorklists } from "@/components/ScheduleWorklists";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -51,7 +56,6 @@ import {
 } from "@/lib/schedule.functions";
 
 import {
-  backfillProductionCustomers,
   createClientFromSquareReview,
   ignoreSquareReview,
   linkSquareReview,
@@ -62,17 +66,12 @@ import { invalidateFor } from "@/lib/invalidation";
 
 
 export const Route = createFileRoute("/_authenticated/schedule-check")({
-  head: () => ({ meta: [{ title: "Schedule Check — FIT Beyond Therapy" }] }),
+  validateSearch: (s: Record<string, unknown>): { view?: "appointments" | "worklists" } => ({ view: s.view === "worklists" ? "worklists" : "appointments" }),
+  head: () => hubHead("Schedule", "Appointments, scheduling worklists and follow-ups."),
   component: ScheduleCheckPage,
 });
 
-function todayYmd(): string {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
+function todayYmd(): string { return chicagoYmd(); }
 
 function visitsRemaining(c: { package_total_visits: number; visits_used: number | null; remaining_left?: number }) {
   if (typeof c.remaining_left === "number") return c.remaining_left;
@@ -82,6 +81,7 @@ function visitsRemaining(c: { package_total_visits: number; visits_used: number 
 
 function ScheduleCheckPage() {
   const { isStaff } = useRole();
+  const { view = "appointments" } = Route.useSearch();
   const [date, setDate] = useState<string>(todayYmd());
   const [checkedIn, setCheckedIn] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState<string>("");
@@ -120,55 +120,6 @@ function ScheduleCheckPage() {
       invalidateFor(qc, "visit-changed");
     },
     onError: (e: Error) => toast.error(e.message),
-  });
-
-  const runBackfill = useServerFn(backfillProductionCustomers);
-  const backfillMut = useMutation({
-    mutationFn: async () => {
-      // Batched loop — server processes ~200 customers per call to stay
-      // under Cloudflare Workers' 1000-subrequest / 30s limit. Keep looping
-      // until the server reports done=true so a large customer set completes
-      // across multiple safe requests instead of failing silently.
-      let offset = 0;
-      let total = 0;
-      const agg = {
-        auto_linked: 0,
-        queued_for_review: 0,
-        hidden_old: 0,
-        updated_contact: 0,
-        errors: [] as string[],
-      };
-      const progressToast = toast.loading("Backfill starting…");
-      try {
-        for (let i = 0; i < 50; i++) {
-          const r = await runBackfill({ data: { offset } });
-          agg.auto_linked += r.auto_linked;
-          agg.queued_for_review += r.queued_for_review;
-          agg.hidden_old += r.hidden_old;
-          agg.updated_contact += r.updated_contact;
-          agg.errors.push(...r.errors);
-          total = r.total;
-          offset = r.next_offset;
-          toast.loading(
-            `Backfill: ${Math.min(offset, total)} of ${total} processed…`,
-            { id: progressToast },
-          );
-          if (r.done) break;
-        }
-        toast.dismiss(progressToast);
-      } catch (e) {
-        toast.dismiss(progressToast);
-        throw e;
-      }
-      return { ...agg, processed: offset, total };
-    },
-    onSuccess: (r) => {
-      toast.success(
-        `Backfill complete — ${r.processed}/${r.total} processed · ${r.auto_linked} auto-linked · ${r.queued_for_review} need review · ${r.hidden_old} hidden (old) · ${r.updated_contact} contact updates · ${r.errors.length} errors`,
-      );
-      invalidateFor(qc, "square-sync");
-    },
-    onError: (e: Error) => toast.error(`Backfill failed: ${e.message}`),
   });
 
   const listClientsFn = useServerFn(listLinkableClients);
@@ -337,76 +288,9 @@ function ScheduleCheckPage() {
   return (
     <AppShell>
       <div className="space-y-6">
-        <header className="space-y-2">
-          <div className="inline-flex items-center gap-2 rounded-full border border-amber-300 bg-amber-50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-amber-800">
-            Production Read-Only
-          </div>
-          <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">Schedule Check</h1>
-          <p className="hidden text-slate-600 md:block">
-            Read-only view of Square appointments from the <strong>Production</strong> Square
-            account. Therapy Admin never writes back to Square. Bookings whose customer ID
-            isn't linked to an Admin client appear under "Unmatched Appointments".
-          </p>
-          <div className="pt-2">
-            <Button
-              variant="outline"
-              onClick={() => backfillMut.mutate()}
-              disabled={backfillMut.isPending}
-              className="h-11 md:h-9"
-            >
-              {backfillMut.isPending ? "Running backfill…" : "Backfill Square Customers"}
-            </Button>
-            <p className="mt-1 hidden text-xs text-slate-500 md:block">
-              Pulls all Production Square customers. Auto-links to Admin clients only on a
-              high-confidence email/phone match. Uncertain matches are sent to <em>Needs Review</em>{" "}
-              below.
-            </p>
-          </div>
+        <header><h1 className="mb-4 text-2xl font-semibold">Schedule</h1><ScheduleNavigation view={view} />
+          <Button variant="link" className="h-auto whitespace-normal px-0 text-left" onClick={() => document.getElementById("schedule-issues")?.scrollIntoView({ behavior: "smooth" })}>Square Needs Review{data?.unmatched.length ? ` · ${data.unmatched.length} unmatched appointments` : ""} ↓</Button>
         </header>
-
-        <div className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
-          <label className="mb-1 block text-xs font-medium text-slate-600">
-            Search a client to see where they're scheduled
-          </label>
-          <Input
-            placeholder="Search client name…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="h-11"
-          />
-          {q && (
-            <div className="mt-2 flex flex-wrap gap-1.5 text-xs">
-              {!anyMatch && (
-                <span className="rounded-full bg-slate-100 px-2 py-0.5 font-medium text-slate-700">
-                  Not Scheduled — no scheduled appointments found for this client.
-                </span>
-              )}
-              {summary?.today && (
-                <span className="rounded-full bg-emerald-100 px-2 py-0.5 font-semibold text-emerald-800">
-                  Scheduled Today
-                </span>
-              )}
-              {summary?.thisWeek && (
-                <span className="rounded-full bg-sky-100 px-2 py-0.5 font-semibold text-sky-800">
-                  Scheduled Remaining This Week
-                </span>
-              )}
-              {summary?.nextWeek && (
-                <span className="rounded-full bg-indigo-100 px-2 py-0.5 font-semibold text-indigo-800">
-                  Scheduled Next Week
-                </span>
-              )}
-              {summary?.notNext && !summary?.nextWeek && (
-                <span className="rounded-full bg-amber-100 px-2 py-0.5 font-semibold text-amber-900">
-                  Scheduled This Week but Not Next Week
-                </span>
-              )}
-            </div>
-          )}
-        </div>
-
-        <SquareReviewCard />
-
         <Card>
           <CardHeader>
             <div className="flex flex-wrap items-end justify-between gap-4">
@@ -457,6 +341,7 @@ function ScheduleCheckPage() {
           </CardContent>
         </Card>
 
+        {view === "appointments" && <>
         <ScheduleSection
           title="Today"
           description={data ? formatDate(data.selected_date) : ""}
@@ -499,29 +384,10 @@ function ScheduleCheckPage() {
           hideOwed={isStaff}
         />
 
-        <ScheduleWorklists data={data?.worklists} filter={q} />
-
-        <NotNextWeekSection
-          appointments={thisWeekNotNextWeek}
-          filter={q}
-        />
-
-
-        <ClientsNeedingCard
-          title="Last Visit Last Week — Nothing Booked"
-          description="Seen last work week, with visits remaining and no Square appointment since. Not repeated below."
-          clients={data?.last_week_nothing_booked ?? []}
-          hideOwed={isStaff}
-        />
-
-        <ClientsNeedingCard
-          title="Not Scheduled After Selected Date"
-          description="Other active clients with visits remaining and no Square appointment after this date."
-          clients={data?.not_scheduled_after ?? []}
-          hideOwed={isStaff}
-        />
-
-        <UnmatchedAppointmentsCard appointments={data?.unmatched ?? []} />
+        </>}
+        {view === "worklists" && <SchedulingQueues data={data} />}
+        <section id="schedule-issues" className="scroll-mt-4 space-y-4"><SquareReviewCard />
+        <UnmatchedAppointmentsCard appointments={data?.unmatched ?? []} /></section>
       </div>
     </AppShell>
   );
@@ -2018,7 +1884,7 @@ function SquareReviewCard() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Needs Review ({reviews.length})</CardTitle>
+        <CardTitle>Square Needs Review ({reviews.length})</CardTitle>
         <CardDescription>
           Production Square customers that couldn't be auto-linked. Only customers with a future
           appointment, a payment in the last 60 days, or a possible email/phone match are shown by
@@ -2038,6 +1904,7 @@ function SquareReviewCard() {
         </div>
       </CardHeader>
       <CardContent>
+        {reviewsQuery.isError && <p role="alert" className="text-destructive">Could not load Square reviews. <Button variant="outline" onClick={() => reviewsQuery.refetch()}>Retry</Button></p>}
         {reviewsQuery.isLoading ? (
           <div className="text-sm text-slate-500">Loading…</div>
         ) : reviews.length === 0 ? (
@@ -2168,413 +2035,4 @@ function ReviewRow({
     </div>
   );
 }
-
-function NotNextWeekSection({
-  appointments,
-  filter = "",
-}: {
-  appointments: ScheduleAppointment[];
-  filter?: string;
-}) {
-  const q = filter.trim();
-  const filtered = q ? appointments.filter((a) => matchesSearch(a, q)) : appointments;
-
-  // Dedupe to one row per client, keeping earliest appointment this week.
-  const perClient = useMemo(() => {
-    const map = new Map<string, ScheduleAppointment>();
-    for (const a of filtered) {
-      if (!a.client) continue;
-      const existing = map.get(a.client.id);
-      if (!existing || a.start_at < existing.start_at) map.set(a.client.id, a);
-    }
-    return Array.from(map.values());
-  }, [filtered]);
-
-  const clientIds = useMemo(() => perClient.map((a) => a.client!.id), [perClient]);
-
-  const fetchContacted = useServerFn(getContactedClientIds);
-  const markContacted = useServerFn(markClientContacted);
-  const unmarkContacted = useServerFn(unmarkClientContacted);
-  const fetchUnavailable = useServerFn(getUnavailableNextWeekClientIds);
-  const markUnavailable = useServerFn(markClientUnavailableNextWeek);
-  const unmarkUnavailable = useServerFn(unmarkClientUnavailableNextWeek);
-  const qc = useQueryClient();
-
-  const contactedQuery = useQuery({
-    queryKey: ["contacted-not-next-week", clientIds.slice().sort().join(",")],
-    queryFn: () => fetchContacted({ data: { clientIds } }),
-    enabled: clientIds.length > 0,
-    staleTime: 60_000,
-  });
-
-  const unavailableQuery = useQuery({
-    queryKey: ["unavailable-next-week", clientIds.slice().sort().join(",")],
-    queryFn: () => fetchUnavailable({ data: { clientIds } }),
-    enabled: clientIds.length > 0,
-    staleTime: 60_000,
-  });
-
-  const contactedSet = useMemo(
-    () => new Set<string>(contactedQuery.data?.client_ids ?? []),
-    [contactedQuery.data],
-  );
-  const priorContactedSet = useMemo(
-    () => new Set<string>(contactedQuery.data?.prior_client_ids ?? []),
-    [contactedQuery.data],
-  );
-  const unavailableSet = useMemo(
-    () => new Set<string>(unavailableQuery.data?.client_ids ?? []),
-    [unavailableQuery.data],
-  );
-
-  const markMut = useMutation({
-    mutationFn: (clientId: string) => markContacted({ data: { clientId } }),
-    onSuccess: (_r, clientId) => {
-      toast.success("Marked as contacted");
-      qc.setQueriesData<
-        { client_ids: string[]; prior_client_ids?: string[]; week_start?: string } | undefined
-      >({ queryKey: ["contacted-not-next-week"] }, (prev) => {
-        const cur = new Set(prev?.client_ids ?? []);
-        cur.add(clientId);
-        const prior = new Set(prev?.prior_client_ids ?? []);
-        prior.delete(clientId);
-        return {
-          client_ids: Array.from(cur),
-          prior_client_ids: Array.from(prior),
-          week_start: prev?.week_start ?? "",
-        };
-      });
-    },
-    onError: (e: Error) => toast.error(e.message),
-  });
-
-  const [undoArmedFor, setUndoArmedFor] = useState<string | null>(null);
-  const unmarkMut = useMutation({
-    mutationFn: (clientId: string) => unmarkContacted({ data: { clientId } }),
-    onSuccess: (_r, clientId) => {
-      toast.success("Reverted — marked as not contacted");
-      setUndoArmedFor((cur) => (cur === clientId ? null : cur));
-      qc.setQueriesData<
-        { client_ids: string[]; prior_client_ids?: string[]; week_start?: string } | undefined
-      >({ queryKey: ["contacted-not-next-week"] }, (prev) => {
-        const cur = new Set(prev?.client_ids ?? []);
-        cur.delete(clientId);
-        return {
-          client_ids: Array.from(cur),
-          prior_client_ids: prev?.prior_client_ids ?? [],
-          week_start: prev?.week_start ?? "",
-        };
-      });
-      qc.invalidateQueries({ queryKey: ["contacted-not-next-week"] });
-    },
-    onError: (e: Error) => toast.error(e.message),
-  });
-
-  const [reasonFor, setReasonFor] = useState<string | null>(null);
-  const [reasonText, setReasonText] = useState("");
-
-  const unavailableMut = useMutation({
-    mutationFn: (vars: { clientId: string; reason: string }) =>
-      markUnavailable({ data: { clientId: vars.clientId, reason: vars.reason } }),
-    onSuccess: (_r, vars) => {
-      toast.success("Marked unavailable next week");
-      setReasonFor(null);
-      setReasonText("");
-      qc.setQueriesData<{ client_ids: string[] } | undefined>(
-        { queryKey: ["unavailable-next-week"] },
-        (prev) => {
-          const cur = new Set(prev?.client_ids ?? []);
-          cur.add(vars.clientId);
-          return { client_ids: Array.from(cur) };
-        },
-      );
-    },
-    onError: (e: Error) => toast.error(e.message),
-  });
-
-  const [undoUnavailableArmedFor, setUndoUnavailableArmedFor] = useState<string | null>(null);
-  const unmarkUnavailableMut = useMutation({
-    mutationFn: (clientId: string) => unmarkUnavailable({ data: { clientId } }),
-    onSuccess: (_r, clientId) => {
-      toast.success("Reverted — no longer marked unavailable");
-      setUndoUnavailableArmedFor((cur) => (cur === clientId ? null : cur));
-      qc.setQueriesData<{ client_ids: string[] } | undefined>(
-        { queryKey: ["unavailable-next-week"] },
-        (prev) => {
-          const cur = new Set(prev?.client_ids ?? []);
-          cur.delete(clientId);
-          return { client_ids: Array.from(cur) };
-        },
-      );
-      qc.invalidateQueries({ queryKey: ["unavailable-next-week"] });
-    },
-    onError: (e: Error) => toast.error(e.message),
-  });
-
-
-  // Sort: active first, then contacted, then unavailable at the bottom.
-  const sorted = useMemo(() => {
-    const rank = (id: string) => {
-      if (unavailableSet.has(id)) return 2;
-      if (contactedSet.has(id)) return 1;
-      return 0;
-    };
-    return [...perClient].sort((a, b) => {
-      const ra = rank(a.client!.id);
-      const rb = rank(b.client!.id);
-      if (ra !== rb) return ra - rb;
-      return a.start_at.localeCompare(b.start_at);
-    });
-  }, [perClient, contactedSet, unavailableSet]);
-
-  const isOpen = q.length > 0 && sorted.length > 0;
-  const contactedCount = sorted.reduce(
-    (n, a) => (contactedSet.has(a.client!.id) ? n + 1 : n),
-    0,
-  );
-  const unavailableCount = sorted.reduce(
-    (n, a) => (unavailableSet.has(a.client!.id) ? n + 1 : n),
-    0,
-  );
-
-  return (
-    <Card>
-      <details open={isOpen} className="group">
-        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 p-6">
-          <div className="min-w-0">
-            <CardTitle>
-              Scheduled This Week But Not Next Week{" "}
-              <span className="text-sm font-normal text-slate-500">
-                ({sorted.length}
-                {contactedCount > 0 ? ` · ${contactedCount} contacted` : ""}
-                {unavailableCount > 0 ? ` · ${unavailableCount} unavailable` : ""})
-              </span>
-            </CardTitle>
-            <CardDescription className="mt-1">
-              Clients with an appointment this week but nothing on the books next week —
-              good candidates to re-book. Once a client books next week, they drop out of
-              this list automatically.
-            </CardDescription>
-          </div>
-          <ChevronDown className="h-5 w-5 shrink-0 text-slate-500 transition-transform group-open:rotate-180" />
-        </summary>
-        <div className="px-6 pb-6">
-          {sorted.length === 0 ? (
-            <EmptyState
-              text={q ? "No scheduled appointments found for this client." : "No clients."}
-            />
-          ) : (
-            <div className="space-y-2">
-              {sorted.map((a) => {
-                const c = a.client!;
-                const isContacted = contactedSet.has(c.id);
-                const wasContactedPrior = priorContactedSet.has(c.id);
-                const isUnavailable = unavailableSet.has(c.id);
-                const busy = markMut.isPending && markMut.variables === c.id;
-                const unavailBusy =
-                  unavailableMut.isPending && unavailableMut.variables?.clientId === c.id;
-                const showReasonInput = reasonFor === c.id;
-                return (
-                  <div
-                    key={c.id}
-                    className={`flex flex-wrap items-center gap-3 rounded-lg border bg-white p-3 shadow-sm ${
-                      isUnavailable
-                        ? "border-slate-200 bg-slate-100/70 opacity-70"
-                        : isContacted
-                          ? "border-emerald-300 bg-emerald-50/40"
-                          : ""
-                    }`}
-                  >
-                    <div className="min-w-0 flex-1">
-                      <div
-                        className={`truncate text-sm font-semibold ${
-                          isUnavailable ? "text-slate-500" : "text-slate-900"
-                        }`}
-                      >
-                        {c.first_name} {c.last_name}
-                        {isUnavailable && (
-                          <span className="ml-2 inline-flex items-center rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-slate-600">
-                            Not available next week
-                          </span>
-                        )}
-                        {!isUnavailable && !isContacted && wasContactedPrior && (
-                          <span
-                            className="ml-2 inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-500"
-                            title="This client has a 'contacted' entry from a previous week."
-                          >
-                            Already contacted last week
-                          </span>
-                        )}
-                      </div>
-                      <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-slate-500">
-                        <span>
-                          {formatDayHeader(a.start_at.slice(0, 10))} · {formatTimeLocal(a.start_at)}
-                          {a.team_member_name ? ` · ${a.team_member_name}` : ""}
-                        </span>
-                        {c.phone && !isUnavailable && (
-                          <span className="inline-flex items-center gap-1">
-                            <a
-                              href={`tel:${formatPhoneLink(c.phone)}`}
-                              className="inline-flex items-center gap-0.5 rounded-full bg-sky-50 px-1.5 py-0.5 text-sky-700 hover:bg-sky-100 hover:underline"
-                              title="Call"
-                            >
-                              <Phone className="h-3 w-3" />
-                              <span className="hidden sm:inline">{formatPhoneDisplay(c.phone)}</span>
-                            </a>
-                            <a
-                              href={`sms:${formatPhoneLink(c.phone)}`}
-                              className="inline-flex items-center gap-0.5 rounded-full bg-emerald-50 px-1.5 py-0.5 text-emerald-700 hover:bg-emerald-100 hover:underline"
-                              title="Text"
-                            >
-                              <MessageSquare className="h-3 w-3" />
-                              <span className="hidden sm:inline">Text</span>
-                            </a>
-                          </span>
-                        )}
-                      </div>
-                      {showReasonInput && !isUnavailable && (
-                        <form
-                          onSubmit={(e) => {
-                            e.preventDefault();
-                            unavailableMut.mutate({ clientId: c.id, reason: reasonText });
-                          }}
-                          className="mt-2 flex flex-wrap items-center gap-2"
-                        >
-                          <Input
-                            autoFocus
-                            placeholder="Reason (optional) — vacation, moving…"
-                            value={reasonText}
-                            onChange={(e) => setReasonText(e.target.value)}
-                            className="h-8 max-w-xs text-xs"
-                          />
-                          <Button type="submit" size="sm" disabled={unavailBusy}>
-                            {unavailBusy ? "…" : "Confirm"}
-                          </Button>
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => {
-                              setReasonFor(null);
-                              setReasonText("");
-                            }}
-                          >
-                            Cancel
-                          </Button>
-                        </form>
-                      )}
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      <Button asChild size="sm" variant="outline">
-                        <Link to="/clients/$id" params={{ id: c.id }}>
-                          View
-                        </Link>
-                      </Button>
-                      {isUnavailable && (() => {
-                        const undoBusy =
-                          unmarkUnavailableMut.isPending &&
-                          unmarkUnavailableMut.variables === c.id;
-                        const armed = undoUnavailableArmedFor === c.id;
-                        return (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className={
-                              armed
-                                ? "text-red-700 hover:text-red-800 hover:bg-red-50"
-                                : "text-slate-500 hover:text-slate-700"
-                            }
-                            disabled={undoBusy}
-                            onClick={() => {
-                              if (undoBusy) return;
-                              if (armed) {
-                                unmarkUnavailableMut.mutate(c.id);
-                              } else {
-                                setUndoUnavailableArmedFor(c.id);
-                                window.setTimeout(() => {
-                                  setUndoUnavailableArmedFor((cur) =>
-                                    cur === c.id ? null : cur,
-                                  );
-                                }, 4000);
-                              }
-                            }}
-                            title="Delete the 'unavailable next week' entry and return this client to the actionable list"
-                          >
-                            {undoBusy ? "…" : armed ? "Tap again to confirm" : "Undo"}
-                          </Button>
-                        );
-                      })()}
-
-                      {!isUnavailable && (
-                        <>
-                          <Button
-                            size="sm"
-                            disabled={isContacted || busy}
-                            onClick={() => markMut.mutate(c.id)}
-                          >
-                            {isContacted ? "Contacted ✓" : busy ? "…" : "Mark as Contacted"}
-                          </Button>
-                          {isContacted && (
-                            (() => {
-                              const undoBusy =
-                                unmarkMut.isPending && unmarkMut.variables === c.id;
-                              const armed = undoArmedFor === c.id;
-                              return (
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  className={
-                                    armed
-                                      ? "text-red-700 hover:text-red-800 hover:bg-red-50"
-                                      : "text-slate-500 hover:text-slate-700"
-                                  }
-                                  disabled={undoBusy}
-                                  onClick={() => {
-                                    if (undoBusy) return;
-                                    if (armed) {
-                                      unmarkMut.mutate(c.id);
-                                    } else {
-                                      setUndoArmedFor(c.id);
-                                      window.setTimeout(() => {
-                                        setUndoArmedFor((cur) => (cur === c.id ? null : cur));
-                                      }, 4000);
-                                    }
-                                  }}
-                                  title="Delete this week's 'contacted' entry and revert to 'Mark as Contacted'"
-                                >
-                                  {undoBusy
-                                    ? "…"
-                                    : armed
-                                      ? "Tap again to confirm"
-                                      : "Undo"}
-                                </Button>
-                              );
-                            })()
-                          )}
-                          {!showReasonInput && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => {
-                                setReasonFor(c.id);
-                                setReasonText("");
-                              }}
-                            >
-                              Can't be scheduled next week
-                            </Button>
-                          )}
-                        </>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      </details>
-    </Card>
-  );
-}
-
 

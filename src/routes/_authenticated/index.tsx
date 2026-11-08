@@ -461,6 +461,217 @@ function Dashboard() {
   // package info (price left blank, flagged for review). Runs once per
   // dashboard visit for staff; idempotent on the server.
   const queryClient = useQueryClient();
+  const [search, setSearch] = usePersistentState("dash:search", "");
+  // Staff never see the payment-due (aggregate) list — default to "all" instead.
+  const [filter, setFilter] = usePersistentState<FilterKey>("dash:filter", isStaff ? "all" : "payment_due");
+  const [statusFilter, setStatusFilter] = usePersistentState<StatusFilter>("dash:status", "active_assessment");
+
+  // New-clients-per-month view state. Activated by the "New Clients" tile.
+  const [newClientsActive, setNewClientsActive] = usePersistentState("dash:newClients", false);
+  const [newClientsMonth, setNewClientsMonth] = usePersistentState<string>("dash:newClientsMonth", currentClinicMonth());
+
+  // Role can resolve after first render; force off payment-due filters for staff.
+  useEffect(() => {
+    if (
+      isStaff &&
+      (filter === "payment_due" ||
+        filter === "payment_due_this_week" ||
+        filter === "payment_due_next_week" ||
+        filter === "overdue_prior_weeks")
+    ) {
+      setFilter("all");
+    }
+  }, [isStaff, filter]);
+
+  // Apply lifecycle status filter first — by default this hides archived clients.
+  const visibleClients = useMemo(() => {
+    return clients.filter((c) =>
+      matchesStatus(effectiveStatus(c, isScheduled(c.id)), statusFilter),
+    );
+  }, [clients, statusFilter, scheduledSet]);
+
+  // New-clients-per-month grouping. Includes archived clients (they were
+  // genuinely added that month); excludes soft-deleted records. Derived from
+  // the full `clients` list, independent of the status filter.
+  const newClientsByMonth = useMemo(
+    () => groupNewClientsByMonth(clients),
+    [clients],
+  );
+  const newClientsMonthMap = useMemo(() => {
+    const m = new Map<string, NewClientsMonth>();
+    for (const mc of newClientsByMonth) m.set(mc.month, mc);
+    return m;
+  }, [newClientsByMonth]);
+  const currentMonthNewCount =
+    newClientsMonthMap.get(currentClinicMonth())?.clients.length ?? 0;
+  const selectedNewClients =
+    newClientsMonthMap.get(newClientsMonth)?.clients ?? [];
+
+  const counts = useMemo(() => {
+    const c = {
+      all: 0,
+      payment_due: 0,
+      payment_due_total: 0,
+      payment_due_this_week: 0,
+      payment_due_this_week_total: 0,
+      payment_due_next_week: 0,
+      payment_due_next_week_total: 0,
+      overdue_prior_weeks: 0,
+      overdue_prior_weeks_total: 0,
+      not_scheduled: 0,
+      almost_finished: 0,
+      critical: 0,
+      critical_total: 0,
+      package_complete: 0,
+      needs_renewal: 0,
+      renewal_scheduled: 0,
+      needs_package_review: 0,
+      // Money owed for the NEXT package, tracked separately from the
+      // current-package balance above.
+      next_package_this_week_total: 0,
+      next_package_next_week_total: 0,
+      // Split of all forecasted next-package money by whether staff has
+      // already prepared the renewal. Keeps the two renewal tiles from
+      // reporting the same dollars twice.
+      next_package_prepared_total: 0,
+      next_package_unprepared_total: 0,
+    };
+
+    for (const cl of visibleClients) {
+      const currentOwed = amountOwed(cl);
+      const prevOwed = previousOwed(cl);
+      const owed = currentOwed + prevOwed;
+      const r = visitsRemaining(cl);
+      c.all += 1;
+      if (owed > 0) {
+        const bucket = startBucketOf(cl);
+        c.payment_due += 1;
+        c.payment_due_total += owed;
+        const currentIsThisWeek = bucket ? bucket === "this" : isScheduledThisWeek(cl.id);
+        if (currentOwed > 0 && currentIsThisWeek) {
+          c.payment_due_this_week += 1;
+          c.payment_due_this_week_total += currentOwed;
+        }
+        // Old-package debt is always overdue; current debt is overdue only
+        // when there's no booking this week, none next week, and no future
+        // package start. Mirrors the row helper so each dollar lands once.
+        const currentIsNextWeek = bucket ? bucket === "next" : isScheduledNextWeek(cl.id);
+        const currentIsOverdue =
+          currentOwed > 0 && !bucket && !currentIsThisWeek && !currentIsNextWeek;
+        if (prevOwed > 0 || currentIsOverdue) {
+          c.overdue_prior_weeks += 1;
+          c.overdue_prior_weeks_total += prevOwed + (currentIsOverdue ? currentOwed : 0);
+        }
+
+        if (currentOwed > 0 && (bucket ? bucket === "next" : isScheduledNextWeek(cl.id))) {
+          c.payment_due_next_week += 1;
+          c.payment_due_next_week_total += currentOwed;
+        }
+      }
+
+      const forecast = renewalMap.get(cl.id);
+      if (forecast) {
+        // Prepared renewals are "handled" and leave the action queue, but
+        // their next-package money still counts in the weekly totals.
+        if (forecast.pre_renewed) {
+          c.renewal_scheduled += 1;
+          c.next_package_prepared_total += forecast.next_package_price;
+        } else {
+          c.needs_renewal += 1;
+          c.next_package_unprepared_total += forecast.next_package_price;
+        }
+        if (forecast.week_bucket === "this") {
+          c.next_package_this_week_total += forecast.next_package_price;
+        } else if (forecast.week_bucket === "next") {
+          c.next_package_next_week_total += forecast.next_package_price;
+        }
+      }
+
+
+      if (!isScheduled(cl.id)) c.not_scheduled += 1;
+      if (r !== null && r > 0 && r <= 2) c.almost_finished += 1;
+      if (owed > 0 && r !== null && r <= 2) {
+        c.critical += 1;
+        c.critical_total += owed;
+      }
+      if (r !== null && cl.package_total_visits > 0 && r === 0) {
+        c.package_complete += 1;
+      }
+      if (needsPackageReview(cl, dismissedIds, cl.id)) c.needs_package_review += 1;
+    }
+    return c;
+  }, [visibleClients, scheduledSet, thisWeekSet, nextWeekSet, carriedOverRecentMap, overduePriorMap, thisWeekEndYmd, nextWeekEndYmd, dismissedIds, renewalMap]);
+
+  const weeklyPaymentGroups = useMemo(() => {
+    if (filter !== "payment_due_this_week" && filter !== "payment_due_next_week") return null;
+    const bucket = filter === "payment_due_this_week" ? "this" : "next";
+    return groupWeeklyPayments(visibleClients, renewalMap, bucket, (client) => {
+      const owed = amountOwed(client);
+      const startBucket = startBucketOf(client);
+      const scheduledForWeek = bucket === "this"
+        ? isScheduledThisWeek(client.id)
+        : isScheduledNextWeek(client.id);
+      return owed > 0 && (startBucket ? startBucket === bucket : scheduledForWeek);
+    });
+  }, [filter, visibleClients, renewalMap, thisWeekSet, nextWeekSet, thisWeekEndYmd, nextWeekEndYmd]);
+
+
+  const filtered = useMemo(() => {
+    const list = visibleClients.filter((c) =>
+      matchesFilter(
+        c,
+        filter,
+        isScheduled(c.id),
+        isScheduledThisWeek(c.id),
+        isScheduledNextWeek(c.id),
+        isCarriedOver(c.id),
+        isOverduePrior(c.id),
+        startBucketOf(c),
+        needsPackageReview(c, dismissedIds, c.id),
+        renewalMap.has(c.id),
+        renewalMap.get(c.id)?.pre_renewed === true,
+      ),
+    );
+
+
+    const q = search.trim().toLowerCase();
+
+    const searched = q
+      ? list.filter((c) =>
+          `${c.first_name} ${c.last_name} ${c.phone ?? ""}`
+            .toLowerCase()
+            .includes(q),
+        )
+      : list;
+    // Sort: payment-due-ish filters by balance desc; others by name
+    if (
+      filter === "payment_due" ||
+      filter === "payment_due_this_week" ||
+      filter === "payment_due_next_week" ||
+      filter === "overdue_prior_weeks" ||
+      filter === "critical"
+    ) {
+      return [...searched].sort((a, b) => totalOwed(b) - totalOwed(a));
+    }
+    if (filter === "almost_finished") {
+      return [...searched].sort(
+        (a, b) => (visitsRemaining(a) ?? 0) - (visitsRemaining(b) ?? 0),
+      );
+    }
+    if (filter === "needs_renewal" || filter === "renewal_scheduled") {
+      // Soonest new-package start first.
+      return [...searched].sort((a, b) =>
+        (renewalMap.get(a.id)?.first_uncovered_ymd ?? "").localeCompare(
+          renewalMap.get(b.id)?.first_uncovered_ymd ?? "",
+        ),
+      );
+    }
+    return [...searched].sort((a, b) => fullName(a).localeCompare(fullName(b)));
+  }, [visibleClients, filter, search, scheduledSet, thisWeekSet, nextWeekSet, carriedOverRecentMap, overduePriorMap, thisWeekEndYmd, nextWeekEndYmd, renewalMap, dismissedIds]);
+
+  const reviewCountQuery = useQuery({
+    queryKey: ["square_payments_needs_review_count"],
+    queryFn: async () => {
   const { count, error } = await supabase
         .from("square_payments")
         .select("id", { count: "exact", head: true })

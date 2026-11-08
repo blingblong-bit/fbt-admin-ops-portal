@@ -23,7 +23,9 @@ export function RebookingQueue({ appointments, week }: { appointments: ScheduleA
   const activities = useQuery({queryKey:['rebooking-activities',week,ids.slice().sort().join(',')],enabled:ids.length>0,queryFn:async () => {
     const r = await supabase.from('client_activities').select('client_id,activity_type,created_at,description').in('client_id',ids).in('activity_type',['contacted','unavailable_next_week']); if(r.error) throw r.error; return r.data;
   }});
-  const refresh = () => { qc.invalidateQueries({queryKey:['rebooking-activities']}); qc.invalidateQueries({queryKey:['contacted-not-next-week']}); qc.invalidateQueries({queryKey:['unavailable-next-week']}); };
+  const refresh = () => { qc.invalidateQueries({queryKey: ["rebooking-activities"]});
+    qc.invalidateQueries({queryKey: ["contacted-not-next-week"]});
+    qc.invalidateQueries({queryKey: ["unavailable-next-week"]}); };
   const unavailableFn = useServerFn(markClientUnavailableNextWeek); const undoUnavailableFn = useServerFn(unmarkClientUnavailableNextWeek); const undoContactFn = useServerFn(unmarkClientContacted);
   const unavailable = useMutation({mutationFn:(id:string) => unavailableFn({data:{clientId:id,reason}}),onSuccess:() => {refresh();setReasonFor(null);setReason('');toast.success('Unavailable outcome recorded for this week');},onError:(e:Error)=>toast.error(e.message)});
   const undo = useMutation({mutationFn:({id,closed}:{id:string;closed:boolean}) => closed ? undoUnavailableFn({data:{clientId:id}}) : undoContactFn({data:{clientId:id}}),onSuccess:()=>{refresh();toast.success('Reopened for outreach');},onError:(e:Error)=>toast.error(e.message)});

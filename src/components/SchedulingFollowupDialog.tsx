@@ -40,8 +40,9 @@ export function SchedulingFollowupDialog({ clientId, clientName, worklist, outre
       {settings.isError && <p role="alert" className="text-destructive">Could not load staff accounts. Try again.</p>}
       <form className="space-y-4" onSubmit={async e => { e.preventDefault(); setBusy(true); try {
         await save({ data: { id: null, clientId, ownerId: owner, due: chicagoDueToIso(day, time), context: `${worklist}: ${context}`, outcome: null } });
-        await qc.invalidateQueries({ queryKey: ['scheduling-followups'] });
-        if (outreach) { try { await markContacted({ data: { clientId } }); await qc.invalidateQueries({ queryKey: ['rebooking-activities'] }); } catch { toast.error('Follow-up saved; contact marker could not be saved. The open follow-up remains available.'); } }
+        await qc.invalidateQueries({ queryKey: ["scheduling-followups"] });
+        if (outreach) { try { await markContacted({ data: { clientId } });
+          await qc.invalidateQueries({ queryKey: ["rebooking-activities"] }); } catch { toast.error('Follow-up saved; contact marker could not be saved. The open follow-up remains available.'); } }
         toast.success('Scheduling follow-up created'); setOpen(false); setContext('');
       } catch (e) { toast.error(e instanceof Error ? e.message : 'Could not create follow-up'); } finally { setBusy(false); } }}>
         <div className="space-y-2"><Label>Assigned staff member</Label><Select value={owner} onValueChange={setOwner}><SelectTrigger><SelectValue placeholder="Select staff account" /></SelectTrigger><SelectContent>{settings.data?.staffAccounts.map(a => <SelectItem key={a.id} value={a.id}>{a.label}</SelectItem>)}</SelectContent></Select></div>

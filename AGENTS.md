@@ -33,3 +33,7 @@
 - Activation cron: `authorizeCron` checks private bearer before any work; pg_cron reads it from vault (set only by admin `syncActivationCronSecret`).
 - Checkout links: amount only from Master Dues effective total (`payment-link.ts`); link payments decided only by `planLinkPayment`/`handleLinkPayment`, env-scoped (sandbox route + `is_test_fixture` clients only; production webhook sees only production rows); stale/second/mismatched payments are held for review, never auto-credited; credit via apply_square_payment. Sandbox-only until approved.
 - Scheduling follow-ups use separate RLS tables and audited RPCs; they never alter classification, hides, Square or financial state. Push claims are unique per task revision/device/Chicago day, rechecked before send, with a private independent cron bearer. The messaging-only worker has no fetch/cache handlers; VAPID private keys are encrypted server-side and never returned to clients.
+
+- Hub navigation uses one shared five-section mapping for mobile tabs and desktop sidebar so preserved detail/task links select the same section.
+- Scheduling queue presentation only regroups existing Square/worklist memberships; week-scoped outreach waits on a linked open owned/due task, never on a contact marker alone.
+- Schedule reads derive hide/pin reactivation without deleting stored audit state or writing sync logs; explicit staff actions remain audited writes.

@@ -1,5 +1,10 @@
 # Roadmap
 
+## Prepared renewal cycle correction
+- [ ] Correct Abby only through audited prepared override; verify live dues and preserved receipts
+- [ ] Show price/prepaid/due and block ambiguous cycle reuse in shared editor/server
+- [ ] Run focused lifecycle and full regression checks; verify preview without publishing
+
 - [x] Add shared weekly payment grouping and reconciliation logic
 - [x] Build grouped This Week / Next Week detail sections and labels
 - [x] Align weekly CSV export with grouped data

@@ -30,6 +30,7 @@ import { Route as AuthenticatedPaymentHistoryRouteImport } from './routes/_authe
 import { Route as AuthenticatedRenewalReviewRouteImport } from './routes/_authenticated/renewal-review'
 import { Route as AuthenticatedRenewalsRouteImport } from './routes/_authenticated/renewals'
 import { Route as AuthenticatedScheduleCheckRouteImport } from './routes/_authenticated/schedule-check'
+import { Route as AuthenticatedScheduleDemoRouteImport } from './routes/_authenticated/schedule-demo'
 import { Route as AuthenticatedSquareDiagnosticRouteImport } from './routes/_authenticated/square-diagnostic'
 import { Route as AuthenticatedSyncLogRouteImport } from './routes/_authenticated/sync-log'
 import { Route as AuthenticatedVisitAutomationReviewRouteImport } from './routes/_authenticated/visit-automation-review'
@@ -163,6 +164,12 @@ const AuthenticatedScheduleCheckRoute =
   AuthenticatedScheduleCheckRouteImport.update({
     id: '/schedule-check',
     path: '/schedule-check',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedScheduleDemoRoute =
+  AuthenticatedScheduleDemoRouteImport.update({
+    id: '/schedule-demo',
+    path: '/schedule-demo',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
 const AuthenticatedSquareDiagnosticRoute =
@@ -302,6 +309,7 @@ export interface FileRoutesByFullPath {
   '/renewal-review': typeof AuthenticatedRenewalReviewRoute
   '/renewals': typeof AuthenticatedRenewalsRoute
   '/schedule-check': typeof AuthenticatedScheduleCheckRoute
+  '/schedule-demo': typeof AuthenticatedScheduleDemoRoute
   '/square-diagnostic': typeof AuthenticatedSquareDiagnosticRoute
   '/sync-log': typeof AuthenticatedSyncLogRoute
   '/visit-automation-review': typeof AuthenticatedVisitAutomationReviewRoute
@@ -344,6 +352,7 @@ export interface FileRoutesByTo {
   '/renewal-review': typeof AuthenticatedRenewalReviewRoute
   '/renewals': typeof AuthenticatedRenewalsRoute
   '/schedule-check': typeof AuthenticatedScheduleCheckRoute
+  '/schedule-demo': typeof AuthenticatedScheduleDemoRoute
   '/square-diagnostic': typeof AuthenticatedSquareDiagnosticRoute
   '/sync-log': typeof AuthenticatedSyncLogRoute
   '/visit-automation-review': typeof AuthenticatedVisitAutomationReviewRoute
@@ -389,6 +398,7 @@ export interface FileRoutesById {
   '/_authenticated/renewal-review': typeof AuthenticatedRenewalReviewRoute
   '/_authenticated/renewals': typeof AuthenticatedRenewalsRoute
   '/_authenticated/schedule-check': typeof AuthenticatedScheduleCheckRoute
+  '/_authenticated/schedule-demo': typeof AuthenticatedScheduleDemoRoute
   '/_authenticated/square-diagnostic': typeof AuthenticatedSquareDiagnosticRoute
   '/_authenticated/sync-log': typeof AuthenticatedSyncLogRoute
   '/_authenticated/visit-automation-review': typeof AuthenticatedVisitAutomationReviewRoute
@@ -435,6 +445,7 @@ export interface FileRouteTypes {
     | '/renewal-review'
     | '/renewals'
     | '/schedule-check'
+    | '/schedule-demo'
     | '/square-diagnostic'
     | '/sync-log'
     | '/visit-automation-review'
@@ -477,6 +488,7 @@ export interface FileRouteTypes {
     | '/renewal-review'
     | '/renewals'
     | '/schedule-check'
+    | '/schedule-demo'
     | '/square-diagnostic'
     | '/sync-log'
     | '/visit-automation-review'
@@ -521,6 +533,7 @@ export interface FileRouteTypes {
     | '/_authenticated/renewal-review'
     | '/_authenticated/renewals'
     | '/_authenticated/schedule-check'
+    | '/_authenticated/schedule-demo'
     | '/_authenticated/square-diagnostic'
     | '/_authenticated/sync-log'
     | '/_authenticated/visit-automation-review'
@@ -711,6 +724,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedScheduleCheckRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/schedule-demo': {
+      id: '/_authenticated/schedule-demo'
+      path: '/schedule-demo'
+      fullPath: '/schedule-demo'
+      preLoaderRoute: typeof AuthenticatedScheduleDemoRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/square-diagnostic': {
       id: '/_authenticated/square-diagnostic'
       path: '/square-diagnostic'
@@ -880,6 +900,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedRenewalReviewRoute: typeof AuthenticatedRenewalReviewRoute
   AuthenticatedRenewalsRoute: typeof AuthenticatedRenewalsRoute
   AuthenticatedScheduleCheckRoute: typeof AuthenticatedScheduleCheckRoute
+  AuthenticatedScheduleDemoRoute: typeof AuthenticatedScheduleDemoRoute
   AuthenticatedSquareDiagnosticRoute: typeof AuthenticatedSquareDiagnosticRoute
   AuthenticatedSyncLogRoute: typeof AuthenticatedSyncLogRoute
   AuthenticatedVisitAutomationReviewRoute: typeof AuthenticatedVisitAutomationReviewRoute
@@ -911,6 +932,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedRenewalReviewRoute: AuthenticatedRenewalReviewRoute,
   AuthenticatedRenewalsRoute: AuthenticatedRenewalsRoute,
   AuthenticatedScheduleCheckRoute: AuthenticatedScheduleCheckRoute,
+  AuthenticatedScheduleDemoRoute: AuthenticatedScheduleDemoRoute,
   AuthenticatedSquareDiagnosticRoute: AuthenticatedSquareDiagnosticRoute,
   AuthenticatedSyncLogRoute: AuthenticatedSyncLogRoute,
   AuthenticatedVisitAutomationReviewRoute:

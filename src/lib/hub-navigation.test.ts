@@ -8,6 +8,7 @@ describe('Hub sections preserve deep links', () => {
     expect(hubSection('/renewals')).toBe('clients');
   });
   it('keeps push task links in Schedule', () => expect(hubSection('/follow-ups')).toBe('schedule'));
+  it('keeps the isolated appointment demo in Schedule', () => expect(hubSection('/schedule-demo')).toBe('schedule'));
   it('keeps old message links in Messaging', () => {
     for (const path of ['/dues-texts', '/dues-queue', '/messaging-preview']) expect(hubSection(path)).toBe('messaging');
   });

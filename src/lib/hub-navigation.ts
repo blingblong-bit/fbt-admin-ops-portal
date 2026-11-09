@@ -3,7 +3,7 @@ export type HubSection = 'dash' | 'clients' | 'schedule' | 'messaging' | 'more';
 export function hubSection(path: string): HubSection {
   if (path === '/' || ['/collections', '/payment-due', '/weekly-dues'].includes(path)) return 'dash';
   if (path.startsWith('/clients') || path === '/renewals') return 'clients';
-  if (['/schedule-check', '/follow-ups', '/missed-check-ins'].includes(path)) return 'schedule';
+  if (['/schedule-check', '/schedule-demo', '/follow-ups', '/missed-check-ins'].includes(path)) return 'schedule';
   if (['/messaging', '/dues-texts', '/dues-queue', '/messaging-preview'].includes(path)) return 'messaging';
   return 'more';
 }

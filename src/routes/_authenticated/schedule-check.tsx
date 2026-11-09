@@ -289,6 +289,7 @@ function ScheduleCheckPage() {
     <AppShell>
       <div className="space-y-6">
         <header><h1 className="mb-4 text-2xl font-semibold">Schedule</h1><ScheduleNavigation view={view} />
+          {view === "appointments" && <Button asChild variant="outline" className="mb-3 min-h-11 whitespace-normal"><Link to="/schedule-demo">Try new appointments · isolated demo</Link></Button>}
           <Button variant="link" className="h-auto whitespace-normal px-0 text-left" onClick={() => document.getElementById("schedule-issues")?.scrollIntoView({ behavior: "smooth" })}>Square Needs Review{data?.unmatched.length ? ` · ${data.unmatched.length} unmatched appointments` : ""} ↓</Button>
         </header>
         <section className="border-y py-4">

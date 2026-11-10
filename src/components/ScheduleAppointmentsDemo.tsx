@@ -71,7 +71,7 @@ export function ScheduleAppointmentsDemo() {
       const [h,m]=editTime.split(':').map(Number);const start=(h??NaN)*60+(m??NaN);
       if(editor.kind==='move'&&editDate!==date)throw new Error('Cross-day rescheduling is not available in this read-only preview. Select a slot on the displayed day.');
       if(!editDate||!Number.isFinite(start))throw new Error('Choose a date and time.');
-      let next=state;
+      let next:DemoState=state;
       if(editor.kind==='book')next=demoBook(state,{id:`demo-book-${crypto.randomUUID()}`,clientId,trainer:editTrainer,date:editDate,start,duration:Number(duration),status:'booked'},needsPackage?{total:Number(visits),price:Number(price)}:undefined);
       else if(editor.kind==='move'&&editor.appointment)next=demoMove(state,editor.appointment.id,{trainer:editTrainer,date:editDate,start,duration:editor.appointment.duration});
       else if(editor.kind==='cancel'&&editor.appointment)next=demoCancel(state,editor.appointment.id,count);

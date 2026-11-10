@@ -6,7 +6,8 @@ export type DemoTrainer = string;
 export type DemoPackage = { id: string; total: number; used: number; price: number; paid: number };
 export type DemoClient = { id: string; name: string; total: number; used: number; price: number; paid: number; packageId?: string; history?: DemoPackage[] };
 export type DemoAppointment = { id: string; clientId: string; trainer: DemoTrainer; date: string; start: number; duration: number; status: 'booked' | 'completed' | 'cancelled'; completedVisit?: number; packageId?: string };
-export type DemoState = { clients: DemoClient[]; appointments: DemoAppointment[]; trainers: string[] };
+export type DemoBlocker = { id: string; trainer: string; date: string; start: number; duration: number };
+export type DemoState = { clients: DemoClient[]; appointments: DemoAppointment[]; trainers: string[]; readOnlySlots?: DemoBlocker[]; availabilityUnknown?: boolean; simulationOnlyTrainers?: string[] };
 export function initialDemoState(): DemoState {
   const clients: DemoClient[] = [
     { id: 'demo-1', name: 'Morgan Reed', total: 8, used: 2, price: 375, paid: 375 },
@@ -47,7 +48,7 @@ export function demoSlotLoad(state: DemoState, slot: Pick<DemoAppointment, 'trai
   return Math.max(0,...points.map(start=>overlaps.filter(a=>a.start<=start&&start<a.start+a.duration).length));
 }
 export function demoSlotFree(state: DemoState, slot: Pick<DemoAppointment, 'trainer' | 'date' | 'start' | 'duration'>, exclude: string[] = [], clientId?: string) {
-  return state.trainers.includes(slot.trainer) && Number.isInteger(slot.start) && Number.isInteger(slot.duration) && slot.start >= 360 && slot.start + slot.duration <= 1140 && slot.duration > 0 && demoSlotLoad(state,slot,exclude)<DEMO_CAPACITY && !state.appointments.some(a => !exclude.includes(a.id) && a.status !== 'cancelled' && a.date === slot.date && a.clientId===clientId && slot.start < a.start+a.duration && a.start < slot.start+slot.duration);
+  return (!state.availabilityUnknown || Boolean(state.simulationOnlyTrainers?.includes(slot.trainer))) && !(state.readOnlySlots ?? []).some(a=>a.date===slot.date&&a.trainer===slot.trainer&&slot.start<a.start+a.duration&&a.start<slot.start+slot.duration) && state.trainers.includes(slot.trainer) && Number.isInteger(slot.start) && Number.isInteger(slot.duration) && slot.start >= 360 && slot.start + slot.duration <= 1140 && slot.duration > 0 && demoSlotLoad(state,slot,exclude)<DEMO_CAPACITY && !state.appointments.some(a => !exclude.includes(a.id) && a.status !== 'cancelled' && a.date === slot.date && a.clientId===clientId && slot.start < a.start+a.duration && a.start < slot.start+slot.duration);
 }
 export function demoOpenings(state: DemoState, date: string, trainers: readonly DemoTrainer[], duration: number) {
   return Array.from({length: 26}, (_, i) => 360+i*30).flatMap(start => trainers.filter(trainer => demoSlotFree(state, {date, trainer, start, duration})).map(trainer => ({date, trainer, start, duration})));

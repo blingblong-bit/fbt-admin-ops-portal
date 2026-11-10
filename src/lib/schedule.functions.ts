@@ -66,6 +66,7 @@ export type ScheduleAppointment = {
   duration_minutes: number | null;
   service_name: string | null;
   team_member_name: string | null;
+  team_member_id?: string | null;
   square_customer_id: string | null;
   customer_info: ProductionCustomerInfo | null;
   client: ScheduleClientLite | null;
@@ -587,6 +588,7 @@ export const getScheduleCheck = createServerFn({ method: "GET" })
         duration_minutes: seg?.duration_minutes ?? null,
         service_name: svc ?? null,
         team_member_name: tmName,
+        team_member_id: seg?.team_member_id ?? null,
         square_customer_id: b.customer_id ?? null,
         customer_info: b.customer_id ? customerInfoMap.get(b.customer_id) ?? null : null,
         client,

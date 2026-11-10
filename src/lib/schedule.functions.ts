@@ -362,7 +362,6 @@ async function fetchTeamMemberNames(
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        query: { filter: { team_member_ids: ids } },
         limit: 200,
       }),
       signal: AbortSignal.timeout(5000),

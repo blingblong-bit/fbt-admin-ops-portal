@@ -30,6 +30,12 @@ describe('read-only Square display and simulated occupancy',()=>{
     const row=projectLiveAppointment({...live,duration_minutes:null,team_member_name:null});
     expect(row.blocker).toMatchObject({start:0,duration:1440});expect(row.trainerUnknown).toBe(true);
   });
+  it('permits only explicitly isolated fake trainer slots when live availability is unknown',()=>{
+    const state=initialDemoState();state.availabilityUnknown=true;state.simulationOnlyTrainers=['Avery'];
+    expect(demoOpenings(state,DEMO_DATE,['Avery'],30).length).toBeGreaterThan(0);
+    expect(demoOpenings(state,DEMO_DATE,['Jordan'],30)).toEqual([]);
+    expect(projectLiveAppointment({...live,team_member_name:null,team_member_id:'trainer-1234'}).trainer).toBe('Unnamed trainer · 1234');
+  });
   it('keeps unknown checkout and visit counts out of the projection even when Hub has a package',()=>{
     const row=projectLiveAppointment({...live,client:{id:'real-id',first_name:'Live',last_name:'Client',phone:null,package_total_visits:4,visits_used:2,package_price:175,amount_paid:175,internal_notes:null,square_customer_id:'square-customer',status:'active',manual_active:null}});
     expect(row.name).toBe('Live Client');expect(row).not.toHaveProperty('visits_used');expect(row).not.toHaveProperty('amount_paid');

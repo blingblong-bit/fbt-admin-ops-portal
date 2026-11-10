@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { DemoWeekStrip } from '@/components/DemoWeekStrip';
 import { useRole } from '@/hooks/useRole';
-import { DEMO_DATE, DEMO_CAPACITY, demoTrainers, demoTime, demoVisit, demoBook, demoMove, demoSwap, demoComplete, demoCancel, demoSlotFree, demoSlotLoad, demoUnreserved, demoPackageFor, demoAddTrainer, initialDemoState, type DemoAppointment } from '@/lib/schedule-demo';
+import { DEMO_DATE, DEMO_CAPACITY, demoTrainers, demoTime, demoVisit, demoBook, demoMove, demoSwap, demoComplete, demoCancel, demoSlotFree, demoSlotLoad, demoUnreserved, demoPackageFor, demoAddTrainer, initialDemoState, type DemoAppointment, type DemoState } from '@/lib/schedule-demo';
 
 type Mode = 'day'|'zoom'|'trainer'|'openings';
 type Editor = {kind:'book'|'move'|'cancel';appointment?:DemoAppointment};
@@ -24,7 +24,7 @@ const money=(n:number)=>new Intl.NumberFormat('en-US',{style:'currency',currency
 const times=Array.from({length:26},(_,i)=>360+i*30);
 export function ScheduleAppointmentsDemo() {
   const {isAdmin,isLoading}=useRole();
-  const [simulation,setState]=useState(() => ({...initialDemoState(),appointments:[]}));
+  const [simulation,setState]=useState<DemoState>(() => ({...initialDemoState(),appointments:[]}));
   const [date,setDate]=useState(chicagoYmd);
   const fetchSchedule=useServerFn(getScheduleCheck);
   const query=useQuery({queryKey:['schedule-check',date],queryFn:()=>fetchSchedule({data:{date}}),refetchInterval:()=>typeof document!=='undefined'&&document.visibilityState==='visible'?60_000:false,refetchIntervalInBackground:false,refetchOnWindowFocus:true});
@@ -32,7 +32,7 @@ export function ScheduleAppointmentsDemo() {
   const liveTrainers=[...new Set(live.map(a=>a.trainer))];
   const allTrainers=[...new Set([...liveTrainers,...simulation.trainers.filter(t=>!demoTrainers.some(d=>d===t))])];
   const trainers=allTrainers.length?allTrainers:[...simulation.trainers];
-  const state={...simulation,trainers,readOnlySlots:live.map(a=>a.blocker),availabilityUnknown:query.isPending||query.isError||Boolean(query.data?.error)||live.some(a=>a.trainerUnknown)};
+  const state={...simulation,trainers,simulationOnlyTrainers:simulation.trainers,readOnlySlots:live.map(a=>a.blocker),availabilityUnknown:query.isPending||query.isError||Boolean(query.data?.error)||live.some(a=>a.trainerUnknown)};
   const [mode,setMode]=useState<Mode>('day');
   const [lastOverview,setLastOverview]=useState<'day'|'zoom'>('day');
   const [trainer,setTrainer]=useState('Avery');

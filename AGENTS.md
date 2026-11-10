@@ -39,3 +39,4 @@
 - Schedule reads derive hide/pin reactivation without deleting stored audit state or writing sync logs; explicit staff actions remain audited writes.
 - Client profile sections preserve mounted state; correction shortcuts open the existing audited package editor rather than introducing another mutation path.
 - The appointments demo is a separate authenticated route using disposable in-memory fake data and pure demo actions, with no production service imports or persistence; this keeps live scheduling and financial operations isolated.
+- Demo appointments retain package identity and history across simulated renewals; slot capacity and client overlap are checked atomically, and demo trainer creation uses the existing protected role read without creating accounts or privileges.

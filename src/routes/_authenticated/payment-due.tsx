@@ -59,7 +59,7 @@ function PaymentDuePage() {
   const diff = t ? Math.round((t.total - allSum) * 100) / 100 : 0;
   const pkgInfo = data?.exceptions.filter((e) => e.kind === "package_info_needed") ?? [];
   const ppv = data?.exceptions.filter((e) => e.kind === "pay_per_visit") ?? [];
-  const billingEx = data?.exceptions.filter((e) => e.kind === "billing_setup_needed" || e.kind === "billing_review") ?? [];
+  const billingEx = data?.exceptions.filter((e) => e.kind === "billing_setup_needed" || e.kind === "billing_review" || e.kind === "payment_review") ?? [];
 
   return (
     <AppShell>

@@ -68,7 +68,7 @@ export type MasterDuesRow = {
 export type MasterDuesException = {
   client_id: string;
   name: string;
-  kind: "package_info_needed" | "pay_per_visit" | "billing_setup_needed" | "billing_review";
+  kind: "package_info_needed" | "pay_per_visit" | "billing_setup_needed" | "billing_review" | "payment_review";
   reason: string;
 };
 
@@ -171,10 +171,17 @@ export function computeMasterDues(clients: MasterDuesClient[], ctx: MasterDuesCt
         exceptions.push({ client_id: c.id, name, kind: "package_info_needed", reason: "Package has no price" });
     } else {
       cur = money(Number(c.package_price) - Number(c.amount_paid ?? 0));
+      // No general credit: money above the package price is never a balance
+      // to spend later. It is surfaced for review, not hidden as "$0 due".
+      const over = r2(Number(c.amount_paid ?? 0) - Number(c.package_price));
+      if (over > 0) exceptions.push({ client_id: c.id, name, kind: "payment_review", reason: `$${over} recorded above the current package price — needs payment review (not credit)` });
     }
 
     const renPrice = Number(c.pending_renewal_price ?? 0);
     const ren = !bt && renPrice > 0 ? money(renPrice - Number(c.pending_renewal_paid ?? 0)) : 0;
+    const penOver = !bt ? r2(Number(c.pending_renewal_paid ?? 0) - (renPrice > 0 ? renPrice : 0)) : 0;
+    if (!bt && penOver > 0 && (renPrice > 0 || c.pending_renewal_start_date))
+      exceptions.push({ client_id: c.id, name, kind: "payment_review", reason: renPrice > 0 ? `$${penOver} paid ahead exceeds the prepared renewal price — needs payment review (not credit)` : `$${penOver} paid ahead for a prepared renewal with no price — needs payment review` });
     let renStatus: ObligationStatus = "none";
     let renYmd: string | null = null;
     if (ren > 0) {

@@ -20,7 +20,7 @@ describe("routePayment", () => {
 
   it("holds money paid ahead against an already-prepared renewal", () => {
     const r = routePayment(
-      { ...base, amountPaid: 375, packagePrice: 375, hasPreparedRenewal: true },
+      { ...base, amountPaid: 375, packagePrice: 375, hasPreparedRenewal: true, pendingRenewalPrice: 375 },
       50,
     );
     expect(r.toCurrentPackage).toBe(0);
@@ -31,7 +31,7 @@ describe("routePayment", () => {
 
   it("splits between the open current balance and the prepared renewal", () => {
     const r = routePayment(
-      { ...base, amountPaid: 300, packagePrice: 375, hasPreparedRenewal: true },
+      { ...base, amountPaid: 300, packagePrice: 375, hasPreparedRenewal: true, pendingRenewalPrice: 375 },
       200,
     );
     expect(r.toCurrentPackage).toBe(75);

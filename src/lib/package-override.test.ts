@@ -106,3 +106,13 @@ describe("no general credit", () => {
     expect(e.override_flags.some((f: string) => f.startsWith("$375 recorded after the correction fits no open package"))).toBe(true);
   });
 });
+
+describe("no general credit — prepared cap", () => {
+  it("money after a correction fills the prepared renewal only up to its price; the rest is flagged", async () => {
+    const { applyOverrides } = await import("./package-override");
+    const raw = { package_total_visits: 8, visits_used: 0, package_price: 375, amount_paid: 375, previous_package_owed: 0, pending_renewal_start_date: "2026-12-01", pending_renewal_price: 375, pending_renewal_paid: 1125 };
+    const e = applyOverrides(raw, [{ slot: "pending", status: "prepared", total_visits: null, visits_used: null, price: null, recognized_paid: 0, start_date: null, created_at: "2026-11-01", raw_baseline: { amount_paid: 375, pending_paid: 0, prev_owed: 0 } }]);
+    expect(e.pending_renewal_paid).toBe(375);
+    expect(e.override_flags.some((f) => /\$750 .*payment review/.test(f))).toBe(true);
+  });
+});

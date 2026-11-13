@@ -2,7 +2,7 @@
 
 ## Dues messaging saved prices
 - [x] Apply active audited package overrides to queue, previews, board and single-client validation without rewriting clients
-- [ ] Verify override pricing and preserved message safeguards with tests and signed-in read-only preview
+- [x] 70 targeted tests passed; signed-in Dues Texts and queue loaded read-only with sending disabled and no runtime errors
 
 ## Prepared cancellation
 - [x] Atomically cancel raw preparation and prepared override without silently moving money

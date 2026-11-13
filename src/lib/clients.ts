@@ -173,20 +173,19 @@ export function packagePriceUnknown(
   return !(Number(c.package_price ?? 0) > 0);
 }
 
-/** Prepared next package that can legitimately absorb extra money. */
-function hasPreparedRenewal(c: PricedClient): boolean {
-  return (
-    !!c.pending_renewal_start_date ||
-    Number(c.pending_renewal_price ?? 0) > 0 ||
-    Number(c.pending_renewal_total_visits ?? 0) > 0
-  );
-}
 
-/** Paid more than the package costs with nothing prepared to explain it. */
+/**
+ * Money recorded beyond what an explicit package can hold. There is no general
+ * credit: excess on the current package is never "explained" by a prepared
+ * renewal (only money routed to that renewal is), and prepaid money above the
+ * prepared renewal's price is also excess. Both go to Payment Review.
+ */
 export function unexplainedOverpayment(c: PricedClient): boolean {
   if (isPayPerVisit(c)) return false;
+  const pendingPaid = Number((c as { pending_renewal_paid?: number | null }).pending_renewal_paid ?? 0);
+  const pendingPrice = Number(c.pending_renewal_price ?? 0);
+  if (pendingPaid > 0 && pendingPrice > 0 && pendingPaid > pendingPrice) return true;
   if (!(Number(c.package_price ?? 0) > 0)) return false;
-  if (hasPreparedRenewal(c)) return false;
   return Number(c.amount_paid ?? 0) > Number(c.package_price ?? 0);
 }
 

@@ -8,7 +8,7 @@ import { clearUnallocatedPrepaid } from "@/lib/admin-finance.functions";
 export function ClearPrepaidCard({ clientId, paidAhead, preparedOn, onDone }: { clientId: string; paidAhead: number; preparedOn: string | null; onDone: () => void }) {
   const clear = useServerFn(clearUnallocatedPrepaid);
   const [busy, setBusy] = useState(false);
-  if (!(paidAhead > 0) && !preparedOn) return null;
+  if (!(paidAhead > 0)) return null;
   const run = async () => {
     const reason = window.prompt(`Clear $${paidAhead.toFixed(2)} paid ahead${preparedOn ? ` and the renewal prepared for ${preparedOn}` : ""}? Payment history is kept.\n\nReason:`, "Old paid-ahead money — client is paid up");
     if (!reason?.trim()) return;

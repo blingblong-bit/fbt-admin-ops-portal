@@ -1,5 +1,9 @@
 # Roadmap
 
+## Dues messaging saved prices
+- [x] Apply active audited package overrides to queue, previews, board and single-client validation without rewriting clients
+- [x] 70 targeted tests passed; signed-in Dues Texts and queue loaded read-only with sending disabled and no runtime errors
+
 ## Prepared cancellation
 - [x] Atomically cancel raw preparation and prepared override without silently moving money
 - [x] Clear Krislyn's prepared override through authenticated cancellation; preserve current package/history

@@ -9,6 +9,7 @@ import {
   type DuesMessage,
 } from "@/lib/dues-messaging";
 import { fullName, totalOwed } from "@/lib/clients";
+import { loadDuesClients } from "@/lib/dues-messaging-clients";
 import {
   buildDuesTextsBoard,
   type BoardCard,
@@ -24,9 +25,6 @@ async function assertAdmin(context: Ctx) {
   ]);
   if (!isAdmin && !isSuper) throw new Error("Forbidden — admin access required");
 }
-
-const CLIENT_COLUMNS =
-  "id, first_name, last_name, phone, package_name, package_total_visits, package_price, package_start_date, visits_used, amount_paid, previous_package_owed, payment_model, status, deleted_at, pending_renewal_start_date, pending_renewal_price, pending_renewal_total_visits, pending_renewal_package_name, pending_renewal_paid, sms_consent_at, sms_consent_source, sms_consent_recorded_by, sms_opted_out_at, sms_opt_out_source";
 
 /** Non-secret: lets the UI render the "sending disabled" banner. */
 export const getMessagingFlag = createServerFn({ method: "GET" })
@@ -59,12 +57,7 @@ export type DuesQueueRow = {
 };
 
 async function loadEligibleClients(context: Ctx) {
-  const { data: rows, error } = await context.supabase
-    .from("clients")
-    .select(CLIENT_COLUMNS)
-    .is("deleted_at", null);
-  if (error) throw error;
-  return (rows ?? []) as (DuesClient & { package_start_date: string | null })[];
+  return loadDuesClients(context.supabase);
 }
 
 async function loadDismissedIds(context: Ctx): Promise<Set<string>> {
@@ -380,14 +373,12 @@ export const generateDuesPreviews = createServerFn({ method: "POST" })
 /* ------------------------------------------------------------------ */
 
 async function loadClient(ctx: Ctx, clientId: string) {
-  const { data, error } = await ctx.supabase
-    .from("clients")
-    .select(CLIENT_COLUMNS)
-    .eq("id", clientId)
-    .maybeSingle();
-  if (error) throw error;
-  if (!data) throw new Error("Client not found");
-  return data as DuesClient & { package_start_date: string | null };
+  const [client] = await loadDuesClients(ctx.supabase, {
+    clientIds: [clientId],
+    includeDeleted: true,
+  });
+  if (!client) throw new Error("Client not found");
+  return client;
 }
 
 /**
@@ -668,12 +659,12 @@ export const getDuesTextsBoard = createServerFn({ method: "GET" })
     if (rows.length === 0) return buildDuesTextsBoard([]);
 
     const ids = [...new Set(rows.map((r) => r.client_id))];
-    const { data: clientRows } = await ctx.supabase
-      .from("clients")
-      .select(CLIENT_COLUMNS)
-      .in("id", ids);
+    const clientRows = await loadDuesClients(ctx.supabase, {
+      clientIds: ids,
+      includeDeleted: true,
+    });
     const byId = new Map(
-      ((clientRows ?? []) as (DuesClient & { package_start_date: string | null })[]).map((c) => [
+      clientRows.map((c) => [
         c.id,
         c,
       ]),

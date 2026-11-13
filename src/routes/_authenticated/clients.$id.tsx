@@ -11,6 +11,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { recordManualPayment } from "@/lib/payments.functions";
 import { renewPackage } from "@/lib/renewal.functions";
 import { updateClientDetails } from "@/lib/admin-finance.functions";
+import { ClearPrepaidCard } from "@/components/ClearPrepaidCard";
 import { PaymentAllocationsCard } from "@/components/PaymentAllocationsCard";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import type { OverrideSlot } from "@/lib/package-override";
@@ -364,6 +365,7 @@ function ClientDetailPage() {
         <TabsContent forceMount value="packages" className="space-y-5 data-[state=inactive]:hidden">
           {isAdminUser && <EditPackagesCard client={(c as Client & { __raw?: Client }).__raw ?? c} onDone={refresh} editRequest={editRequest} />}
           {isAdminUser && <PaymentAllocationsCard client={c} onDone={refresh} />}
+          {isAdminUser && (() => { const raw = (c as Client & { __raw?: Client }).__raw ?? c; return <ClearPrepaidCard clientId={id} paidAhead={Number(raw.pending_renewal_paid ?? 0)} preparedOn={raw.pending_renewal_start_date ?? null} onDone={refresh} />; })()}
           <section className="border-y py-4" aria-label="Visit controls">
             <h2 className="mb-3 text-lg font-semibold">Visit source &amp; check-in</h2>
             <div className="flex flex-wrap items-center gap-3">

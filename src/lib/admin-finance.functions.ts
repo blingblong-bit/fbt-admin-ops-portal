@@ -231,3 +231,18 @@ export const syncActivationCronSecret = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     return { stored: true };
   });
+
+/** Admin: clear an old/stale paid-ahead amount and prepared renewal (audited; payment history kept). */
+export const clearUnallocatedPrepaid = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { clientId: string; reason: string }) => {
+    if (!d?.clientId || !d.reason?.trim()) throw new Error("A reason is required");
+    return d;
+  })
+  .handler(async ({ data, context }) => {
+    const ctx = context as unknown as Ctx;
+    await assertAdmin(ctx);
+    const { data: res, error } = await ctx.supabase.rpc("clear_unallocated_prepaid", { p_client_id: data.clientId, p_reason: data.reason.trim() });
+    if (error) throw new Error(error.message);
+    return res as { changed: boolean; cleared?: number };
+  });

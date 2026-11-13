@@ -1276,6 +1276,10 @@ export type Database = {
         Args: { p_client_id: string; p_reason: string; p_slot: string }
         Returns: Json
       }
+      clear_unallocated_prepaid: {
+        Args: { p_client_id: string; p_reason: string }
+        Returns: Json
+      }
       configure_scheduling_push: {
         Args: {
           p_enabled: boolean

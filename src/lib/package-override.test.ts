@@ -96,3 +96,13 @@ describe("override consistency across screens", () => {
     expect(applyOverridesToRows([raw], [])[0]).toBe(raw);
   });
 });
+
+describe("no general credit", () => {
+  it("extra money after a correction is flagged, never added to the current package as credit", () => {
+    const c = { id: "x", package_price: 375, amount_paid: 1125, package_total_visits: 8, visits_used: 1, previous_package_owed: 0, pending_renewal_paid: 0, pending_renewal_start_date: null, pending_renewal_price: null, pending_renewal_total_visits: null, package_start_date: "2026-10-29" } as unknown;
+    const o = [{ id: "o1", slot: "current", status: "active", price: 375, recognized_paid: 0, total_visits: 8, visits_used: null, start_date: "2026-10-29", square_booking_id: null, raw_baseline: { amount_paid: 375, pending_paid: 0, prev_owed: 0 }, created_at: "2026-10-29T00:00:00Z" }] as unknown;
+    const e = applyOverrides(c as RawPackageFields, o as PackageOverride[]);
+    expect(e.amount_paid).toBe(375);
+    expect(e.override_flags.some((f: string) => f.startsWith("$375 recorded after the correction fits no open package"))).toBe(true);
+  });
+});

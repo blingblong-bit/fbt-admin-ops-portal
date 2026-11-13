@@ -119,7 +119,7 @@ export function applyOverrides<T extends RawPackageFields>(c: T, overrides: Pack
   // explicit visit count on the package in force, or started a prepared package
   // by hand. Financial/date-only edits and Square-started packages keep Square
   // as the source of visit numbers. (Activation is still held by blocksAutoActivation.)
-  applyNewPayments(c, out, overrides, { cur, pen, prev, promoted });
+  applyNewPayments(c, out, overrides, { cur, pen, prev, promoted }, flags);
   const penActive = pen?.status === "active";
   const manualCount = penActive ? !pen!.square_booking_id : !!cur && cur.visits_used !== null;
   if (manualCount) out.visit_tracking_mode = "hub" as never;
@@ -132,7 +132,7 @@ export function applyOverrides<T extends RawPackageFields>(c: T, overrides: Pack
  * overrides mask only, oldest debt first: prior → current → prepared. Unmasked
  * fields already show raw payments, so nothing is counted twice.
  */
-function applyNewPayments(c: RawPackageFields, out: RawPackageFields, overrides: PackageOverride[], s: { cur?: PackageOverride; pen?: PackageOverride; prev?: PackageOverride; promoted: boolean }) {
+function applyNewPayments(c: RawPackageFields, out: RawPackageFields, overrides: PackageOverride[], s: { cur?: PackageOverride; pen?: PackageOverride; prev?: PackageOverride; promoted: boolean }, flags: string[]) {
   const withB = overrides.filter((o) => o.raw_baseline);
   const prevMasked = !!s.prev;
   const curMasked = (!!s.cur && s.cur.recognized_paid !== null) || s.pen?.status === "active";
@@ -160,7 +160,9 @@ function applyNewPayments(c: RawPackageFields, out: RawPackageFields, overrides:
     out.pending_renewal_paid = (n(out.pending_renewal_paid) + pool) as never;
     pool = 0;
   }
-  if (pool > 0) out.amount_paid = (n(out.amount_paid) + pool) as never; // overpayment stays visible as credit-on-current
+  // No general credit: money that fits no open package is never counted as paid
+  // anywhere (it could otherwise be reused by a later renewal); it needs review.
+  if (pool > 0) flags.push(`$${Math.round(pool * 100) / 100} recorded after the correction fits no open package — needs payment review (not counted as credit)`);
 }
 
 /** Overrides block automatic renewal activation so Square/check-in can't silently replace admin figures. */

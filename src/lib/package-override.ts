@@ -157,8 +157,10 @@ function applyNewPayments(c: RawPackageFields, out: RawPackageFields, overrides:
     pool -= t;
   }
   if (penMasked && pool > 0 && out.pending_renewal_start_date) {
-    out.pending_renewal_paid = (n(out.pending_renewal_paid) + pool) as never;
-    pool = 0;
+    // Only up to the prepared price: paid-ahead money is never open-ended credit.
+    const t = Math.min(pool, Math.max(0, n(out.pending_renewal_price) - n(out.pending_renewal_paid)));
+    out.pending_renewal_paid = (n(out.pending_renewal_paid) + t) as never;
+    pool -= t;
   }
   // No general credit: money that fits no open package is never counted as paid
   // anywhere (it could otherwise be reused by a later renewal); it needs review.

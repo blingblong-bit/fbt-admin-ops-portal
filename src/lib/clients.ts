@@ -173,14 +173,6 @@ export function packagePriceUnknown(
   return !(Number(c.package_price ?? 0) > 0);
 }
 
-/** Prepared next package that can legitimately absorb extra money. */
-function hasPreparedRenewal(c: PricedClient): boolean {
-  return (
-    !!c.pending_renewal_start_date ||
-    Number(c.pending_renewal_price ?? 0) > 0 ||
-    Number(c.pending_renewal_total_visits ?? 0) > 0
-  );
-}
 
 /**
  * Money recorded beyond what an explicit package can hold. There is no general

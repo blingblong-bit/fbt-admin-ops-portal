@@ -652,16 +652,20 @@ async function detectOverpayment(
   if (!clientId) return 0;
   const { data } = await supabaseAdmin
     .from("clients")
-    .select("package_price, amount_paid, payment_model, pending_renewal_start_date")
+    .select("package_price, amount_paid, payment_model, pending_renewal_start_date, pending_renewal_price, pending_renewal_paid")
     .eq("id", clientId)
     .maybeSingle();
   if (!data) return 0;
   if ((data.payment_model ?? "package") === "pay_per_visit") return 0;
   const price = Number(data.package_price ?? 0);
   const paid = Number(data.amount_paid ?? 0);
+  // No general credit: paid-ahead money above the prepared renewal price is excess too.
+  const penPrice = Number(data.pending_renewal_price ?? 0);
+  const penPaid = Number(data.pending_renewal_paid ?? 0);
+  const penOver = penPaid > 0 && (penPrice <= 0 || penPaid > penPrice) ? penPaid - Math.max(0, penPrice) : 0;
   // No package set up: any money recorded needs a package review.
-  if (price <= 0) return paid > 0 ? Number(paid.toFixed(2)) : 0;
-  return paid > price ? Number((paid - price).toFixed(2)) : 0;
+  const curOver = price <= 0 ? Math.max(0, paid) : Math.max(0, paid - price);
+  return Number((curOver + penOver).toFixed(2));
 }
 
 async function handleBookingEvent(supabaseAdmin: SupabaseClient<Database>, eventType: string, event: SquareEvent) {

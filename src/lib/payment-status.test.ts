@@ -66,8 +66,18 @@ describe("payment status for package clients", () => {
     expect(paymentStatus(c)).toBe("payment_review");
   });
 
-  it("overpayment explained by a prepared renewal is not Payment Review", () => {
+  it("excess on the current package is Payment Review even with a prepared renewal (no general credit)", () => {
     const c = base({ amount_paid: 690, pending_renewal_start_date: "2026-10-01" });
+    expect(paymentStatus(c)).toBe("payment_review");
+  });
+
+  it("paid-ahead above the prepared renewal price is Payment Review", () => {
+    const c = base({ amount_paid: 375, pending_renewal_start_date: "2026-10-01", pending_renewal_price: 375, pending_renewal_paid: 1125 } as never);
+    expect(paymentStatus(c)).toBe("payment_review");
+  });
+
+  it("legitimate early payment within the prepared price stays Paid", () => {
+    const c = base({ amount_paid: 375, pending_renewal_start_date: "2026-10-01", pending_renewal_price: 375, pending_renewal_paid: 375 } as never);
     expect(paymentStatus(c)).toBe("paid");
   });
 

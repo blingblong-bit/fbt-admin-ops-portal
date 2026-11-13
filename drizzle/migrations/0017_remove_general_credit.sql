@@ -1,13 +1,3 @@
--- PREPARED ONLY — NOT APPLIED. Do not move into supabase/migrations or run
--- against the shared backend without explicit owner approval.
--- Removes general credit from the live money functions:
---  * apply_square_payment: paid-ahead money is capped at the prepared renewal's
---    open price; any excess stays recorded on the current package and is marked
---    unallocated_excess / needs_payment_review in the payment activity.
---  * renew_client_package: refuses to renew while legacy excess exists (current
---    overpaid, or paid-ahead above the new price) instead of dropping/reusing it.
--- No table, row, payment, allocation or client data is changed.
-
 CREATE OR REPLACE FUNCTION public.apply_square_payment(p_client_id uuid, p_square_payment_id text, p_amount_cents integer, p_match_method text, p_manual_resolution boolean DEFAULT false)
  RETURNS TABLE(newly_applied boolean, applied_amount numeric)
  LANGUAGE plpgsql
@@ -75,9 +65,6 @@ BEGIN
   v_remaining := v_remaining - v_to_current;
   v_to_pending := 0;
 
-  -- 3) Anything left only moves forward when a prepared renewal explains it.
-  --    Otherwise it stays on the current package as a reviewable overpayment;
-  --    no general account credit is ever created.
   -- 3) No general credit. Money moves forward only into an already-prepared,
   --    priced renewal, and only up to that renewal's open price. Anything else
   --    stays recorded on the current package as an overpayment (never lost) and

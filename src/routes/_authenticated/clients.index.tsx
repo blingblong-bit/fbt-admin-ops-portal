@@ -23,7 +23,6 @@ import {
   effectiveStatus,
   formatCurrency,
   fullName,
-  progress,
   needsPackageReview,
   type Client,
   type LifecycleStatus,
@@ -35,6 +34,8 @@ import { applyOverridesToRows, type PackageOverride } from "@/lib/package-overri
 import { getPackageSetupList } from "@/lib/package-setup.functions";
 import { useRole } from "@/hooks/useRole";
 import { usePackageReviewDismissedIds } from "@/components/PackageReviewBadge";
+import { getClientListVisitTracking } from "@/lib/client-visit-progress.functions";
+import { clientVisitProgress } from "@/lib/client-visit-progress";
 
 
 export const Route = createFileRoute("/_authenticated/clients/")({
@@ -80,6 +81,15 @@ function ClientsListPage() {
   const renewalFn = useServerFn(getRenewalForecast);
   const setupFn = useServerFn(getPackageSetupList);
   const today = chicagoYmd();
+  const fetchVisitTracking = useServerFn(getClientListVisitTracking);
+  const visitProgress = useQuery({
+    queryKey: ["clients", "visit-progress"],
+    queryFn: () => fetchVisitTracking(),
+    staleTime: 60_000,
+  });
+  const shownProgress = (c: Client) => visitProgress.isPending
+    ? "Checking…"
+    : clientVisitProgress(c, visitProgress.data?.[c.id]);
   const schedule = useQuery({ queryKey: ["schedule-check", today], queryFn: () => scheduleFn({ data: { date: today } }), enabled: ["today", "week", "not_next", "not_scheduled"].includes(view), staleTime: 60_000 });
   const renewals = useQuery({ queryKey: ["renewal-forecast"], queryFn: () => renewalFn(), enabled: view === "renewals", staleTime: 60_000 });
   const setup = useQuery({ queryKey: ["renewal-forecast", "package-setup"], queryFn: () => setupFn(), enabled: view === "package", staleTime: 60_000 });
@@ -182,6 +192,7 @@ function ClientsListPage() {
 
       <div className="mb-4"><label htmlFor="clients-view" className="mb-1 block text-xs font-medium text-muted-foreground">Client filter</label><select id="clients-view" value={view} onChange={e => setView(e.target.value)} className="h-11 w-full rounded-md border border-input bg-background px-3 text-sm sm:max-w-sm">{[["all","All Active"],["package","Needs Package Info"],["renewals","Renewals"],["today","Scheduled Today"],["week","Scheduled This Week"],["not_next","This Week but Not Next"],["not_scheduled","Not Scheduled"]].map(([key,label]) => <option key={key} value={key}>{label}</option>)}</select></div>
       {clientError && <p role="alert" className="mb-4 text-destructive">Clients could not load. <Button variant="outline" onClick={() => retryClients()}>Retry</Button></p>}
+      {visitProgress.isError && <p role="alert" className="mb-4 text-destructive">Square progress could not load; showing Hub counts. <Button variant="outline" onClick={() => visitProgress.refetch()}>Retry</Button></p>}
       {viewError && <p role="alert" className="mb-4 text-destructive">Could not fully read this filter: {viewError} <Button variant="outline" onClick={() => { schedule.refetch(); renewals.refetch(); setup.refetch(); }}>Retry</Button></p>}
       {(viewBusy || isLoading) && <p role="status" className="mb-4 text-muted-foreground">Loading clients…</p>}
       <div className="sticky top-0 z-20 -mx-4 mb-3 border-b bg-background/95 px-4 py-2 backdrop-blur md:hidden">
@@ -222,7 +233,7 @@ function ClientsListPage() {
                 <div className="text-muted-foreground">Package</div>
                 <div className="text-right text-foreground truncate">{c.package_name ?? "—"}</div>
                 <div className="text-muted-foreground">Visits</div>
-                <div className="text-right text-foreground">{progress(c)}</div>
+                <div className="text-right text-foreground">{shownProgress(c)}</div>
                 <div className="text-muted-foreground">Scheduled</div>
                 <div className="text-right">{scheduledSet.has(c.id) ? "✅" : "⭕"}</div>
                 {!isStaff && (
@@ -277,7 +288,7 @@ function ClientsListPage() {
                     <TableCell className="font-medium whitespace-nowrap">{fullName(c)}</TableCell>
                     <TableCell className="whitespace-nowrap">{c.phone ?? "—"}</TableCell>
                     <TableCell className="whitespace-nowrap">{c.package_name ?? "—"}</TableCell>
-                    <TableCell className="whitespace-nowrap">{progress(c)}</TableCell>
+                    <TableCell className="whitespace-nowrap">{shownProgress(c)}</TableCell>
                     <TableCell>
                       {scheduledSet.has(c.id) ? "✅" : "⭕"}
                     </TableCell>

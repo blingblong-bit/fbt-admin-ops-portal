@@ -1,5 +1,9 @@
 # Roadmap
 
+## Client search visit progress
+- [ ] Match search cards/table to the profile's read-only Square visit tracking
+- [ ] Test fallback rules and verify Katie on mobile and desktop without live writes
+
 ## Dues messaging saved prices
 - [x] Apply active audited package overrides to queue, previews, board and single-client validation without rewriting clients
 - [x] 70 targeted tests passed; signed-in Dues Texts and queue loaded read-only with sending disabled and no runtime errors

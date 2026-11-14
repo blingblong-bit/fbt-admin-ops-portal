@@ -1,5 +1,10 @@
 # Roadmap
 
+## Scheduling worklist search and Krislyn review
+- [x] Add shared name search without changing category memberships or outreach state
+- [x] Investigate Krislyn read-only: scheduling sees Square 3/4, forecast's explicit override sees 2/4 with two future bookings; record untouched
+- [x] Signed-in desktop/mobile search, category switching and clearing verified; 42 relevant tests passed, build OK
+
 ## Client search visit progress
 - [x] Match search cards/table to the profile's read-only Square visit tracking
 - [x] 71 tests passed; Katie verified at 6/9 on mobile, desktop and profile without live writes

@@ -16,4 +16,15 @@ describe("name search", () => {
     const list = [{ n: "A" }, { n: "B" }];
     expect(filterByName(list, "   ", (x) => x.n)).toBe(list);
   });
+  it("worklist search preserves a client's memberships and leaves original lists intact", () => {
+    const krislyn = { id: "krislyn", first_name: "Krislyn", last_name: "Martin" };
+    const other = { id: "other", first_name: "Katie", last_name: "McNabb" };
+    const categories = { not_scheduled: [krislyn, other], package_completed: [krislyn], hidden: [other] };
+    const getName = (r: typeof krislyn) => `${r.first_name} ${r.last_name}`;
+    expect(filterByName(categories.not_scheduled, "  KRIS ", getName)).toEqual([krislyn]);
+    expect(filterByName(categories.package_completed, "mart", getName)).toEqual([krislyn]);
+    expect(filterByName(categories.hidden, "kris", getName)).toEqual([]);
+    expect(categories.not_scheduled).toEqual([krislyn, other]);
+    expect(filterByName(categories.not_scheduled, "", getName)).toBe(categories.not_scheduled);
+  });
 });

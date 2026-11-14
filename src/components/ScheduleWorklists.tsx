@@ -5,7 +5,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { toast } from "@/components/ui/sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import { filterByName, normalizeQuery } from "@/lib/name-search";
 import { SchedulingFollowupDialog } from "@/components/SchedulingFollowupDialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatDate } from "@/lib/clients";
@@ -33,7 +33,6 @@ type Moves = Record<string, "hidden" | "restored">;
 export function ScheduleWorklists({ data: sourceData, filter, lastWeek = [] }: { data: ScheduleCheckResult["worklists"] | undefined; filter: string; lastWeek?: WorklistRow[] }) {
   const serverData = useMemo(() => sourceData ? { ...sourceData, last_week: lastWeek } : undefined, [sourceData, lastWeek]);
   const [tab, setTab] = useState<Key>("not_scheduled");
-  const [q, setQ] = useState("");
   const [limit, setLimit] = useState(100);
   const [collapsed, setCollapsed] = useState<Record<Key, boolean>>({
     last_week: true,
@@ -60,11 +59,11 @@ export function ScheduleWorklists({ data: sourceData, filter, lastWeek = [] }: {
     }
     return out;
   }, [serverData, moves]);
-  const term = (q || filter).trim().toLowerCase();
+  const term = normalizeQuery(filter);
+  useEffect(() => { setLimit(100); }, [term, tab]);
   const rows = useMemo(() => {
     const list = data?.[tab] ?? [];
-    if (!term) return list;
-    return list.filter((r) => `${r.first_name} ${r.last_name}`.toLowerCase().includes(term));
+    return filterByName(list, term, r => `${r.first_name} ${r.last_name}`);
   }, [data, tab, term]);
 
   return (
@@ -93,17 +92,17 @@ export function ScheduleWorklists({ data: sourceData, filter, lastWeek = [] }: {
                   size="sm"
                   variant="outline"
                   className="min-h-11 shrink-0"
-                  aria-expanded={!collapsed[t.key]}
+                  aria-expanded={!!term || !collapsed[t.key]}
+                  disabled={!!term}
                   onClick={() => setCollapsed((c) => ({ ...c, [t.key]: !c[t.key] }))}
                 >
-                  {collapsed[t.key] ? `Show list (${data?.[t.key].length ?? 0})` : "Collapse list"}
+                  {term ? `${rows.length} matches` : collapsed[t.key] ? `Show list (${data?.[t.key].length ?? 0})` : "Collapse list"}
                 </Button>
               </div>
-              {!collapsed[t.key] && (
+              {(!!term || !collapsed[t.key]) && (
                 <>
                   {t.key === "hidden" && (
                     <>
-                      <Input type="search" placeholder="Filter hidden clients by name…" value={q} onChange={(e) => { setQ(e.target.value); setLimit(100); }} className="h-11" />
                       <p className="text-xs text-muted-foreground">
                         {term ? `${rows.length} of ${data?.hidden.length ?? 0} hidden match` : `${data?.hidden.length ?? 0} hidden`}
                         {" · "}{data?.hidden.filter((r) => r.hidden_kind === "manual").length ?? 0} by staff, {data?.hidden.filter((r) => r.hidden_kind === "auto").length ?? 0} auto

@@ -1,5 +1,10 @@
 # Roadmap
 
+## Scheduling worklist search and Krislyn review
+- [ ] Add shared name search without changing category memberships or outreach state
+- [ ] Investigate Krislyn's Needs Renewal absence read-only; preserve her record
+- [ ] Verify search on desktop/mobile and run relevant tests
+
 ## Client search visit progress
 - [x] Match search cards/table to the profile's read-only Square visit tracking
 - [x] 71 tests passed; Katie verified at 6/9 on mobile, desktop and profile without live writes

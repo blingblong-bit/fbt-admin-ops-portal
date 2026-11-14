@@ -1,9 +1,9 @@
 # Roadmap
 
 ## Scheduling worklist search and Krislyn review
-- [ ] Add shared name search without changing category memberships or outreach state
-- [ ] Investigate Krislyn's Needs Renewal absence read-only; preserve her record
-- [ ] Verify search on desktop/mobile and run relevant tests
+- [x] Add shared name search without changing category memberships or outreach state
+- [x] Investigate Krislyn read-only: scheduling sees Square 3/4, forecast's explicit override sees 2/4 with two future bookings; record untouched
+- [x] Signed-in desktop/mobile search, category switching and clearing verified; 42 relevant tests passed, build OK
 
 ## Client search visit progress
 - [x] Match search cards/table to the profile's read-only Square visit tracking

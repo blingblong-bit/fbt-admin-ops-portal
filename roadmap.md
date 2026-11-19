@@ -3,7 +3,7 @@
 ## Assessment-to-package payment review
 - [x] Add read-only Square service detection to Payment Due and Needs Package Setup without changing money calculations
 - [x] 70 targeted tests passed; signed-in six-case review, profile link and mobile layout verified; build OK
-- [ ] Save Donna and Bristol package prices — waiting for owner-confirmed amounts
+- [x] Save Donna and Bristol package prices — owner-confirmed $375/8 and $200/4 saved as audited overrides; Payment Due shows both, review list down to 5
 
 ## Scheduling worklist search and Krislyn review
 - [x] Add shared name search without changing category memberships or outreach state

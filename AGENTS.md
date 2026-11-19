@@ -27,7 +27,7 @@
 - Shared prepared editor uses `preparedEditGuard` on both forecast and fresh server evidence; same-cycle reschedules preserve prepaid and original preparation time, while already-opened/ambiguous prepaid cycles and active pending corrections require audited reconciliation rather than silent reuse.
 - Prepared cancellation uses authenticated `cancel_prepared_renewal` to lock the client, clear raw preparation and prepared override atomically, and audit once; prepaid funds require reconciliation and active packages are never cancelled, preventing resurrection or silent money movement.
 - Square activation decided only by `decideSquareActivation` (past live 1/N on/after prepared date, clean sequence, size match, no override), applied only by `runSquareActivationSweep` when `SQUARE_AUTO_ACTIVATION_ENABLED=true`; openers before `SQUARE_AUTO_ACTIVATION_SINCE` report-only.
-- Needs Package Setup (`package-setup.ts`) is read-only; never creates packages/payments.
+- Needs Package Setup and the Payment Due assessment-to-training alert share the read-only `getPackageSetupList`; catalog parent service types plus live bookings identify missing effective package/pricing, never infer debt or write packages/payments, and unreadable corrections/catalog fail closed.
 - Schedule follow-up lists only from `groupFollowUps`/`effectiveRemaining` (disjoint, clean Square counts preferred, Hub/Square disagreement flagged, never auto-fixed).
 - Schedule worklists only from `classifyWorklist`; hides/pins in `schedule_hides`, clear only on new activity or opposite staff action; never hide mismatches/unlinked clients.
 - Activation cron: `authorizeCron` checks private bearer before any work; pg_cron reads it from vault (set only by admin `syncActivationCronSecret`).

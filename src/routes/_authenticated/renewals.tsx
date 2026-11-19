@@ -29,8 +29,8 @@ function PackageSetupList({ query }: { query: string }) {
   const rows = filterByName(q.data?.rows ?? [], query, (r) => r.name);
   return (
     <div className="space-y-3">
-      {q.data?.error && <p className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm">Appointments couldn't be read, so states below may be wrong: {q.data.error}</p>}
-      {rows.length === 0 ? <p className="text-sm text-muted-foreground">{query ? "No client here matches that name." : "Nobody is waiting for a first package."}</p> : rows.map((r) => (
+      {q.data?.error && <p role="alert" className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm">Package setup review unavailable: {q.data.error}</p>}
+      {!q.data?.error && (rows.length === 0 ? <p className="text-sm text-muted-foreground">{query ? "No client here matches that name." : "Nobody is waiting for package setup or pricing."}</p> : rows.map((r) => (
         <Card key={r.client_id} className={r.state === "urgent" ? "border-destructive/50" : ""}>
           <CardContent className="flex flex-wrap items-center justify-between gap-2 p-4">
             <div>
@@ -43,7 +43,7 @@ function PackageSetupList({ query }: { query: string }) {
             <Button asChild size="sm" variant="outline"><Link to="/clients/$id" params={{ id: r.client_id }}>Open profile / set package</Link></Button>
           </CardContent>
         </Card>
-      ))}
+      )))}
     </div>
   );
 }

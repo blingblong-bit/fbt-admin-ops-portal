@@ -11,6 +11,7 @@ import { getMasterDues, masterDuesQuery } from "@/lib/master-dues.functions";
 import { DUES_FILTERS, filterTotals, makeWeekOf, matchesFilter, sortRows, sumRows, type DuesFilter } from "@/lib/master-dues-view";
 import type { MasterDuesRow, ObligationStatus } from "@/lib/master-dues";
 import { addDaysYmd, workWeekStartFromYmd } from "@/lib/work-week";
+import { AssessmentPackageReview } from "@/components/AssessmentPackageReview";
 
 export const Route = createFileRoute("/_authenticated/payment-due")({
   head: () => ({
@@ -72,6 +73,7 @@ function PaymentDuePage() {
       </div>
 
       {!q.isLoading && <DuesFreshnessBanner q={q} />}
+      <AssessmentPackageReview enabled={isAdmin} />
       {q.isLoading || roleLoading ? (
         <p className="text-muted-foreground">Loading master dues from Square…</p>
       ) : q.isError && !q.data ? (
@@ -116,7 +118,7 @@ function PaymentDuePage() {
               </div>
             </div>
           )}
-          <p className="mt-6 text-xs text-muted-foreground">Computed {new Date(q.data!.computed_at).toLocaleString()}</p>
+          <p className="mt-6 text-xs text-muted-foreground">Computed {q.data ? new Date(q.data.computed_at).toLocaleString() : "—"}</p>
         </div>
       )}
     </AppShell>

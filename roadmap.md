@@ -1,5 +1,10 @@
 # Roadmap
 
+## Assessment-to-package payment review
+- [x] Add read-only Square service detection to Payment Due and Needs Package Setup without changing money calculations
+- [x] 70 targeted tests passed; signed-in six-case review, profile link and mobile layout verified; build OK
+- [ ] Save Donna and Bristol package prices — waiting for owner-confirmed amounts
+
 ## Scheduling worklist search and Krislyn review
 - [x] Add shared name search without changing category memberships or outreach state
 - [x] Investigate Krislyn read-only: scheduling sees Square 3/4, forecast's explicit override sees 2/4 with two future bookings; record untouched

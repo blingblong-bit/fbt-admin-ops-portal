@@ -79,6 +79,7 @@ import {
   type WeeklyPaymentRow,
 } from "@/lib/weekly-payment-groups";
 import { invalidateFor } from "@/lib/invalidation";
+import { applyOverridesToRows, type PackageOverride } from "@/lib/package-override";
 
 
 export const Route = createFileRoute("/_authenticated/")({
@@ -119,7 +120,10 @@ function useClients() {
         all.push(...batch);
         if (batch.length < PAGE_SIZE) break;
       }
-      return all;
+      // Apply audited package corrections so queues match the profile.
+      const overrides = await supabase.from("package_overrides").select("*").is("cleared_at", null);
+      if (overrides.error) throw overrides.error;
+      return applyOverridesToRows(all, (overrides.data ?? []) as (PackageOverride & { client_id: string })[]);
     },
   });
 }

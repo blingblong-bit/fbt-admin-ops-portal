@@ -310,14 +310,16 @@ export function futureBookedBoundary(live: LiveNumbered[], nowIso: string): stri
  * Square-driven timing for a prepared renewal. Square's visit sequence decides;
  * when the renewal was prepared is supporting evidence only.
  *  1. A past 1/N counts as the renewal's start only when Square shows the
- *     package Hub tracks finished (live N/N on/after Hub's start date) and the
+ *     package Hub tracks finished (live N/N after Hub's start date) and the
  *     new package is still in progress.
  *  2. If the past 1/N merely opened the package Hub already tracks (stale Hub
  *     start date), the renewal goes to the next booked boundary / first
  *     uncovered visit.
  *  3. Both a clear past start and a later booked boundary → Needs Review,
  *     unless preparation after the past start supports the later one.
- * Without evidence (legacy callers) the prior rule applies.
+ * Completion on the Hub start date can be the previous package's final visit
+ * followed by a manual renewal; it does not prove the new Hub package finished.
+ * Without boundary evidence, a later opener alone requires review.
  */
 export function renewalTimingFor(
   c: { pending_renewal_price?: number | null; pending_renewal_start_date?: string | null; package_start_date?: string | null },
@@ -328,10 +330,10 @@ export function renewalTimingFor(
   if (s.suppressed) return { kind: "unknown", ymd: null, reason: "Square position unreadable" };
   const pending = Number(c.pending_renewal_price ?? 0) > 0 || !!c.pending_renewal_start_date;
   const pastStart = pending && s.currentPackageStart && s.used < s.total && (!c.package_start_date || chiYmd(s.currentPackageStart) > c.package_start_date) ? s.currentPackageStart : null;
-  if (pastStart && !ev) return { kind: "started", ymd: chiYmd(pastStart), reason: "Square shows the next package began (1/N after N/N)" };
+  if (pastStart && !ev) return { kind: "unknown", ymd: null, reason: "Square package opener cannot be attributed without boundary evidence" };
   if (pastStart && ev) {
     const startYmd = chiYmd(pastStart);
-    const clearPast = ev.live.some((x) => x.n === x.of && x.iso < pastStart && (!c.package_start_date || chiYmd(x.iso) >= c.package_start_date));
+    const clearPast = ev.live.some((x) => x.n === x.of && x.iso < pastStart && (!c.package_start_date || chiYmd(x.iso) > c.package_start_date));
     const future = futureBookedBoundary(ev.live, nowIso);
     if (clearPast && !future) return { kind: "started", ymd: startYmd, reason: "Square shows the Hub package finished and the next package began" };
     if (clearPast && future) {

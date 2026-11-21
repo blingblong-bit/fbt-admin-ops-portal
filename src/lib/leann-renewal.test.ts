@@ -9,7 +9,7 @@ import { groupRenewals } from "./renewals-view";
 import { decideOverridePendingStart } from "./square-activation";
 import { buildSequence, detectNoteIssues } from "./square-visit-audit";
 import { currentPositionUnreadable, drivingCounts, forecastRenewal, resolveEffectiveVisitState } from "./effective-visit-state";
-import { computeMasterDues, renewalTimingFor } from "./master-dues";
+import { computeMasterDues, liveNumbered, renewalTimingFor } from "./master-dues";
 import { chicagoYmd, workWeekStartFromYmd, addDaysYmd } from "./work-week";
 
 const ID = "leann";
@@ -47,7 +47,7 @@ function collections(nowIso: string, bookings: ForecastBooking[], overrides: Ovr
   const st = resolveEffectiveVisitState(e, live, nowIso);
   const d = drivingCounts(st);
   const f = forecastRenewal({ upcomingStarts: upcomingFrom(bookings, nowIso), visitsUsed: d.used, totalVisits: d.total, nextPackageStart: d.nextPackageStart });
-  const t = renewalTimingFor(e, { suppressed: st.suppressed, ...d, firstUncoveredStart: f.firstUncoveredStart }, nowIso);
+  const t = renewalTimingFor(e, { suppressed: st.suppressed, ...d, firstUncoveredStart: f.firstUncoveredStart }, nowIso, { live: liveNumbered(bookings) });
   const row = computeMasterDues([e as never], { todayYmd: chicagoYmd(new Date(nowIso)), nextAppointmentYmd: new Map(), renewalTiming: new Map([[ID, t]]) }).rows[0];
   return { row, state: st, eff: e };
 }

@@ -55,7 +55,7 @@ describe("prepared renewal timing vs completed boundary (Jay)", () => {
     const d = drivingCounts(s);
     const ups = bs.filter((x) => x.start_at > now && x.status === "ACCEPTED").map((x) => x.start_at);
     const f = forecastRenewal({ upcomingStarts: ups, visitsUsed: d.used, totalVisits: d.total, nextPackageStart: d.nextPackageStart });
-    return renewalTimingFor(client, { suppressed: s.suppressed, ...d, firstUncoveredStart: f.firstUncoveredStart }, now);
+    return renewalTimingFor(client, { suppressed: s.suppressed, ...d, firstUncoveredStart: f.firstUncoveredStart }, now, { live: liveNumbered(bs) });
   };
   it("completed 8/26 package → Upcoming 10/28, not Due Now", () => {
     expect(timing(jay, NOW)).toMatchObject({ kind: "upcoming", ymd: "2026-10-28" });

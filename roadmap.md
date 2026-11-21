@@ -1,5 +1,10 @@
 # Roadmap
 
+## Renewal timing boundary regression
+- [x] Inspect current-cycle versus next-cycle evidence without live mutations
+- [x] Exclude old completion on the effective Hub start date; hold evidence-free opener attribution for review; add 14 anonymized regressions
+- [x] 160 focused / 568 full tests passed; diff checked; signed-in preview shows Melani's $345 renewal Prepared, not Due Now, without an Aug 28 expected date; no runtime errors or publication
+
 ## Assessment-to-package payment review
 - [x] Add read-only Square service detection to Payment Due and Needs Package Setup without changing money calculations
 - [x] 70 targeted tests passed; signed-in six-case review, profile link and mobile layout verified; build OK

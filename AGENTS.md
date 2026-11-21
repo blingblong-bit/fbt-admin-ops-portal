@@ -10,6 +10,7 @@
 <!-- LOVABLE:END -->
 
 - `src/lib/master-dues.ts`: pure dues calculator (previous/current/prepared buckets, own status); caller supplies Square-driven renewal timing, never stored date alone — testable, stale dates harmless.
+- `renewalTimingFor` attributes a past Square opener only with live completion strictly after the effective Hub package start; same-day completion may precede manual renewal, and missing boundary evidence requires review rather than inferred debt.
 - Payment Due reads only getMasterDues/computeMasterDues (tile + /payment-due share one query); Renewal Scheduled is workflow-only — no total drift.
 - pay_per_visit/weekly clients get money only from `billing-sim.ts` obligations (Square appts since `billing_effective_date`, attributable payments oldest-first) inside getMasterDues; package fields ignored — one billing path.
 - `weekly-dues.ts` only slices Master Dues rows into a work week and must reconcile to its total — no drift.

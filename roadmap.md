@@ -1,9 +1,11 @@
 # Roadmap
 
 ## Simple Dues renewal week picker
+- [x] Replace current-week-only owed display with per-client carried-over/new-this-week projections for current and future weeks; past weeks remain expected/paid only
+- [x] Test $375 carried + $375 new = $750, intervening unpaid future starts, paid exclusions and carried-only clients; exclude already-past starts from projected carry
 - [x] Replace fixed grouping with Chicago Monday–Sunday navigation and current-week reset
-- [x] Add pure weekly rows/totals, all projected 1/x starts, current-week-only already owed and read-only historical evidence (current records, not historical snapshots)
-- [x] 126 focused / 697 full tests passed; 1440/390/320px unsaved examples verified current split, next/past weeks and reset without overflow/errors; build OK, unchanged balances/scheduling/data, no publication
+- [x] Add pure weekly rows/totals, all projected 1/x starts and read-only historical evidence (current records, not historical snapshots)
+- [x] 112 focused / 707 full tests passed; 1440/390/320px unsaved examples verified per-client current/next/later splits, paid zero rows, past expected/paid without carry and reset without overflow/errors; build OK, unchanged balances/scheduling/data, no publication
 - [ ] Signed-in real-record verification — no existing account in this draft; no account/data created under read-only instructions
 
 ## Simple Dues visit labels and upcoming renewals

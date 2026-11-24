@@ -90,21 +90,41 @@ export function simpleRenewalEvents(client: SimpleClient, packages: SimplePackag
     });
   });
 }
+export type SimpleRenewalWeekRow = { client: SimpleClient; carriedOver: number; newThisWeek: number; total: number; packages: SimpleRenewalEvent[]; carriedPackages: SimpleRenewalEvent[] };
+/** Assumes no additional payments; carried projections never become stored balances. */
 export function buildSimpleRenewalWeek(input: { events: SimpleRenewalEvent[]; whoOwes: SimpleRow[]; selectedDate: string; now: string; bookingsReliable?: boolean }) {
   const start = simpleWeekStart(input.selectedDate); const next = shiftSimpleWeek(start, 1);
   const endDate = new Date(`${next}T12:00:00Z`); endDate.setUTCDate(endDate.getUTCDate() - 1);
-  const isCurrent = start === simpleWeekStart(chicagoDate(input.now));
+  const currentStart = simpleWeekStart(chicagoDate(input.now));
+  const isCurrent = start === currentStart; const isPast = start < currentStart;
   const seen = new Set<string>();
-  const packages = input.bookingsReliable === false ? [] : input.events.filter(r => {
+  const events = input.bookingsReliable === false ? [] : input.events.filter(r => {
     const key = `${r.client.id}:${r.visit.booking.id}`;
-    if (r.client.archived || r.visit.booking.date < start || r.visit.booking.date >= next || seen.has(key)) return false;
+    if (r.client.archived || seen.has(key)) return false;
     seen.add(key); return true;
   }).sort((a,b) => a.visit.booking.startAt.localeCompare(b.visit.booking.startAt) || a.client.name.localeCompare(b.client.name));
-  const owed = isCurrent ? [...new Map(input.whoOwes.filter(r => !r.client.archived && r.balance !== null && r.balance > 0).map(r => [r.client.id, r])).values()] : [];
-  const newPackages = packages.reduce((s,r) => s + cents(r.expected), 0);
-  const alreadyOwed = owed.reduce((s,r) => s + cents(Number(r.balance)), 0);
-  return { start, end: endDate.toISOString().slice(0,10), isCurrent, isPast: start < simpleWeekStart(chicagoDate(input.now)), packages, owed,
-    newPackages: newPackages / 100, alreadyOwed: alreadyOwed / 100, total: (newPackages + alreadyOwed) / 100,
+  const packages = events.filter(r => r.visit.booking.date >= start && r.visit.booking.date < next);
+  const owed = !isPast ? [...new Map(input.whoOwes.filter(r => !r.client.archived && r.balance !== null && r.balance > 0).map(r => [r.client.id, r])).values()] : [];
+  const carriedPackages = isPast ? [] : events.filter(r => !r.paid && r.visit.booking.startAt > input.now && r.visit.booking.date < start);
+  const byClient = new Map<string, { client: SimpleClient; carriedCents: number; newCents: number; packages: SimpleRenewalEvent[]; carriedPackages: SimpleRenewalEvent[] }>();
+  function clientRow(client: SimpleClient) {
+    const existing = byClient.get(client.id);
+    if (existing) return existing;
+    const row = { client, carriedCents: 0, newCents: 0, packages: [] as SimpleRenewalEvent[], carriedPackages: [] as SimpleRenewalEvent[] };
+    byClient.set(client.id, row); return row;
+  }
+  for (const row of owed) clientRow(row.client).carriedCents += cents(Number(row.balance));
+  for (const event of carriedPackages) {
+    const row = clientRow(event.client); row.carriedCents += cents(event.expected); row.carriedPackages.push(event);
+  }
+  for (const event of packages) {
+    const row = clientRow(event.client); row.newCents += event.paid ? 0 : cents(event.expected); row.packages.push(event);
+  }
+  const rows: SimpleRenewalWeekRow[] = [...byClient.values()].map(r => ({ client: r.client, carriedOver: r.carriedCents / 100, newThisWeek: r.newCents / 100, total: (r.carriedCents + r.newCents) / 100, packages: r.packages, carriedPackages: r.carriedPackages })).sort((a,b) => a.client.name.localeCompare(b.client.name));
+  const newThisWeek = [...byClient.values()].reduce((s,r) => s + r.newCents, 0);
+  const carriedOver = [...byClient.values()].reduce((s,r) => s + r.carriedCents, 0);
+  return { start, end: endDate.toISOString().slice(0,10), isCurrent, isPast, packages, rows,
+    newThisWeek: newThisWeek / 100, carriedOver: carriedOver / 100, total: (newThisWeek + carriedOver) / 100,
     expectedValue: packages.reduce((s,r) => s + cents(r.visit.price), 0) / 100,
     paidValue: packages.filter(r => r.paid).reduce((s,r) => s + cents(r.visit.price), 0) / 100,
     appointmentsReliable: input.bookingsReliable !== false,

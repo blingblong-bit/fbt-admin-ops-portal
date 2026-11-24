@@ -131,11 +131,6 @@ export const Route = createFileRoute("/api/public/square/webhook")({
           }
           if (eventType === "payment.created" || eventType === "payment.updated") {
             await handlePaymentEvent(supabaseAdmin, eventType, event);
-            // Independent follow-on; legacy handling and acknowledgement stay unchanged.
-            try {
-              const { ingestSimplePayment } = await import("@/lib/simple-dues-ingest.server");
-              await ingestSimplePayment(supabaseAdmin, obj.payment?.id ?? event.data?.id ?? null);
-            } catch { console.error("[simple-dues] follow-on unavailable; original payment handling completed"); }
             return new Response("ok");
           }
           if (

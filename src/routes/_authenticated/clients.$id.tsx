@@ -1,6 +1,5 @@
-import { useSimplePackageClientIds } from "@/hooks/useSimplePackageClientIds";
-import { invalidateFor as invalidateSimpleDues } from "@/lib/simple-dues-cache";
-import { SimpleDuesCard } from "@/components/SimpleDuesCard";
+import { PreRenewCard } from "@/components/PreRenewCard";
+import type { RenewalForecastRow } from "@/lib/schedule.functions";
 import { createFileRoute, Link, useCanGoBack, useNavigate, useRouter } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
@@ -12,12 +11,19 @@ import { supabase } from "@/integrations/supabase/client";
 import { recordManualPayment } from "@/lib/payments.functions";
 import { renewPackage } from "@/lib/renewal.functions";
 import { updateClientDetails } from "@/lib/admin-finance.functions";
+import { ClearPrepaidCard } from "@/components/ClearPrepaidCard";
+import { PaymentAllocationsCard } from "@/components/PaymentAllocationsCard";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import type { OverrideSlot } from "@/lib/package-override";
+import { EditPackagesCard } from "@/components/EditPackagesCard";
 import { applyOverrides, type PackageOverride } from "@/lib/package-override";
 import { AppShell } from "@/components/AppShell";
 import { ArchiveClientButton } from "@/components/ArchiveClientButton";
+import { VisitSourceLine } from "@/components/VisitSourceLine";
 import { StatusBadge } from "@/components/StatusBadge";
+import { RenewalFlagBadge, useIsRenewalFlagged } from "@/components/RenewalFlagBadge";
 import {
+  PackageReviewBadge,
   usePackageReviewDismissedIds,
   DISMISS_ACTIVITY,
   UNDISMISS_ACTIVITY,
@@ -27,6 +33,12 @@ import {
 import {
   getScheduledClientIds,
   getClientAppointments,
+  getUncheckedRecentAppointments,
+  completeVisitForClient,
+  getClientVisitTracking,
+  setVisitTrackingMode,
+  undoVisitCheckIn,
+  getRenewalForecast,
   type ClientAppointment,
 } from "@/lib/schedule.functions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -49,6 +61,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Progress } from "@/components/ui/progress";
 import {
   Dialog,
   DialogContent,
@@ -138,27 +151,101 @@ function ClientDetailPage() {
   const isScheduled = scheduledQuery.data?.client_ids.includes(id) ?? false;
   const qc = useQueryClient();
   const navigate = useNavigate();
+  const [paymentOpen, setPaymentOpen] = useState(false);
+  const [renewOpen, setRenewOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [section, setSection] = useState("overview");
+  const [correctOpen, setCorrectOpen] = useState(false);
+  const [editRequest, setEditRequest] = useState<{ slot: OverrideSlot; key: number } | null>(null);
+  const openPackage = (slot: OverrideSlot) => {
+    setCorrectOpen(false);
+    setSection("packages");
+    setEditRequest({ slot, key: Date.now() });
+  };
 
 
   useEffect(() => {
     if (edit) setEditOpen(true);
   }, [edit]);
 
+  const { isAdmin: isAdminUser } = useRole();
   const refresh = () => {
-    // Contact edits and review dismissals retain the existing refresh behavior.
+    // Used after payments, renewals, package edits and check-ins on this profile.
     invalidateFor(qc, ["payment-changed", "renewal-changed", "package-edited", "visit-changed"], { clientId: id });
   };
 
-  // Scheduling is derived from live Square bookings — no manual toggle.
+  const fetchForecast = useServerFn(getRenewalForecast);
+  const forecastQ = useQuery({
+    queryKey: ["renewal-forecast"],
+    queryFn: () => fetchForecast(),
+    staleTime: 60_000,
+    enabled: !!c?.pending_renewal_start_date,
+  });
+  const renewalRow = (forecastQ.data as { rows?: { client_id: string; first_uncovered_ymd: string; no_upcoming: boolean }[] } | undefined)?.rows?.find((r) => r.client_id === id);
+  const completeVisitFn = useServerFn(completeVisitForClient);
+  const fetchUnchecked = useServerFn(getUncheckedRecentAppointments);
 
+  const [visitPickerOpen, setVisitPickerOpen] = useState(false);
+  const fetchTracking = useServerFn(getClientVisitTracking);
+  const trackingQ = useQuery({
+    queryKey: ["visit-tracking", id],
+    queryFn: () => fetchTracking({ data: { clientId: id } }),
+    staleTime: 60_000,
+  });
+  const visitTracking = trackingQ.data?.visit ?? null;
+  const squareTracks = !!visitTracking && !visitTracking.manualCheckInNeeded;
+  const setModeFn = useServerFn(setVisitTrackingMode);
+  const undoFn = useServerFn(undoVisitCheckIn);
+  const refreshVisitData = () => {
+    invalidateFor(qc, "visit-changed", { clientId: id });
+  };
+  const modeMut = useMutation({
+    mutationFn: (mode: "auto" | "square" | "hub") => setModeFn({ data: { clientId: id, mode } }),
+    onSuccess: () => { toast.success("Visit tracking updated"); refreshVisitData(); },
+    onError: (e: Error) => toast.error(e.message),
+  });
+  const undoMut = useMutation({
+    mutationFn: (activityId: string) => undoFn({ data: { activityId } }),
+    onSuccess: () => { toast.success("Check-in undone"); refreshVisitData(); },
+    onError: (e: Error) => toast.error(e.message),
+  });
+  const uncheckedQ = useQuery({
+    queryKey: ["unchecked-appointments", id],
+    queryFn: () => fetchUnchecked({ data: { clientId: id } }),
+    enabled: visitPickerOpen,
+  });
+
+  const completeVisit = useMutation({
+    // All visits go through the shared check-in so the duplicate guards and
+    // package/renewal handling are identical everywhere.
+    mutationFn: async (appt?: { bookingId: string; startAt: string }) => {
+      if (!c) return;
+      if (!appt && (c.visits_used ?? 0) >= c.package_total_visits && !c.pending_renewal_start_date) {
+        throw new Error("All visits already used");
+      }
+      await completeVisitFn({
+        data: {
+          clientId: id,
+          ...(appt ? { bookingId: appt.bookingId, appointmentStartAt: appt.startAt } : {}),
+        },
+      });
+    },
+    onSuccess: () => {
+      toast.success("Visit recorded");
+      setVisitPickerOpen(false);
+      refresh();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+
+  // Scheduling is derived from live Square bookings — no manual toggle.
+  const renewalFlagged = useIsRenewalFlagged(id);
 
   // "First Visit — No Package Info, Needs Review"
   const dismissedIds = usePackageReviewDismissedIds().data ?? null;
   const isDismissedFromReview = !!dismissedIds?.has(id);
-  const packageClientIds = useSimplePackageClientIds().data ?? null;
-  const packageReviewNeeded = !!c && needsPackageReview(c, dismissedIds, id, packageClientIds);
+  const packageReviewNeeded = !!c && needsPackageReview(c, dismissedIds, id);
   const packageReviewMut = useMutation({
     mutationFn: async (dismiss: boolean) => {
       const { error } = await supabase.from("client_activities").insert({
@@ -173,7 +260,6 @@ function ClientDetailPage() {
     onSuccess: (_d, dismiss) => {
       toast.success(dismiss ? "Marked as not needing a package" : "Re-flagged for package review");
       refresh();
-      invalidateSimpleDues(qc);
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -189,6 +275,17 @@ function ClientDetailPage() {
     );
   }
 
+  const owed = amountOwed(c);
+  const priceUnknown = packagePriceUnknown(c, isDismissedFromReview);
+  // Square-driven clients show the Square position; stored Hub count is never changed.
+  const sqShown = squareTracks && visitTracking ? visitTracking : null;
+  const shownUsed = sqShown ? sqShown.used : c.visits_used;
+  const shownTotal = sqShown ? sqShown.total : c.package_total_visits;
+  const hasVisitData = shownUsed !== null && shownUsed !== undefined;
+  const remaining = sqShown ? Math.max(0, sqShown.total - sqShown.used) : visitsRemaining(c);
+  const pct = hasVisitData && shownTotal > 0 ? ((shownUsed as number) / shownTotal) * 100 : 0;
+  const hubDiffers = !!sqShown && (c.visits_used !== sqShown.used || c.package_total_visits !== sqShown.total);
+
   return (
     <AppShell>
       <div className="mb-6">
@@ -203,28 +300,118 @@ function ClientDetailPage() {
             <p className="mt-1 break-words text-sm text-muted-foreground">{c.phone ?? "No phone"} · {c.email ?? "No email"}</p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button variant="outline" onClick={() => setEditOpen(true)}>Correct record</Button>
+            <Button onClick={() => setPaymentOpen(true)} disabled={totalOwed(c) === 0}>Record Payment</Button>
+            <Button variant="outline" onClick={() => setCorrectOpen(true)}>Correct record</Button>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <StatusBadge client={c} isScheduled={isScheduled} scheduleOnly />
+          <StatusBadge client={c} isScheduled={isScheduled} dismissedFromPackageReview={isDismissedFromReview} />
+          {renewalFlagged && <RenewalFlagBadge />}
+          {packageReviewNeeded && <PackageReviewBadge priceNeeded={packagePriceNeeded(c)} />}
         </div>
       </header>
 
       <Tabs value={section} onValueChange={setSection}>
         <TabsList aria-label="Client profile sections" className="mb-4 grid h-auto w-full grid-cols-2 gap-1 sm:grid-cols-4">
           <TabsTrigger value="overview" className="min-h-10">Overview</TabsTrigger>
-          <TabsTrigger value="packages" className="min-h-10 whitespace-normal text-xs sm:text-sm">Packages &amp; Payments</TabsTrigger>
+          <TabsTrigger value="packages" className="min-h-10">Packages &amp; Payments</TabsTrigger>
           <TabsTrigger value="activity" className="min-h-10">Activity</TabsTrigger>
           <TabsTrigger value="messages" className="min-h-10">Messages</TabsTrigger>
         </TabsList>
         <TabsContent forceMount value="overview" className="space-y-5 data-[state=inactive]:hidden">
-          <SimpleDuesCard clientId={id} />
+          <section aria-label="Current package summary" className="border-y py-5">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h2 className="text-lg font-semibold">Current package</h2>
+                <p className="text-sm text-muted-foreground">{c.package_name ?? "Package"} · Started {formatDate(c.package_start_date)}</p>
+              </div>
+              {isAdminUser && <Button size="sm" variant="outline" onClick={() => openPackage("current")}>Correct package</Button>}
+            </div>
+            <div className="grid gap-5 sm:grid-cols-2">
+              <div>
+                <div className="flex items-end justify-between gap-2">
+                  <strong className="text-3xl">{hasVisitData ? `${shownUsed} / ${shownTotal}` : "—"}</strong>
+                  <span className="text-sm text-muted-foreground">{hasVisitData ? `${remaining} visits remaining` : "Visits unavailable"}</span>
+                </div>
+                <Progress value={pct} className="my-3 h-2" />
+                {visitTracking && <VisitSourceLine visit={visitTracking} compact />}
+                {hubDiffers && <p className="mt-2 text-xs text-muted-foreground">Showing Square appointment notes; Hub stored {c.visits_used ?? "—"}/{c.package_total_visits}. No counts changed.</p>}
+                <Button size="sm" variant="link" className="px-0" onClick={() => setSection("packages")}>Visit source &amp; check-in</Button>
+              </div>
+              <div className="space-y-2 text-sm">
+                <Row label="Package price" value={formatCurrency(c.package_price)} />
+                <Row label="Paid toward this package" value={formatCurrency(c.amount_paid)} />
+                <Row label="Current package owed" value={priceUnknown ? "Package info needed" : formatCurrency(owed)} valueClass={owed > 0 ? "font-semibold text-destructive" : "font-semibold"} />
+                {previousOwed(c) > 0 && <Row label="Prior package owed" value={formatCurrency(previousOwed(c))} />}
+                <div className="border-t pt-2">
+                  {(() => {
+                    const last = activities.find((a) => a.activity_type === "payment");
+                    if (!last) return <p className="text-xs text-muted-foreground">Last payment received: no receipt in this history.</p>;
+                    const meta = last.metadata as Record<string, unknown> | null;
+                    const amount = Number(meta?.amount ?? meta?.applied_amount);
+                    return <><Row label="Last payment received" value={`${Number.isFinite(amount) ? formatCurrency(amount) : "Receipt"} · ${formatDate(last.created_at)}`} /><p className="mt-1 text-xs text-muted-foreground">Receipt history is separate from package paid figures; cycle allocation is not verified here.</p></>;
+                  })()}
+                  <Button size="sm" variant="link" className="px-0" onClick={() => setSection("packages")}>Review payment history</Button>
+                </div>
+              </div>
+            </div>
+          </section>
           <NextAppointment clientId={id} onDetails={() => setSection("activity")} />
+          {c.pending_renewal_start_date && <section className="border-t pt-4" aria-label="Upcoming renewal">
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2"><h2 className="text-lg font-semibold">Upcoming renewal</h2>{isAdminUser && <Button size="sm" variant="outline" onClick={() => openPackage("pending")}>Correct upcoming package</Button>}</div>
+            {renewalRow ? <PreRenewCard forecast={renewalRow as unknown as RenewalForecastRow} hideAmount={!isAdminUser} /> : <p className="text-sm text-muted-foreground">Prepared on or after {formatDate(c.pending_renewal_start_date)}. {forecastQ.isError ? "Renewal details could not load." : forecastQ.isFetching ? "Checking Square timing…" : "No verified start shown."}</p>}
+          </section>}
         </TabsContent>
         <TabsContent forceMount value="packages" className="space-y-5 data-[state=inactive]:hidden">
-          <SimpleDuesCard clientId={id} view="history" />
+          {isAdminUser && <EditPackagesCard client={(c as Client & { __raw?: Client }).__raw ?? c} onDone={refresh} editRequest={editRequest} />}
+          {isAdminUser && <PaymentAllocationsCard client={c} onDone={refresh} />}
+          {isAdminUser && (() => { const raw = (c as Client & { __raw?: Client }).__raw ?? c; return <ClearPrepaidCard clientId={id} paidAhead={Number(raw.pending_renewal_paid ?? 0)} preparedOn={raw.pending_renewal_start_date ?? null} onDone={refresh} />; })()}
+          <section className="border-y py-4" aria-label="Visit controls">
+            <h2 className="mb-3 text-lg font-semibold">Visit source &amp; check-in</h2>
+            <div className="flex flex-wrap items-center gap-3">
+          {visitTracking && <VisitSourceLine visit={visitTracking} />}
+          {c.square_customer_id && (c.package_total_visits ?? 0) > 0 && (
+            <label className="flex items-center gap-2 text-xs text-muted-foreground">
+              Count visits from
+              <select
+                className="rounded-md border bg-background px-2 py-1 text-xs text-foreground"
+                value={(c as Client & { visit_tracking_mode?: string }).visit_tracking_mode ?? "auto"}
+                disabled={modeMut.isPending}
+                onChange={(e) => modeMut.mutate(e.target.value as "auto" | "square" | "hub")}
+              >
+                <option value="auto">Automatic</option>
+                <option value="square">Use Square appointment notes</option>
+                <option value="hub">Use Hub manual check-in</option>
+              </select>
+            </label>
+          )}
+
+
+            {(c.package_total_visits ?? 0) > 0 &&
+              (remaining !== 0 || !!c.pending_renewal_start_date) && (
+              <Button
+                variant={squareTracks ? "ghost" : "default"}
+                size={squareTracks ? "sm" : "default"}
+                onClick={() => setVisitPickerOpen(true)}
+                title={
+                  squareTracks
+                    ? "Square notes track this client's visits — only use for corrections."
+                    : !hasVisitData
+                      ? "Visits unknown — verify before completing."
+                      : undefined
+                }
+              >
+                {squareTracks ? "Manual check-in" : "Complete Visit"}
+              </Button>
+            )}
+
+            </div>
+            {(c.package_total_visits ?? 0) > 0 && (!hasVisitData || remaining === 0) && <p className="mt-2 text-sm text-muted-foreground">{!hasVisitData ? "Visits unknown" : "No visits remaining"} — verify in Square before completing.</p>}
+          </section>
           <section className="space-y-3 border-b pb-4"><h2 className="text-lg font-semibold">Other record actions</h2><div className="flex flex-wrap gap-2">
+            <Button variant="outline" onClick={() => setRenewOpen(true)}>
+              Renew Package
+            </Button>
             <ArchiveClientButton clientId={c.id} clientName={fullName(c)} archived={c.status === "archived"} />
             {packageReviewNeeded && (
               <Button
@@ -235,7 +422,7 @@ function ClientDetailPage() {
                 No package needed
               </Button>
             )}
-            {isDismissedFromReview && (
+            {isDismissedFromReview && (c.package_total_visits ?? 0) === 0 && (
               <Button
                 variant="ghost"
                 disabled={packageReviewMut.isPending}
@@ -269,7 +456,19 @@ function ClientDetailPage() {
                     </div>
                     <div className="flex items-center gap-2 text-xs text-slate-400">
                       {new Date(a.created_at).toLocaleString()}
-
+                      {a.activity_type === "visit" && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 px-2 text-xs"
+                          disabled={undoMut.isPending}
+                          onClick={() => {
+                            if (confirm("Undo this check-in? The visit will be given back.")) undoMut.mutate(a.id);
+                          }}
+                        >
+                          Undo
+                        </Button>
+                      )}
                     </div>
                   </li>
                 ))}
@@ -282,6 +481,80 @@ function ClientDetailPage() {
         <TabsContent forceMount value="messages" className="data-[state=inactive]:hidden"><MessagesCard clientId={id} client={c as never} /></TabsContent>
       </Tabs>
 
+      <Dialog open={correctOpen} onOpenChange={setCorrectOpen}>
+        <DialogContent className="w-[calc(100%-2rem)] min-w-0 max-h-[85dvh] overflow-y-auto">
+          <DialogHeader><DialogTitle>Correct record</DialogTitle><DialogDescription>Corrections update the record, not a new payment. Required reasons and confirmations still apply.</DialogDescription></DialogHeader>
+          <div className="min-w-0 space-y-4 [&_button]:min-w-0 [&_button]:max-w-full [&_button]:whitespace-normal [&_button]:h-auto [&_button]:min-h-10 [&_button]:py-2 [&_button]:px-2">
+            <Button variant="outline" className="min-h-11 w-full justify-start" onClick={() => { setCorrectOpen(false); setEditOpen(true); }}>Edit client details</Button>
+            {isAdminUser && <><div><h3 className="mb-2 text-sm font-semibold">Correct a package</h3><div className="grid grid-cols-3 gap-2"><Button variant="outline" onClick={() => openPackage("current")}>Current</Button><Button variant="outline" onClick={() => openPackage("pending")}>Upcoming</Button><Button variant="outline" onClick={() => openPackage("previous")}>Prior</Button></div><p className="mt-2 text-xs text-muted-foreground">Price, recognized paid, date and package details. Recognized paid is a correction, not money received.</p></div><Button variant="outline" className="min-h-11 w-full whitespace-normal justify-start text-left" onClick={() => { setCorrectOpen(false); setSection("packages"); }}>Review where a payment went / Undo last renewal</Button></>}
+            <Button variant="outline" className="min-h-11 w-full justify-start" onClick={() => { setCorrectOpen(false); setSection("packages"); }}>Visit source &amp; other record actions</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={visitPickerOpen} onOpenChange={(o) => !o && setVisitPickerOpen(false)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Complete Visit</DialogTitle>
+            <DialogDescription>
+              Pick the appointment this visit was for, so it isn't counted twice.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            {uncheckedQ.isLoading ? (
+              <p className="text-sm text-slate-500">Looking up recent appointments…</p>
+            ) : (uncheckedQ.data?.appointments.length ?? 0) === 0 ? (
+              <p className="text-sm text-slate-500">
+                No recent appointment without a check-in was found.
+              </p>
+            ) : (
+              (uncheckedQ.data?.appointments ?? []).map((a) => (
+                <Button
+                  key={a.booking_id}
+                  variant="outline"
+                  className="min-h-11 w-full justify-start"
+                  disabled={completeVisit.isPending}
+                  onClick={() =>
+                    completeVisit.mutate({ bookingId: a.booking_id, startAt: a.start_at })
+                  }
+                >
+                  {new Date(a.start_at).toLocaleString("en-US", {
+                    timeZone: "America/Chicago",
+                    weekday: "short",
+                    month: "short",
+                    day: "numeric",
+                    hour: "numeric",
+                    minute: "2-digit",
+                  })}
+                </Button>
+              ))
+            )}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="ghost"
+              disabled={completeVisit.isPending}
+              onClick={() => completeVisit.mutate(undefined)}
+            >
+              No appointment — just record a visit
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+
+      <PaymentDialog
+        open={paymentOpen}
+        onClose={() => setPaymentOpen(false)}
+        client={c}
+        onDone={refresh}
+      />
+      <RenewDialog
+        open={renewOpen}
+        onClose={() => setRenewOpen(false)}
+        client={c}
+        onDone={refresh}
+      />
       <EditDialog
         open={editOpen}
         onClose={() => {
@@ -665,6 +938,7 @@ function EditDialog({
   const navigate = useNavigate();
   const { isAdmin } = useRole();
   const saveDetails = useServerFn(updateClientDetails);
+  const fx = form as unknown as Record<string, unknown>;
   useEffect(() => {
     setForm(client);
     setEditReason("");
@@ -695,13 +969,40 @@ function EditDialog({
 
   const mutation = useMutation({
     mutationFn: async () => {
+      const visitsUsedVal =
+        form.visits_used === null || form.visits_used === undefined || (form.visits_used as unknown as string) === ""
+          ? null
+          : Number(form.visits_used);
+      if (visitsUsedVal !== null && visitsUsedVal > Number(form.package_total_visits)) {
+        throw new Error("Visits used cannot exceed total visits");
+      }
+      if (form.payment_model !== "pay_per_visit" && Number(form.amount_paid) > Number(form.package_price)) {
+        throw new Error("Amount paid cannot exceed package price");
+      }
+      const f = form as Client & Record<string, unknown>;
+      const num = (v: unknown) => (v === null || v === undefined || v === "" ? null : Number(v));
       const patch: Record<string, unknown> = {
         first_name: form.first_name,
         last_name: form.last_name,
         phone: form.phone || null,
         email: form.email || null,
+        package_name: form.package_name || null,
+        package_total_visits: Number(form.package_total_visits),
+        package_price: Number(form.package_price),
+        package_start_date: form.package_start_date || null,
+        visits_used: visitsUsedVal,
+        amount_paid: Number(form.amount_paid),
         internal_notes: form.internal_notes || null,
+        payment_model: form.payment_model === "pay_per_visit" ? "pay_per_visit" : "package",
+        manual_active: Boolean(form.manual_active),
+        status: form.manual_active ? "active" : form.status,
       };
+      if (isAdmin) {
+        patch.billing_type = f.billing_type ?? "package";
+        patch.per_visit_rate = num(f.per_visit_rate);
+        patch.weekly_rate = num(f.weekly_rate);
+        patch.billing_effective_date = (f.billing_effective_date as string) || null;
+      }
       // One locked server-side update that records every changed field
       // (before → after) in the client's history.
       await saveDetails({ data: { clientId: client.id, patch, reason: editReason } });
@@ -736,6 +1037,96 @@ function EditDialog({
           <Field label="Email">
             <Input value={form.email ?? ""} onChange={(e) => up("email", e.target.value)} />
           </Field>
+          <Field label="Package Name">
+            <Input value={form.package_name ?? ""} onChange={(e) => up("package_name", e.target.value)} />
+          </Field>
+          <Field label="Start Date">
+            <Input type="date" value={form.package_start_date ?? ""} onChange={(e) => up("package_start_date", e.target.value)} />
+          </Field>
+          <Field label="Total Visits">
+            <Input type="number" min={0} value={form.package_total_visits} onChange={(e) => up("package_total_visits", Number(e.target.value))} />
+          </Field>
+          <Field label="Visits Used">
+            <Input
+              type="number"
+              min={0}
+              value={form.visits_used ?? ""}
+              onChange={(e) =>
+                up("visits_used", e.target.value === "" ? null : Number(e.target.value))
+              }
+            />
+          </Field>
+          <Field label="Package Price">
+            <Input type="number" min={0} step="0.01" value={form.package_price} onChange={(e) => up("package_price", Number(e.target.value))} />
+          </Field>
+          <Field label="Amount Paid">
+            <Input type="number" min={0} step="0.01" value={form.amount_paid} onChange={(e) => up("amount_paid", Number(e.target.value))} />
+          </Field>
+          {Number(form.package_total_visits) === 0 && (
+            <Field label="Payment Model">
+              <select
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                value={form.payment_model === "pay_per_visit" ? "pay_per_visit" : "package"}
+                onChange={(e) => up("payment_model", e.target.value)}
+              >
+                <option value="package">Package (default)</option>
+                <option value="pay_per_visit">Pay-per-visit (hides Amount Owed, uncapped ledger)</option>
+              </select>
+            </Field>
+          )}
+          {isAdmin && (
+            <div className="sm:col-span-2 grid gap-3 rounded-md border p-3 sm:grid-cols-2">
+              <div className="sm:col-span-2 text-sm font-medium">Billing (admin only)</div>
+              <Field label="Billing type">
+                <select
+                  aria-label="Billing type"
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  value={String(fx.billing_type ?? "package")}
+                  onChange={(e) => setForm((x) => ({ ...x, billing_type: e.target.value }) as Client)}
+                >
+                  <option value="package">Package</option>
+                  <option value="pay_per_visit">Pay-per-visit</option>
+                  <option value="weekly">Weekly</option>
+                </select>
+              </Field>
+              <Field label="Billing start date">
+                <Input
+                  type="date"
+                  aria-label="Billing start date"
+                  value={String(fx.billing_effective_date ?? "")}
+                  onChange={(e) => setForm((x) => ({ ...x, billing_effective_date: e.target.value || null }) as Client)}
+                />
+              </Field>
+              <Field label="Per-visit rate ($)">
+                <Input
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  aria-label="Per-visit rate"
+                  value={String(fx.per_visit_rate ?? "")}
+                  onChange={(e) => setForm((x) => ({ ...x, per_visit_rate: e.target.value === "" ? null : Number(e.target.value) }) as Client)}
+                />
+              </Field>
+              <Field label="Weekly rate ($)">
+                <Input
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  aria-label="Weekly rate"
+                  value={String(fx.weekly_rate ?? "")}
+                  onChange={(e) => setForm((x) => ({ ...x, weekly_rate: e.target.value === "" ? null : Number(e.target.value) }) as Client)}
+                />
+              </Field>
+              {!!fx.billing_type && fx.billing_type !== "package" && (
+                <p className="sm:col-span-2 text-xs text-amber-700">
+                  Pay-per-visit and weekly clients are billed from their Square appointments since the billing start date. The package price and amount paid above no longer count toward what they owe.
+                </p>
+              )}
+              <p className="sm:col-span-2 text-xs text-muted-foreground">
+                Assessment clients: set Status to Assessment. That's a client status, not a billing type.
+              </p>
+            </div>
+          )}
           <div className="sm:col-span-2">
             <Field label="Reason for change (saved in history)">
               <Input aria-label="Reason for change" value={editReason} onChange={(e) => setEditReason(e.target.value)} />
@@ -747,7 +1138,21 @@ function EditDialog({
             </Field>
           </div>
 
-
+          <div className="sm:col-span-2 flex items-start gap-3 rounded-md border border-slate-200 bg-slate-50 p-3">
+            <input
+              id="manual-active"
+              type="checkbox"
+              className="mt-1 h-4 w-4"
+              checked={Boolean(form.manual_active)}
+              onChange={(e) => up("manual_active", e.target.checked)}
+            />
+            <label htmlFor="manual-active" className="text-sm">
+              <span className="font-medium text-slate-800">Pin as Active</span>
+              <span className="block text-xs text-slate-500">
+                Keep this client visible on the dashboard even with no upcoming booking, no balance, and no visits remaining. Prevents the inactive-cleanup tool from archiving them.
+              </span>
+            </label>
+          </div>
         </div>
 
         <DialogFooter className="sm:justify-between">

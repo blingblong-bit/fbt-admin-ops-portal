@@ -1,4 +1,3 @@
-import { useSimplePackageClientIds } from "@/hooks/useSimplePackageClientIds";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -1466,7 +1465,6 @@ function AppointmentsCard({
 }) {
   const renewalFlags = useRenewalFlaggedClientIds().data;
   const packageReviewDismissed = usePackageReviewDismissedIds().data ?? null;
-  const packageClientIds = useSimplePackageClientIds().data ?? null;
 
   return (
 
@@ -1540,7 +1538,7 @@ function AppointmentsCard({
                       {a.client && (
                         <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px] font-medium">
                           {renewalFlags?.has(a.client.id) && <RenewalFlagBadge />}
-                          {needsPackageReview(a.client, packageReviewDismissed, a.client.id, packageClientIds) && (
+                          {needsPackageReview(a.client, packageReviewDismissed, a.client.id) && (
                             <PackageReviewBadge priceNeeded={packagePriceNeeded(a.client)} />
                           )}
 

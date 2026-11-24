@@ -1,6 +1,4 @@
-import { useSimplePackageClientIds } from "@/hooks/useSimplePackageClientIds";
 import { DashboardTodaySchedule } from "@/components/DashboardTodaySchedule";
-import { DashboardDuesTile } from "@/components/DashboardDuesTile";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -16,6 +14,8 @@ import {
   CalendarClock,
   CircleDollarSign,
   CircleSlash,
+  Eye,
+  EyeOff,
   History,
   Hourglass,
   Receipt,
@@ -33,6 +33,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { SmartClientCard } from "@/components/SmartClientCard";
 import { ArchiveClientButton } from "@/components/ArchiveClientButton";
 import { PreRenewCard } from "@/components/PreRenewCard";
+import { AdminPrimaryAreas, AdminToolLinks } from "@/components/AdminDashboard";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -61,8 +62,17 @@ import {
 
   type RenewalForecastRow,
 } from "@/lib/schedule.functions";
+import { getDuesTextsBoard } from "@/lib/dues-messaging.functions";
+import { getVisitNoteReview } from "@/lib/visit-note-review.functions";
+import { getVisitAutomationReview } from "@/lib/visit-automation-review.functions";
 import type { ScheduleStatus } from "@/components/SmartClientCard";
 import { useRole } from "@/hooks/useRole";
+import { useDuesFreshness } from "@/components/DuesFreshnessBanner";
+import { getMasterDues, masterDuesQuery } from "@/lib/master-dues.functions";
+import { computeWeeklyDues } from "@/lib/weekly-dues";
+import { filterTotals, makeWeekOf, type DuesFilter } from "@/lib/master-dues-view";
+import { addDaysYmd, workWeekStartFromYmd } from "@/lib/work-week";
+import { visibleTileMoney } from "@/lib/dashboard-tile-visibility";
 import {
   groupWeeklyPayments,
   type WeeklyPaymentGroups,
@@ -451,15 +461,14 @@ function Dashboard() {
   };
 
   const dismissedIds = usePackageReviewDismissedIds().data ?? null;
-  const packageClientIds = useSimplePackageClientIds().data ?? null;
 
   // Auto-create package shells from Square visit notes for clients with no
   // package info (price left blank, flagged for review). Runs once per
   // dashboard visit for staff; idempotent on the server.
   const queryClient = useQueryClient();
   const [search, setSearch] = usePersistentState("dash:search", "");
-  // A new presentation key prevents retired per-user filters from resurfacing.
-  const [filter, setFilter] = usePersistentState<FilterKey>("dash:simple-filter", "not_scheduled");
+  // Staff never see the payment-due (aggregate) list — default to "all" instead.
+  const [filter, setFilter] = usePersistentState<FilterKey>("dash:filter", isStaff ? "all" : "payment_due");
   const [statusFilter, setStatusFilter] = usePersistentState<StatusFilter>("dash:status", "active_assessment");
 
   // New-clients-per-month view state. Activated by the "New Clients" tile.
@@ -593,10 +602,10 @@ function Dashboard() {
       if (r !== null && cl.package_total_visits > 0 && r === 0) {
         c.package_complete += 1;
       }
-      if (needsPackageReview(cl, dismissedIds, cl.id, packageClientIds)) c.needs_package_review += 1;
+      if (needsPackageReview(cl, dismissedIds, cl.id)) c.needs_package_review += 1;
     }
     return c;
-  }, [visibleClients, scheduledSet, thisWeekSet, nextWeekSet, carriedOverRecentMap, overduePriorMap, thisWeekEndYmd, nextWeekEndYmd, dismissedIds, packageClientIds, renewalMap]);
+  }, [visibleClients, scheduledSet, thisWeekSet, nextWeekSet, carriedOverRecentMap, overduePriorMap, thisWeekEndYmd, nextWeekEndYmd, dismissedIds, renewalMap]);
 
   const weeklyPaymentGroups = useMemo(() => {
     if (filter !== "payment_due_this_week" && filter !== "payment_due_next_week") return null;
@@ -623,7 +632,7 @@ function Dashboard() {
         isCarriedOver(c.id),
         isOverduePrior(c.id),
         startBucketOf(c),
-        needsPackageReview(c, dismissedIds, c.id, packageClientIds),
+        needsPackageReview(c, dismissedIds, c.id),
         renewalMap.has(c.id),
         renewalMap.get(c.id)?.pre_renewed === true,
       ),
@@ -663,7 +672,412 @@ function Dashboard() {
       );
     }
     return [...searched].sort((a, b) => fullName(a).localeCompare(fullName(b)));
-  }, [visibleClients, filter, search, scheduledSet, thisWeekSet, nextWeekSet, carriedOverRecentMap, overduePriorMap, thisWeekEndYmd, nextWeekEndYmd, renewalMap, dismissedIds, packageClientIds]);
+  }, [visibleClients, filter, search, scheduledSet, thisWeekSet, nextWeekSet, carriedOverRecentMap, overduePriorMap, thisWeekEndYmd, nextWeekEndYmd, renewalMap, dismissedIds]);
+
+  const reviewCountQuery = useQuery({
+    queryKey: ["square_payments_needs_review_count"],
+    queryFn: async () => {
+  const { count, error } = await supabase
+        .from("square_payments")
+        .select("id", { count: "exact", head: true })
+        .eq("needs_review", true);
+      if (error) throw error;
+      return count ?? 0;
+    },
+    refetchInterval: 30_000,
+  });
+
+  const reviewCount = reviewCountQuery.data ?? 0;
+
+  const renewalYesCountQ = useQuery({
+    queryKey: ["renewal_campaigns_yes_count"],
+    queryFn: async () => {
+      const { count, error } = await supabase
+        .from("renewal_campaigns")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "yes");
+      if (error) throw error;
+      return count ?? 0;
+    },
+    refetchInterval: 30_000,
+  });
+  const renewalManualCountQ = useQuery({
+    queryKey: ["renewal_campaigns_manual_count"],
+    queryFn: async () => {
+      const { count, error } = await supabase
+        .from("renewal_campaigns")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "manual_review");
+      if (error) throw error;
+      return count ?? 0;
+    },
+    refetchInterval: 30_000,
+  });
+  const renewalYesCount = renewalYesCountQ.data ?? 0;
+  const renewalManualCount = renewalManualCountQ.data ?? 0;
+
+  const fetchMissedSummary = useServerFn(getMissedCheckInSummary);
+  const missedQ = useQuery({
+    queryKey: ["missed-check-ins"],
+    queryFn: () => fetchMissedSummary({}),
+    refetchInterval: 5 * 60_000,
+  });
+  const missedYesterday = missedQ.data?.yesterday_count ?? 0;
+  const missedOlder = missedQ.data?.older_count ?? 0;
+
+  // Dues Texts tile — admin/superadmin only, so staff never trigger the query.
+  const fetchDuesBoard = useServerFn(getDuesTextsBoard);
+  const duesTextsQ = useQuery({
+    queryKey: ["dues-texts-counts"],
+    queryFn: () => fetchDuesBoard(),
+    enabled: !isStaff,
+    refetchInterval: 5 * 60_000,
+  });
+  const duesReady = duesTextsQ.data?.counts.ready ?? 0;
+  const duesBlocked = duesTextsQ.data?.counts.blocked ?? 0;
+  const duesClosed = duesTextsQ.data?.counts.closed ?? 0;
+  const duesReadyTotal = duesTextsQ.data?.readyTotal ?? 0;
+
+  // Visit Note Review tile — admin only, derived live from Square (read-only).
+  const fetchNoteReview = useServerFn(getVisitNoteReview);
+  const noteReviewQ = useQuery({
+    queryKey: ["visit-note-review"],
+    queryFn: () => orThrow(fetchNoteReview({ data: {} })),
+    enabled: !isStaff,
+    staleTime: 60_000,
+  });
+  const nr = noteReviewQ.data;
+  const noteReviewCount = nr?.cards.length ?? 0;
+  const noteReviewSub = nr
+    ? nr.error
+      ? "couldn't read Square"
+      : `${nr.counts.skipped + nr.counts.stale_future + nr.counts.future_after_complete + nr.counts.missing_note} sequence · ${nr.counts.same_day_conflict} conflicting · ${nr.counts.package_size} size`
+    : "checking Square…";
+
+  const fetchAutomation = useServerFn(getVisitAutomationReview);
+  const masterDuesFn = useServerFn(getMasterDues);
+  const masterQ = useQuery({ ...masterDuesQuery(() => masterDuesFn()), enabled: !isStaff });
+  const masterFresh = useDuesFreshness(masterQ);
+  // Prefix for money tiles: never present a failed refresh as current.
+  const freshTag = masterFresh.untrusted ? `Out of date — last updated ${masterFresh.label} · ` : masterFresh.state === "updating" ? "Updating… · " : "";
+  const masterTile = (k: DuesFilter) => {
+    const d = masterQ.data?.data;
+    if (!d) return { clients: 0, dollars: undefined as number | undefined };
+    const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Chicago" });
+    return filterTotals(d.rows, k, makeWeekOf(today, workWeekStartFromYmd, addDaysYmd));
+  };
+  const weeklyTile = (() => {
+    const d = masterQ.data?.data;
+    if (!d) return null;
+    const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Chicago" });
+    return computeWeeklyDues(d.rows, d.appointments, workWeekStartFromYmd(today)).totals;
+  })();
+  const $tile = (n: number) => n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
+  const automationQ = useQuery({
+    queryKey: ["visit-automation-review"],
+    queryFn: () => orThrow(fetchAutomation({ data: {} })),
+    enabled: !isStaff,
+    staleTime: 60_000,
+  });
+  const au = automationQ.data;
+  const automationCount = au?.cards.length ?? 0;
+  const automationSub = au
+    ? au.error
+      ? "couldn't read Square"
+      : `${au.impact.square} Square · ${au.impact.hub_fallback} Hub · ${au.impact.needs_review} flagged · ${au.impact.held_for_review} held`
+    : "checking Square…";
+
+
+
+  const allTiles: (TileDef & { staffHidden?: boolean; adminHidden?: boolean })[] = [
+    {
+      key: "payment_due",
+      label: "Payment Due",
+      // Same getMasterDues query as /payment-due → tile and page always match.
+      sublabel: masterQ.data?.error ? "Square unavailable" : masterQ.data ? `${freshTag}master dues` : "loading…",
+      icon: <CircleDollarSign className="h-5 w-5" />,
+      count: masterQ.data?.data?.totals.clients ?? 0,
+      money: masterQ.data?.data?.totals.total,
+      moneyLabel: "tracked",
+      tone: "red",
+      href: "/payment-due",
+      staffHidden: true,
+    },
+    {
+      key: "weekly_dues",
+      label: "Weekly Dues",
+      sublabel: weeklyTile
+        ? `${freshTag}${$tile(weeklyTile.expected)} expected · ${$tile(weeklyTile.carryover)} carryover`
+        : masterQ.data?.error ? "Square unavailable" : "loading…",
+      icon: <CircleDollarSign className="h-5 w-5" />,
+      count: weeklyTile?.expectedClients ?? 0,
+      money: weeklyTile?.total,
+      moneyLabel: "actionable",
+      tone: "red",
+      href: "/weekly-dues",
+      staffHidden: true,
+    },
+    {
+      key: "payment_due_this_week",
+      label: "Payment Due — This Week",
+      sublabel: freshTag + formatYmdRange(thisWeekQuery.data?.week_start, thisWeekQuery.data?.week_end),
+      icon: <CircleDollarSign className="h-5 w-5" />,
+      count: masterTile("this_week").clients,
+      money: masterTile("this_week").dollars,
+      moneyLabel: "expected",
+      tone: "red",
+      href: "/payment-due",
+      search: { filter: "this_week" },
+      staffHidden: true,
+    },
+    {
+      key: "payment_due_next_week",
+      label: "Payment Due — Next Week",
+      sublabel: freshTag + formatYmdRange(nextWeekQuery.data?.week_start, nextWeekQuery.data?.week_end),
+      icon: <CircleDollarSign className="h-5 w-5" />,
+      count: masterTile("next_week").clients,
+      money: masterTile("next_week").dollars,
+      moneyLabel: "expected",
+      tone: "red",
+      href: "/payment-due",
+      search: { filter: "next_week" },
+      staffHidden: true,
+    },
+    {
+      key: "overdue_prior_weeks",
+      label: "Due Now / Overdue",
+      sublabel: `${freshTag}already owed — any timing`,
+      icon: <AlertTriangle className="h-5 w-5" />,
+      count: masterTile("due_now").clients,
+      money: masterTile("due_now").dollars,
+      moneyLabel: "due now",
+      tone: "red",
+      href: "/payment-due",
+      search: { filter: "due_now" },
+      staffHidden: true,
+    },
+    {
+      key: "not_scheduled",
+      label: "Not Scheduled",
+      icon: <CalendarClock className="h-5 w-5" />,
+      count: counts.not_scheduled,
+      tone: "amber",
+    },
+    {
+      key: "almost_finished",
+      label: "Almost Finished",
+      icon: <Hourglass className="h-5 w-5" />,
+      count: counts.almost_finished,
+      tone: "amber",
+    },
+    {
+      key: "critical",
+      label: "Critical",
+      icon: <AlertTriangle className="h-5 w-5" />,
+      count: counts.critical,
+      // Hide the aggregate $ for staff, but keep the count/list — Critical is
+      // the "almost finished AND owes" cohort which is useful signal.
+      money: isStaff ? undefined : counts.critical_total,
+      moneyLabel: "outstanding",
+      tone: "red",
+      // No Master Dues urgency rule yet → hidden for admins so it can't conflict.
+      adminHidden: true,
+    },
+    {
+      key: "payments_review",
+      label: "Payments Review",
+      icon: <Receipt className="h-5 w-5" />,
+      count: reviewCount,
+      tone: reviewCount > 0 ? "amber" : "slate",
+      href: "/sync-log",
+      countLabel: "payment",
+      staffHidden: true,
+    },
+    {
+      key: "payment_history",
+      label: "Payment History",
+      icon: <History className="h-5 w-5" />,
+      count: 0,
+      tone: "slate",
+      href: "/payment-history",
+      hideCount: true,
+      ctaLabel: "View by week",
+      staffHidden: true,
+    },
+    {
+      key: "missed_check_ins",
+      label: "Missed Check-Ins",
+      sublabel:
+        missedOlder > 0
+          ? `Yesterday · ${missedOlder} older unresolved`
+          : "Yesterday",
+      icon: <CalendarX className="h-5 w-5" />,
+      count: missedYesterday,
+      countLabel: "client",
+      tone: missedYesterday > 0 || missedOlder > 0 ? "amber" : "slate",
+      href: "/missed-check-ins",
+    },
+
+    {
+      key: "package_complete",
+      label: "Package Complete",
+      icon: <CircleSlash className="h-5 w-5" />,
+      count: counts.package_complete,
+      tone: "slate",
+    },
+    {
+      key: "needs_renewal",
+      label: "Needs Renewal",
+      sublabel: "booked past current package",
+      icon: <RefreshCw className="h-5 w-5" />,
+      count: counts.needs_renewal,
+      tone: counts.needs_renewal > 0 ? "amber" : "slate",
+    },
+    {
+      key: "renewal_scheduled",
+      label: "Renewal Scheduled",
+      sublabel: "next package prepared — activates at check-in",
+      icon: <RefreshCw className="h-5 w-5" />,
+      count: counts.renewal_scheduled,
+      tone: "slate",
+    },
+    {
+      key: "needs_package_review",
+      label: "First Visit — No Package Info",
+      sublabel: "assessment only — needs package review",
+      icon: <ClipboardList className="h-5 w-5" />,
+      count: counts.needs_package_review,
+      tone: counts.needs_package_review > 0 ? "amber" : "slate",
+    },
+
+    {
+      key: "renewal_review",
+      label: "Needs Renewal Review",
+      icon: <RefreshCw className="h-5 w-5" />,
+      count: renewalYesCount,
+      tone: renewalYesCount > 0 ? "amber" : "slate",
+      href: "/renewal-review",
+    },
+    {
+      key: "renewal_manual",
+      label: "Needs Manual Follow-up",
+      icon: <HelpCircle className="h-5 w-5" />,
+      count: renewalManualCount,
+      tone: renewalManualCount > 0 ? "amber" : "slate",
+      href: "/renewal-review",
+    },
+    {
+      key: "new_clients",
+      label: "New Clients",
+      sublabel: longMonthLabel(currentClinicMonth()),
+      icon: <UserPlus className="h-5 w-5" />,
+      count: currentMonthNewCount,
+      tone: currentMonthNewCount > 0 ? "amber" : "slate",
+      staffHidden: true,
+    },
+    {
+      key: "dues_texts",
+      label: "Dues Texts",
+      sublabel: `${duesBlocked} blocked · ${duesClosed} payment received`,
+      icon: <MessageSquare className="h-5 w-5" />,
+      count: duesReady,
+      // Count only: dollars live in Payment Due (Master Dues).
+      tone: duesReady > 0 ? "amber" : "slate",
+      href: "/dues-texts",
+      staffHidden: true,
+    },
+    {
+      key: "visit_note_review",
+      label: "Visit Note Review",
+      sublabel: noteReviewSub,
+      icon: <ClipboardList className="h-5 w-5" />,
+      count: noteReviewCount,
+      tone: noteReviewCount > 0 ? "amber" : "slate",
+      href: "/visit-note-review",
+      staffHidden: true,
+    },
+    {
+      key: "visit_automation_review",
+      label: "Visit Automation Review",
+      sublabel: automationSub,
+      icon: <ClipboardList className="h-5 w-5" />,
+      count: automationCount,
+      tone: "slate",
+      href: "/visit-automation-review",
+      staffHidden: true,
+    },
+    {
+      key: "all",
+      label: "All Active",
+      icon: <Users className="h-5 w-5" />,
+      count: counts.all,
+      tone: "slate",
+    },
+  ];
+  const tiles = allTiles.filter((t) => !(isStaff && t.staffHidden) && !(!isStaff && t.adminHidden));
+
+  // Per-user tile visibility. Persisted in localStorage; defaults to the
+  // curated "essential" set below. Tiles not in the essentials list are
+  // hidden until the user clicks "Show more tiles" (which also reveals
+  // per-tile hide/show toggles for customization).
+  const DEFAULT_VISIBLE_TILES = useMemo(
+    () =>
+      new Set<string>([
+        "payment_due",
+        "payment_due_this_week",
+        "payment_due_next_week",
+        "overdue_prior_weeks",
+        "critical",
+        "payment_history",
+        "needs_renewal",
+        "renewal_scheduled",
+        "needs_package_review",
+        "missed_check_ins",
+
+        "renewal_review",
+        "renewal_manual",
+        "new_clients",
+        "dues_texts",
+        "visit_note_review",
+        "visit_automation_review",
+      ]),
+    [],
+  );
+  const [hiddenTiles, setHiddenTiles] = useState<Set<string>>(() => {
+    if (typeof window === "undefined") return new Set();
+    try {
+      const raw = window.localStorage.getItem("dashboard.hiddenTiles");
+      if (raw) return new Set<string>(JSON.parse(raw));
+    } catch { /* ignore */ }
+    // First run: hide every tile not in the default-visible set.
+    const hide = new Set<string>();
+    for (const t of allTiles) if (!DEFAULT_VISIBLE_TILES.has(t.key)) hide.add(t.key);
+    return hide;
+  });
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(
+        "dashboard.hiddenTiles",
+        JSON.stringify([...hiddenTiles]),
+      );
+    } catch { /* ignore */ }
+  }, [hiddenTiles]);
+  const [showAllTiles, setShowAllTiles] = usePersistentState("dash:showAll", false);
+  const [adminToolsOpen, setAdminToolsOpen] = usePersistentState("dash:adminTools", false);
+
+  const toggleTileHidden = (key: string) => {
+    setHiddenTiles((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const visibleTiles = showAllTiles
+    ? tiles
+    : tiles.filter((t) => !hiddenTiles.has(t.key));
+  const hiddenCount = tiles.filter((t) => hiddenTiles.has(t.key)).length;
 
   return (
     <AppShell>
@@ -680,21 +1094,22 @@ function Dashboard() {
       </div>
 
 
-      <div aria-label="Dashboard tiles" className="grid gap-3 sm:grid-cols-3">
-        <DashboardDuesTile />
-        <Button variant="outline" className="h-auto min-h-36 flex-col items-start justify-start gap-3 whitespace-normal rounded-md p-5 text-left" aria-pressed={!newClientsActive} onClick={() => { setFilter("not_scheduled"); setNewClientsActive(false); }}>
-          <span className="flex items-center gap-2 text-base font-semibold"><CalendarClock className="size-5" />Not Scheduled</span>
-          <span className="text-3xl font-semibold tabular-nums">{isLoading ? "—" : counts.not_scheduled}</span>
-          <span className="text-sm text-muted-foreground">clients</span>
-        </Button>
-        <Button variant="outline" className="h-auto min-h-36 flex-col items-start justify-start gap-3 whitespace-normal rounded-md p-5 text-left" aria-pressed={newClientsActive} onClick={() => { setNewClientsMonth(currentClinicMonth()); setNewClientsActive(true); }}>
-          <span className="flex items-center gap-2 text-base font-semibold"><UserPlus className="size-5" />New Clients</span>
-          <span className="text-3xl font-semibold tabular-nums">{isLoading ? "—" : currentMonthNewCount}</span>
-          <span className="text-sm text-muted-foreground">{longMonthLabel(currentClinicMonth())}</span>
-        </Button>
-      </div>
+      {!isStaff && (
+        <AdminPrimaryAreas
+          masterData={masterQ.data?.data ?? null}
+          renewalRows={renewalQuery.data?.rows ?? []}
+          newClientsCount={currentMonthNewCount}
+          newClientsLabel={longMonthLabel(currentClinicMonth())}
+          newClientsActive={newClientsActive}
+          onNewClients={() => {
+            setNewClientsMonth(currentClinicMonth());
+            setNewClientsActive((v) => !v);
+          }}
+        />
+      )}
       <div className="my-6"><DashboardTodaySchedule /></div>
       <div className="mb-6 grid grid-cols-2 gap-2 sm:grid-cols-4"><Button asChild variant="outline" className="min-h-11 whitespace-normal"><Link to="/schedule-check" search={{view:"worklists"}}>Scheduling Worklists</Link></Button><Button asChild variant="outline" className="min-h-11"><Link to="/follow-ups" search={{task:undefined}}>Follow-ups</Link></Button><Button asChild variant="outline" className="min-h-11"><Link to="/clients/new">Add Client</Link></Button><Button asChild variant="outline" className="min-h-11"><Link to="/more">More</Link></Button></div>
+      <details className="mb-6 border-b pb-4"><summary className="cursor-pointer py-3 text-sm font-semibold">Client action queues</summary><div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">{visibleTiles.filter(t=>!t.href).map(t=><Tile key={t.key} tile={t} hideMoney={true} active={filter===t.key} onClick={()=>{setFilter(t.key as FilterKey);setNewClientsActive(false);}} editing={false} hidden={false} onToggleHidden={()=>{}} />)}</div></details>
       {/* New Clients per month — admin tile view */}
       {newClientsActive && (
         <NewClientsByMonthView
@@ -931,6 +1346,126 @@ function NewClientsByMonthView({
     </section>
   );
 }
+
+type TileDef = {
+  key: string;
+  label: string;
+  sublabel?: string;
+  icon: React.ReactNode;
+  count: number;
+  money?: number;
+  moneyLabel?: string;
+  extraMoney?: number;
+  extraMoneyLabel?: string;
+  tone: "red" | "amber" | "slate";
+  href?: string;
+  countLabel?: string;
+  hideCount?: boolean;
+  ctaLabel?: string;
+  search?: Record<string, string>;
+};
+
+function Tile({
+  tile,
+  hideMoney,
+  active,
+  onClick,
+  editing = false,
+  hidden = false,
+  onToggleHidden,
+}: {
+  tile: TileDef;
+  hideMoney: boolean;
+  active: boolean;
+  onClick: () => void;
+  editing?: boolean;
+  hidden?: boolean;
+  onToggleHidden?: () => void;
+}) {
+  const visibleMoney = visibleTileMoney(tile, hideMoney);
+  const activeRing =
+    tile.tone === "red"
+      ? "ring-red-500 border-red-300 bg-red-50"
+      : tile.tone === "amber"
+        ? "ring-amber-500 border-amber-300 bg-amber-50"
+        : "ring-slate-900 border-slate-300 bg-slate-50";
+  const iconTone =
+    tile.tone === "red"
+      ? "text-red-600 bg-red-100"
+      : tile.tone === "amber"
+        ? "text-amber-600 bg-amber-100"
+        : "text-slate-700 bg-slate-100";
+  const inner = (
+    <>
+      <div className={`flex h-9 w-9 items-center justify-center rounded-lg ${iconTone}`}>
+        {tile.icon}
+      </div>
+      <div className="text-sm font-medium text-slate-600">{tile.label}</div>
+      {tile.sublabel && (
+        <div className="-mt-1 text-xs text-slate-500">{tile.sublabel}</div>
+      )}
+      {tile.hideCount ? (
+        <div className="text-base font-medium text-slate-700">
+          {tile.ctaLabel ?? "View"}
+        </div>
+      ) : (
+        <div className="text-2xl font-semibold tracking-tight text-slate-900">
+          {tile.count}
+          <span className="ml-1 text-sm font-normal text-slate-500">
+            {tile.count === 1 ? tile.countLabel ?? "client" : `${tile.countLabel ?? "client"}s`}
+          </span>
+        </div>
+      )}
+      {visibleMoney.money !== undefined && visibleMoney.money > 0 && (
+        <div className="text-xs font-medium text-slate-600">
+          {formatCurrency(visibleMoney.money)} {tile.moneyLabel}
+        </div>
+      )}
+      {visibleMoney.extraMoney !== undefined && visibleMoney.extraMoney > 0 && (
+        <div className="text-xs font-medium text-amber-700">
+          + {formatCurrency(visibleMoney.extraMoney)} {tile.extraMoneyLabel}
+        </div>
+      )}
+    </>
+  );
+
+  const baseClass = `relative flex flex-col items-start gap-2 rounded-xl border bg-white p-4 text-left shadow-sm transition-all hover:border-slate-300 hover:shadow ${
+    active ? `ring-2 ${activeRing}` : ""
+  } ${editing && hidden ? "opacity-60" : ""}`;
+
+  const toggleBtn = editing && onToggleHidden ? (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        onToggleHidden();
+      }}
+      className="absolute right-2 top-2 rounded-md border border-slate-200 bg-white/90 p-1 text-slate-500 shadow-sm hover:text-slate-900"
+      aria-label={hidden ? "Show tile" : "Hide tile"}
+      title={hidden ? "Show tile" : "Hide tile"}
+    >
+      {hidden ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
+    </button>
+  ) : null;
+
+  if (tile.href) {
+    return (
+      <Link to={tile.href} className={baseClass}>
+        {inner}
+        {toggleBtn}
+      </Link>
+    );
+  }
+
+  return (
+    <button type="button" onClick={onClick} className={baseClass}>
+      {inner}
+      {toggleBtn}
+    </button>
+  );
+}
+
 
 function PaymentTotals({ clients }: { clients: Client[] }) {
   const owed = clients.map((c) => totalOwed(c));

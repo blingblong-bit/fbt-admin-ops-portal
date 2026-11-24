@@ -95,20 +95,32 @@ export function packagePriceNeeded(
   return (c.package_total_visits ?? 0) > 0 && Number(c.package_price ?? 0) <= 0;
 }
 
-/** Package review uses simple package existence only; unreadable evidence is not a setup gap. */
+/**
+ * "First Visit — No Package Info, Needs Review": an active client whose first
+ * visit was just an assessment, so no real package was ever set up — or whose
+ * package was auto-created from Square notes and still has no price.
+ * Excludes archived/deleted records, deliberate pay-per-visit clients, and
+ * anyone staff has dismissed with "No package needed".
+ */
 export function needsPackageReview(
-  c: {
+  c: Pick<Client, "package_total_visits"> & {
+    package_name?: string | null;
+    package_price?: number | null;
     status?: string | null;
     deleted_at?: string | null;
+    payment_model?: string | null;
   },
   dismissed?: Set<string> | null,
   clientId?: string,
-  packageClientIds?: Set<string> | null,
 ): boolean {
+
   if (c.deleted_at) return false;
   if (c.status === "archived") return false;
-  if (!clientId || !dismissed || !packageClientIds) return false;
-  return !dismissed.has(clientId) && !packageClientIds.has(clientId);
+  if (c.payment_model === "pay_per_visit") return false;
+  if (clientId && dismissed?.has(clientId)) return false;
+  if ((c.package_total_visits ?? 0) > 0) return packagePriceNeeded(c);
+  if ((c.package_name ?? "").trim().length > 0) return false;
+  return true;
 }
 
 

@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { Search } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { RebookingQueue } from '@/components/RebookingQueue';
-import { followUpEligible } from '@/lib/schedule-followup';
+import { thisWeekRebookEligible } from '@/lib/schedule-followup';
 import type { ScheduleCheckResult, WorklistRow } from '@/lib/schedule.functions';
 
 export function SchedulingQueues({data}:{data:ScheduleCheckResult|undefined}) {
@@ -11,7 +11,7 @@ export function SchedulingQueues({data}:{data:ScheduleCheckResult|undefined}) {
   if(!data) return <p role="status">Loading scheduling worklists…</p>;
   const next = new Set(data.next_week.flatMap(a=>a.client?[a.client.id]:[]));
   const hidden = new Set(data.worklists.hidden.map(r=>r.id));
-  const rebooking = data.this_week.filter(a=>a.client && !next.has(a.client.id) && !hidden.has(a.client.id) && followUpEligible(a.client));
+  const rebooking = data.this_week.filter(a=>a.client && !next.has(a.client.id) && !hidden.has(a.client.id) && thisWeekRebookEligible(a.client));
   const toRow = (c:ScheduleCheckResult['not_scheduled_after'][number]):WorklistRow => ({...c,reasons:[...(c.visit_count_check?[c.visit_count_check]:[]),'No Square appointment after selected date'],last_kept_visit:c.last_appointment_at,next_appointment_at:null});
   const noBooking = new Map(data.worklists.not_scheduled.map(c=>[c.id,c]));
   for(const c of [...data.last_week_nothing_booked,...data.not_scheduled_after]) if(!hidden.has(c.id) && !noBooking.has(c.id)) noBooking.set(c.id,toRow(c));

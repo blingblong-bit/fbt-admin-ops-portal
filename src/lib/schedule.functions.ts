@@ -615,7 +615,7 @@ export const getScheduleCheck = createServerFn({ method: "GET" })
       next_week.filter((a) => a.client).map((a) => a.client!.id),
     );
 
-    const { effectiveRemaining, followUpEligible, groupFollowUps } = await import("@/lib/schedule-followup");
+    const { effectiveRemaining, thisWeekRebookEligible, groupFollowUps } = await import("@/lib/schedule-followup");
 
     // Reports must exclude archived clients — matching map above still
     // contains them so appointments continue to resolve for display.
@@ -641,7 +641,7 @@ export const getScheduleCheck = createServerFn({ method: "GET" })
 
     const needs_next_week_scheduling: NeedsScheduleClient[] = clientList
       .filter(
-        (c) => followUpEligible(c) && thisWeekClientIds.has(c.id) && !nextWeekClientIds.has(c.id),
+        (c) => thisWeekRebookEligible(c) && thisWeekClientIds.has(c.id) && !nextWeekClientIds.has(c.id),
       )
       .map(decorate);
 

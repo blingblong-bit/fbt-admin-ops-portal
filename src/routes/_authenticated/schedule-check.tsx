@@ -15,7 +15,7 @@ import { ScheduleWorklists } from "@/components/ScheduleWorklists";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { followUpEligible } from "@/lib/schedule-followup";
+import { thisWeekRebookEligible } from "@/lib/schedule-followup";
 import {
   Table,
   TableBody,
@@ -266,7 +266,7 @@ function ScheduleCheckPage() {
       (data?.this_week ?? []).filter((a) => {
         if (!a.client) return false;
         if (nextWeekClientIds.has(a.client.id)) return false;
-        return followUpEligible(a.client);
+        return thisWeekRebookEligible(a.client);
       }),
     [data, nextWeekClientIds],
   );

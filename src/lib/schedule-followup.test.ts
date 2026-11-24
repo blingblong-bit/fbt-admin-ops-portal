@@ -83,3 +83,15 @@ describe("schedule follow-up", () => {
     expect(followUpEligible(c("g", { visits_used: 8, pending_renewal_start_date: "2026-10-27" }))).toBe(true);
   });
 });
+
+import { thisWeekRebookEligible } from "./schedule-followup";
+describe("thisWeekRebookEligible", () => {
+  const base = { id: "z", status: "active", package_total_visits: 8, visits_used: 8 };
+  it("keeps a client who finished 8 of 8 this week", () => {
+    expect(thisWeekRebookEligible({ ...base, visit: { mode: "square", total: 8, used: 8 } as never })).toBe(true);
+  });
+  it("still excludes archived and no-package clients", () => {
+    expect(thisWeekRebookEligible({ ...base, status: "archived" })).toBe(false);
+    expect(thisWeekRebookEligible({ ...base, package_total_visits: 0 })).toBe(false);
+  });
+});

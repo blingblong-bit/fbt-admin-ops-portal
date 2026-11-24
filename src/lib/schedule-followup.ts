@@ -82,3 +82,12 @@ export function groupFollowUps(
   }
   return out;
 }
+
+/**
+ * "This Week But Not Next" membership: like followUpEligible, but clients who
+ * just used up their package also stay (they need rebooking/renewal outreach).
+ */
+export function thisWeekRebookEligible(c: FollowUpClient): boolean {
+  if (c.status === "archived" || c.status === "inactive") return false;
+  return (c.package_total_visits ?? 0) > 0;
+}

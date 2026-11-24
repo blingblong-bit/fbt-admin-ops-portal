@@ -1487,6 +1487,10 @@ export type Database = {
         }
         Returns: Json
       }
+      simple_create_opening_packages: {
+        Args: { _cutover: string; _expected: Json }
+        Returns: number
+      }
       simple_import_openings: {
         Args: { _as_of: string; _rows: Json }
         Returns: number

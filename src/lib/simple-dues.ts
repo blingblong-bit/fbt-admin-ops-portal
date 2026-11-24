@@ -1,6 +1,6 @@
 /** Independent of Master Dues: money is integer cents, with no allocations. */
 export type SimplePackage = { id: string; client_id: string; visits: number; price: number; started_on: string; source: "auto" | "manual" | "opening"; square_payment_id: string | null; flagged_for_review: boolean; reviewed_at: string | null; note: string | null; created_at: string; deleted_at: string | null };
-export type SimplePayment = { id: string; clientId: string | null; amountCents: number; currency: string; status: string; date: string };
+export type SimplePayment = { id: string; clientId: string | null; amountCents: number; currency: string; status: string; date: string; buyerName?:string|null; buyerEmail?:string|null };
 export type SimplePrice = { amount: number; visits: number; flag_for_review: boolean };
 export type SimpleBooking = { id: string; clientId: string; date: string; startAt: string; endAt: string; status: string };
 export type SimpleClient = { id: string; name: string; archived: boolean };
@@ -21,7 +21,7 @@ export function planAutoPackage(payment: SimplePayment, priceList: SimplePrice[]
 }
 export function simpleBalance(opening: number, packages: SimplePackage[], payments: SimplePayment[], cutoverDate: string | null): number | null {
   if (!cutoverDate) return null;
-  const prices = packages.filter(p => !p.deleted_at && p.started_on >= cutoverDate).reduce((sum, p) => sum + cents(p.price), 0);
+  const prices = packages.filter(p => !p.deleted_at && p.source !== "opening" && p.started_on >= cutoverDate).reduce((sum, p) => sum + cents(p.price), 0);
   const unique = new Map(payments.map(p => [p.id, p]));
   const paid = [...unique.values()].filter(p => p.date >= cutoverDate && p.status === "COMPLETED" && p.currency === "USD").reduce((sum, p) => sum + p.amountCents, 0);
   return (cents(opening) + prices - paid) / 100;
@@ -36,6 +36,10 @@ export function simpleVisitsLeft(pkg: SimplePackage, bookings: SimpleBooking[], 
   return pkg.visits - completed.size;
 }
 export type SimpleRow = { client: SimpleClient; balance: number | null; newest: SimplePackage | null; visitsLeft: number | null; next: SimpleBooking | null; unmatchedPaymentIds: string[] };
+export function unlinkedSimplePayments(payments:SimplePayment[],cutoverDate:string|null) {
+  if(!cutoverDate)return [];
+  return [...new Map(payments.map(p=>[p.id,p])).values()].filter(p=>!p.clientId && p.status==="COMPLETED" && p.date>=cutoverDate).sort((a,b)=>b.date.localeCompare(a.date)||a.id.localeCompare(b.id));
+}
 export function computeSimpleDues(input: { clients: SimpleClient[]; packages: SimplePackage[]; payments: SimplePayment[]; bookings: SimpleBooking[]; openings: {client_id: string; amount: number}[]; priceList: SimplePrice[]; cutoverDate: string | null; now: string; bookingsReliable?: boolean }) {
   const rows: SimpleRow[] = input.clients.filter(c => !c.archived).map(client => {
     const packages = input.packages.filter(p => p.client_id === client.id);

@@ -1,6 +1,7 @@
 # Roadmap
 
 ## Additive simple dues
+- [x] Opening-package preview/create uses latest uncleared current override and one opening per client; missing info listed, starts on/after candidate cutover held rather than charged. Unlinked receipts shown read-only with buyer/date/amount. 646 tests passed; signed-in create/re-preview and mobile receipt checked; legacy records unchanged and cutover restored unset; build OK, no publication.
 - [x] Add isolated simple tables, audited admin writes and Square payment ingestion
 - [x] Add pure balance/package planner tests and separate /dues page/form/profile card/dashboard link
 - [x] 627 tests passed; signed-in add/edit, notes and opening balances read back; local recorder replay/single audit/removal checked; desktop/mobile no overflow or runtime errors. Cutover restored unset; legacy diff additive only, build OK; no publication. Square attendance is not certified; live webhook delivery not triggered.

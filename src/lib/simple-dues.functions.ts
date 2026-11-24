@@ -3,7 +3,8 @@ import { queryOptions } from "@tanstack/react-query";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { fetchSquareBookings } from "@/lib/schedule.functions";
-import { chicagoDate, computeSimpleDues, parseOpeningCsv, SIMPLE_DEFAULT_PRICES, type SimplePackage, type SimplePayment, type SimpleBooking, type SimplePrice, type SimpleClient } from "./simple-dues";
+import { chicagoDate, computeSimpleDues, parseOpeningCsv, unlinkedSimplePayments, SIMPLE_DEFAULT_PRICES, type SimplePackage, type SimplePayment, type SimpleBooking, type SimplePrice, type SimpleClient } from "./simple-dues";
+import {planOpeningPackages,type OpeningOverride} from "./simple-dues-opening";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/integrations/supabase/types";
 
@@ -31,8 +32,8 @@ export const getSimpleDues=createServerFn({method:"GET"}).middleware([requireSup
   const clients:SimpleClient[]=rawClients.map(c=>({id:c.id,name:`${c.first_name} ${c.last_name}`.trim(),archived:c.status==="archived" || !!c.deleted_at}));
   const packages=rawPackages.map(p=>({...p,price:Number(p.price)})) as SimplePackage[];
   const priceList:SimplePrice[]=prices.map(p=>({...p,amount:Number(p.amount)}));
-  const rawPayments=cutoverDate ? await all((from,to)=>{let q=db.from("square_payments").select("square_payment_id,client_id,amount_cents,currency,status,created_at,raw_event").gte("created_at",`${cutoverDate}T00:00:00Z`).order("id");if(data.clientId)q=q.eq("client_id",data.clientId);return q.range(from,to);}) : [];
-  const payments:SimplePayment[]=rawPayments.map(p=>{const event=p.raw_event as {data?:{object?:{payment?:{created_at?:string}}}}|null;return {id:p.square_payment_id,clientId:p.client_id,amountCents:p.amount_cents,currency:p.currency,status:p.status??"",date:chicagoDate(event?.data?.object?.payment?.created_at??p.created_at)};});
+  const rawPayments=cutoverDate ? await all((from,to)=>{let q=db.from("square_payments").select("square_payment_id,client_id,amount_cents,currency,status,created_at,raw_event,buyer_email").gte("created_at",`${cutoverDate}T00:00:00Z`).order("id");if(data.clientId)q=q.eq("client_id",data.clientId);return q.range(from,to);}) : [];
+  const payments:SimplePayment[]=rawPayments.map(p=>{const event=p.raw_event as {data?:{object?:{payment?:{created_at?:string;buyer_email_address?:string;buyer_name?:string;billing_address?:{first_name?:string;last_name?:string}}}}}|null;const receipt=event?.data?.object?.payment;const address=receipt?.billing_address;const buyerName=receipt?.buyer_name??[address?.first_name,address?.last_name].filter(Boolean).join(" ");return {id:p.square_payment_id,clientId:p.client_id,amountCents:p.amount_cents,currency:p.currency,status:p.status??"",date:chicagoDate(receipt?.created_at??p.created_at),buyerName:buyerName||null,buyerEmail:p.buyer_email??receipt?.buyer_email_address??null};});
   const now=new Date().toISOString(); const bookings:SimpleBooking[]=[]; let bookingError:string|null=null;
   if(cutoverDate) {
     const token=process.env['SQUARE_PRODUCTION_ACCESS_TOKEN'];
@@ -56,14 +57,24 @@ export const getSimpleDues=createServerFn({method:"GET"}).middleware([requireSup
     }
   }
   const board=computeSimpleDues({clients,packages,payments,bookings,openings:openings.map(o=>({client_id:o.client_id,amount:Number(o.amount)})),priceList,cutoverDate,now,bookingsReliable:!bookingError});
-  return { ...board,clients,packages,openings:openings.map(o=>({...o,amount:Number(o.amount)})),priceList,cutoverDate,bookingError,computed_at:now,unlinkedPayments:payments.filter(p=>cutoverDate && p.date>=cutoverDate && !p.clientId && p.status==="COMPLETED" && p.currency==="USD").length };
+  return { ...board,clients,packages,openings:openings.map(o=>({...o,amount:Number(o.amount)})),priceList,cutoverDate,bookingError,computed_at:now,unlinkedPayments:unlinkedSimplePayments(payments,cutoverDate) };
 });
 export const simpleDuesQuery=(clientId?:string)=>queryOptions({queryKey:["simple-dues",clientId??"all"],queryFn:()=>getSimpleDues({data:clientId?{clientId}:{}}),staleTime:60000,refetchInterval:60000,refetchOnWindowFocus:true});
 
 const date=z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(s=>!Number.isNaN(new Date(s).getTime()),"Invalid date");
+export const previewSimpleOpeningPackages=createServerFn({method:"POST"}).middleware([requireSupabaseAuth]).inputValidator((d:unknown)=>z.object({cutoverDate:date}).parse(d)).handler(async({data,context})=>{
+  const db=context.supabase;await admin(db,context.userId);
+  const [clients,overrides,existing]=await Promise.all([
+    all((from,to)=>db.from("clients").select("id,first_name,last_name,status,deleted_at,package_total_visits,package_price,package_start_date").order("id").range(from,to)),
+    all((from,to)=>db.from("package_overrides").select("*").eq("slot","current").is("cleared_at",null).order("id").range(from,to)),
+    all((from,to)=>db.from("simple_packages").select("client_id,source").eq("source","opening").order("id").range(from,to)),
+  ]);
+  return {...planOpeningPackages(clients,overrides as OpeningOverride[],existing as {client_id:string;source:"opening"}[],data.cutoverDate),cutoverDate:data.cutoverDate};
+});
 const amount=z.number().finite().min(0).max(9999999999).refine(n=>Math.round(n*100)/100===n,"Use at most two decimal places");
 const packageFields={clientId:z.string().uuid(),visits:z.number().int().min(0).max(10000),price:amount,startedOn:date,note:z.string().max(2000)};
 const mutation=z.discriminatedUnion("action",[
+  z.object({action:z.literal("create-openings"),cutoverDate:date,rows:z.array(z.object({client_id:z.string().uuid(),visits:z.number().int().positive(),price:amount,started_on:date})).max(10000)}),
   z.object({action:z.literal("package"),id:z.string().uuid().optional(),...packageFields}),
   z.object({action:z.literal("remove"),id:z.string().uuid()}),z.object({action:z.literal("review"),id:z.string().uuid()}),
   z.object({action:z.literal("cutover"),date}),z.object({action:z.literal("price"),amount:amount.refine(n=>n>0),visits:z.number().int().positive().max(10000),flag:z.boolean()}),
@@ -74,7 +85,8 @@ export type SimpleMutation=z.infer<typeof mutation>;
 export const saveSimpleDues=createServerFn({method:"POST"}).middleware([requireSupabaseAuth]).inputValidator((d:unknown)=>mutation.parse(d)).handler(async({data,context})=>{
   const db=context.supabase; await admin(db,context.userId);
   let error:unknown=null;
-  if(data.action==="package") {const row={client_id:data.clientId,visits:data.visits,price:data.price,started_on:data.startedOn,note:data.note};
+  if(data.action==="create-openings") {const r=await db.rpc("simple_create_opening_packages",{_cutover:data.cutoverDate,_expected:data.rows});error=r.error;
+  } else if(data.action==="package") {const row={client_id:data.clientId,visits:data.visits,price:data.price,started_on:data.startedOn,note:data.note};
     if(data.id) {const r=await db.from("simple_packages").update(row).eq("id",data.id).eq("client_id",data.clientId).is("deleted_at",null).select("id").single();error=r.error;}
     else {const r=await db.from("simple_packages").insert({...row,source:"manual",created_by:context.userId});error=r.error;}
   } else if(data.action==="review" || data.action==="remove") {const r=await db.from("simple_packages").update(data.action==="review"?{reviewed_at:new Date().toISOString(),reviewed_by:context.userId}:{deleted_at:new Date().toISOString()}).eq("id",data.id).is("deleted_at",null).select("id").single();error=r.error;

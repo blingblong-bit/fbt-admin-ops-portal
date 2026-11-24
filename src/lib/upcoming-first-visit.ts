@@ -64,7 +64,7 @@ export function upcomingWeekSummary(items: UpcomingFirstVisit[], weekStart: stri
 }
 
 /** Current-package money above its price. Money held on an approved renewal is not overpaid. Never credit. */
-export function overpaidAmount(c: { package_price?: number | string | null; amount_paid?: number | string | null }): number {
+export function overpaidAmount(c: { package_price?: number | string | null; amount_paid?: number | string | null; pending_renewal_paid?: number | string | null }): number {
   const price = Number(c.package_price ?? 0);
   return r2(price > 0 ? Math.max(0, Number(c.amount_paid ?? 0) - price) : 0);
 }

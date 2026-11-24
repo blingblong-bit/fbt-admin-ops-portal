@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { selectProfileRenewal } from "./upcoming-first-visit";
+import { nextPackagePrefill } from "./profile-renewal";
 
 const now = "2026-11-24T12:00:00Z";
 const base = { id: "c1", square_customer_id: "sq1", package_price: 345 };
@@ -21,5 +22,27 @@ describe("selectProfileRenewal", () => {
   });
   it("cancelled 1/x and nothing prepared shows none", () => {
     expect(selectProfileRenewal(base, [{ ...b1, status: "CANCELLED_BY_SELLER" }], now).kind).toBe("none");
+  });
+});
+
+describe("nextPackagePrefill start date", () => {
+  const cur = { totalVisits: 8, price: 345, packageName: "8-Visit Package" };
+  it("prepared renewal with a booked 1/x starts on the 1/x date, not the stored date", () => {
+    const r = selectProfileRenewal({ ...base, pending_renewal_start_date: "2026-12-01", pending_renewal_total_visits: 8, pending_renewal_price: 345 }, [b1], now);
+    const p = nextPackagePrefill(r, cur);
+    expect(p?.startYmd).toBe("2026-12-04");
+    expect(p?.fromBooking).toBe(true);
+    expect(p?.hasPrepared).toBe(true);
+  });
+  it("prepared renewal without a booked 1/x keeps its stored start date", () => {
+    const r = selectProfileRenewal({ ...base, pending_renewal_start_date: "2026-12-10", pending_renewal_total_visits: 4, pending_renewal_price: 200 }, [], now);
+    const p = nextPackagePrefill(r, cur);
+    expect(p?.startYmd).toBe("2026-12-10");
+    expect(p?.fromBooking).toBe(false);
+  });
+  it("booked 1/x with no prepared renewal starts on the 1/x date", () => {
+    const p = nextPackagePrefill(selectProfileRenewal(base, [b1], now), cur);
+    expect(p?.startYmd).toBe("2026-12-04");
+    expect(p?.fromBooking).toBe(true);
   });
 });

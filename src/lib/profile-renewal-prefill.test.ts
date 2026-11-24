@@ -8,10 +8,10 @@ const b1 = { id: "b1", start_at: "2026-12-04T15:00:00Z", status: "ACCEPTED", sel
 const cur = { totalVisits: 4, price: 345, packageName: null };
 
 describe("profile next package", () => {
-  it("prepared renewal wins and shows paid", () => {
+  it("prepared renewal keeps its details but starts on the booked 1/x date", () => {
     const r = selectProfileRenewal({ ...base, pending_renewal_start_date: "2026-12-10", pending_renewal_total_visits: 4, pending_renewal_price: 200, pending_renewal_paid: 50 }, [b1], now);
     const p = nextPackagePrefill(r, cur)!;
-    expect([p.visits, p.price, p.startYmd, p.paid, p.hasPrepared, p.fromBooking]).toEqual([4, 200, "2026-12-10", 50, true, false]);
+    expect([p.visits, p.price, p.startYmd, p.paid, p.hasPrepared, p.fromBooking]).toEqual([4, 200, "2026-12-04", 50, true, true]);
     expect(nextPackageLine(p)).toContain("· paid $50");
   });
   it("booked 1/x: date from booking, N from note, price = current package", () => {

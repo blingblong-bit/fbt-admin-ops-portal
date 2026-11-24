@@ -67,3 +67,25 @@ export function overpaidAmount(c: { package_price?: number | string | null; amou
   const over = price > 0 ? Math.max(0, Number(c.amount_paid ?? 0) - price) : 0;
   return r2(over + Math.max(0, Number(c.pending_renewal_paid ?? 0)));
 }
+
+export type ProfileRenewal =
+  | { kind: "upcoming"; item: UpcomingFirstVisit; prepared: PreparedInfo | null }
+  | { kind: "prepared"; prepared: PreparedInfo }
+  | { kind: "none" };
+export type PreparedInfo = { startYmd: string | null; totalVisits: number | null; price: number | null };
+
+/** Profile "Upcoming renewal" selection for one client. Pure; never hides a prepared renewal. */
+export function selectProfileRenewal(c: UpcomingClient, bookings: UpcomingBooking[], nowIso: string): ProfileRenewal {
+  const hasPrepared = !!c.pending_renewal_start_date || c.pending_renewal_price != null || c.pending_renewal_total_visits != null;
+  const prepared: PreparedInfo | null = hasPrepared ? {
+    startYmd: c.pending_renewal_start_date ?? null,
+    totalVisits: c.pending_renewal_total_visits ?? null,
+    price: c.pending_renewal_price != null ? Number(c.pending_renewal_price) : null,
+  } : null;
+  const map = new Map<string, UpcomingBooking[]>();
+  if (c.square_customer_id) map.set(c.square_customer_id, bookings);
+  const item = findUpcomingFirstVisits([c], map, nowIso)[0];
+  if (item) return { kind: "upcoming", item, prepared };
+  if (prepared) return { kind: "prepared", prepared };
+  return { kind: "none" };
+}

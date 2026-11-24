@@ -13,6 +13,7 @@ import { UndoRenewalButton } from "@/components/UndoRenewalButton";
 import { overpaidAmount } from "@/lib/upcoming-first-visit";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { EditPackagesCard } from "@/components/EditPackagesCard";
+import { ProfileUpcomingRenewal } from "@/components/ProfileUpcomingRenewal";
 import { applyOverrides, type PackageOverride } from "@/lib/package-override";
 import { AppShell } from "@/components/AppShell";
 import { ArchiveClientButton } from "@/components/ArchiveClientButton";
@@ -346,6 +347,7 @@ function ClientDetailPage() {
             </div>
           </section>
           <NextAppointment clientId={id} onDetails={() => setSection("activity")} />
+          <ProfileUpcomingRenewal clientId={id} isAdmin={isAdminUser} />
         </TabsContent>
         <TabsContent forceMount value="packages" className="space-y-5 data-[state=inactive]:hidden">
           {isAdminUser && <EditPackagesCard client={(c as Client & { __raw?: Client }).__raw ?? c} onDone={refresh} editRequest={editRequest} />}

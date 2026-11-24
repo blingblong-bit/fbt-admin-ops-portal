@@ -14,7 +14,7 @@ export type PaymentRoutingState = {
   pendingRenewalPaid: number;
   /** A prepared renewal exists when it has a start date. */
   hasPreparedRenewal: boolean;
-  /** Price of the prepared renewal; paid-ahead money is capped at it. Unknown = holds nothing. */
+  /** Ignored: payments never go to a prepared renewal. Kept for callers. */
   pendingRenewalPrice?: number | null;
 };
 
@@ -28,10 +28,9 @@ export type PaymentRouting = {
 };
 
 /**
- * Debt first, then the open balance on the current package, and only then the
- * prepaid bucket of an already-prepared, priced renewal (up to its price). Any
- * excess stays on the current package as a reviewable overpayment — a general
- * account credit is never created, carried, or applied.
+ * One tracker: debt first, then the current package. Money never moves into a
+ * prepared renewal. Any excess stays on the current package as a reviewable
+ * overpayment — a general account credit is never created, carried, or applied.
  */
 export function routePayment(state: PaymentRoutingState, amount: number): PaymentRouting {
   const prevOwed = Math.max(0, Number(state.previousPackageOwed ?? 0));
@@ -42,34 +41,21 @@ export function routePayment(state: PaymentRoutingState, amount: number): Paymen
 
   const toPreviousPackage = Math.min(prevOwed, amt);
   let remaining = amt - toPreviousPackage;
-
   let toCurrentPackage = Math.min(Math.max(0, price - paid), remaining);
   remaining -= toCurrentPackage;
-
-  let toPendingPackage = 0;
-  let unallocated = 0;
-  if (remaining > 0 && state.hasPreparedRenewal) {
-    const cap = Math.max(0, Number(state.pendingRenewalPrice ?? 0) - pendingPaid);
-    toPendingPackage = Math.min(cap, remaining);
-    remaining -= toPendingPackage;
-  }
-  if (remaining > 0) {
-    // No general credit: the money stays recorded (never lost) on the current
-    // package and the client is flagged for Payment Review.
-    unallocated = remaining;
-    toCurrentPackage += remaining;
-    remaining = 0;
-  }
+  const unallocated = remaining;
+  toCurrentPackage += remaining;
 
   return {
     toPreviousPackage,
     toCurrentPackage,
-    toPendingPackage,
+    toPendingPackage: 0,
     unallocated,
     next: {
       previousPackageOwed: prevOwed - toPreviousPackage,
       amountPaid: paid + toCurrentPackage,
-      pendingRenewalPaid: pendingPaid + toPendingPackage,
+      // Existing prepared-renewal money is left exactly as stored; never added to.
+      pendingRenewalPaid: pendingPaid,
     },
   };
 }

@@ -1,5 +1,3 @@
-import { PreRenewCard } from "@/components/PreRenewCard";
-import type { RenewalForecastRow } from "@/lib/schedule.functions";
 import { createFileRoute, Link, useCanGoBack, useNavigate, useRouter } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
@@ -11,10 +9,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { recordManualPayment } from "@/lib/payments.functions";
 import { renewPackage } from "@/lib/renewal.functions";
 import { updateClientDetails } from "@/lib/admin-finance.functions";
-import { ClearPrepaidCard } from "@/components/ClearPrepaidCard";
-import { PaymentAllocationsCard } from "@/components/PaymentAllocationsCard";
+import { UndoRenewalButton } from "@/components/UndoRenewalButton";
+import { overpaidAmount } from "@/lib/upcoming-first-visit";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import type { OverrideSlot } from "@/lib/package-override";
 import { EditPackagesCard } from "@/components/EditPackagesCard";
 import { applyOverrides, type PackageOverride } from "@/lib/package-override";
 import { AppShell } from "@/components/AppShell";
@@ -38,7 +35,6 @@ import {
   getClientVisitTracking,
   setVisitTrackingMode,
   undoVisitCheckIn,
-  getRenewalForecast,
   type ClientAppointment,
 } from "@/lib/schedule.functions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -71,7 +67,6 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import {
-  amountOwed,
   packagePriceUnknown,
   previousOwed,
   totalOwed,
@@ -156,11 +151,11 @@ function ClientDetailPage() {
   const [editOpen, setEditOpen] = useState(false);
   const [section, setSection] = useState("overview");
   const [correctOpen, setCorrectOpen] = useState(false);
-  const [editRequest, setEditRequest] = useState<{ slot: OverrideSlot; key: number } | null>(null);
-  const openPackage = (slot: OverrideSlot) => {
+  const [editRequest, setEditRequest] = useState<{ key: number } | null>(null);
+  const openPackage = () => {
     setCorrectOpen(false);
     setSection("packages");
-    setEditRequest({ slot, key: Date.now() });
+    setEditRequest({ key: Date.now() });
   };
 
 
@@ -174,14 +169,6 @@ function ClientDetailPage() {
     invalidateFor(qc, ["payment-changed", "renewal-changed", "package-edited", "visit-changed"], { clientId: id });
   };
 
-  const fetchForecast = useServerFn(getRenewalForecast);
-  const forecastQ = useQuery({
-    queryKey: ["renewal-forecast"],
-    queryFn: () => fetchForecast(),
-    staleTime: 60_000,
-    enabled: !!c?.pending_renewal_start_date,
-  });
-  const renewalRow = (forecastQ.data as { rows?: { client_id: string; first_uncovered_ymd: string; no_upcoming: boolean }[] } | undefined)?.rows?.find((r) => r.client_id === id);
   const completeVisitFn = useServerFn(completeVisitForClient);
   const fetchUnchecked = useServerFn(getUncheckedRecentAppointments);
 
@@ -275,7 +262,9 @@ function ClientDetailPage() {
     );
   }
 
-  const owed = amountOwed(c);
+  // One Owes number: previous + current combined (same as the dues total).
+  const owed = totalOwed(c);
+  const overpaid = overpaidAmount(c);
   const priceUnknown = packagePriceUnknown(c, isDismissedFromReview);
   // Square-driven clients show the Square position; stored Hub count is never changed.
   const sqShown = squareTracks && visitTracking ? visitTracking : null;
@@ -325,7 +314,7 @@ function ClientDetailPage() {
                 <h2 className="text-lg font-semibold">Current package</h2>
                 <p className="text-sm text-muted-foreground">{c.package_name ?? "Package"} · Started {formatDate(c.package_start_date)}</p>
               </div>
-              {isAdminUser && <Button size="sm" variant="outline" onClick={() => openPackage("current")}>Correct package</Button>}
+              {isAdminUser && <Button size="sm" variant="outline" onClick={() => openPackage()}>Edit package</Button>}
             </div>
             <div className="grid gap-5 sm:grid-cols-2">
               <div>
@@ -341,8 +330,8 @@ function ClientDetailPage() {
               <div className="space-y-2 text-sm">
                 <Row label="Package price" value={formatCurrency(c.package_price)} />
                 <Row label="Paid toward this package" value={formatCurrency(c.amount_paid)} />
-                <Row label="Current package owed" value={priceUnknown ? "Package info needed" : formatCurrency(owed)} valueClass={owed > 0 ? "font-semibold text-destructive" : "font-semibold"} />
-                {previousOwed(c) > 0 && <Row label="Prior package owed" value={formatCurrency(previousOwed(c))} />}
+                <Row label="Owes" value={priceUnknown ? "Package info needed" : formatCurrency(owed)} valueClass={owed > 0 ? "font-semibold text-destructive" : "font-semibold"} />
+                {overpaid > 0 && <Row label="Overpaid, needs review" value={formatCurrency(overpaid)} valueClass="font-semibold" />}
                 <div className="border-t pt-2">
                   {(() => {
                     const last = activities.find((a) => a.activity_type === "payment");
@@ -357,15 +346,9 @@ function ClientDetailPage() {
             </div>
           </section>
           <NextAppointment clientId={id} onDetails={() => setSection("activity")} />
-          {c.pending_renewal_start_date && <section className="border-t pt-4" aria-label="Upcoming renewal">
-            <div className="mb-2 flex flex-wrap items-center justify-between gap-2"><h2 className="text-lg font-semibold">Upcoming renewal</h2>{isAdminUser && <Button size="sm" variant="outline" onClick={() => openPackage("pending")}>Correct upcoming package</Button>}</div>
-            {renewalRow ? <PreRenewCard forecast={renewalRow as unknown as RenewalForecastRow} hideAmount={!isAdminUser} /> : <p className="text-sm text-muted-foreground">Prepared on or after {formatDate(c.pending_renewal_start_date)}. {forecastQ.isError ? "Renewal details could not load." : forecastQ.isFetching ? "Checking Square timing…" : "No verified start shown."}</p>}
-          </section>}
         </TabsContent>
         <TabsContent forceMount value="packages" className="space-y-5 data-[state=inactive]:hidden">
           {isAdminUser && <EditPackagesCard client={(c as Client & { __raw?: Client }).__raw ?? c} onDone={refresh} editRequest={editRequest} />}
-          {isAdminUser && <PaymentAllocationsCard client={c} onDone={refresh} />}
-          {isAdminUser && (() => { const raw = (c as Client & { __raw?: Client }).__raw ?? c; return <ClearPrepaidCard clientId={id} paidAhead={Number(raw.pending_renewal_paid ?? 0)} preparedOn={raw.pending_renewal_start_date ?? null} onDone={refresh} />; })()}
           <section className="border-y py-4" aria-label="Visit controls">
             <h2 className="mb-3 text-lg font-semibold">Visit source &amp; check-in</h2>
             <div className="flex flex-wrap items-center gap-3">
@@ -412,6 +395,7 @@ function ClientDetailPage() {
             <Button variant="outline" onClick={() => setRenewOpen(true)}>
               Renew Package
             </Button>
+            {isAdminUser && <UndoRenewalButton clientId={c.id} onDone={refresh} />}
             <ArchiveClientButton clientId={c.id} clientName={fullName(c)} archived={c.status === "archived"} />
             {packageReviewNeeded && (
               <Button
@@ -486,7 +470,7 @@ function ClientDetailPage() {
           <DialogHeader><DialogTitle>Correct record</DialogTitle><DialogDescription>Corrections update the record, not a new payment. Required reasons and confirmations still apply.</DialogDescription></DialogHeader>
           <div className="min-w-0 space-y-4 [&_button]:min-w-0 [&_button]:max-w-full [&_button]:whitespace-normal [&_button]:h-auto [&_button]:min-h-10 [&_button]:py-2 [&_button]:px-2">
             <Button variant="outline" className="min-h-11 w-full justify-start" onClick={() => { setCorrectOpen(false); setEditOpen(true); }}>Edit client details</Button>
-            {isAdminUser && <><div><h3 className="mb-2 text-sm font-semibold">Correct a package</h3><div className="grid grid-cols-3 gap-2"><Button variant="outline" onClick={() => openPackage("current")}>Current</Button><Button variant="outline" onClick={() => openPackage("pending")}>Upcoming</Button><Button variant="outline" onClick={() => openPackage("previous")}>Prior</Button></div><p className="mt-2 text-xs text-muted-foreground">Price, recognized paid, date and package details. Recognized paid is a correction, not money received.</p></div><Button variant="outline" className="min-h-11 w-full whitespace-normal justify-start text-left" onClick={() => { setCorrectOpen(false); setSection("packages"); }}>Review where a payment went / Undo last renewal</Button></>}
+            {isAdminUser && <><div><h3 className="mb-2 text-sm font-semibold">Edit package</h3><Button variant="outline" className="w-full" onClick={() => openPackage()}>Edit package size, price, visits or amount paid</Button></div><Button variant="outline" className="min-h-11 w-full whitespace-normal justify-start text-left" onClick={() => { setCorrectOpen(false); setSection("packages"); }}>Undo last renewal</Button></>}
             <Button variant="outline" className="min-h-11 w-full justify-start" onClick={() => { setCorrectOpen(false); setSection("packages"); }}>Visit source &amp; other record actions</Button>
           </div>
         </DialogContent>
@@ -833,8 +817,7 @@ function RenewDialog({
     mutationFn: async () => {
       // One locked server operation: closes the finished package, carries
       // unpaid money forward as previous-package debt, and starts the new
-      // package already credited with money prepaid against a prepared
-      // renewal — so an incoming payment can't be wiped mid-renewal.
+      // package — so an incoming payment can't be wiped mid-renewal.
       await renewPackageFn({
         data: {
           clientId: client.id,
@@ -902,8 +885,7 @@ function RenewDialog({
               <Label>Paid Today ($)</Label>
               <Input type="number" min={0} step="0.01" value={form.amount_paid} onChange={(e) => up("amount_paid", Number(e.target.value))} />
               <p className="mt-1 text-xs text-muted-foreground">
-                Leave at $0 unless money was collected right now. Money already paid ahead for
-                this prepared package is applied automatically.
+                Leave at $0 unless money was collected right now.
               </p>
             </div>
           </div>

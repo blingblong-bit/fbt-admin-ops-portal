@@ -18,24 +18,32 @@ describe("routePayment", () => {
     expect(r.next).toEqual({ previousPackageOwed: 0, amountPaid: 150, pendingRenewalPaid: 0 });
   });
 
-  it("holds money paid ahead against an already-prepared renewal", () => {
+  it("never puts money into a prepared renewal; excess stays on the current package for review", () => {
     const r = routePayment(
       { ...base, amountPaid: 375, packagePrice: 375, hasPreparedRenewal: true, pendingRenewalPrice: 375 },
       50,
     );
-    expect(r.toCurrentPackage).toBe(0);
-    expect(r.toPendingPackage).toBe(50);
-    expect(r.next.pendingRenewalPaid).toBe(50);
-    expect(r.next.amountPaid).toBe(375);
+    expect(r.toPendingPackage).toBe(0);
+    expect(r.toCurrentPackage).toBe(50);
+    expect(r.unallocated).toBe(50);
+    expect(r.next.pendingRenewalPaid).toBe(0);
+    expect(r.next.amountPaid).toBe(425);
   });
 
-  it("splits between the open current balance and the prepared renewal", () => {
+  it("fills the open current balance and flags only the rest, even with a prepared renewal", () => {
     const r = routePayment(
       { ...base, amountPaid: 300, packagePrice: 375, hasPreparedRenewal: true, pendingRenewalPrice: 375 },
       200,
     );
-    expect(r.toCurrentPackage).toBe(75);
-    expect(r.toPendingPackage).toBe(125);
+    expect(r.toCurrentPackage).toBe(200);
+    expect(r.toPendingPackage).toBe(0);
+    expect(r.unallocated).toBe(125);
+  });
+
+  it("leaves an existing prepared-renewal amount exactly as stored", () => {
+    const r = routePayment({ ...base, amountPaid: 0, hasPreparedRenewal: true, pendingRenewalPrice: 375, pendingRenewalPaid: 100 }, 50);
+    expect(r.next.pendingRenewalPaid).toBe(100);
+    expect(r.next.amountPaid).toBe(50);
   });
 
   it("leaves unexplained excess on the current package when no renewal is prepared", () => {
@@ -87,22 +95,11 @@ describe("computeRenewalTransition", () => {
 });
 
 describe("no general credit anywhere", () => {
-  it("paid-ahead money is capped at the prepared renewal price; the rest is unallocated", () => {
+  it("a large payment over a prepared renewal is all unallocated, recorded on current", () => {
     const r = routePayment({ ...base, amountPaid: 375, hasPreparedRenewal: true, pendingRenewalPrice: 375 }, 1125);
-    expect(r.toPendingPackage).toBe(375);
-    expect(r.unallocated).toBe(750);
-    expect(r.next.pendingRenewalPaid).toBe(375);
-    expect(r.next.amountPaid).toBe(1125); // recorded, not lost, flagged for review
-  });
-  it("a prepared renewal with no price holds nothing", () => {
-    const r = routePayment({ ...base, amountPaid: 375, hasPreparedRenewal: true }, 100);
     expect(r.toPendingPackage).toBe(0);
-    expect(r.unallocated).toBe(100);
-  });
-  it("true early payment within the prepared price is kept against that package", () => {
-    const r = routePayment({ ...base, amountPaid: 375, hasPreparedRenewal: true, pendingRenewalPrice: 375, pendingRenewalPaid: 100 }, 275);
-    expect(r.toPendingPackage).toBe(275);
-    expect(r.unallocated).toBe(0);
+    expect(r.unallocated).toBe(1125);
+    expect(r.next.amountPaid).toBe(1500); // recorded, not lost, flagged for review
   });
   it("prior debt is still paid first and never cleared without money", () => {
     const r = routePayment({ ...base, previousPackageOwed: 200, hasPreparedRenewal: true, pendingRenewalPrice: 375 }, 150);

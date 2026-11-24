@@ -129,3 +129,9 @@
 - [x] Preview checks; leave publication and automatic alerts off
 - [ ] Secure background job preparation — blocked by protected secret-storage access; no job created
 - [ ] Scheduler selection, reminder window, opt-in and real iPhone test — requires publication approval and scheduler device consent
+
+## Simpler renewals and dues (owner-approved)
+- [x] Upcoming 1/x rows on Payment Due / Weekly Dues with admin OK
+- [x] Payments: debt then current only; overpaid shown for review
+- [x] Profile: one Owes number, plain package edit, removed money-moving tools
+- [x] Renewals page read-only; AGENTS.md updated

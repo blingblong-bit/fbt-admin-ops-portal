@@ -32,7 +32,6 @@ import { AppShell } from "@/components/AppShell";
 import { StatusBadge } from "@/components/StatusBadge";
 import { SmartClientCard } from "@/components/SmartClientCard";
 import { ArchiveClientButton } from "@/components/ArchiveClientButton";
-import { PreRenewCard } from "@/components/PreRenewCard";
 import { AdminPrimaryAreas, AdminToolLinks } from "@/components/AdminDashboard";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -1221,10 +1220,6 @@ function Dashboard() {
                   scheduleStatus = "not_scheduled";
                 }
               }
-              const forecast =
-                filter === "needs_renewal" || filter === "renewal_scheduled"
-                  ? renewalMap.get(c.id)
-                  : undefined;
               return (
                 <div key={c.id} className="flex flex-col gap-2">
                   <SmartClientCard
@@ -1235,7 +1230,6 @@ function Dashboard() {
                     scheduleStatus={scheduleStatus}
                     scheduleStatusDetail={scheduleStatusDetail}
                   />
-                  {forecast && <PreRenewCard forecast={forecast} hideAmount={isStaff} />}
                   {(filter === "payment_due" || filter === "payment_due_this_week" || filter === "payment_due_next_week" || filter === "overdue_prior_weeks") && (
                     <ArchiveClientButton clientId={c.id} clientName={fullName(c)} archived={c.status === "archived"} size="sm" />
                   )}
@@ -1592,9 +1586,6 @@ function WeeklyPaymentView({
                       balanceAmount={row.currentAmount}
                       additionalAmounts={amounts}
                     />
-                    {row.forecast && row.nextAmount > 0 && (
-                      <PreRenewCard forecast={row.forecast as RenewalForecastRow} />
-                    )}
                     <ArchiveClientButton
                       clientId={row.client.id}
                       clientName={fullName(row.client)}

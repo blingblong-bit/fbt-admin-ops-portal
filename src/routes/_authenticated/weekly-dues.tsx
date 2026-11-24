@@ -10,6 +10,8 @@ import { DuesFreshnessBanner, useDuesFreshness } from "@/components/DuesFreshnes
 import { getMasterDues, masterDuesQuery } from "@/lib/master-dues.functions";
 import { computeWeeklyDues, KIND_LABEL, matchesWeekly, weekdayIndex, WEEKDAYS, WEEKLY_FILTERS, type WeeklyFilter, type WeeklyItem } from "@/lib/weekly-dues";
 import { addDaysYmd, workWeekStartFromYmd } from "@/lib/work-week";
+import { UpcomingFirstVisitList, UpcomingWeekLine } from "@/components/UpcomingFirstVisits";
+import { upcomingWeekSummary } from "@/lib/upcoming-first-visit";
 
 type Search = { week?: "prev" | "current" | "next"; filter?: string };
 
@@ -92,6 +94,11 @@ function WeeklyDuesPage() {
             <Stat label="Older Outstanding" value={w.totals.older} sub={`${w.totals.olderClients} clients`} />
             <Stat label="Total Actionable" value={w.totals.total} sub="expected + carryover + older" />
           </div>
+
+          <section className="mb-4 space-y-2" aria-label="Upcoming 1/x visits">
+            <UpcomingWeekLine label="This week" owesNow={w.totals.total} items={data?.upcomingFirst ?? []} weekStart={w.week.start} />
+            <UpcomingFirstVisitList items={upcomingWeekSummary(data?.upcomingFirst ?? [], w.week.start).items} isAdmin={isAdmin} />
+          </section>
 
           <div className="mb-4 flex flex-wrap gap-1">
             {WEEKLY_FILTERS.map((f) => (

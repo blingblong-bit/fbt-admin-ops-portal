@@ -6,10 +6,11 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { computeMasterDues, renewalTimingFor, type RenewalTiming, liveNumbered } from "./master-dues";
 import { drivingCounts, forecastRenewal } from "./effective-visit-state";
 import { simulateBilling, type SimResult } from "./billing-sim";
+import { findUpcomingFirstVisits, overpaidAmount, type UpcomingFirstVisit } from "./upcoming-first-visit";
 
 type Result =
   | { error: string; computed_at: string; data: null }
-  | { error: null; computed_at: string; data: ReturnType<typeof computeMasterDues> & { appointments: Record<string, string[]> } };
+  | { error: null; computed_at: string; data: ReturnType<typeof computeMasterDues> & { appointments: Record<string, string[]>; upcomingFirst: UpcomingFirstVisit[]; overpaid: Record<string, number> } };
 
 const chi = (iso: string) => new Date(iso).toLocaleDateString("en-CA", { timeZone: "America/Chicago" });
 const NUMBERED = /\b\d+\s*(of|\/)\s*\d+\b/i;
@@ -103,7 +104,11 @@ export const getMasterDues = createServerFn({ method: "GET" })
         .map((b) => b.start_at!)
         .filter((s) => { const t = Date.parse(s); return t >= lo && t <= hi; });
     }
-    return { error: null, computed_at: nowIso, data: { ...data, appointments } };
+    // Booked 1/x visits: review rows only, never added to any total.
+    const upcomingFirst = findUpcomingFirstVisits(clients, index.byCustomer as never, nowIso);
+    const overpaid: Record<string, number> = {};
+    for (const c of clients) { const o = overpaidAmount(c); if (o > 0) overpaid[c.id] = o; }
+    return { error: null, computed_at: nowIso, data: { ...data, appointments, upcomingFirst, overpaid } };
   });
 
 export const masterDuesQuery = (fn: () => Promise<Result>) =>

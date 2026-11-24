@@ -12,6 +12,8 @@ import { DUES_FILTERS, filterTotals, makeWeekOf, matchesFilter, sortRows, sumRow
 import type { MasterDuesRow, ObligationStatus } from "@/lib/master-dues";
 import { addDaysYmd, workWeekStartFromYmd } from "@/lib/work-week";
 import { AssessmentPackageReview } from "@/components/AssessmentPackageReview";
+import { UpcomingFirstVisitList, UpcomingWeekLine } from "@/components/UpcomingFirstVisits";
+import { mondayOf, upcomingWeekSummary } from "@/lib/upcoming-first-visit";
 
 export const Route = createFileRoute("/_authenticated/payment-due")({
   head: () => ({
@@ -91,6 +93,34 @@ function PaymentDuePage() {
             <Summary label="Needs Review" clients={t.renewalByStatus.needs_review.clients} dollars={t.renewalByStatus.needs_review.dollars} />
           </div>
           <p className="mb-4 text-xs text-muted-foreground">Client counts can overlap when one client has money in more than one category. Dollars never double count.</p>
+
+          <section className="mb-6 space-y-2" aria-label="Upcoming 1/x visits">
+            <h2 className="text-lg font-semibold">Upcoming 1/x visits</h2>
+            <p className="text-xs text-muted-foreground">Booked first visits of a new package. Not owed until the visit starts; nothing is added until an admin taps OK.</p>
+            {(() => {
+              const up = data.upcomingFirst ?? [];
+              const wk = mondayOf(today), nx = addDaysYmd(wk, 7);
+              const later = up.filter((i) => i.week_start > nx);
+              return <>
+                <UpcomingWeekLine label="This week" owesNow={t.total} items={up} weekStart={wk} />
+                <UpcomingFirstVisitList items={upcomingWeekSummary(up, wk).items} isAdmin={isAdmin} />
+                <UpcomingWeekLine label="Next week" owesNow={t.total} items={up} weekStart={nx} />
+                <UpcomingFirstVisitList items={upcomingWeekSummary(up, nx).items} isAdmin={isAdmin} />
+                {later.length > 0 && <><p className="text-sm font-medium">Later</p><UpcomingFirstVisitList items={later} isAdmin={isAdmin} /></>}
+              </>;
+            })()}
+          </section>
+
+          {Object.keys(data.overpaid ?? {}).length > 0 && (
+            <section className="mb-6" aria-label="Overpaid, needs review">
+              <h2 className="mb-1 text-lg font-semibold">Overpaid, needs review</h2>
+              <ul className="space-y-1 text-sm">
+                {Object.entries(data.overpaid).map(([id, amt]) => (
+                  <li key={id}><Link to="/clients/$id" params={{ id }} className="hover:underline">{data.rows.find((r) => r.client_id === id)?.name ?? "Client"}</Link> <span className="text-muted-foreground">— Overpaid, needs review · {$(amt)}</span></li>
+                ))}
+              </ul>
+            </section>
+          )}
 
           <div className="mb-3 flex flex-wrap gap-1.5">
             {DUES_FILTERS.map((f) => (

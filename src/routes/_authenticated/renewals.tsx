@@ -6,7 +6,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { AppShell } from "@/components/AppShell";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { PreRenewCard } from "@/components/PreRenewCard";
 import { ActivateFromSquareButton } from "@/components/ActivateFromSquareButton";
 import { formatDate } from "@/lib/clients";
 import { getRenewalForecast, type RenewalForecastRow } from "@/lib/schedule.functions";
@@ -169,6 +168,7 @@ function RenewalsPage() {
           </button>
         </div>
         <p className="text-sm text-muted-foreground">{tab === "setup" ? "Assessment clients with no first package yet, including ones marked \"No package needed\". They leave this list once a package is set. Urgent = a follow-up is booked with no package." : current.help}</p>
+        <p className="text-sm">Read-only. To approve a booked 1/x visit and its price, use <Link to="/payment-due" className="font-medium underline">Payment Due</Link>.</p>
         <SearchBox value={query} onChange={setQuery} />
         {tab === "setup" ? <PackageSetupList query={query} /> : <>
         {forecastQ.data && (
@@ -210,7 +210,6 @@ function RenewalsPage() {
                       </Button>
                     </div>
                   </div>
-                  <PreRenewCard forecast={r} />
                 </CardContent>
               </Card>
             ))}

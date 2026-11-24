@@ -83,7 +83,7 @@ describe("mutation coverage", () => {
     expect(offenders.filter((o) => !o.includes("__root.tsx"))).toEqual([]);
   });
   it("each known save point calls invalidateFor", () => {
-    const files = ["components/PreRenewCard.tsx", "components/SmartClientCard.tsx", "components/PaymentAllocationsCard.tsx",
+    const files = ["components/UpcomingFirstVisits.tsx", "components/SmartClientCard.tsx", "components/UndoRenewalButton.tsx", "components/EditPackagesCard.tsx",
       "components/ArchiveClientButton.tsx", "routes/_authenticated/clients.$id.tsx", "routes/_authenticated/schedule-check.tsx",
       "routes/_authenticated/missed-check-ins.tsx", "routes/_authenticated/sync-log.tsx", "routes/_authenticated/clients.new.tsx",
       "routes/_authenticated/clients.deleted.tsx"];

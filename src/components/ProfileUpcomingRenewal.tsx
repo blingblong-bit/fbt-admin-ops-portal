@@ -27,7 +27,30 @@ export function ProfileUpcomingRenewal({ clientId, isAdmin }: { clientId: string
   );
 }
 
-function RenewForm({ clientId, p, packageName, onClose }: { clientId: string; p: NextPackagePrefill | null; packageName: string | null; onClose: () => void }) {
+/** Forecast rows fetch profile defaults only after an admin opens Renew. */
+export function ForecastRenewAction({ clientId }: { clientId: string }) {
+  const [open, setOpen] = useState(false);
+  return open
+    ? <ForecastRenewForm clientId={clientId} onClose={() => setOpen(false)} />
+    : <Button size="sm" variant="outline" onClick={() => setOpen(true)}>Renew</Button>;
+}
+
+function ForecastRenewForm({ clientId, onClose }: { clientId: string; onClose: () => void }) {
+  const fn = useServerFn(getProfileRenewal);
+  const q = useQuery({ queryKey: ["client", clientId, "upcoming-renewal"], queryFn: () => fn({ data: { clientId } }), staleTime: 60_000 });
+  if (q.isPending || q.isError) return (
+    <div className="flex flex-wrap items-center gap-2">
+      <p className={`text-sm ${q.isError ? "text-destructive" : "text-muted-foreground"}`} role={q.isError ? "alert" : "status"}>
+        {q.isError ? "Couldn't load renewal details." : "Loading renewal details…"}
+      </p>
+      {q.isError && <Button size="sm" variant="outline" disabled={q.isFetching} onClick={() => q.refetch()}>Retry</Button>}
+      <Button size="sm" variant="ghost" onClick={onClose}>Close</Button>
+    </div>
+  );
+  return <RenewForm clientId={clientId} p={nextPackagePrefill(q.data.renewal, q.data.current ?? null)} packageName={q.data.current?.packageName ?? null} onClose={onClose} />;
+}
+
+export function RenewForm({ clientId, p, packageName, onClose }: { clientId: string; p: NextPackagePrefill | null; packageName: string | null; onClose: () => void }) {
   const qc = useQueryClient();
   const renew = useServerFn(renewPackage);
   const prep = useServerFn(preRenewNextPackage);
@@ -69,7 +92,7 @@ function RenewForm({ clientId, p, packageName, onClose }: { clientId: string; p:
       <label className="text-xs">Start date<Input aria-label="Start date" type="date" className="h-9 w-40" value={start} onChange={(e) => setStart(e.target.value)} /></label>
       <Button size="sm" disabled={busy} onClick={() => save.mutate()}>Save</Button>
       <Button size="sm" variant="ghost" disabled={busy} onClick={onClose}>Close</Button>
-      {p?.hasPrepared && <button type="button" className="text-xs text-muted-foreground underline" disabled={busy} onClick={() => remove.mutate()}>Remove</button>}
+      {p?.hasPrepared && <Button size="sm" variant="ghost" className="text-xs text-muted-foreground underline" disabled={busy} onClick={() => remove.mutate()}>Remove</Button>}
       {remove.error && <p className="w-full text-xs text-destructive">{(remove.error as Error).message}</p>}
     </div>
   );

@@ -1,5 +1,9 @@
 # Roadmap
 
+## Minimal forecast-row renewal action
+- [x] Reuse profile Renew form for admin forecast rows only, with lazy defaults; retain Setup and existing mutation/refresh rules
+- [x] 19 focused tests passed; build OK and diff checked; signed-in row verification unavailable because preview sign-in requires account selection; no data changes or publication
+
 ## Renewal timing boundary regression
 - [x] Inspect current-cycle versus next-cycle evidence without live mutations
 - [x] Exclude old completion on the effective Hub start date; hold evidence-free opener attribution for review; add 14 anonymized regressions

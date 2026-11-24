@@ -46,6 +46,15 @@ describe("event mappings", () => {
     expect(qc.getQueryState(["client", "c2"])?.isInvalidated).toBe(false);
     expect(qc.getQueryState(["merge-center-pairs"])?.isInvalidated).toBe(false);
   });
+  it("renewal save or removal invalidates forecast, Payment Due, dashboard and profile defaults", async () => {
+    const qc = new QueryClient();
+    const keys = [["renewal-forecast"], ["master-dues"], ["clients"], ["client", "c1"], ["client", "c1", "upcoming-renewal"]];
+    for (const key of keys) qc.setQueryData(key, 1);
+    qc.setQueryData(["client", "other", "upcoming-renewal"], 1);
+    await invalidateFor(qc, "renewal-changed", { clientId: "c1" });
+    for (const key of keys) expect(qc.getQueryState(key)?.isInvalidated).toBe(true);
+    expect(qc.getQueryState(["client", "other", "upcoming-renewal"])?.isInvalidated).toBe(false);
+  });
 });
 
 describe("dues freshness", () => {

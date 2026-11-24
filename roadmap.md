@@ -1,5 +1,10 @@
 # Roadmap
 
+## Faster Dues loading
+- [x] Concurrent four-window Square reads, short bookings-only cache, forced Refresh/Retry and parallel independent reads; preserve calculators and mutation invalidation
+- [x] 187 simple-dues tests / 758 full tests passed, including 25 new concurrency/cache/loading regressions; shared query reuse, forced retry and fresh package/payment reads verified with mocks; build/diff clean
+- [ ] Signed-in desktop/mobile Dues and Refresh verification — this draft has no auth users; checks reach sign-in without errors/overflow, and no accounts or data were created
+
 ## Simple Dues completeness
 - [x] Share sequential package assignment across visit counts, labels and renewal/week projections; preserve balance formula
 - [x] Surface Needs a package, sorted Renew soon and collapsed inactive clients; show appointment failure/retry and dashboard counts

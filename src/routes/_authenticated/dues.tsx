@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
 import { Plus, RefreshCw, Check, Pencil, Trash2, ArrowLeft, FileUp, ChevronLeft, ChevronRight } from "lucide-react";
-import { simpleDuesQuery, saveSimpleDues, previewSimpleOpeningPackages, type SimpleMutation } from "@/lib/simple-dues.functions";
+import { getSimpleDues, simpleDuesQuery, saveSimpleDues, previewSimpleOpeningPackages, type SimpleMutation } from "@/lib/simple-dues.functions";
 import { chicagoDate, parseOpeningCsv, simpleWeekStart, shiftSimpleWeek, buildSimpleRenewalWeek, type SimpleRow, type SimplePrice, SIMPLE_DEFAULT_PRICES } from "@/lib/simple-dues";
 import { invalidateFor } from "@/lib/simple-dues-cache";
 import { requireAdmin } from "@/lib/require-admin";
@@ -34,6 +34,11 @@ function OpeningLine({id,name,amount,date,busy,onSave}:{id:string;name:string;am
 
 function SimpleDuesPage() {
   const q=useQuery(simpleDuesQuery());const data=q.data;const qc=useQueryClient();const save=useServerFn(saveSimpleDues);
+  const fetchFresh=useServerFn(getSimpleDues);
+  const refresh=useMutation({mutationFn:async()=>{
+    await qc.cancelQueries({queryKey:["simple-dues","all"],exact:true});
+    return qc.fetchQuery({...simpleDuesQuery(),queryFn:()=>fetchFresh({data:{forceFresh:true}}),staleTime:0});
+  }});
   const mutation=useMutation({mutationFn:(d:SimpleMutation)=>save({data:d}),onSuccess:()=>invalidateFor(qc)});
   const previewFn=useServerFn(previewSimpleOpeningPackages);
   const openingPreview=useMutation({mutationFn:(cutoverDate:string)=>previewFn({data:{cutoverDate}})});
@@ -48,11 +53,11 @@ function SimpleDuesPage() {
   function remove(id:string) {if(window.confirm("Remove this simple package? Its history and Square payment remain recorded."))mutation.mutate({action:"remove",id});}
   const headings=["Who owes","Flagged for Dad","Check package info","Renew soon"];
   return <AppShell><div className="mx-auto max-w-5xl space-y-6 pb-10">
-    <header className="flex flex-wrap items-center justify-between gap-3"><div><Button asChild variant="ghost" size="sm" className="mb-1 px-0"><Link to="/"><ArrowLeft className="mr-1 size-4"/>Dashboard</Link></Button><h1 className="text-2xl font-semibold">Dues</h1><p className="text-sm text-muted-foreground">Simple · Square payments and packages</p></div><div className="flex flex-wrap gap-2"><Button variant="outline" disabled={busy||!data?.cutoverDate} onClick={()=>mutation.mutate({action:"sync"})}><RefreshCw className="mr-2 size-4"/>Sync packages</Button><Button disabled={!data} onClick={()=>setRequest({clientId:""})}><Plus className="mr-2 size-4"/>Add package</Button></div></header>
-    <DuesFreshnessBanner q={q}/>
-    {data?.bookingError&&<div role="alert" className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-destructive bg-destructive/10 p-3 text-sm font-medium text-destructive"><span>Square appointments didn't load — Renew soon, Needs a package and Upcoming renewals may be incomplete.</span><Button variant="outline" size="sm" disabled={q.isFetching} onClick={()=>q.refetch()}>Retry</Button></div>}
+    <header className="flex flex-wrap items-center justify-between gap-3"><div><Button asChild variant="ghost" size="sm" className="mb-1 px-0"><Link to="/"><ArrowLeft className="mr-1 size-4"/>Dashboard</Link></Button><h1 className="text-2xl font-semibold">Dues</h1><p className="text-sm text-muted-foreground">Simple · Square payments and packages</p></div><div className="flex flex-wrap gap-2"><Button variant="outline" size="sm" disabled={q.isFetching||refresh.isPending} onClick={()=>refresh.mutate()}><RefreshCw className="mr-1 size-4"/>Refresh</Button><Button variant="outline" disabled={busy||!data?.cutoverDate} onClick={()=>mutation.mutate({action:"sync"})}><RefreshCw className="mr-2 size-4"/>Sync packages</Button><Button disabled={!data} onClick={()=>setRequest({clientId:""})}><Plus className="mr-2 size-4"/>Add package</Button></div></header>
+    <DuesFreshnessBanner q={{...q,refetch:()=>refresh.mutate()}}/>
+    {data?.bookingError&&<div role="alert" className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-destructive bg-destructive/10 p-3 text-sm font-medium text-destructive"><span>Square appointments didn't load — Renew soon, Needs a package and Upcoming renewals may be incomplete.</span><Button variant="outline" size="sm" disabled={q.isFetching||refresh.isPending} onClick={()=>refresh.mutate()}>Retry</Button></div>}
     {mutation.isError&&<p role="alert" className="rounded-md border border-destructive p-3 text-sm text-destructive">{mutation.error instanceof Error?mutation.error.message:"Could not save change"}</p>}
-    {q.isError&&<p role="alert" className="text-destructive">Dues could not load. <Button variant="outline" onClick={()=>q.refetch()}>Retry</Button></p>}
+    {q.isError&&<p role="alert" className="text-destructive">Dues could not load. <Button variant="outline" disabled={q.isFetching||refresh.isPending} onClick={()=>refresh.mutate()}>Retry</Button></p>}
     {data&&<>
       {!data.cutoverDate?<div role="status" className="border-y py-4 font-medium">Cutover not set · balances and worklists are off</div>:<div className="flex flex-wrap items-baseline gap-x-8 gap-y-2 border-y py-5"><div><span className="text-3xl font-semibold tabular-nums">{formatCurrency(data.totalOwed)}</span><span className="ml-2 text-sm text-muted-foreground">total owed</span></div><p className="text-sm"><strong>{data.owingCount}</strong> clients owing</p><p className="text-xs text-muted-foreground">From {formatDate(data.cutoverDate)} · Read {new Date(data.computed_at).toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit"})}</p></div>}
       {data.unlinkedPayments.length>0&&<p role="alert" className="text-sm text-destructive">{data.unlinkedPayments.length} completed payments have no linked client. See Check package info; not included in client balances.</p>}

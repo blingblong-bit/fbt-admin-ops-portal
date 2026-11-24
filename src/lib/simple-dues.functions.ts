@@ -1,5 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
-import { queryOptions } from "@tanstack/react-query";
+import { keepPreviousData, queryOptions } from "@tanstack/react-query";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { fetchSquareBookings } from "@/lib/schedule.functions";
@@ -16,23 +16,24 @@ async function all<T>(page:(from:number,to:number)=>PromiseLike<{data:T[]|null;e
   const rows:T[]=[];
   for(let from=0;;from+=500) {const result=await page(from,from+499); if(result.error) throw result.error; rows.push(...result.data??[]); if((result.data?.length??0)<500) return rows; if(from>100000) throw new Error("Too many rows; narrow the date range");}
 }
-const scope=z.object({clientId:z.string().uuid().optional()});
+const scope=z.object({clientId:z.string().uuid().optional(),forceFresh:z.boolean().optional()});
 export const getSimpleDues=createServerFn({method:"GET"}).middleware([requireSupabaseAuth]).inputValidator((d:unknown)=>scope.parse(d??{})).handler(async({data,context})=>{
   const db=context.supabase;
   if(!data.clientId) await admin(db,context.userId);
-  const {data:settings,error:settingsError}=await db.from("simple_dues_settings").select("cutover_date").eq("id",true).maybeSingle();
-  if(settingsError) throw settingsError;
-  const cutoverDate=settings?.cutover_date??null;
-  const [rawClients,rawPackages,openings,prices]=await Promise.all([
+  const settingsRead=Promise.resolve(db.from("simple_dues_settings").select("cutover_date").eq("id",true).maybeSingle()).then(result=>{if(result.error)throw result.error;return result.data?.cutover_date??null;});
+  // Receipts depend on cutover; start them as soon as settings resolve, alongside the other reads.
+  const paymentsRead=settingsRead.then(cutoverDate=>cutoverDate ? all((from,to)=>{let q=db.from("square_payments").select("square_payment_id,client_id,amount_cents,currency,status,created_at,raw_event,buyer_email").gte("created_at",`${cutoverDate}T00:00:00Z`).order("id");if(data.clientId)q=q.eq("client_id",data.clientId);return q.range(from,to);}) : []);
+  const [cutoverDate,rawClients,rawPackages,openings,prices,rawPayments]=await Promise.all([
+    settingsRead,
     all((from,to)=>{let q=db.from("clients").select("id,first_name,last_name,square_customer_id,status,deleted_at").order("id");if(data.clientId)q=q.eq("id",data.clientId);return q.range(from,to);}),
     all((from,to)=>{let q=db.from("simple_packages").select("*").order("id");if(data.clientId)q=q.eq("client_id",data.clientId);return q.range(from,to);}),
     all((from,to)=>{let q=db.from("simple_opening_balances").select("*").order("client_id");if(data.clientId)q=q.eq("client_id",data.clientId);return q.range(from,to);}),
     all((from,to)=>db.from("simple_price_list").select("*").order("amount",{ascending:false}).range(from,to)),
+    paymentsRead,
   ]);
   const clients:SimpleClient[]=rawClients.map(c=>({id:c.id,name:`${c.first_name} ${c.last_name}`.trim(),archived:c.status==="archived" || !!c.deleted_at}));
   const packages=rawPackages.map(p=>({...p,price:Number(p.price)})) as SimplePackage[];
   const priceList:SimplePrice[]=prices.map(p=>({...p,amount:Number(p.amount)}));
-  const rawPayments=cutoverDate ? await all((from,to)=>{let q=db.from("square_payments").select("square_payment_id,client_id,amount_cents,currency,status,created_at,raw_event,buyer_email").gte("created_at",`${cutoverDate}T00:00:00Z`).order("id");if(data.clientId)q=q.eq("client_id",data.clientId);return q.range(from,to);}) : [];
   const payments:SimplePayment[]=rawPayments.map(p=>{const event=p.raw_event as {data?:{object?:{payment?:{created_at?:string;buyer_email_address?:string;buyer_name?:string;billing_address?:{first_name?:string;last_name?:string}}}}}|null;const receipt=event?.data?.object?.payment;const address=receipt?.billing_address;const buyerName=receipt?.buyer_name??[address?.first_name,address?.last_name].filter(Boolean).join(" ");return {id:p.square_payment_id,clientId:p.client_id,amountCents:p.amount_cents,currency:p.currency,status:p.status??"",date:chicagoDate(receipt?.created_at??p.created_at),buyerName:buyerName||null,buyerEmail:p.buyer_email??receipt?.buyer_email_address??null};});
   const now=new Date().toISOString(); const bookings:SimpleBooking[]=[]; let bookingError:string|null=null;
   if(cutoverDate) {
@@ -41,25 +42,23 @@ export const getSimpleDues=createServerFn({method:"GET"}).middleware([requireSup
     else {
       const customerMap=new Map(rawClients.filter(c=>c.square_customer_id).map(c=>[c.square_customer_id,c.id]));
       const earliest=[cutoverDate,...packages.filter(p=>!p.deleted_at).map(p=>p.started_on)].sort()[0]??cutoverDate;
-      let start=new Date(`${earliest}T00:00:00Z`); const end=new Date(Date.now()+90*86400000);
-      // Reuse production's GET reader, partitioning to keep its pagination cap from silently truncating visits.
-      for(let windows=0;start<end;windows++) {
-        if(windows>120) {bookingError="Appointment history is too large; manual review needed";break;}
-        const next=new Date(Math.min(start.getTime()+28*86400000,end.getTime()));
-        const result=await fetchSquareBookings(token,start.toISOString(),next.toISOString(),data.clientId?rawClients[0]?.square_customer_id??undefined:undefined);
-        if(result.error || result.bookings.length>=2000) {bookingError=result.error??"Appointment history is incomplete";break;}
+      const start=new Date(`${earliest}T00:00:00Z`); const end=new Date(Date.now()+90*86400000);
+      const {readSimpleBookings}=await import("./simple-dues-bookings.server");
+      const customerId=data.clientId?rawClients[0]?.square_customer_id??undefined:undefined;
+      const result=await readSimpleBookings({reader:fetchSquareBookings,token,scope:context.userId,startIso:start.toISOString(),endIso:end.toISOString(),...(customerId?{customerId}:{}),...(data.forceFresh?{forceFresh:true}:{})});
         for(const b of result.bookings) {const clientId=customerMap.get(b.customer_id??""); if(!clientId || !b.start_at) continue;
           const duration=(b.appointment_segments??[]).reduce((n,s)=>n+Number(s.duration_minutes??0),0);
           if(!duration && b.start_at<now) {bookingError="Some past appointments have no duration; visits need manual review";continue;}
           bookings.push({id:b.id,clientId,date:chicagoDate(b.start_at),startAt:b.start_at,endAt:new Date(new Date(b.start_at).getTime()+duration*60000).toISOString(),status:b.status??""});
-        } start=next;
-      }
+        }
+      // As in the sequential reader, a window failure/guard outranks earlier duration warnings.
+      if(result.error) bookingError=result.error;
     }
   }
   const board=computeSimpleDues({clients,packages,payments,bookings,openings:openings.map(o=>({client_id:o.client_id,amount:Number(o.amount)})),priceList,cutoverDate,now,bookingsReliable:!bookingError});
   return { ...board,clients,packages,openings:openings.map(o=>({...o,amount:Number(o.amount)})),priceList,cutoverDate,bookingError,computed_at:now,unlinkedPayments:unlinkedSimplePayments(payments,cutoverDate) };
 });
-export const simpleDuesQuery=(clientId?:string)=>queryOptions({queryKey:["simple-dues",clientId??"all"],queryFn:()=>getSimpleDues({data:clientId?{clientId}:{}}),staleTime:60000,refetchInterval:60000,refetchOnWindowFocus:true});
+export const simpleDuesQuery=(clientId?:string)=>queryOptions({queryKey:["simple-dues",clientId??"all"],queryFn:()=>getSimpleDues({data:clientId?{clientId}:{}}),staleTime:180000,refetchInterval:300000,refetchOnWindowFocus:false,placeholderData:keepPreviousData});
 
 const date=z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(s=>!Number.isNaN(new Date(s).getTime()),"Invalid date");
 export const previewSimpleOpeningPackages=createServerFn({method:"POST"}).middleware([requireSupabaseAuth]).inputValidator((d:unknown)=>z.object({cutoverDate:date}).parse(d)).handler(async({data,context})=>{

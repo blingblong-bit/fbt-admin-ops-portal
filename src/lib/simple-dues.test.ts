@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { simpleBalance, simpleVisitsLeft, computeSimpleDues, newestSimplePackage, planAutoPackage, parseOpeningCsv, chicagoDate, SIMPLE_DEFAULT_PRICES, type SimplePackage, type SimplePayment, type SimpleBooking } from "./simple-dues";
+import { simpleBalance, simpleVisitsLeft, computeSimpleDues, newestSimplePackage, numberSimpleVisits, nextSimpleRenewal, simpleRenewalGroup, planAutoPackage, parseOpeningCsv, chicagoDate, SIMPLE_DEFAULT_PRICES, type SimplePackage, type SimplePayment, type SimpleBooking } from "./simple-dues";
 const cutoverDate="2026-11-24";
 const now="2026-12-01T18:00:00.000Z";
 const pkg=(p:Partial<SimplePackage>={}):SimplePackage=>({id:"pkg",client_id:"c",visits:8,price:375,started_on:cutoverDate,source:"manual",square_payment_id:null,flagged_for_review:false,reviewed_at:null,note:null,created_at:"2026-11-24T18:00:00Z",deleted_at:null,...p});
@@ -58,4 +58,85 @@ describe("opening import",()=>{
   it("rejects duplicates",()=>expect(()=>parseOpeningCsv("c,375\nc,200",clients)).toThrow("duplicate"));
   it("rejects empty/invalid amounts",()=>expect(()=>parseOpeningCsv("c,",clients)).toThrow("invalid amount"));
   it("uses Chicago receipt date rather than UTC",()=>expect(chicagoDate("2026-11-24T02:00:00Z")).toBe("2026-11-23"));
+});
+
+describe("read-only simple visit numbering and renewal projection",()=>{
+  const client={id:'c',name:'Example Client',archived:false};
+  const at=(id:number,day:string,status='ACCEPTED')=>booking({id:String(id),date:day,startAt:`${day}T15:00:00.000Z`,endAt:`${day}T15:45:00.000Z`,status});
+  const eight=[24,25,26,27,28,29,30].map((day,i)=>at(i+1,`2026-11-${day}`)).concat(at(8,'2026-12-02'),at(9,'2026-12-04'),at(10,'2026-12-09'));
+  it('labels completed past bookings first then accepted future reservations in time order',()=>{
+    const visits=numberSimpleVisits(pkg(),eight.slice().reverse(),now);
+    expect(visits.map(v=>v.label)).toEqual(['1/8','2/8','3/8','4/8','5/8','6/8','7/8','8/8','1/8','2/8']);
+    expect(visits[8]).toMatchObject({newPackage:true,price:375,cycle:1});
+  });
+  it('restarts each subsequent projected package with the same size and price',()=>{
+    expect(numberSimpleVisits(pkg({visits:2,price:100}),eight,now).map(v=>[v.label,v.newPackage,v.price])).toEqual([['1/2',false,100],['2/2',false,100],['1/2',true,100],['2/2',false,100],['1/2',true,100],['2/2',false,100],['1/2',true,100],['2/2',false,100],['1/2',true,100],['2/2',false,100]]);
+  });
+  it.each(['CANCELLED_BY_SELLER','CANCELLED_BY_CUSTOMER','CANCELED','NO_SHOW','DECLINED','PENDING'])('skips %s without advancing numbering',status=>{
+    expect(numberSimpleVisits(pkg(),[at(1,'2026-11-25',status),at(2,'2026-12-02',status),at(3,'2026-12-04')],now).map(v=>v.label)).toEqual(['1/8']);
+  });
+  it('skips old dates, other clients, duplicate bookings, running bookings and future COMPLETED states',()=>{
+    const b=at(1,'2026-11-25');
+    expect(numberSimpleVisits(pkg(),[at(0,'2026-11-23'),b,b,{...b,id:'other',clientId:'d'},booking({id:'running',startAt:'2026-12-01T17:45:00.000Z',endAt:'2026-12-01T18:30:00.000Z'}),at(9,'2026-12-02','COMPLETED')],now).map(v=>v.booking.id)).toEqual(['1']);
+  });
+  it('accepts past completed bookings after the full duration ends',()=>expect(numberSimpleVisits(pkg(),[at(1,'2026-11-25','COMPLETED')],now)[0]?.label).toBe('1/8'));
+  it('zero/invalid/removed packages never produce a division by zero or renewal guess',()=>{
+    for(const p of [pkg({visits:0}),pkg({visits:-1}),pkg({visits:1.5}),pkg({deleted_at:now})])expect(numberSimpleVisits(p,eight,now)).toEqual([]);
+  });
+  it('selects one next future 1/8 even when a previous projected renewal was in the past',()=>{
+    const v=numberSimpleVisits(pkg({visits:2}),eight,now);
+    expect(nextSimpleRenewal(client,v,[pkg({visits:2})],now)?.visit.booking.id).toBe('9');
+  });
+  it('no booking after the last package visit means no upcoming renewal',()=>expect(nextSimpleRenewal(client,numberSimpleVisits(pkg(),eight.slice(0,8),now),[],now)).toBeNull());
+  it('matching recorded package on the renewal date is Paid, not expected revenue',()=>{
+    const r=nextSimpleRenewal(client,numberSimpleVisits(pkg(),eight,now),[pkg({id:'next',started_on:'2026-12-04'})],now);
+    expect(r).toMatchObject({paid:true,expected:0});
+  });
+  it('matching auto-added package after the renewal date is Paid',()=>{
+    expect(nextSimpleRenewal(client,numberSimpleVisits(pkg(),eight,now),[pkg({id:'auto',source:'auto',square_payment_id:'receipt',started_on:'2026-12-05'})],now)).toMatchObject({paid:true,expected:0});
+  });
+  it('old auto-payment package is not general credit for the next projected cycle',()=>{
+    expect(nextSimpleRenewal(client,numberSimpleVisits(pkg(),eight,now),[pkg({source:'auto',square_payment_id:'old-receipt'})],now)).toMatchObject({paid:false,expected:375});
+  });
+  it('an early matching auto purchase pays only its first reserved cycle, never the following renewal',()=>{
+    const p=pkg({source:'auto',square_payment_id:'matching-receipt'});const bookings=[at(1,'2026-12-02')];
+    const input={clients:[client],packages:[p],payments:[payment()],bookings,openings:[],priceList:SIMPLE_DEFAULT_PRICES,cutoverDate,now};
+    expect(computeSimpleDues(input).upcomingRenewals[0]).toMatchObject({paid:true,expected:0});
+    expect(computeSimpleDues({...input,bookings:eight}).upcomingRenewals[0]).toMatchObject({paid:false,expected:375});
+  });
+  it('a recorded future-start package keeps its future first booking visible as Paid',()=>{
+    const b=computeSimpleDues({clients:[client],packages:[pkg({started_on:'2026-12-02'})],payments:[],bookings:[at(1,'2026-12-02')],openings:[],priceList:SIMPLE_DEFAULT_PRICES,cutoverDate,now});
+    expect(b.upcomingRenewals[0]).toMatchObject({paid:true,expected:0});expect(b.renewalExpected).toEqual({thisWeek:0,nextWeek:0});
+  });
+  it('removed, other-client, wrong-price or wrong-size packages cannot mark a matching renewal paid',()=>{
+    const matches=[pkg({started_on:'2026-12-04',deleted_at:now}),pkg({started_on:'2026-12-04',client_id:'d'}),pkg({started_on:'2026-12-04',price:345}),pkg({started_on:'2026-12-04',visits:4})];
+    expect(nextSimpleRenewal(client,numberSimpleVisits(pkg(),eight,now),matches,now)).toMatchObject({paid:false,expected:375});
+  });
+  it.each([['2026-12-06','This week'],['2026-12-07','Next week'],['2026-12-13','Next week'],['2026-12-14','Later']] as const)('groups %s as %s in Monday–Sunday Chicago weeks',(date,group)=>expect(simpleRenewalGroup(date,now)).toBe(group));
+  it('uses Chicago date at midnight across a UTC week boundary',()=>expect(simpleRenewalGroup('2026-11-30','2026-11-30T02:00:00Z')).toBe('Next week'));
+  it('adds forecasts without changing balances, debt membership, remaining visits or input records',()=>{
+    const input={clients:[client],packages:[pkg()],payments:[payment()],bookings:eight,openings:[],priceList:SIMPLE_DEFAULT_PRICES,cutoverDate,now};
+    const snapshot=JSON.stringify(input); const b=computeSimpleDues(input);
+    expect(b.totalOwed).toBe(0);expect(b.whoOwes).toEqual([]);expect(b.rows[0]?.visitsLeft).toBe(1);
+    expect(b.rows[0]?.upcomingVisits.map(v=>v.label)).toEqual(['8/8','1/8','2/8']);
+    expect(b.upcomingRenewals).toHaveLength(1);expect(b.renewalExpected).toEqual({thisWeek:375,nextWeek:0});
+    expect(JSON.stringify(input)).toBe(snapshot);
+  });
+  it('totals unpaid expected amounts by week in cents and excludes an already paid first cycle',()=>{
+    const clients=[client,{id:'d',name:'Next Client',archived:false},{id:'e',name:'Paid Client',archived:false}];
+    const packages=[pkg({visits:2,price:123.45}),pkg({id:'d',client_id:'d',visits:2,price:200}),pkg({id:'e',client_id:'e',source:'auto',square_payment_id:'matched'})];
+    const bookings=[at(1,'2026-11-25'),at(2,'2026-11-26'),at(3,'2026-12-04'),...['2026-11-25','2026-11-26','2026-12-09'].map((day,i)=>({...at(i+10,day),clientId:'d'})),{...at(20,'2026-12-02'),clientId:'e'}];
+    const b=computeSimpleDues({clients,packages,payments:[],bookings,openings:[],priceList:SIMPLE_DEFAULT_PRICES,cutoverDate,now});
+    expect(b.upcomingRenewals).toHaveLength(3);expect(b.renewalExpected).toEqual({thisWeek:123.45,nextWeek:200});expect(b.upcomingRenewals.find(r=>r.client.id==='e')?.paid).toBe(true);
+  });
+  it('newest package is always the anchor; older receipts never pay its subsequent renewal',()=>{
+    const b=computeSimpleDues({clients:[client],packages:[pkg({id:'old',visits:4}),pkg({id:'new',visits:2,price:200,started_on:'2026-12-02'})],payments:[],bookings:eight,openings:[],priceList:SIMPLE_DEFAULT_PRICES,cutoverDate,now:'2026-12-03T18:00:00.000Z'});
+    expect(b.rows[0]?.upcomingVisits.map(v=>v.label)).toEqual(['2/2','1/2']);expect(b.upcomingRenewals[0]).toMatchObject({paid:false,expected:200,group:'Next week'});
+  });
+  it('incomplete appointment reads and unset cutover suppress all new projections',()=>{
+    for(const extra of [{bookingsReliable:false},{cutoverDate:null}]){
+      const b=computeSimpleDues({clients:[client],packages:[pkg()],payments:[],bookings:eight,openings:[],priceList:SIMPLE_DEFAULT_PRICES,cutoverDate,now,...extra});
+      expect(b.upcomingRenewals).toEqual([]);expect(b.rows[0]?.upcomingVisits).toEqual([]);expect(b.renewalExpected).toEqual({thisWeek:0,nextWeek:0});
+    }
+  });
 });

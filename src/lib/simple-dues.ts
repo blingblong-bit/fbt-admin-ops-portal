@@ -35,7 +35,36 @@ export function simpleVisitsLeft(pkg: SimplePackage, bookings: SimpleBooking[], 
   const completed = new Set(bookings.filter(b => b.clientId === pkg.client_id && b.date >= pkg.started_on && b.endAt <= now && (b.status === "ACCEPTED" || b.status === "COMPLETED")).map(b => b.id));
   return pkg.visits - completed.size;
 }
-export type SimpleRow = { client: SimpleClient; balance: number | null; newest: SimplePackage | null; visitsLeft: number | null; next: SimpleBooking | null; unmatchedPaymentIds: string[] };
+export type SimpleVisit = { booking: SimpleBooking; number: number; size: number; label: string; cycle: number; newPackage: boolean; price: number };
+/** Read-only reservation projection, not attendance certification or a balance input. */
+export function numberSimpleVisits(pkg: SimplePackage, bookings: SimpleBooking[], now: string): SimpleVisit[] {
+  if (!Number.isInteger(pkg.visits) || pkg.visits <= 0 || pkg.deleted_at) return [];
+  const eligible = [...new Map(bookings.filter(b => b.clientId === pkg.client_id && b.date >= pkg.started_on &&
+    ((b.endAt <= now && (b.status === "ACCEPTED" || b.status === "COMPLETED")) || (b.startAt > now && b.status === "ACCEPTED"))).map(b => [b.id, b])).values()];
+  eligible.sort((a, b) => Number(a.startAt > now) - Number(b.startAt > now) || a.startAt.localeCompare(b.startAt) || a.id.localeCompare(b.id));
+  return eligible.map((booking, index) => {
+    const number = index % pkg.visits + 1; const cycle = Math.floor(index / pkg.visits);
+    return { booking, number, size: pkg.visits, label: `${number}/${pkg.visits}`, cycle, newPackage: cycle > 0 && number === 1, price: pkg.price };
+  });
+}
+export type SimpleRenewal = { client: SimpleClient; visit: SimpleVisit; paid: boolean; expected: number; group: "This week" | "Next week" | "Later" };
+export function simpleRenewalGroup(date: string, now: string): SimpleRenewal["group"] {
+  // Monday–Sunday calendar weeks in Chicago, independent of UTC/DST offsets.
+  const today = new Date(`${chicagoDate(now)}T12:00:00Z`);
+  const monday = new Date(today); monday.setUTCDate(today.getUTCDate() - (today.getUTCDay() + 6) % 7);
+  const day = Math.floor((new Date(`${date}T12:00:00Z`).getTime() - monday.getTime()) / 86400000);
+  return day < 7 ? "This week" : day < 14 ? "Next week" : "Later";
+}
+export function nextSimpleRenewal(client: SimpleClient, visits: SimpleVisit[], packages: SimplePackage[], now: string, anchor?: SimplePackage): SimpleRenewal | null {
+  const prepaidAnchor = anchor?.source === "auto" && !!anchor.square_payment_id;
+  // A recorded future package/early automatic purchase may already cover the first reserved cycle.
+  const visit = visits.find(v => v.booking.startAt > now && (v.newPackage || (v.cycle === 0 && v.number === 1 && anchor && (anchor.started_on > chicagoDate(now) || prepaidAnchor))));
+  if (!visit) return null;
+  // Only a recorded package covering this boundary is evidence; an old receipt/negative balance is not prepayment.
+  const paid = (visit.cycle === 0 && prepaidAnchor) || packages.some(p => p.client_id === client.id && !p.deleted_at && p.started_on >= visit.booking.date && p.visits === visit.size && cents(p.price) === cents(visit.price));
+  return { client, visit, paid, expected: paid ? 0 : visit.price, group: simpleRenewalGroup(visit.booking.date, now) };
+}
+export type SimpleRow = { client: SimpleClient; balance: number | null; newest: SimplePackage | null; visitsLeft: number | null; next: SimpleBooking | null; unmatchedPaymentIds: string[]; upcomingVisits: SimpleVisit[]; renewal: SimpleRenewal | null };
 export function unlinkedSimplePayments(payments:SimplePayment[],cutoverDate:string|null) {
   if(!cutoverDate)return [];
   return [...new Map(payments.map(p=>[p.id,p])).values()].filter(p=>!p.clientId && p.status==="COMPLETED" && p.date>=cutoverDate).sort((a,b)=>b.date.localeCompare(a.date)||a.id.localeCompare(b.id));
@@ -48,8 +77,10 @@ export function computeSimpleDues(input: { clients: SimpleClient[]; packages: Si
     const newest = newestSimplePackage(packages, input.cutoverDate);
     const next = input.bookingsReliable === false ? null : bookings.filter(b => b.startAt > input.now && b.status === "ACCEPTED").sort((a,b) => a.startAt.localeCompare(b.startAt))[0] ?? null;
     const known = packages.map(p => p.square_payment_id).filter((id): id is string => !!id);
+    const numbered = newest && input.bookingsReliable !== false ? numberSimpleVisits(newest, bookings, input.now) : [];
     return { client, balance: simpleBalance(Number(input.openings.find(o => o.client_id === client.id)?.amount ?? 0), packages, payments, input.cutoverDate), newest,
       visitsLeft: newest && input.bookingsReliable !== false ? simpleVisitsLeft(newest, bookings, input.now) : null, next,
+      upcomingVisits: numbered.filter(v => v.booking.startAt > input.now), renewal: nextSimpleRenewal(client, numbered, packages, input.now, newest ?? undefined),
       unmatchedPaymentIds: payments.filter(p => planAutoPackage(p, input.priceList, {cutoverDate: input.cutoverDate, existingPaymentIds: known}).kind === "check").map(p => p.id),
     };
   });
@@ -58,7 +89,9 @@ export function computeSimpleDues(input: { clients: SimpleClient[]; packages: Si
   const renewSoon = rows.filter(r => r.newest && r.visitsLeft !== null && r.visitsLeft <= 2);
   const cutover = input.cutoverDate;
   const flagged = cutover ? input.packages.filter(p => !p.deleted_at && p.started_on >= cutover && p.flagged_for_review && !p.reviewed_at && rows.some(r => r.client.id === p.client_id)) : [];
-  return { rows, whoOwes, checkPackageInfo, renewSoon, flagged, totalOwed: whoOwes.reduce((sum,r) => sum + cents(Number(r.balance)), 0) / 100, owingCount: whoOwes.length };
+  const upcomingRenewals = rows.flatMap(r => r.renewal ? [r.renewal] : []).sort((a,b) => a.visit.booking.startAt.localeCompare(b.visit.booking.startAt) || a.client.name.localeCompare(b.client.name));
+  const renewalExpected = { thisWeek: upcomingRenewals.filter(r => r.group === "This week").reduce((s,r) => s + cents(r.expected), 0) / 100, nextWeek: upcomingRenewals.filter(r => r.group === "Next week").reduce((s,r) => s + cents(r.expected), 0) / 100 };
+  return { rows, whoOwes, checkPackageInfo, renewSoon, flagged, upcomingRenewals, renewalExpected, totalOwed: whoOwes.reduce((sum,r) => sum + cents(Number(r.balance)), 0) / 100, owingCount: whoOwes.length };
 }
 /** CSV accepts quoted names, rejects ambiguous/unmatched clients and duplicate rows before any write. */
 export function parseOpeningCsv(text: string, clients: SimpleClient[]): {client_id: string; amount: number; note: string}[] {

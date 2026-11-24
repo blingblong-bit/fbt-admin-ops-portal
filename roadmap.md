@@ -1,5 +1,11 @@
 # Roadmap
 
+## Simple Dues visit labels and upcoming renewals
+- [x] Add pure read-only numbering, next renewal and weekly expected-value projections with regression tests
+- [x] Show upcoming renewals on Dues and upcoming visit labels on the profile; preserve balances and scheduling
+- [x] Focused/full tests and desktop/mobile unsaved-example checks (1440/390/320px); clean preview/diff; no writes or publication
+- [ ] Verify actual clients signed in — this draft has no auth users; creating one or loading example rows would violate the read-only request
+
 ## Simple Dues UI cutover
 - [x] Promote simple Dues totals/count; retain only Dues, Not Scheduled and New Clients tiles; remove tile customization
 - [x] Replace retired navigation with Dues; retain admin-only collapsed old-screen links and move profile simple Dues first in Overview and Packages & Payments

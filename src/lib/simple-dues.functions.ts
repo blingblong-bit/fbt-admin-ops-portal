@@ -40,7 +40,7 @@ export const getSimpleDues=createServerFn({method:"GET"}).middleware([requireSup
     if(!token) bookingError="Square appointments unavailable";
     else {
       const customerMap=new Map(rawClients.filter(c=>c.square_customer_id).map(c=>[c.square_customer_id,c.id]));
-      const earliest=packages.filter(p=>!p.deleted_at).map(p=>p.started_on).sort()[0]??cutoverDate;
+      const earliest=[cutoverDate,...packages.filter(p=>!p.deleted_at).map(p=>p.started_on)].sort()[0]??cutoverDate;
       let start=new Date(`${earliest}T00:00:00Z`); const end=new Date(Date.now()+90*86400000);
       // Reuse production's GET reader, partitioning to keep its pagination cap from silently truncating visits.
       for(let windows=0;start<end;windows++) {

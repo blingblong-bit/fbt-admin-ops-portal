@@ -82,7 +82,7 @@ describe("Chicago renewal week picker", () => {
   it("uses each recorded package size and price without overlapping its successor", () => {
     const newer=pkg({id:"new",source:"auto",square_payment_id:"new-payment",started_on:"2026-11-27",visits:4,price:375});
     const result=simpleRenewalEvents(client,[pkg(),newer],bookings,now,"2026-11-17");
-    expect(result.map(r=>[r.visit.booking.date,r.visit.size,r.visit.price,r.paid])).toEqual([["2026-11-23",2,200,false],["2026-11-27",4,375,true]]);
+    expect(result.map(r=>[r.visit.booking.date,r.visit.size,r.visit.price,r.paid])).toEqual([["2026-11-23",4,375,true],["2026-11-30",4,375,false]]);
   });
   it("skips cancelled visits and does not shift to a cancelled 1/x date", () => {
     const result=simpleRenewalEvents(client,[pkg()],[...bookings,booking("cancelled","2026-11-22","CANCELLED_BY_SELLER")],now,"2026-11-17");

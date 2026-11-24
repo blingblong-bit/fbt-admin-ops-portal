@@ -2,6 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { CircleDollarSign, ArrowRight } from "lucide-react";
 import { simpleDuesQuery } from "@/lib/simple-dues.functions";
+import { simpleDuesAttentionCounts } from "@/lib/simple-dues";
 import { formatCurrency } from "@/lib/clients";
 import { useRole } from "@/hooks/useRole";
 import { Button } from "@/components/ui/button";
@@ -20,6 +21,7 @@ export function DashboardDuesTile() {
       {q.isPending ? <p role="status" className="text-sm text-muted-foreground">Loading dues…</p> : !q.data ? <p role="alert" className="text-sm text-destructive">Dues could not load. <Button size="sm" variant="outline" onClick={() => q.refetch()}>Retry</Button></p> : !q.data.cutoverDate ? <p role="status" className="text-sm text-muted-foreground">Cutover not set</p> : <>
         <p className="text-3xl font-semibold tabular-nums">{formatCurrency(q.data.totalOwed)}</p>
         <p className="mt-1 text-sm text-muted-foreground">total owed · <strong className="text-foreground">{q.data.owingCount}</strong> {q.data.owingCount === 1 ? "client owing" : "clients owing"}</p>
+        <p className="mt-2 text-sm text-muted-foreground">{q.data.bookingError?"Renew soon and missing packages unavailable":`${simpleDuesAttentionCounts(q.data).renewSoon} renew soon · ${simpleDuesAttentionCounts(q.data).needsPackage} need a package`} · {simpleDuesAttentionCounts(q.data).flagged} flagged</p>
       </>}
     </>}
   </div>;

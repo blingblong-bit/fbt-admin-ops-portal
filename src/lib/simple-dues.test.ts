@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { simpleBalance, simpleVisitsLeft, computeSimpleDues, newestSimplePackage, numberSimpleVisits, nextSimpleRenewal, simpleRenewalGroup, planAutoPackage, parseOpeningCsv, chicagoDate, SIMPLE_DEFAULT_PRICES, type SimplePackage, type SimplePayment, type SimpleBooking } from "./simple-dues";
+import { assignSimplePackages, simpleBalance, simpleVisitsLeft, computeSimpleDues, newestSimplePackage, numberSimpleVisits, nextSimpleRenewal, simpleRenewalGroup, planAutoPackage, parseOpeningCsv, chicagoDate, SIMPLE_DEFAULT_PRICES, type SimplePackage, type SimplePayment, type SimpleBooking } from "./simple-dues";
 const cutoverDate="2026-11-24";
 const now="2026-12-01T18:00:00.000Z";
 const pkg=(p:Partial<SimplePackage>={}):SimplePackage=>({id:"pkg",client_id:"c",visits:8,price:375,started_on:cutoverDate,source:"manual",square_payment_id:null,flagged_for_review:false,reviewed_at:null,note:null,created_at:"2026-11-24T18:00:00Z",deleted_at:null,...p});
@@ -42,7 +42,8 @@ describe("simple sections",()=>{
   it("unmatched receipt is a setup review, not invented revenue",()=>{const b=compute({packages:[],payments:[payment({amountCents:12000})]});expect(b.checkPackageInfo[0]?.balance).toBe(-120);expect(b.whoOwes).toEqual([]);});
   it("reviewed packages leave Dad section without changing balance",()=>{const b=compute({packages:[pkg({source:"auto",flagged_for_review:true,reviewed_at:now})]});expect(b.flagged).toEqual([]);expect(b.totalOwed).toBe(375);});
   it("unreviewed flagged package appears",()=>expect(compute({packages:[pkg({source:"auto",flagged_for_review:true})]}).flagged.length).toBe(1));
-  it.each([2,1,0,-1])("%s visits left is renew soon",visits=>expect(compute({packages:[pkg({visits})]}).renewSoon.length).toBe(1));
+  it.each([2,1,-1])("%s visits left is renew soon",visits=>expect(compute({packages:[pkg({visits})]}).renewSoon.length).toBe(1));
+  it("zero left without activity is retained in inactive renewals",()=>expect(compute({packages:[pkg({visits:0})]}).inactiveRenewSoon).toHaveLength(1));
   it("three remaining is not renew soon",()=>expect(compute({packages:[pkg({visits:3})]}).renewSoon).toEqual([]));
   it("zero left with future booking remains in renew soon",()=>expect(compute({packages:[pkg({visits:0})],bookings:[booking({startAt:"2026-12-02T15:00:00.000Z",endAt:"2026-12-02T15:45:00.000Z"})]}).renewSoon[0]?.next?.id).toBe("b"));
   it("unreadable bookings suppresses visit and renewal guesses",()=>{const b=compute({packages:[pkg({visits:0})],bookingsReliable:false});expect(b.renewSoon).toEqual([]);expect(b.rows[0]?.visitsLeft).toBeNull();});
@@ -89,11 +90,13 @@ describe("read-only simple visit numbering and renewal projection",()=>{
   });
   it('no booking after the last package visit means no upcoming renewal',()=>expect(nextSimpleRenewal(client,numberSimpleVisits(pkg(),eight.slice(0,8),now),[],now)).toBeNull());
   it('matching recorded package on the renewal date is Paid, not expected revenue',()=>{
-    const r=nextSimpleRenewal(client,numberSimpleVisits(pkg(),eight,now),[pkg({id:'next',started_on:'2026-12-04'})],now);
+    const packages=[pkg(),pkg({id:'next',started_on:'2026-12-04'})];
+    const r=nextSimpleRenewal(client,assignSimplePackages(packages,eight,now).visits,packages,now);
     expect(r).toMatchObject({paid:true,expected:0});
   });
   it('matching auto-added package after the renewal date is Paid',()=>{
-    expect(nextSimpleRenewal(client,numberSimpleVisits(pkg(),eight,now),[pkg({id:'auto',source:'auto',square_payment_id:'receipt',started_on:'2026-12-05'})],now)).toMatchObject({paid:true,expected:0});
+    const packages=[pkg(),pkg({id:'auto',source:'auto',square_payment_id:'receipt',started_on:'2026-12-05'})];
+    expect(nextSimpleRenewal(client,assignSimplePackages(packages,eight,now).visits,packages,now)).toMatchObject({paid:true,expected:0});
   });
   it('old auto-payment package is not general credit for the next projected cycle',()=>{
     expect(nextSimpleRenewal(client,numberSimpleVisits(pkg(),eight,now),[pkg({source:'auto',square_payment_id:'old-receipt'})],now)).toMatchObject({paid:false,expected:375});
@@ -129,9 +132,9 @@ describe("read-only simple visit numbering and renewal projection",()=>{
     const b=computeSimpleDues({clients,packages,payments:[],bookings,openings:[],priceList:SIMPLE_DEFAULT_PRICES,cutoverDate,now});
     expect(b.upcomingRenewals).toHaveLength(3);expect(b.renewalExpected).toEqual({thisWeek:123.45,nextWeek:200});expect(b.upcomingRenewals.find(r=>r.client.id==='e')?.paid).toBe(true);
   });
-  it('newest package is always the anchor; older receipts never pay its subsequent renewal',()=>{
+  it('recorded packages take turns before projecting from the last size and price',()=>{
     const b=computeSimpleDues({clients:[client],packages:[pkg({id:'old',visits:4}),pkg({id:'new',visits:2,price:200,started_on:'2026-12-02'})],payments:[],bookings:eight,openings:[],priceList:SIMPLE_DEFAULT_PRICES,cutoverDate,now:'2026-12-03T18:00:00.000Z'});
-    expect(b.rows[0]?.upcomingVisits.map(v=>v.label)).toEqual(['2/2','1/2']);expect(b.upcomingRenewals[0]).toMatchObject({paid:false,expected:200,group:'Next week'});
+    expect(b.rows[0]?.upcomingVisits.map(v=>v.label)).toEqual(['1/2','2/2']);expect(b.upcomingRenewals[0]).toMatchObject({paid:false,expected:200,group:'This week'});
   });
   it('incomplete appointment reads and unset cutover suppress all new projections',()=>{
     for(const extra of [{bookingsReliable:false},{cutoverDate:null}]){

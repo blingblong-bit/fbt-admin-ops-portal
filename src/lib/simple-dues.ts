@@ -31,21 +31,44 @@ export function newestSimplePackage(packages: SimplePackage[], cutover: string |
   return packages.filter(p => !p.deleted_at).sort((a,b) => b.started_on.localeCompare(a.started_on) || b.created_at.localeCompare(a.created_at) || b.id.localeCompare(a.id))[0] ?? null;
 }
 export function simpleVisitsLeft(pkg: SimplePackage, bookings: SimpleBooking[], now: string): number {
-  // Square has no attendance-completed booking state: past ACCEPTED bookings whose full duration ended count.
-  const completed = new Set(bookings.filter(b => b.clientId === pkg.client_id && b.date >= pkg.started_on && b.endAt <= now && (b.status === "ACCEPTED" || b.status === "COMPLETED")).map(b => b.id));
-  return pkg.visits - completed.size;
+  return assignSimplePackages([pkg], bookings, now).visitsLeft ?? pkg.visits;
 }
-export type SimpleVisit = { booking: SimpleBooking; number: number; size: number; label: string; cycle: number; newPackage: boolean; price: number };
+export type SimpleVisit = { booking: SimpleBooking; number: number; size: number; label: string; cycle: number; newPackage: boolean; price: number; recordedPackageId?: string | null };
+/** Shared eligibility for reservation numbering and missing-package activity; not attendance certification. */
+export function eligibleSimpleBookings(bookings: SimpleBooking[], now: string): SimpleBooking[] {
+  return [...new Map(bookings.filter(b =>
+    (b.endAt <= now && (b.status === "ACCEPTED" || b.status === "COMPLETED")) ||
+    (b.startAt > now && b.status === "ACCEPTED")
+  ).map(b => [b.id, b])).values()].sort((a,b) => a.startAt.localeCompare(b.startAt) || a.id.localeCompare(b.id));
+}
+/** Packages take turns by capacity, never by the next payment date. No balance inputs or writes. */
+export function assignSimplePackages(packages: SimplePackage[], bookings: SimpleBooking[], now: string) {
+  const active = packages.filter(p => !p.deleted_at).sort((a,b) => a.started_on.localeCompare(b.started_on) || a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id));
+  const first = active[0]; const last = active.at(-1);
+  if (!first || !last) return { visits: [] as SimpleVisit[], visitsLeft: null };
+  const eligible = eligibleSimpleBookings(bookings.filter(b => b.clientId === first.client_id && b.date >= first.started_on), now);
+  const capacity = active.reduce((sum,p) => sum + p.visits, 0);
+  // Upcoming reservations receive slots, but only ended bookings consume visits left.
+  const visitsLeft = capacity - eligible.filter(b => b.endAt <= now).length;
+  if (active.some(p => !Number.isInteger(p.visits) || p.visits < 0)) return { visits: [] as SimpleVisit[], visitsLeft };
+  let packageIndex = 0; let used = 0;
+  const visits: SimpleVisit[] = [];
+  for (const booking of eligible) {
+    while (active[packageIndex] && used >= (active[packageIndex]?.visits ?? 0)) { packageIndex++; used = 0; }
+    const recorded = active[packageIndex];
+    const p = recorded ?? last;
+    if (p.visits <= 0) break;
+    const number = used % p.visits + 1;
+    const cycle = recorded ? packageIndex : active.length + Math.floor(used / p.visits);
+    visits.push({ booking, number, size: p.visits, label: `${number}/${p.visits}`, cycle,
+      newPackage: !recorded && number === 1, price: p.price, recordedPackageId: recorded?.id ?? null });
+    used++;
+  }
+  return { visits, visitsLeft };
+}
 /** Read-only reservation projection, not attendance certification or a balance input. */
 export function numberSimpleVisits(pkg: SimplePackage, bookings: SimpleBooking[], now: string): SimpleVisit[] {
-  if (!Number.isInteger(pkg.visits) || pkg.visits <= 0 || pkg.deleted_at) return [];
-  const eligible = [...new Map(bookings.filter(b => b.clientId === pkg.client_id && b.date >= pkg.started_on &&
-    ((b.endAt <= now && (b.status === "ACCEPTED" || b.status === "COMPLETED")) || (b.startAt > now && b.status === "ACCEPTED"))).map(b => [b.id, b])).values()];
-  eligible.sort((a, b) => Number(a.startAt > now) - Number(b.startAt > now) || a.startAt.localeCompare(b.startAt) || a.id.localeCompare(b.id));
-  return eligible.map((booking, index) => {
-    const number = index % pkg.visits + 1; const cycle = Math.floor(index / pkg.visits);
-    return { booking, number, size: pkg.visits, label: `${number}/${pkg.visits}`, cycle, newPackage: cycle > 0 && number === 1, price: pkg.price };
-  });
+  return assignSimplePackages([pkg], bookings, now).visits;
 }
 export type SimpleRenewal = { client: SimpleClient; visit: SimpleVisit; paid: boolean; expected: number; group: "This week" | "Next week" | "Later" };
 export function simpleRenewalGroup(date: string, now: string): SimpleRenewal["group"] {
@@ -55,14 +78,15 @@ export function simpleRenewalGroup(date: string, now: string): SimpleRenewal["gr
   const day = Math.floor((new Date(`${date}T12:00:00Z`).getTime() - monday.getTime()) / 86400000);
   return day < 7 ? "This week" : day < 14 ? "Next week" : "Later";
 }
-export function nextSimpleRenewal(client: SimpleClient, visits: SimpleVisit[], packages: SimplePackage[], now: string, anchor?: SimplePackage): SimpleRenewal | null {
-  const prepaidAnchor = anchor?.source === "auto" && !!anchor.square_payment_id;
-  // A recorded future package/early automatic purchase may already cover the first reserved cycle.
-  const visit = visits.find(v => v.booking.startAt > now && (v.newPackage || (v.cycle === 0 && v.number === 1 && anchor && (anchor.started_on > chicagoDate(now) || prepaidAnchor))));
+export function nextSimpleRenewal(client: SimpleClient, visits: SimpleVisit[], packages: SimplePackage[], now: string): SimpleRenewal | null {
+  const visit = visits.find(v => v.booking.startAt > now && isSimpleRenewalStart(v, packages));
   if (!visit) return null;
-  // Only a recorded package covering this boundary is evidence; an old receipt/negative balance is not prepayment.
-  const paid = (visit.cycle === 0 && prepaidAnchor) || packages.some(p => p.client_id === client.id && !p.deleted_at && p.started_on >= visit.booking.date && p.visits === visit.size && cents(p.price) === cents(visit.price));
+  const paid = !!visit.recordedPackageId;
   return { client, visit, paid, expected: paid ? 0 : visit.price, group: simpleRenewalGroup(visit.booking.date, now) };
+}
+function isSimpleRenewalStart(visit: SimpleVisit, packages: SimplePackage[]) {
+  // The opening cycle is already represented by the opening balance, not new renewal value.
+  return visit.number === 1 && (visit.newPackage || packages.some(p => p.id === visit.recordedPackageId && !p.deleted_at && (visit.cycle > 0 || p.source !== "opening")));
 }
 export type SimpleRow = { client: SimpleClient; balance: number | null; newest: SimplePackage | null; visitsLeft: number | null; next: SimpleBooking | null; unmatchedPaymentIds: string[]; upcomingVisits: SimpleVisit[]; renewal: SimpleRenewal | null };
 export function simpleWeekStart(date: string): string {
@@ -79,15 +103,12 @@ export type SimpleRenewalEvent = { client: SimpleClient; visit: SimpleVisit; pai
 /** Current-record reconstruction only: no saved historical forecast or balance snapshots. */
 export function simpleRenewalEvents(client: SimpleClient, packages: SimplePackage[], bookings: SimpleBooking[], now: string, cutover: string | null): SimpleRenewalEvent[] {
   if (!cutover || client.archived) return [];
-  const active = packages.filter(p => p.client_id === client.id && !p.deleted_at).sort((a,b) => a.started_on.localeCompare(b.started_on) || a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id));
-  return active.flatMap((p, index) => {
-    const next = active[index + 1];
-    const visits = numberSimpleVisits(p, bookings.filter(b => !next || b.date < next.started_on), now);
-    return visits.filter(v => v.booking.date >= cutover && (v.newPackage || (v.number === 1 && v.cycle === 0 && p.source !== "opening"))).map(visit => {
-      // A package/payment is evidence for its own first cycle only, never every later projected cycle.
-      const paid = visit.cycle === 0 && (p.started_on >= visit.booking.date || (p.source === "auto" && !!p.square_payment_id));
-      return { client, visit, paid, expected: paid ? 0 : visit.price, packageId: p.id };
-    });
+  return renewalEventsFromAssignment(client, assignSimplePackages(packages.filter(p => p.client_id === client.id), bookings, now).visits, packages, cutover);
+}
+function renewalEventsFromAssignment(client: SimpleClient, visits: SimpleVisit[], packages: SimplePackage[], cutover: string): SimpleRenewalEvent[] {
+  return visits.filter(v => v.booking.date >= cutover && isSimpleRenewalStart(v, packages)).map(visit => {
+    const paid = !!visit.recordedPackageId;
+    return { client, visit, paid, expected: paid ? 0 : visit.price, packageId: visit.recordedPackageId ?? `projected:${client.id}:${visit.cycle}` };
   });
 }
 export type SimpleRenewalWeekRow = { client: SimpleClient; carriedOver: number; newThisWeek: number; total: number; packages: SimpleRenewalEvent[]; carriedPackages: SimpleRenewalEvent[] };
@@ -135,6 +156,7 @@ export function unlinkedSimplePayments(payments:SimplePayment[],cutoverDate:stri
   return [...new Map(payments.map(p=>[p.id,p])).values()].filter(p=>!p.clientId && p.status==="COMPLETED" && p.date>=cutoverDate).sort((a,b)=>b.date.localeCompare(a.date)||a.id.localeCompare(b.id));
 }
 export function computeSimpleDues(input: { clients: SimpleClient[]; packages: SimplePackage[]; payments: SimplePayment[]; bookings: SimpleBooking[]; openings: {client_id: string; amount: number}[]; priceList: SimplePrice[]; cutoverDate: string | null; now: string; bookingsReliable?: boolean }) {
+  const assignments = new Map<string, SimpleVisit[]>();
   const rows: SimpleRow[] = input.clients.filter(c => !c.archived).map(client => {
     const packages = input.packages.filter(p => p.client_id === client.id);
     const payments = input.payments.filter(p => p.clientId === client.id);
@@ -142,22 +164,43 @@ export function computeSimpleDues(input: { clients: SimpleClient[]; packages: Si
     const newest = newestSimplePackage(packages, input.cutoverDate);
     const next = input.bookingsReliable === false ? null : bookings.filter(b => b.startAt > input.now && b.status === "ACCEPTED").sort((a,b) => a.startAt.localeCompare(b.startAt))[0] ?? null;
     const known = packages.map(p => p.square_payment_id).filter((id): id is string => !!id);
-    const numbered = newest && input.bookingsReliable !== false ? numberSimpleVisits(newest, bookings, input.now) : [];
+    const assignment = newest && input.bookingsReliable !== false ? assignSimplePackages(packages, bookings, input.now) : { visits: [], visitsLeft: null };
+    const numbered = assignment.visits;
+    assignments.set(client.id, numbered);
     return { client, balance: simpleBalance(Number(input.openings.find(o => o.client_id === client.id)?.amount ?? 0), packages, payments, input.cutoverDate), newest,
-      visitsLeft: newest && input.bookingsReliable !== false ? simpleVisitsLeft(newest, bookings, input.now) : null, next,
-      upcomingVisits: numbered.filter(v => v.booking.startAt > input.now), renewal: nextSimpleRenewal(client, numbered, packages, input.now, newest ?? undefined),
+      visitsLeft: assignment.visitsLeft, next,
+      upcomingVisits: numbered.filter(v => v.booking.startAt > input.now), renewal: nextSimpleRenewal(client, numbered, packages, input.now),
       unmatchedPaymentIds: payments.filter(p => planAutoPackage(p, input.priceList, {cutoverDate: input.cutoverDate, existingPaymentIds: known}).kind === "check").map(p => p.id),
     };
   });
   const whoOwes = rows.filter(r => r.balance !== null && r.balance > 0).sort((a,b) => Number(b.balance) - Number(a.balance) || a.client.name.localeCompare(b.client.name));
   const checkPackageInfo = rows.filter(r => r.balance !== null && (r.balance < 0 || r.unmatchedPaymentIds.length > 0));
-  const renewSoon = rows.filter(r => r.newest && r.visitsLeft !== null && r.visitsLeft <= 2);
+  const { renewSoon, inactiveRenewSoon } = groupSimpleRenewSoon(rows, input.bookings, input.now);
+  const needsPackage = input.cutoverDate && input.bookingsReliable !== false ? findSimpleNeedsPackage(rows, input.packages, input.bookings, input.cutoverDate, input.now) : [];
   const cutover = input.cutoverDate;
   const flagged = cutover ? input.packages.filter(p => !p.deleted_at && p.started_on >= cutover && p.flagged_for_review && !p.reviewed_at && rows.some(r => r.client.id === p.client_id)) : [];
   const upcomingRenewals = rows.flatMap(r => r.renewal ? [r.renewal] : []).sort((a,b) => a.visit.booking.startAt.localeCompare(b.visit.booking.startAt) || a.client.name.localeCompare(b.client.name));
   const renewalExpected = { thisWeek: upcomingRenewals.filter(r => r.group === "This week").reduce((s,r) => s + cents(r.expected), 0) / 100, nextWeek: upcomingRenewals.filter(r => r.group === "Next week").reduce((s,r) => s + cents(r.expected), 0) / 100 };
-  const renewalEvents = input.bookingsReliable === false ? [] : rows.flatMap(r => simpleRenewalEvents(r.client, input.packages, input.bookings, input.now, input.cutoverDate));
-  return { rows, whoOwes, checkPackageInfo, renewSoon, flagged, upcomingRenewals, renewalExpected, renewalEvents, totalOwed: whoOwes.reduce((sum,r) => sum + cents(Number(r.balance)), 0) / 100, owingCount: whoOwes.length };
+  const renewalEvents = input.bookingsReliable === false ? [] : rows.flatMap(r => input.cutoverDate ? renewalEventsFromAssignment(r.client, assignments.get(r.client.id) ?? [], input.packages, input.cutoverDate) : []);
+  return { rows, whoOwes, checkPackageInfo, renewSoon, inactiveRenewSoon, needsPackage, flagged, upcomingRenewals, renewalExpected, renewalEvents, totalOwed: whoOwes.reduce((sum,r) => sum + cents(Number(r.balance)), 0) / 100, owingCount: whoOwes.length };
+}
+export function findSimpleNeedsPackage(rows: SimpleRow[], packages: SimplePackage[], bookings: SimpleBooking[], cutover: string, now: string) {
+  return rows.filter(r => !r.client.archived && !packages.some(p => p.client_id === r.client.id && !p.deleted_at)).flatMap(row => {
+    const eligible = eligibleSimpleBookings(bookings.filter(b => b.clientId === row.client.id), now);
+    const visitsSinceCutover = eligible.filter(b => b.endAt <= now && b.date >= cutover).length;
+    return eligible.some(b => b.startAt > now) || visitsSinceCutover > 0 ? [{ ...row, visitsSinceCutover }] : [];
+  }).sort((a,b) => (a.next?.startAt ?? "9999-12-31").localeCompare(b.next?.startAt ?? "9999-12-31") || a.client.name.localeCompare(b.client.name));
+}
+export function groupSimpleRenewSoon(rows: SimpleRow[], bookings: SimpleBooking[], now: string) {
+  const cutoff = new Date(new Date(now).getTime() - 30 * 86400000).toISOString();
+  const candidates = rows.filter(r => !r.client.archived && r.newest && r.visitsLeft !== null && (r.visitsLeft <= 2 || r.upcomingVisits[0]?.newPackage));
+  const inactive = (r: SimpleRow) => r.visitsLeft === 0 && !r.next && !eligibleSimpleBookings(bookings.filter(b => b.clientId === r.client.id), now).some(b => b.endAt <= now && b.startAt >= cutoff);
+  const priority = (r: SimpleRow) => Number(r.visitsLeft) < 0 ? 0 : r.visitsLeft === 0 ? 1 : 2;
+  const sort = (a: SimpleRow,b: SimpleRow) => priority(a) - priority(b) || (a.next?.startAt ?? "9999-12-31").localeCompare(b.next?.startAt ?? "9999-12-31") || a.client.name.localeCompare(b.client.name);
+  return { renewSoon: candidates.filter(r => !inactive(r)).sort(sort), inactiveRenewSoon: candidates.filter(inactive).sort(sort) };
+}
+export function simpleDuesAttentionCounts(board: { renewSoon: SimpleRow[]; inactiveRenewSoon: SimpleRow[]; needsPackage: SimpleRow[]; flagged: SimplePackage[] }) {
+  return { renewSoon: board.renewSoon.length + board.inactiveRenewSoon.length, needsPackage: board.needsPackage.length, flagged: board.flagged.length };
 }
 /** CSV accepts quoted names, rejects ambiguous/unmatched clients and duplicate rows before any write. */
 export function parseOpeningCsv(text: string, clients: SimpleClient[]): {client_id: string; amount: number; note: string}[] {

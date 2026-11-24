@@ -1,5 +1,11 @@
 # Roadmap
 
+## Simple Dues completeness
+- [x] Share sequential package assignment across visit counts, labels and renewal/week projections; preserve balance formula
+- [x] Surface Needs a package, sorted Renew soon and collapsed inactive clients; show appointment failure/retry and dashboard counts
+- [x] 162 focused / 733 full tests passed (26 new regressions); diff/preview clean. Unsaved examples at 1440/390/320px verified preselected Add package, inactive expansion, renewal week navigation/reset, red failure/retry recovery and dashboard counts without overflow/runtime errors; no data writes or publication
+- [ ] Real signed-in Square/client verification — this draft has no auth users; account or example data creation was not performed under read-only scope
+
 ## Simple Dues renewal week picker
 - [x] Replace current-week-only owed display with per-client carried-over/new-this-week projections for current and future weeks; past weeks remain expected/paid only
 - [x] Test $375 carried + $375 new = $750, intervening unpaid future starts, paid exclusions and carried-only clients; exclude already-past starts from projected carry

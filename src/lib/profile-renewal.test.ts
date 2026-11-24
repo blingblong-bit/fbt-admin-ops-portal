@@ -17,7 +17,7 @@ describe("selectProfileRenewal", () => {
   });
   it("prepared renewal without a booked 1/x is still shown", () => {
     const r = selectProfileRenewal({ ...base, pending_renewal_start_date: "2026-12-10", pending_renewal_total_visits: 4, pending_renewal_price: 200 }, [], now);
-    expect(r).toEqual({ kind: "prepared", prepared: { startYmd: "2026-12-10", totalVisits: 4, price: 200 } });
+    expect(r).toEqual({ kind: "prepared", prepared: { startYmd: "2026-12-10", totalVisits: 4, price: 200, paid: 0 } });
   });
   it("cancelled 1/x and nothing prepared shows none", () => {
     expect(selectProfileRenewal(base, [{ ...b1, status: "CANCELLED_BY_SELLER" }], now).kind).toBe("none");

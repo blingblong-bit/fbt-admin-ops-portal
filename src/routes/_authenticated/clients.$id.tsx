@@ -1,4 +1,5 @@
 import { PreRenewCard } from "@/components/PreRenewCard";
+import { SimpleDuesCard } from "@/components/SimpleDuesCard";
 import type { RenewalForecastRow } from "@/lib/schedule.functions";
 import { createFileRoute, Link, useCanGoBack, useNavigate, useRouter } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -357,6 +358,7 @@ function ClientDetailPage() {
             </div>
           </section>
           <NextAppointment clientId={id} onDetails={() => setSection("activity")} />
+          <SimpleDuesCard clientId={id} />
           {c.pending_renewal_start_date && <section className="border-t pt-4" aria-label="Upcoming renewal">
             <div className="mb-2 flex flex-wrap items-center justify-between gap-2"><h2 className="text-lg font-semibold">Upcoming renewal</h2>{isAdminUser && <Button size="sm" variant="outline" onClick={() => openPackage("pending")}>Correct upcoming package</Button>}</div>
             {renewalRow ? <PreRenewCard forecast={renewalRow as unknown as RenewalForecastRow} hideAmount={!isAdminUser} /> : <p className="text-sm text-muted-foreground">Prepared on or after {formatDate(c.pending_renewal_start_date)}. {forecastQ.isError ? "Renewal details could not load." : forecastQ.isFetching ? "Checking Square timing…" : "No verified start shown."}</p>}

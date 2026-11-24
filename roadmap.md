@@ -1,5 +1,10 @@
 # Roadmap
 
+## Additive simple dues
+- [x] Add isolated simple tables, audited admin writes and Square payment ingestion
+- [x] Add pure balance/package planner tests and separate /dues page/form/profile card/dashboard link
+- [x] 627 tests passed; signed-in add/edit, notes and opening balances read back; local recorder replay/single audit/removal checked; desktop/mobile no overflow or runtime errors. Cutover restored unset; legacy diff additive only, build OK; no publication. Square attendance is not certified; live webhook delivery not triggered.
+
 ## Renewal timing boundary regression
 - [x] Inspect current-cycle versus next-cycle evidence without live mutations
 - [x] Exclude old completion on the effective Hub start date; hold evidence-free opener attribution for review; add 14 anonymized regressions

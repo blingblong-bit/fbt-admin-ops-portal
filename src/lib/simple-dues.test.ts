@@ -1,0 +1,61 @@
+import { describe, it, expect } from "vitest";
+import { simpleBalance, simpleVisitsLeft, computeSimpleDues, newestSimplePackage, planAutoPackage, parseOpeningCsv, chicagoDate, SIMPLE_DEFAULT_PRICES, type SimplePackage, type SimplePayment, type SimpleBooking } from "./simple-dues";
+const cutoverDate="2026-11-24";
+const now="2026-12-01T18:00:00.000Z";
+const pkg=(p:Partial<SimplePackage>={}):SimplePackage=>({id:"pkg",client_id:"c",visits:8,price:375,started_on:cutoverDate,source:"manual",square_payment_id:null,flagged_for_review:false,reviewed_at:null,note:null,created_at:"2026-11-24T18:00:00Z",deleted_at:null,...p});
+const payment=(p:Partial<SimplePayment>={}):SimplePayment=>({id:"pay",clientId:"c",amountCents:37500,currency:"USD",status:"COMPLETED",date:cutoverDate,...p});
+const booking=(p:Partial<SimpleBooking>={}):SimpleBooking=>({id:"b",clientId:"c",date:"2026-11-25",startAt:"2026-11-25T15:00:00.000Z",endAt:"2026-11-25T15:45:00.000Z",status:"ACCEPTED",...p});
+const context={cutoverDate};
+describe("simple auto package planner",()=>{
+  it.each([[375,8,false],[345,8,false],[200,4,false],[100,2,true],[50,1,true]] as const)("exact $%s maps to %s visits and flag %s",(amount,visits,flag)=>expect(planAutoPackage(payment({amountCents:amount*100}),SIMPLE_DEFAULT_PRICES,context)).toMatchObject({kind:"add",visits,price:amount,flaggedForReview:flag,startedOn:cutoverDate}));
+  it("nonmatching amount creates no package",()=>expect(planAutoPackage(payment({amountCents:37499}),SIMPLE_DEFAULT_PRICES,context)).toEqual({kind:"check",clientId:"c",paymentId:"pay"}));
+  it("replay ignores existing receipt even if its package was removed",()=>expect(planAutoPackage(payment(),SIMPLE_DEFAULT_PRICES,{...context,existingPaymentIds:["pay"]})).toEqual({kind:"ignore"}));
+  it("before cutover ignores completed payment",()=>expect(planAutoPackage(payment({date:"2026-11-23"}),SIMPLE_DEFAULT_PRICES,context)).toEqual({kind:"ignore"}));
+  it("unset cutover ignores all payments",()=>expect(planAutoPackage(payment(),SIMPLE_DEFAULT_PRICES,{cutoverDate:null})).toEqual({kind:"ignore"}));
+  it.each(["APPROVED","FAILED","CANCELED"])("%s payment adds nothing",status=>expect(planAutoPackage(payment({status}),SIMPLE_DEFAULT_PRICES,context).kind).toBe("ignore"));
+  it("unlinked payment never guesses a client",()=>expect(planAutoPackage(payment({clientId:null}),SIMPLE_DEFAULT_PRICES,context).kind).toBe("ignore"));
+  it("foreign currency cannot match dollar price",()=>expect(planAutoPackage(payment({currency:"CAD"}),SIMPLE_DEFAULT_PRICES,context).kind).toBe("ignore"));
+});
+describe("simple balance",()=>{
+  it("opening + package prices - actual receipts",()=>expect(simpleBalance(100,[pkg(),pkg({id:"2",price:200})],[payment({amountCents:30000})],cutoverDate)).toBe(375));
+  it("no calculations until cutover",()=>expect(simpleBalance(100,[pkg()],[payment()],null)).toBeNull());
+  it("includes cutover day, excludes earlier packages/payments",()=>expect(simpleBalance(0,[pkg({started_on:"2026-11-23"}),pkg()],[payment({date:"2026-11-23"}),payment({id:"2",amountCents:10000})],cutoverDate)).toBe(275));
+  it("negative is preserved, not carried or allocated anywhere",()=>expect(simpleBalance(0,[pkg()],[payment({amountCents:50000})],cutoverDate)).toBe(-125));
+  it("soft deletion removes only package price, not receipt",()=>expect(simpleBalance(0,[pkg({deleted_at:now})],[payment()],cutoverDate)).toBe(-375));
+  it("receipt replay does not reduce balance twice",()=>expect(simpleBalance(0,[pkg()],[payment(),payment()],cutoverDate)).toBe(0));
+  it("not-completed and foreign payments do not change dollar balance",()=>expect(simpleBalance(0,[pkg()],[payment({status:"APPROVED"}),payment({id:"2",currency:"CAD"})],cutoverDate)).toBe(375));
+  it("uses exact cents for nonstandard manually priced packages",()=>expect(simpleBalance(0,[pkg({price:123.45})],[payment({amountCents:12344})],cutoverDate)).toBe(0.01));
+});
+describe("simple visits",()=>{
+  it("counts completed-time accepted bookings once, not note numbers",()=>expect(simpleVisitsLeft(pkg(),[booking(),booking()],now)).toBe(7));
+  it.each(["CANCELLED_BY_SELLER","CANCELLED_BY_CUSTOMER","NO_SHOW","DECLINED","PENDING"])("does not count %s",status=>expect(simpleVisitsLeft(pkg(),[booking({status})],now)).toBe(8));
+  it("future and currently running bookings do not count",()=>expect(simpleVisitsLeft(pkg(),[booking({endAt:"2026-12-01T19:00:00.000Z"})],now)).toBe(8));
+  it("old-cycle bookings and other clients do not count",()=>expect(simpleVisitsLeft(pkg(),[booking({date:"2026-11-23"}),booking({id:"2",clientId:"other"})],now)).toBe(8));
+  it("keeps overrun visible",()=>expect(simpleVisitsLeft(pkg({visits:0}),[booking()],now)).toBe(-1));
+  it("newest package uses start date then created time",()=>expect(newestSimplePackage([pkg(),pkg({id:"2",started_on:"2026-11-26"}),pkg({id:"3",deleted_at:now,started_on:"2026-11-27"})],cutoverDate)?.id).toBe("2"));
+  it("opening package before cutover still supplies remaining visits",()=>expect(newestSimplePackage([pkg({source:"opening",started_on:"2026-11-01"})],cutoverDate)?.visits).toBe(8));
+});
+describe("simple sections",()=>{
+  const compute=(extra:Partial<Parameters<typeof computeSimpleDues>[0]>={})=>computeSimpleDues({clients:[{id:"c",name:"One",archived:false}],packages:[pkg()],payments:[],bookings:[],openings:[],priceList:SIMPLE_DEFAULT_PRICES,cutoverDate,now,...extra});
+  it("orders owing highest first and totals positive balances only",()=>{const b=compute({clients:[{id:"c",name:"One",archived:false},{id:"d",name:"Two",archived:false},{id:"e",name:"Three",archived:false}],packages:[pkg(),pkg({client_id:"d",id:"2",price:200})],payments:[payment({clientId:"e",amountCents:10000})]});expect(b.whoOwes.map(r=>r.client.id)).toEqual(["c","d"]);expect(b.totalOwed).toBe(575);expect(b.owingCount).toBe(2);expect(b.checkPackageInfo.map(r=>r.client.id)).toEqual(["e"]);});
+  it("missing package alone never means debt",()=>{const b=compute({packages:[]});expect(b.totalOwed).toBe(0);expect(b.whoOwes).toEqual([]);});
+  it("unmatched receipt is a setup review, not invented revenue",()=>{const b=compute({packages:[],payments:[payment({amountCents:12000})]});expect(b.checkPackageInfo[0]?.balance).toBe(-120);expect(b.whoOwes).toEqual([]);});
+  it("reviewed packages leave Dad section without changing balance",()=>{const b=compute({packages:[pkg({source:"auto",flagged_for_review:true,reviewed_at:now})]});expect(b.flagged).toEqual([]);expect(b.totalOwed).toBe(375);});
+  it("unreviewed flagged package appears",()=>expect(compute({packages:[pkg({source:"auto",flagged_for_review:true})]}).flagged.length).toBe(1));
+  it.each([2,1,0,-1])("%s visits left is renew soon",visits=>expect(compute({packages:[pkg({visits})]}).renewSoon.length).toBe(1));
+  it("three remaining is not renew soon",()=>expect(compute({packages:[pkg({visits:3})]}).renewSoon).toEqual([]));
+  it("zero left with future booking remains in renew soon",()=>expect(compute({packages:[pkg({visits:0})],bookings:[booking({startAt:"2026-12-02T15:00:00.000Z",endAt:"2026-12-02T15:45:00.000Z"})]}).renewSoon[0]?.next?.id).toBe("b"));
+  it("unreadable bookings suppresses visit and renewal guesses",()=>{const b=compute({packages:[pkg({visits:0})],bookingsReliable:false});expect(b.renewSoon).toEqual([]);expect(b.rows[0]?.visitsLeft).toBeNull();});
+  it("archived clients are excluded without deleting their records",()=>{const b=compute({clients:[{id:"c",name:"One",archived:true}]});expect(b.rows).toEqual([]);expect(b.totalOwed).toBe(0);});
+  it("all action sections off until cutover",()=>{const b=compute({cutoverDate:null,packages:[pkg({visits:0,flagged_for_review:true})]});expect([b.whoOwes.length,b.flagged.length,b.checkPackageInfo.length,b.renewSoon.length]).toEqual([0,0,0,0]);});
+});
+describe("opening import",()=>{
+  const clients=[{id:"c",name:"One Client",archived:false}];
+  it("accepts header, case-insensitive names and negative opening balance",()=>expect(parseOpeningCsv('client name,amount\n"one client",-50.25',clients)).toEqual([{client_id:"c",amount:-50.25,note:"Opening balance CSV import"}]));
+  it("accepts explicit id",()=>expect(parseOpeningCsv("c,375",clients)[0]?.amount).toBe(375));
+  it("rejects unknown client before import",()=>expect(()=>parseOpeningCsv("unknown,375",clients)).toThrow("unknown"));
+  it("rejects ambiguous names",()=>expect(()=>parseOpeningCsv("One Client,375",[...clients,{id:"d",name:"One Client",archived:false}])).toThrow("ambiguous"));
+  it("rejects duplicates",()=>expect(()=>parseOpeningCsv("c,375\nc,200",clients)).toThrow("duplicate"));
+  it("rejects empty/invalid amounts",()=>expect(()=>parseOpeningCsv("c,",clients)).toThrow("invalid amount"));
+  it("uses Chicago receipt date rather than UTC",()=>expect(chicagoDate("2026-11-24T02:00:00Z")).toBe("2026-11-23"));
+});

@@ -1107,6 +1107,7 @@ function Dashboard() {
           }}
         />
       )}
+      {!isStaff && <Button asChild variant="outline" className="mt-3 min-h-12"><Link to="/dues"><CircleDollarSign className="mr-2 size-5"/>Dues</Link></Button>}
       <div className="my-6"><DashboardTodaySchedule /></div>
       <div className="mb-6 grid grid-cols-2 gap-2 sm:grid-cols-4"><Button asChild variant="outline" className="min-h-11 whitespace-normal"><Link to="/schedule-check" search={{view:"worklists"}}>Scheduling Worklists</Link></Button><Button asChild variant="outline" className="min-h-11"><Link to="/follow-ups" search={{task:undefined}}>Follow-ups</Link></Button><Button asChild variant="outline" className="min-h-11"><Link to="/clients/new">Add Client</Link></Button><Button asChild variant="outline" className="min-h-11"><Link to="/more">More</Link></Button></div>
       <details className="mb-6 border-b pb-4"><summary className="cursor-pointer py-3 text-sm font-semibold">Client action queues</summary><div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">{visibleTiles.filter(t=>!t.href).map(t=><Tile key={t.key} tile={t} hideMoney={true} active={filter===t.key} onClick={()=>{setFilter(t.key as FilterKey);setNewClientsActive(false);}} editing={false} hidden={false} onToggleHidden={()=>{}} />)}</div></details>

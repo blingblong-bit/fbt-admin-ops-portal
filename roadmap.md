@@ -4,6 +4,7 @@
 - [x] Share authoritative note anchoring across simple labels, visits left and renewal projections; retain balance formula and all stored data
 - [x] Hold projected carried dues until the first visit starts; test restarts, newest-package fallback, early recorded packages and cancellation safety
 - [x] 807 tests passed (15 new regressions), build OK and diff clean; production Square notes read for all six clients; no stored data, webhook, schema, checklist or publication changes
+- [x] Cross-app source sweep: simple screens share the fix; payment recorder, cache, package forms, retained legacy money screens, scheduling and renewal jobs inspected. No further in-scope stale-start counter found; legacy boundary regex remains outside the authorized simple-only correction. Full 807 tests rerun; no jobs or writes triggered.
 - [ ] Real signed-in six-profile readback and active-client label-impact counts — this draft has no auth users or client/package records; Square-only labels verified, 314 Square customers have parseable notes (not an active Hub count)
 
 ## Past Square payments and opening-balance review

@@ -26,7 +26,8 @@ export function ProfileUpcomingRenewal({ clientId, isAdmin }: { clientId: string
     const line = r.kind === "upcoming"
       ? `1/${r.item.total_visits} on ${day(r.item.ymd)} · ${p.price != null ? $(p.price) : "price needed"}`
       : `Prepared: ${p.totalVisits ?? "?"} visits · ${p.price != null ? $(p.price) : "price needed"} · starts ${p.startYmd ? day(p.startYmd) : "—"}`;
-    const status = r.kind === "upcoming" ? `Approved · due ${day(r.item.ymd)}, not owed yet` : "Prepared · no 1/x booked yet, not owed yet";
+    const status = (r.kind === "upcoming" ? `Approved · due ${day(r.item.ymd)}, not owed yet` : "Prepared · no 1/x booked yet, not owed yet")
+      + (p.paid > 0 ? ` · Paid toward this renewal · ${$(p.paid)}` : "");
     body = <Prepared clientId={clientId} isAdmin={isAdmin} line={line} status={status} prepared={p} />;
   }
   return <section aria-label="Upcoming renewal" className="border-b pb-4"><h2 className="mb-1 text-lg font-semibold">Upcoming renewal</h2>{body}</section>;

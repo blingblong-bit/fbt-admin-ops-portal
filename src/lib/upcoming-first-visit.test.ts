@@ -36,7 +36,7 @@ describe("upcoming 1/x visits", () => {
     expect(upcomingWeekSummary(findUpcomingFirstVisits([c], m, NOW), "2026-11-30").dollars).toBe(0);
   });
   it("overpaid includes stored prepared-renewal money and money above the price", () => {
-    expect(overpaidAmount({ package_price: 375, amount_paid: 450, pending_renewal_paid: 100 })).toBe(175);
+    expect(overpaidAmount({ package_price: 375, amount_paid: 450, pending_renewal_paid: 100 })).toBe(75);
     expect(overpaidAmount({ package_price: 375, amount_paid: 375, pending_renewal_paid: 0 })).toBe(0);
   });
 });

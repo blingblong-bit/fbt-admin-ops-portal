@@ -13,11 +13,11 @@ export type UpcomingBooking = { id: string; start_at?: string | null; status?: s
 export type UpcomingClient = {
   id: string; first_name?: string | null; last_name?: string | null; square_customer_id?: string | null;
   package_price?: number | string | null;
-  pending_renewal_start_date?: string | null; pending_renewal_total_visits?: number | null; pending_renewal_price?: number | string | null;
+  pending_renewal_start_date?: string | null; pending_renewal_total_visits?: number | null; pending_renewal_price?: number | string | null; pending_renewal_paid?: number | string | null;
 };
 export type UpcomingFirstVisit = {
   client_id: string; name: string; booking_id: string; start_iso: string; ymd: string; week_start: string;
-  total_visits: number; price: number | null; status: "needs_review" | "approved";
+  total_visits: number; price: number | null; paid: number; remaining: number | null; status: "needs_review" | "approved";
 };
 
 const chi = (iso: string) => new Date(iso).toLocaleDateString("en-CA", { timeZone: "America/Chicago" });
@@ -49,6 +49,8 @@ export function findUpcomingFirstVisits(clients: UpcomingClient[], byCustomer: M
       client_id: c.id, name: `${c.first_name ?? ""} ${c.last_name ?? ""}`.trim() || "Client",
       booking_id: first.b.id, start_iso: first.b.start_at!, ymd, week_start: mondayOf(ymd), total_visits: total,
       price: Number.isFinite(raw) && raw > 0 ? r2(raw) : null,
+      paid: approved ? r2(Math.max(0, Number(c.pending_renewal_paid ?? 0))) : 0,
+      remaining: Number.isFinite(raw) && raw > 0 ? r2(Math.max(0, raw - (approved ? Math.max(0, Number(c.pending_renewal_paid ?? 0)) : 0))) : null,
       status: approved ? "approved" : "needs_review",
     });
   }
@@ -58,21 +60,20 @@ export function findUpcomingFirstVisits(clients: UpcomingClient[], byCustomer: M
 /** Weekly summary line. Kept separate from (never added to) the Owes total. */
 export function upcomingWeekSummary(items: UpcomingFirstVisit[], weekStart: string) {
   const inWeek = items.filter((i) => i.week_start === weekStart);
-  return { items: inWeek, dollars: r2(inWeek.reduce((a, i) => a + (i.price ?? 0), 0)), needReview: inWeek.filter((i) => i.status === "needs_review").length };
+  return { items: inWeek, dollars: r2(inWeek.reduce((a, i) => a + (i.remaining ?? 0), 0)), needReview: inWeek.filter((i) => i.status === "needs_review").length };
 }
 
-/** Money recorded above what is owed (incl. any stored prepared-renewal amount). Never credit. */
-export function overpaidAmount(c: { package_price?: number | string | null; amount_paid?: number | string | null; pending_renewal_paid?: number | string | null }): number {
+/** Current-package money above its price. Money held on an approved renewal is not overpaid. Never credit. */
+export function overpaidAmount(c: { package_price?: number | string | null; amount_paid?: number | string | null }): number {
   const price = Number(c.package_price ?? 0);
-  const over = price > 0 ? Math.max(0, Number(c.amount_paid ?? 0) - price) : 0;
-  return r2(over + Math.max(0, Number(c.pending_renewal_paid ?? 0)));
+  return r2(price > 0 ? Math.max(0, Number(c.amount_paid ?? 0) - price) : 0);
 }
 
 export type ProfileRenewal =
   | { kind: "upcoming"; item: UpcomingFirstVisit; prepared: PreparedInfo | null }
   | { kind: "prepared"; prepared: PreparedInfo }
   | { kind: "none" };
-export type PreparedInfo = { startYmd: string | null; totalVisits: number | null; price: number | null };
+export type PreparedInfo = { startYmd: string | null; totalVisits: number | null; price: number | null; paid: number };
 
 /** Profile "Upcoming renewal" selection for one client. Pure; never hides a prepared renewal. */
 export function selectProfileRenewal(c: UpcomingClient, bookings: UpcomingBooking[], nowIso: string): ProfileRenewal {
@@ -81,6 +82,7 @@ export function selectProfileRenewal(c: UpcomingClient, bookings: UpcomingBookin
     startYmd: c.pending_renewal_start_date ?? null,
     totalVisits: c.pending_renewal_total_visits ?? null,
     price: c.pending_renewal_price != null ? Number(c.pending_renewal_price) : null,
+    paid: r2(Math.max(0, Number(c.pending_renewal_paid ?? 0))),
   } : null;
   const map = new Map<string, UpcomingBooking[]>();
   if (c.square_customer_id) map.set(c.square_customer_id, bookings);

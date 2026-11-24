@@ -47,9 +47,10 @@ function UpcomingRow({ i, isAdmin }: { i: UpcomingFirstVisit; isAdmin: boolean }
       <CardContent className="flex flex-wrap items-center justify-between gap-2 p-3">
         <div className="min-w-0">
           <Link to="/clients/$id" params={{ id: i.client_id }} className="font-semibold hover:underline">{i.name}</Link>
-          <div className="text-sm">1/{i.total_visits} on {day} · {i.price != null ? $(i.price) : "price needed"}</div>
+          <div className="text-sm">1/{i.total_visits} on {day} · {i.remaining != null ? $(i.remaining) : "price needed"}{i.paid > 0 ? ` (paid ${$(i.paid)})` : ""}</div>
           <div className="text-xs text-muted-foreground">
             {i.status === "approved" ? `Approved · due ${day}, not owed yet` : "Needs review"}
+            {i.status === "approved" && i.paid > 0 ? ` · Paid toward this renewal · ${$(i.paid)}` : ""}
           </div>
         </div>
         {isAdmin && i.status === "needs_review" && (

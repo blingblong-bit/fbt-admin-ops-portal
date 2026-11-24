@@ -951,6 +951,133 @@ export type Database = {
         }
         Relationships: []
       }
+      simple_dues_settings: {
+        Row: {
+          cutover_date: string | null
+          id: boolean
+        }
+        Insert: {
+          cutover_date?: string | null
+          id?: boolean
+        }
+        Update: {
+          cutover_date?: string | null
+          id?: boolean
+        }
+        Relationships: []
+      }
+      simple_opening_balances: {
+        Row: {
+          amount: number
+          as_of: string
+          client_id: string
+          created_at: string
+          created_by: string | null
+          note: string | null
+        }
+        Insert: {
+          amount: number
+          as_of: string
+          client_id: string
+          created_at?: string
+          created_by?: string | null
+          note?: string | null
+        }
+        Update: {
+          amount?: number
+          as_of?: string
+          client_id?: string
+          created_at?: string
+          created_by?: string | null
+          note?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "simple_opening_balances_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: true
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      simple_packages: {
+        Row: {
+          client_id: string
+          created_at: string
+          created_by: string | null
+          deleted_at: string | null
+          flagged_for_review: boolean
+          id: string
+          note: string | null
+          price: number
+          reviewed_at: string | null
+          reviewed_by: string | null
+          source: string
+          square_payment_id: string | null
+          started_on: string
+          visits: number
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          flagged_for_review?: boolean
+          id?: string
+          note?: string | null
+          price: number
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          source: string
+          square_payment_id?: string | null
+          started_on: string
+          visits: number
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          flagged_for_review?: boolean
+          id?: string
+          note?: string | null
+          price?: number
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          source?: string
+          square_payment_id?: string | null
+          started_on?: string
+          visits?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "simple_packages_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      simple_price_list: {
+        Row: {
+          amount: number
+          flag_for_review: boolean
+          visits: number
+        }
+        Insert: {
+          amount: number
+          flag_for_review?: boolean
+          visits: number
+        }
+        Update: {
+          amount?: number
+          flag_for_review?: boolean
+          visits?: number
+        }
+        Relationships: []
+      }
       square_customer_reviews: {
         Row: {
           created_at: string
@@ -1365,6 +1492,19 @@ export type Database = {
         }
         Returns: Json
       }
+      simple_create_opening_packages: {
+        Args: { _cutover: string; _expected: Json }
+        Returns: number
+      }
+      simple_import_openings: {
+        Args: { _as_of: string; _rows: Json }
+        Returns: number
+      }
+      simple_payment_note: {
+        Args: { _client_id: string; _note: string }
+        Returns: undefined
+      }
+      simple_record_payment: { Args: { _payment_id: string }; Returns: string }
       start_pending_override_from_square: {
         Args: {
           p_booking_id: string

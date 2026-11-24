@@ -78,7 +78,7 @@ describe("read-only simple visit numbering and renewal projection",()=>{
   });
   it('skips old dates, other clients, duplicate bookings, running bookings and future COMPLETED states',()=>{
     const b=at(1,'2026-11-25');
-    expect(numberSimpleVisits(pkg(),[at(0,'2026-11-23'),b,b,{...b,id:'other',clientId:'d'},booking({id:'running',startAt:'2026-12-01T17:45:00.000Z',endAt:'2026-12-01T18:30:00.000Z'}),at(9,'2026-12-02','COMPLETED')],now).map(v=>v.booking.id)).toEqual(['1']);
+    expect(numberSimpleVisits(pkg(),[at(0,'2026-11-23'),b,b,{...b,id:'other',clientId:'d'},booking({id:'running',startAt:'2026-12-01T17:45:00.000Z',endAt:'2026-12-01T18:30:00.000Z'}),at(9,'2026-12-02','COMPLETED')],now).map(v=>v.booking.id)).toEqual(['1','running']);
   });
   it('accepts past completed bookings after the full duration ends',()=>expect(numberSimpleVisits(pkg(),[at(1,'2026-11-25','COMPLETED')],now)[0]?.label).toBe('1/8'));
   it('zero/invalid/removed packages never produce a division by zero or renewal guess',()=>{
@@ -133,7 +133,7 @@ describe("read-only simple visit numbering and renewal projection",()=>{
     expect(b.upcomingRenewals).toHaveLength(3);expect(b.renewalExpected).toEqual({thisWeek:123.45,nextWeek:200});expect(b.upcomingRenewals.find(r=>r.client.id==='e')?.paid).toBe(true);
   });
   it('recorded packages take turns before projecting from the last size and price',()=>{
-    const b=computeSimpleDues({clients:[client],packages:[pkg({id:'old',visits:4}),pkg({id:'new',visits:2,price:200,started_on:'2026-12-02'})],payments:[],bookings:eight,openings:[],priceList:SIMPLE_DEFAULT_PRICES,cutoverDate,now:'2026-12-03T18:00:00.000Z'});
+    const b=computeSimpleDues({clients:[client],packages:[pkg({id:'old',visits:4}),pkg({id:'new',visits:2,price:200,started_on:'2026-12-02'})],payments:[],bookings:eight.map((b,i)=>({...b,sellerNote:i===0?'1/4':null})),openings:[],priceList:SIMPLE_DEFAULT_PRICES,cutoverDate,now:'2026-12-03T18:00:00.000Z'});
     expect(b.rows[0]?.upcomingVisits.map(v=>v.label)).toEqual(['1/2','2/2']);expect(b.upcomingRenewals[0]).toMatchObject({paid:false,expected:200,group:'This week'});
   });
   it('incomplete appointment reads and unset cutover suppress all new projections',()=>{

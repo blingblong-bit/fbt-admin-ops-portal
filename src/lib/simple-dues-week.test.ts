@@ -14,7 +14,7 @@ describe("Chicago renewal week picker", () => {
   it("uses Monday through Sunday, including both boundaries", () => {
     const result = week();
     expect([result.start, result.end]).toEqual(["2026-11-23", "2026-11-29"]);
-    expect(result.packages.map(r => r.visit.booking.date)).toEqual(["2026-11-23", "2026-11-27"]);
+    expect(result.packages.map(r => r.visit.booking.date)).toEqual(["2026-11-27"]);
     expect(week("2026-11-30").packages.map(r => r.visit.booking.date)).toEqual(["2026-11-30"]);
   });
   it("uses Chicago current week rather than the UTC Monday", () => {
@@ -33,21 +33,21 @@ describe("Chicago renewal week picker", () => {
   });
   it("includes every new 1/x, including multiple renewals for one client", () => {
     expect(events().map(r => r.visit.label)).toEqual(["1/2","1/2","1/2"]);
-    expect(week().newThisWeek).toBe(400);
+    expect(week().newThisWeek).toBe(200);
   });
   it("splits current carried balance and new packages without changing either amount", () => {
     const result = week();
-    expect([result.newThisWeek,result.carriedOver,result.total]).toEqual([400,375,775]);
-    expect(result.rows[0]).toMatchObject({carriedOver:375,newThisWeek:400,total:775});
+    expect([result.newThisWeek,result.carriedOver,result.total]).toEqual([200,575,775]);
+    expect(result.rows[0]).toMatchObject({carriedOver:575,newThisWeek:200,total:775});
   });
-  it("carries current debt plus intervening upcoming starts into future weeks, never past weeks", () => {
+  it("carries current debt plus started packages into future weeks, never unstarted projections", () => {
     expect(week("2026-11-16").carriedOver).toBe(0);
     expect(week("2026-11-30").carriedOver).toBe(575);
     expect(week("2026-11-30").total).toBe(775);
-    expect(week().carriedOver).toBe(375);
+    expect(week().carriedOver).toBe(575);
   });
   it("never adds zero, negative, unknown or archived balances", () => {
-    const result = week(undefined,{whoOwes:[debt(0),debt(-200,"b"),debt(null,"c"),{...debt(900,"d"),client:{...client,id:"d",archived:true}},debt(50,"e")]});
+    const result = week(undefined,{events:[],whoOwes:[debt(0),debt(-200,"b"),debt(null,"c"),{...debt(900,"d"),client:{...client,id:"d",archived:true}},debt(50,"e")]});
     expect(result.rows.filter(r=>r.carriedOver>0).map(r=>r.client.id)).toEqual(["e"]);
     expect(result.carriedOver).toBe(50);
   });
@@ -77,11 +77,11 @@ describe("Chicago renewal week picker", () => {
   });
   it("does not use negative balance as renewal prepayment", () => {
     const result=week(undefined,{whoOwes:[debt(-400)]});
-    expect([result.newThisWeek,result.carriedOver,result.total]).toEqual([400,0,400]);
+    expect([result.newThisWeek,result.carriedOver,result.total]).toEqual([200,200,400]);
   });
   it("uses each recorded package size and price without overlapping its successor", () => {
     const newer=pkg({id:"new",source:"auto",square_payment_id:"new-payment",started_on:"2026-11-27",visits:4,price:375});
-    const result=simpleRenewalEvents(client,[pkg(),newer],bookings,now,"2026-11-17");
+    const result=simpleRenewalEvents(client,[pkg(),newer],bookings.map((b,i)=>({...b,sellerNote:i===0?"1/2":null})),now,"2026-11-17");
     expect(result.map(r=>[r.visit.booking.date,r.visit.size,r.visit.price,r.paid])).toEqual([["2026-11-23",4,375,true],["2026-11-30",4,375,false]]);
   });
   it("skips cancelled visits and does not shift to a cancelled 1/x date", () => {
@@ -124,19 +124,19 @@ describe("read-only per-client carried-over projection", () => {
     expect(result.rows).toHaveLength(1);
     expect(result.rows[0]).toMatchObject({carriedOver:375,newThisWeek:375,total:750});
   });
-  it("also carries an unpaid upcoming start from the current week into next week",()=>{
+  it("does not carry an unpaid upcoming start into next week's owed amount",()=>{
     const result=week("2026-11-30",{events:[event("this","2026-11-27"),event("next","2026-12-01")]});
-    expect([result.carriedOver,result.newThisWeek,result.total]).toEqual([750,375,1125]);
-    expect(result.rows[0]?.carriedPackages.map(r=>r.visit.booking.id)).toEqual(["this"]);
+    expect([result.carriedOver,result.newThisWeek,result.total]).toEqual([375,375,750]);
+    expect(result.rows[0]?.carriedPackages).toEqual([]);
   });
-  it("carries every intervening unpaid week, but not packages after the selected week",()=>{
+  it("future intervening packages are expected, never carried debt",()=>{
     const result=week("2026-12-07",{events:[event("current","2026-11-27"),event("next","2026-12-01"),event("selected","2026-12-09"),event("later","2026-12-16")]});
-    expect([result.carriedOver,result.newThisWeek,result.total]).toEqual([1125,375,1500]);
+    expect([result.carriedOver,result.newThisWeek,result.total]).toEqual([375,375,750]);
   });
-  it("does not add past-week or already-past current-week starts to future carried debt",()=>{
+  it("carries already-started unpaid packages, not future starts",()=>{
     const result=week("2026-11-30",{events:[event("old","2026-11-20"),event("past-today","2026-11-24"),event("upcoming","2026-11-27")]});
-    expect(result.carriedOver).toBe(750);
-    expect(result.rows[0]?.carriedPackages.map(r=>r.visit.booking.id)).toEqual(["upcoming"]);
+    expect(result.carriedOver).toBe(1125);
+    expect(result.rows[0]?.carriedPackages.map(r=>r.visit.booking.id)).toEqual(["old","past-today"]);
   });
   it("paid starts add zero both in their own week and in future carry-over",()=>{
     const events=[event("paid-current","2026-11-27",true),event("paid-next","2026-12-01",true)];
@@ -150,10 +150,10 @@ describe("read-only per-client carried-over projection", () => {
     expect(result.rows).toHaveLength(1);
     expect(result.rows[0]).toMatchObject({carriedOver:375,newThisWeek:0,total:375,packages:[]});
   });
-  it("retains a client with no current balance but only an earlier unpaid future package",()=>{
+  it("does not invent carried debt for a client with only an earlier unpaid future package",()=>{
     const result=week("2026-12-07",{events:[event("earlier","2026-12-01")],whoOwes:[]});
-    expect(result.rows).toHaveLength(1);
-    expect(result.rows[0]).toMatchObject({carriedOver:375,newThisWeek:0,total:375});
+    expect(result.rows).toEqual([]);
+    expect(result.carriedOver).toBe(0);
   });
   it("combines multiple selected packages into one client row and reconciles row totals",()=>{
     const other={...event("other","2026-12-03",false,200),client:{...client,id:"b",name:"Example B"}};
@@ -170,7 +170,7 @@ describe("read-only per-client carried-over projection", () => {
     expect(result.rows[0]).toMatchObject({carriedOver:0,newThisWeek:375,total:375,carriedPackages:[]});
   });
   it("does not offset future expected packages using negative balances",()=>{
-    const result=week("2026-12-07",{events:[event("earlier","2026-12-01")],whoOwes:[debt(-375)]});
+    const result=week("2026-12-07",{events:[event("earlier","2026-11-23")],whoOwes:[debt(-375)]});
     expect([result.carriedOver,result.newThisWeek,result.total]).toEqual([375,0,375]);
   });
 });

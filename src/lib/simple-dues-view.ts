@@ -14,10 +14,11 @@ export function duesTileCounts(board: { whoOwes: SimpleRow[]; needsPackage: Simp
 /** Display only: select the current capacity bucket without using any balance or legacy fields. */
 export function simpleCurrentPackage(packages: SimplePackage[], bookings: SimpleBooking[], now: string, reliable: boolean) {
   const active = packages.filter(p => !p.deleted_at).sort((a,b) => a.started_on.localeCompare(b.started_on) || a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id));
-  if (!reliable) return { package: null, visitsLeft: null, nextStart: null, reliable: false };
-  const { visits } = assignSimplePackages(active, bookings, now);
-  const current = active.find(p => visits.filter(v => v.recordedPackageId === p.id && v.booking.endAt <= now).length < p.visits) ?? active.at(-1) ?? null;
-  const completed = current ? visits.filter(v => v.recordedPackageId === current.id && v.booking.endAt <= now).length : 0;
-  return { package: current, visitsLeft: current ? Math.max(0, current.visits - completed) : null,
+  if (!reliable) return { package: null, totalVisits: null, visitsLeft: null, nextStart: null, reliable: false };
+  const { visits, visitsLeft } = assignSimplePackages(active, bookings, now);
+  const latest = visits.filter(v => v.booking.endAt <= now).at(-1) ?? visits.find(v => v.booking.startAt > now);
+  const current = active.find(p => p.id === latest?.recordedPackageId) ?? active.at(-1) ?? null;
+  const remaining = latest ? latest.size - (latest.booking.endAt <= now ? latest.number : latest.number - 1) : visitsLeft;
+  return { package: current, totalVisits: latest?.size ?? current?.visits ?? null, visitsLeft: current ? Math.max(0, latest?.recordedPackageId ? Number(remaining) : Number(visitsLeft)) : null,
     nextStart: visits.find(v => v.number === 1 && v.booking.startAt > now) ?? null, reliable: true };
 }

@@ -27,7 +27,7 @@ describe("current simple package display",()=>{
     expect(summary.visitsLeft).toBe(7);expect(summary.nextStart).toMatchObject({number:1,size:8,newPackage:true});
   });
   it("an early next package does not replace the current remaining capacity",()=>{
-    expect(simpleCurrentPackage([pkg,{...pkg,id:"next",visits:4,price:200,started_on:"2026-11-25"}],bookings,now,true).package?.id).toBe("p");
+    expect(simpleCurrentPackage([pkg,{...pkg,id:"next",visits:4,price:200,started_on:"2026-11-25"}],bookings.map((b,i)=>({...b,sellerNote:i===0?"1/8":null})),now,true).package?.id).toBe("p");
   });
   it("cancelled visits do not consume capacity",()=>expect(simpleCurrentPackage([pkg],[{...bookings[0],status:"CANCELLED_BY_SELLER"}],now,true).visitsLeft).toBe(8));
   it("incomplete appointment reads do not guess current progress",()=>expect(simpleCurrentPackage([pkg],bookings,now,false)).toMatchObject({reliable:false,visitsLeft:null,nextStart:null}));

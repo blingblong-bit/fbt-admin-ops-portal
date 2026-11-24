@@ -51,7 +51,7 @@ export const getSimpleDues=createServerFn({method:"GET"}).middleware([requireSup
     if(!token) bookingError="Square appointments unavailable";
     else {
       const customerMap=new Map(rawClients.filter(c=>c.square_customer_id).map(c=>[c.square_customer_id,c.id]));
-      const earliest=[cutoverDate,...packages.filter(p=>!p.deleted_at).map(p=>p.started_on)].sort()[0]??cutoverDate;
+      const earliest=[cutoverDate,chicagoDate(new Date(Date.now()-180*86400000)),...packages.filter(p=>!p.deleted_at).map(p=>p.started_on)].sort()[0]??cutoverDate;
       const start=new Date(`${earliest}T00:00:00Z`); const end=new Date(Date.now()+90*86400000);
       const {readSimpleBookings}=await import("./simple-dues-bookings.server");
       const customerId=data.clientId?rawClients[0]?.square_customer_id??undefined:undefined;
@@ -59,7 +59,7 @@ export const getSimpleDues=createServerFn({method:"GET"}).middleware([requireSup
         for(const b of result.bookings) {const clientId=customerMap.get(b.customer_id??""); if(!clientId || !b.start_at) continue;
           const duration=(b.appointment_segments??[]).reduce((n,s)=>n+Number(s.duration_minutes??0),0);
           if(!duration && b.start_at<now) {bookingError="Some past appointments have no duration; visits need manual review";continue;}
-          bookings.push({id:b.id,clientId,date:chicagoDate(b.start_at),startAt:b.start_at,endAt:new Date(new Date(b.start_at).getTime()+duration*60000).toISOString(),status:b.status??""});
+          bookings.push({id:b.id,clientId,date:chicagoDate(b.start_at),startAt:b.start_at,endAt:new Date(new Date(b.start_at).getTime()+duration*60000).toISOString(),status:b.status??"",sellerNote:b.seller_note??null,customerNote:b.customer_note??null});
         }
       // As in the sequential reader, a window failure/guard outranks earlier duration warnings.
       if(result.error) bookingError=result.error;

@@ -46,4 +46,4 @@
 - Client search visit progress uses the profile's raw tracking inputs and shared Square resolver in one bulk read; display projections never overwrite client fields or change financial/classification logic.
 - Simple dues is independent: only simple_* stores package state, completed Square receipts supply money, and its cache is isolated. The webhook's error-contained follow-on runs after legacy handling; no legacy calculations or allocation writes are imported. Past ACCEPTED bookings count only after their full duration ends, with unknown/incomplete reads suppressing renewal suggestions; Square does not certify attendance.
 - Opening packages snapshot latest uncleared current overrides, require preview revalidation and one row per client even after removal; never affect balances. Unlinked simple receipts remain read-only review rows.
-- Simple visits/weeks use sequential package capacity, never balances.
+- Simple visits use Square notes; balance inputs stay isolated.

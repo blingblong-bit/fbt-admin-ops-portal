@@ -7,22 +7,23 @@ const pkg = (extra: Partial<SimplePackage> = {}): SimplePackage => ({ id: "first
 const booking = (id: string, date: string, extra: Partial<SimpleBooking> = {}): SimpleBooking => ({ id, clientId: "c", date, startAt: `${date}T15:00:00.000Z`, endAt: `${date}T15:45:00.000Z`, status: "ACCEPTED", ...extra });
 const bookings = ["2026-11-24","2026-11-25","2026-11-26","2026-11-27","2026-11-28","2026-11-29","2026-11-30","2026-12-02","2026-12-04","2026-12-06","2026-12-08","2026-12-10","2026-12-12"].map((date,i) => booking(String(i),date));
 const input = { clients: [client], packages: [pkg()], bookings, payments: [], openings: [], priceList: [], cutoverDate: "2026-11-24", now };
+const noted = (size = 8) => bookings.map((b,i) => ({...b,sellerNote:i===0?`1 of ${size}`:null}));
 const early = pkg({ id: "next", visits: 4, price: 200, source: "auto", square_payment_id: "receipt", started_on: "2026-11-27", created_at: "2026-11-27T20:00:00Z" });
 
 describe("sequential simple package assignment", () => {
   it("early payment does not absorb remaining visits on the 8-visit package", () => {
-    const result = assignSimplePackages([early,pkg()], bookings.slice().reverse(), now);
+    const result = assignSimplePackages([early,pkg()], noted().reverse(), now);
     expect(result.visits.slice(0,8).map(v => v.recordedPackageId)).toEqual(Array(8).fill("first"));
     expect(result.visits.map(v => v.label)).toEqual(["1/8","2/8","3/8","4/8","5/8","6/8","7/8","8/8","1/4","2/4","3/4","4/4","1/4"]);
     expect(result.visitsLeft).toBe(3);
   });
   it("visits left sums unused ended-visit slots across recorded packages, not future reservations", () => {
-    expect(assignSimplePackages([pkg(),early],bookings, "2026-11-28T18:00:00.000Z").visitsLeft).toBe(7);
+    expect(assignSimplePackages([pkg(),early],noted(), "2026-11-28T18:00:00.000Z").visitsLeft).toBe(7);
   });
   it("ties in started_on take turns by created_at, then stable id", () => {
     const a = pkg({id:"a",visits:2}); const b = pkg({id:"b",visits:1,created_at:"2026-11-24T19:00:00Z"});
-    expect(assignSimplePackages([b,a],bookings.slice(0,3),now).visits.map(v => v.recordedPackageId)).toEqual(["a","a","b"]);
-    expect(assignSimplePackages([pkg({id:"b",visits:1}),pkg({id:"a",visits:1})],bookings.slice(0,2),now).visits.map(v=>v.recordedPackageId)).toEqual(["a","b"]);
+    expect(assignSimplePackages([b,a],noted(2).slice(0,3),now).visits.map(v => v.recordedPackageId)).toEqual(["a","a","b"]);
+    expect(assignSimplePackages([pkg({id:"b",visits:1}),pkg({id:"a",visits:1})],noted(1).slice(0,2),now).visits.map(v=>v.recordedPackageId)).toEqual(["a","b"]);
   });
   it("deleted packages and bookings before the first start never consume slots", () => {
     const result = assignSimplePackages([early,pkg({deleted_at:now})],[booking("old","2026-11-26"),...bookings],now);
@@ -31,13 +32,13 @@ describe("sequential simple package assignment", () => {
     expect(result.visitsLeft).toBe(-2);
   });
   it.each(["CANCELLED_BY_SELLER","CANCELLED_BY_CUSTOMER","NO_SHOW","DECLINED","PENDING"])("%s never advances any cycle",status => {
-    const result = assignSimplePackages([pkg({visits:1}),early],[booking("cancelled","2026-11-24",{status}),booking("ok","2026-11-25")],now);
+    const result = assignSimplePackages([pkg({visits:1}),early],[booking("cancelled","2026-11-24",{status}),booking("ok","2026-11-25",{sellerNote:"1 of 1"})],now);
     expect(result.visits.map(v=>[v.booking.id,v.label,v.recordedPackageId])).toEqual([["ok","1/1","first"]]);
   });
-  it("deduplicates, excludes running appointments, and includes ended COMPLETED", () => {
+  it("deduplicates, labels running appointments without consuming them, and includes ended COMPLETED", () => {
     const b=booking("past","2026-12-04",{status:"COMPLETED"});
     const result=assignSimplePackages([pkg()],[b,b,booking("running","2026-12-05",{startAt:"2026-12-05T17:45:00.000Z",endAt:"2026-12-05T18:30:00.000Z"}),booking("future-completed","2026-12-06",{status:"COMPLETED"}),booking("other","2026-12-04",{clientId:"other"})],now);
-    expect(result.visits.map(v=>v.booking.id)).toEqual(["past"]);
+    expect(result.visits.map(v=>v.booking.id)).toEqual(["past","running"]);
     expect(result.visitsLeft).toBe(7);
   });
   it("every projected later cycle uses the last package size/price, never old payments", () => {
@@ -45,19 +46,19 @@ describe("sequential simple package assignment", () => {
     expect(result.visits.filter(v=>v.newPackage).map(v=>[v.number,v.size,v.price,v.recordedPackageId])).toEqual([[1,4,200,null],[1,4,200,null]]);
   });
   it("recorded manual and auto packages are covered regardless of date, projections are not", () => {
-    const board=computeSimpleDues({...input,packages:[pkg({visits:2}),early]});
+    const board=computeSimpleDues({...input,bookings:noted(2),packages:[pkg({visits:2}),early]});
     expect(board.renewalEvents.slice(0,3).map(e=>[e.visit.booking.id,e.paid,e.expected])).toEqual([["0",true,0],["2",true,0],["6",false,200]]);
     expect(board.renewalEvents.filter(e=>!e.paid).every(e=>e.expected===200)).toBe(true);
   });
   it("upcoming renewals, labels and week picker agree on the early-paid boundary", () => {
-    const board=computeSimpleDues({...input,packages:[pkg(),early],now:"2026-11-28T18:00:00.000Z"});
+    const board=computeSimpleDues({...input,bookings:noted(),packages:[pkg(),early],now:"2026-11-28T18:00:00.000Z"});
     expect(board.upcomingRenewals[0]).toMatchObject({paid:true,expected:0,visit:{number:1,size:4,recordedPackageId:"next",booking:{date:"2026-12-04"}}});
     expect(board.rows[0]?.upcomingVisits.find(v=>v.booking.date==="2026-12-04")?.label).toBe("1/4");
     const week=buildSimpleRenewalWeek({events:board.renewalEvents,whoOwes:[],selectedDate:"2026-12-04",now:"2026-11-28T18:00:00.000Z"});
     expect([week.paidValue,week.newThisWeek]).toEqual([200,0]);
   });
   it("opening packages are consumed first but are not new expected renewal value", () => {
-    const board=computeSimpleDues({...input,packages:[pkg({source:"opening"}),early]});
+    const board=computeSimpleDues({...input,bookings:noted(),packages:[pkg({source:"opening"}),early]});
     expect(board.renewalEvents.map(e=>e.visit.booking.id)).toEqual(["8","12"]);
     expect(board.renewalEvents.map(e=>e.paid)).toEqual([true,false]);
   });

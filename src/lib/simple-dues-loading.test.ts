@@ -69,6 +69,12 @@ beforeEach(() => {
 afterEach(() => { vi.useRealTimers(); vi.unstubAllEnvs(); });
 
 describe("simple Dues loading preserves all calculations", () => {
+  it("retains seller and customer notes in the fetched booking projection", async () => {
+    harness.reader.mockResolvedValue({bookings:[{...rawBooking,seller_note:"7 of 8",customer_note:"staff note"},{...rawBooking,id:"next",start_at:"2026-11-25T15:00:00Z",seller_note:null,customer_note:"8/8"}],error:null});
+    const result=await getSimpleDues({data:{clientId,forceFresh:true}});
+    expect(result.rows[0]?.upcomingVisits[0]).toMatchObject({label:"8/8",booking:{sellerNote:null,customerNote:"8/8"}});
+    expect(result.rows[0]?.visitsLeft).toBe(1);
+  });
   it("opening corrections reuse only the opening action and preserve date and the original nullable note", async()=>{
     await saveSimpleDues({data:{action:"opening",clientId,amount:0,date:"2026-11-24",note:null}});
     expect(harness.rpc.mock.calls).toEqual([["simple_import_openings",{_rows:[{client_id:clientId,amount:0,note:null}],_as_of:"2026-11-24"}]]);

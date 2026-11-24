@@ -1,5 +1,11 @@
 # Roadmap
 
+## Simple Dues renewal week picker
+- [x] Replace fixed grouping with Chicago Monday–Sunday navigation and current-week reset
+- [x] Add pure weekly rows/totals, all projected 1/x starts, current-week-only already owed and read-only historical evidence (current records, not historical snapshots)
+- [x] 126 focused / 697 full tests passed; 1440/390/320px unsaved examples verified current split, next/past weeks and reset without overflow/errors; build OK, unchanged balances/scheduling/data, no publication
+- [ ] Signed-in real-record verification — no existing account in this draft; no account/data created under read-only instructions
+
 ## Simple Dues visit labels and upcoming renewals
 - [x] Add pure read-only numbering, next renewal and weekly expected-value projections with regression tests
 - [x] Show upcoming renewals on Dues and upcoming visit labels on the profile; preserve balances and scheduling

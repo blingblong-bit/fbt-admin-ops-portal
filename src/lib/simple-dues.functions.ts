@@ -7,6 +7,8 @@ import { chicagoDate, computeSimpleDues, parseOpeningCsv, unlinkedSimplePayments
 import {planOpeningPackages,type OpeningOverride} from "./simple-dues-opening";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/integrations/supabase/types";
+import { packageReviewDismissals, DISMISS_ACTIVITY, UNDISMISS_ACTIVITY } from "./simple-package-review";
+import { simpleCurrentPackage } from "./simple-dues-view";
 
 async function admin(db: SupabaseClient<Database>, userId: string) {
   const {data,error}=await db.from("user_roles").select("role").eq("user_id",userId);
@@ -23,13 +25,14 @@ export const getSimpleDues=createServerFn({method:"GET"}).middleware([requireSup
   const settingsRead=Promise.resolve(db.from("simple_dues_settings").select("cutover_date").eq("id",true).maybeSingle()).then(result=>{if(result.error)throw result.error;return result.data?.cutover_date??null;});
   // Receipts depend on cutover; start them as soon as settings resolve, alongside the other reads.
   const paymentsRead=settingsRead.then(cutoverDate=>cutoverDate ? all((from,to)=>{let q=db.from("square_payments").select("square_payment_id,client_id,amount_cents,currency,status,created_at,raw_event,buyer_email").gte("created_at",`${cutoverDate}T00:00:00Z`).order("id");if(data.clientId)q=q.eq("client_id",data.clientId);return q.range(from,to);}) : []);
-  const [cutoverDate,rawClients,rawPackages,openings,prices,rawPayments]=await Promise.all([
+  const [cutoverDate,rawClients,rawPackages,openings,prices,rawPayments,dismissalRows]=await Promise.all([
     settingsRead,
     all((from,to)=>{let q=db.from("clients").select("id,first_name,last_name,square_customer_id,status,deleted_at").order("id");if(data.clientId)q=q.eq("id",data.clientId);return q.range(from,to);}),
     all((from,to)=>{let q=db.from("simple_packages").select("*").order("id");if(data.clientId)q=q.eq("client_id",data.clientId);return q.range(from,to);}),
     all((from,to)=>{let q=db.from("simple_opening_balances").select("*").order("client_id");if(data.clientId)q=q.eq("client_id",data.clientId);return q.range(from,to);}),
     all((from,to)=>db.from("simple_price_list").select("*").order("amount",{ascending:false}).range(from,to)),
     paymentsRead,
+    all((from,to)=>{let q=db.from("client_activities").select("client_id,activity_type,created_at").in("activity_type",[DISMISS_ACTIVITY,UNDISMISS_ACTIVITY]).order("created_at").order("id");if(data.clientId)q=q.eq("client_id",data.clientId);return q.range(from,to);}),
   ]);
   const clients:SimpleClient[]=rawClients.map(c=>({id:c.id,name:`${c.first_name} ${c.last_name}`.trim(),archived:c.status==="archived" || !!c.deleted_at}));
   const packages=rawPackages.map(p=>({...p,price:Number(p.price)})) as SimplePackage[];
@@ -56,7 +59,9 @@ export const getSimpleDues=createServerFn({method:"GET"}).middleware([requireSup
     }
   }
   const board=computeSimpleDues({clients,packages,payments,bookings,openings:openings.map(o=>({client_id:o.client_id,amount:Number(o.amount)})),priceList,cutoverDate,now,bookingsReliable:!bookingError});
-  return { ...board,clients,packages,openings:openings.map(o=>({...o,amount:Number(o.amount)})),priceList,cutoverDate,bookingError,computed_at:now,unlinkedPayments:unlinkedSimplePayments(payments,cutoverDate) };
+  const dismissed=packageReviewDismissals(dismissalRows);
+  const packageSummaries=Object.fromEntries(clients.map(c=>[c.id,simpleCurrentPackage(packages.filter(p=>p.client_id===c.id),bookings.filter(b=>b.clientId===c.id),now,!bookingError)]));
+  return { ...board,needsPackage:board.needsPackage.filter(r=>!dismissed.has(r.client.id)),clients,packages,payments,packageSummaries,openings:openings.map(o=>({...o,amount:Number(o.amount)})),priceList,cutoverDate,bookingError,computed_at:now,unlinkedPayments:unlinkedSimplePayments(payments,cutoverDate) };
 });
 export const simpleDuesQuery=(clientId?:string)=>queryOptions({queryKey:["simple-dues",clientId??"all"],queryFn:()=>getSimpleDues({data:clientId?{clientId}:{}}),staleTime:180000,refetchInterval:300000,refetchOnWindowFocus:false,placeholderData:keepPreviousData});
 

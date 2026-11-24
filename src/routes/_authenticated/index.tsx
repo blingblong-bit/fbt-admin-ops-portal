@@ -1,3 +1,4 @@
+import { useSimplePackageClientIds } from "@/hooks/useSimplePackageClientIds";
 import { DashboardTodaySchedule } from "@/components/DashboardTodaySchedule";
 import { DashboardDuesTile } from "@/components/DashboardDuesTile";
 import { createFileRoute, Link } from "@tanstack/react-router";
@@ -450,6 +451,7 @@ function Dashboard() {
   };
 
   const dismissedIds = usePackageReviewDismissedIds().data ?? null;
+  const packageClientIds = useSimplePackageClientIds().data ?? null;
 
   // Auto-create package shells from Square visit notes for clients with no
   // package info (price left blank, flagged for review). Runs once per
@@ -591,10 +593,10 @@ function Dashboard() {
       if (r !== null && cl.package_total_visits > 0 && r === 0) {
         c.package_complete += 1;
       }
-      if (needsPackageReview(cl, dismissedIds, cl.id)) c.needs_package_review += 1;
+      if (needsPackageReview(cl, dismissedIds, cl.id, packageClientIds)) c.needs_package_review += 1;
     }
     return c;
-  }, [visibleClients, scheduledSet, thisWeekSet, nextWeekSet, carriedOverRecentMap, overduePriorMap, thisWeekEndYmd, nextWeekEndYmd, dismissedIds, renewalMap]);
+  }, [visibleClients, scheduledSet, thisWeekSet, nextWeekSet, carriedOverRecentMap, overduePriorMap, thisWeekEndYmd, nextWeekEndYmd, dismissedIds, packageClientIds, renewalMap]);
 
   const weeklyPaymentGroups = useMemo(() => {
     if (filter !== "payment_due_this_week" && filter !== "payment_due_next_week") return null;
@@ -621,7 +623,7 @@ function Dashboard() {
         isCarriedOver(c.id),
         isOverduePrior(c.id),
         startBucketOf(c),
-        needsPackageReview(c, dismissedIds, c.id),
+        needsPackageReview(c, dismissedIds, c.id, packageClientIds),
         renewalMap.has(c.id),
         renewalMap.get(c.id)?.pre_renewed === true,
       ),
@@ -661,7 +663,7 @@ function Dashboard() {
       );
     }
     return [...searched].sort((a, b) => fullName(a).localeCompare(fullName(b)));
-  }, [visibleClients, filter, search, scheduledSet, thisWeekSet, nextWeekSet, carriedOverRecentMap, overduePriorMap, thisWeekEndYmd, nextWeekEndYmd, renewalMap, dismissedIds]);
+  }, [visibleClients, filter, search, scheduledSet, thisWeekSet, nextWeekSet, carriedOverRecentMap, overduePriorMap, thisWeekEndYmd, nextWeekEndYmd, renewalMap, dismissedIds, packageClientIds]);
 
   return (
     <AppShell>

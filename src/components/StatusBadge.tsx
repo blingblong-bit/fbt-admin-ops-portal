@@ -16,10 +16,11 @@ type Props = {
   isScheduled: boolean;
   /** Staff dismissed this client with "No package needed". */
   dismissedFromPackageReview?: boolean;
+  scheduleOnly?: boolean;
 };
 
-export function StatusBadge({ client, isScheduled, dismissedFromPackageReview = false }: Props) {
-  const s = simpleStatus(client, isScheduled, dismissedFromPackageReview);
+export function StatusBadge({ client, isScheduled, dismissedFromPackageReview = false, scheduleOnly = false }: Props) {
+  const s = scheduleOnly ? (isScheduled ? "Active" : "Not Scheduled") : simpleStatus(client, isScheduled, dismissedFromPackageReview);
   return (
     <span
       className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-semibold ${simpleStatusClasses(s)}`}

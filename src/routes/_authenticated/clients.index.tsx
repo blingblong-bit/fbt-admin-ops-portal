@@ -1,3 +1,4 @@
+import { useSimplePackageClientIds } from "@/hooks/useSimplePackageClientIds";
 import { usePersistentState } from "@/hooks/usePersistentState";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
@@ -31,7 +32,6 @@ import { getScheduleCheck, getRenewalForecast, getScheduledClientIds, type Sched
 import { chicagoYmd } from "@/lib/work-week";
 import { hubHead } from "@/lib/hub-navigation";
 import { applyOverridesToRows, type PackageOverride } from "@/lib/package-override";
-import { getPackageSetupList } from "@/lib/package-setup.functions";
 import { useRole } from "@/hooks/useRole";
 import { usePackageReviewDismissedIds } from "@/components/PackageReviewBadge";
 import { getClientListVisitTracking } from "@/lib/client-visit-progress.functions";
@@ -73,13 +73,15 @@ function matchesStatusFilter(eff: LifecycleStatus, f: StatusFilter): boolean {
 
 function ClientsListPage() {
   const { isStaff } = useRole();
-  const dismissedIds = usePackageReviewDismissedIds().data ?? null;
+  const dismissalsQuery = usePackageReviewDismissedIds();
+  const packagesQuery = useSimplePackageClientIds();
+  const dismissedIds = dismissalsQuery.data ?? null;
+  const packageClientIds = packagesQuery.data ?? null;
   const [search, setSearch] = usePersistentState("clients:search", "");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("active_assessment");
   const [view, setView] = useState("all");
   const scheduleFn = useServerFn(getScheduleCheck);
   const renewalFn = useServerFn(getRenewalForecast);
-  const setupFn = useServerFn(getPackageSetupList);
   const today = chicagoYmd();
   const fetchVisitTracking = useServerFn(getClientListVisitTracking);
   const visitProgress = useQuery({
@@ -92,7 +94,6 @@ function ClientsListPage() {
     : clientVisitProgress(c, visitProgress.data?.[c.id]);
   const schedule = useQuery({ queryKey: ["schedule-check", today], queryFn: () => scheduleFn({ data: { date: today } }), enabled: ["today", "week", "not_next", "not_scheduled"].includes(view), staleTime: 60_000 });
   const renewals = useQuery({ queryKey: ["renewal-forecast"], queryFn: () => renewalFn(), enabled: view === "renewals", staleTime: 60_000 });
-  const setup = useQuery({ queryKey: ["renewal-forecast", "package-setup"], queryFn: () => setupFn(), enabled: view === "package", staleTime: 60_000 });
   const fetchScheduledIds = useServerFn(getScheduledClientIds);
   const scheduledQuery = useQuery({
     queryKey: ["scheduled-client-ids"],
@@ -132,7 +133,7 @@ function ClientsListPage() {
 
   const viewIds = useMemo(() => {
     if (view === "renewals") return new Set(renewals.data?.rows.map(r => r.client_id) ?? []);
-    if (view === "package") return new Set([...clients.filter(c => needsPackageReview(c, dismissedIds, c.id)).map(c => c.id), ...(setup.data?.rows.map(r => r.client_id) ?? [])]);
+    if (view === "package") return new Set(clients.filter(c => needsPackageReview(c, dismissedIds, c.id, packageClientIds)).map(c => c.id));
     const d = schedule.data;
     const ids = (list: ScheduleAppointment[]) => new Set<string>(list.flatMap(a => a.client ? [a.client.id] : []));
     if (view === "today") return ids(d?.selected_day ?? []);
@@ -140,9 +141,9 @@ function ClientsListPage() {
     if (view === "not_next") { const next = ids(d?.next_week ?? []); return ids((d?.this_week ?? []).filter(a => a.client && !next.has(a.client.id))); }
     if (view === "not_scheduled") return new Set([...(d?.worklists.not_scheduled ?? []), ...(d?.last_week_nothing_booked ?? []), ...(d?.not_scheduled_after ?? [])].map(c => c.id));
     return null;
-  }, [view, clients, dismissedIds, setup.data, renewals.data, schedule.data]);
-  const viewBusy = (["today", "week", "not_next", "not_scheduled"].includes(view) && schedule.isPending) || (view === "renewals" && renewals.isPending) || (view === "package" && setup.isPending);
-  const viewError = (["today", "week", "not_next", "not_scheduled"].includes(view) && (schedule.error?.message || schedule.data?.error || schedule.data?.worklists.error)) || (view === "renewals" && (renewals.error?.message || renewals.data?.error)) || (view === "package" && (setup.error?.message || setup.data?.error));
+  }, [view, clients, dismissedIds, packageClientIds, renewals.data, schedule.data]);
+  const viewBusy = (["today", "week", "not_next", "not_scheduled"].includes(view) && schedule.isPending) || (view === "renewals" && renewals.isPending) || (view === "package" && (packagesQuery.isPending || dismissalsQuery.isPending));
+  const viewError = (["today", "week", "not_next", "not_scheduled"].includes(view) && (schedule.error?.message || schedule.data?.error || schedule.data?.worklists.error)) || (view === "renewals" && (renewals.error?.message || renewals.data?.error)) || (view === "package" && (packagesQuery.isError || dismissalsQuery.isError) && "Package review could not load.");
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     const byStatus = clients.filter((c) => {
@@ -193,7 +194,7 @@ function ClientsListPage() {
       <div className="mb-4"><label htmlFor="clients-view" className="mb-1 block text-xs font-medium text-muted-foreground">Client filter</label><select id="clients-view" value={view} onChange={e => setView(e.target.value)} className="h-11 w-full rounded-md border border-input bg-background px-3 text-sm sm:max-w-sm">{[["all","All Active"],["package","Needs Package Info"],["renewals","Renewals"],["today","Scheduled Today"],["week","Scheduled This Week"],["not_next","This Week but Not Next"],["not_scheduled","Not Scheduled"]].map(([key,label]) => <option key={key} value={key}>{label}</option>)}</select></div>
       {clientError && <p role="alert" className="mb-4 text-destructive">Clients could not load. <Button variant="outline" onClick={() => retryClients()}>Retry</Button></p>}
       {visitProgress.isError && <p role="alert" className="mb-4 text-destructive">Square progress could not load; showing Hub counts. <Button variant="outline" onClick={() => visitProgress.refetch()}>Retry</Button></p>}
-      {viewError && <p role="alert" className="mb-4 text-destructive">Could not fully read this filter: {viewError} <Button variant="outline" onClick={() => { schedule.refetch(); renewals.refetch(); setup.refetch(); }}>Retry</Button></p>}
+      {viewError && <p role="alert" className="mb-4 text-destructive">Could not fully read this filter: {viewError} <Button variant="outline" onClick={() => { schedule.refetch(); renewals.refetch(); packagesQuery.refetch(); dismissalsQuery.refetch(); }}>Retry</Button></p>}
       {(viewBusy || isLoading) && <p role="status" className="mb-4 text-muted-foreground">Loading clients…</p>}
       <div className="sticky top-0 z-20 -mx-4 mb-3 border-b bg-background/95 px-4 py-2 backdrop-blur md:hidden">
         <Input

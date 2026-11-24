@@ -23,20 +23,24 @@ const packageRow = (price = 375) => ({ id: "package-one", client_id: clientId, v
 const rawBooking: SquareBooking = { id: "booking-one", customer_id: "square-one", start_at: "2026-11-24T15:00:00Z", status: "ACCEPTED", appointment_segments: [{ duration_minutes: 45 }] };
 let packages = [packageRow()];
 let receiptCents = 0;
+let dismissals: {client_id:string;activity_type:string;created_at:string}[] = [];
+let dismissalError: unknown = null;
 let settingsGate: Promise<void> = Promise.resolve();
 function db() {
   return { from: (table: string) => {
     const query = {
-      select: () => query, eq: () => query, order: () => query, gte: () => query,
+      select: () => query, eq: () => query, order: () => query, gte: () => query, in: () => query,
       maybeSingle: () => run(), range: () => run(), then: (resolve: (value: unknown) => unknown) => run().then(resolve),
     };
     async function run() {
       harness.started.push(table);
+      if(table === "client_activities" && dismissalError) return {data:null,error:dismissalError};
       if (table === "simple_dues_settings") await settingsGate;
       const data = table === "user_roles" ? [{ role: "admin" }]
         : table === "simple_dues_settings" ? { cutover_date: "2026-11-24" }
         : table === "clients" ? [{ id: clientId, first_name: "Example", last_name: "Client", square_customer_id: "square-one", status: "active", deleted_at: null }]
         : table === "simple_packages" ? packages
+        : table === "client_activities" ? dismissals
         : table === "square_payments" && receiptCents ? [{ square_payment_id: "receipt", client_id: clientId, amount_cents: receiptCents, currency: "USD", status: "COMPLETED", created_at: "2026-11-24T06:00:00Z", raw_event: null, buyer_email: null }]
         : [];
       return { data, error: null };
@@ -53,12 +57,38 @@ beforeEach(() => {
   harness.reader.mockReset().mockResolvedValue({ bookings: [rawBooking], error: null });
   packages = [packageRow()];
   receiptCents = 0;
+  dismissals = [];
+  dismissalError = null;
   settingsGate = Promise.resolve();
   harness.db = db();
 });
 afterEach(() => { vi.useRealTimers(); vi.unstubAllEnvs(); });
 
 describe("simple Dues loading preserves all calculations", () => {
+  it("a $375 eight-visit simple package with a $375 receipt has zero balance and one tracker", async () => {
+    receiptCents = 37500;
+    const result = await getSimpleDues({data:{clientId,forceFresh:true}});
+    expect(result.rows[0]?.balance).toBe(0);
+    expect(result.needsPackage).toHaveLength(0);
+    expect(result.packageSummaries[clientId]).toMatchObject({package:{visits:8,price:375},visitsLeft:7});
+    expect(result.payments).toMatchObject([{id:"receipt",amountCents:37500}]);
+  });
+  it("dismissed clients leave Needs a package without changing balances, and undo restores membership", async () => {
+    packages = [];
+    receiptCents = 10000;
+    dismissals = [{client_id:clientId,activity_type:"package_review_dismissed",created_at:"2026-11-24T17:00:00Z"}];
+    const dismissed = await getSimpleDues({data:{forceFresh:true}});
+    expect(dismissed.needsPackage).toHaveLength(0);
+    expect(dismissed.rows[0]?.balance).toBe(-100);
+    dismissals.push({client_id:clientId,activity_type:"package_review_redo",created_at:"2026-11-24T17:30:00Z"});
+    const undone = await getSimpleDues({data:{}});
+    expect(undone.needsPackage.map(r=>r.client.id)).toEqual([clientId]);
+    expect(undone.rows[0]?.balance).toBe(-100);
+  });
+  it("unreadable dismissals stop the review read rather than guessing", async () => {
+    dismissalError = new Error("Review state unavailable");
+    await expect(getSimpleDues({data:{}})).rejects.toThrow("Review state unavailable");
+  });
   it("reads packages and receipts each time while only Square bookings are cached", async () => {
     const first = await getSimpleDues({ data: { forceFresh: true } });
     const calls = harness.reader.mock.calls.length;

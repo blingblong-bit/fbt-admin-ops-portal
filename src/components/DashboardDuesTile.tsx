@@ -19,9 +19,9 @@ export function DashboardDuesTile() {
     {isLoading ? <p role="status" className="text-sm text-muted-foreground">Loading access…</p> : !isAdmin ? <p className="text-sm text-muted-foreground">Admin access required for totals</p> : <>
       <DuesFreshnessBanner q={q} />
       {q.isPending ? <p role="status" className="text-sm text-muted-foreground">Loading dues…</p> : !q.data ? <p role="alert" className="text-sm text-destructive">Dues could not load. <Button size="sm" variant="outline" onClick={() => q.refetch()}>Retry</Button></p> : !q.data.cutoverDate ? <p role="status" className="text-sm text-muted-foreground">Cutover not set</p> : <>
-        <p className="text-3xl font-semibold tabular-nums">{formatCurrency(q.data.totalOwed)}</p>
-        <p className="mt-1 text-sm text-muted-foreground">total owed · <strong className="text-foreground">{q.data.owingCount}</strong> {q.data.owingCount === 1 ? "client owing" : "clients owing"}</p>
-        <p className="mt-2 text-sm text-muted-foreground">{q.data.bookingError?"Renew soon and missing packages unavailable":`${simpleDuesAttentionCounts(q.data).renewSoon} renew soon · ${simpleDuesAttentionCounts(q.data).needsPackage} need a package`} · {simpleDuesAttentionCounts(q.data).flagged} flagged</p>
+        <Link to="/dues" search={{list:"who-owes"}} className="text-3xl font-semibold tabular-nums hover:underline">{formatCurrency(q.data.totalOwed)}</Link>
+        <p className="mt-1 text-sm text-muted-foreground">total owed · <Link to="/dues" search={{list:"who-owes"}} className="font-semibold text-foreground hover:underline">{q.data.owingCount}</Link> {q.data.owingCount === 1 ? "client owing" : "clients owing"}</p>
+        <div className="mt-2 flex flex-wrap gap-x-2 gap-y-1 text-sm text-muted-foreground">{q.data.bookingError?<span>Renew soon and missing packages unavailable</span>:<><Link to="/dues" search={{list:"renew-soon"}} className="hover:underline">{simpleDuesAttentionCounts(q.data).renewSoon} renew soon</Link><span>·</span><Link to="/dues" search={{list:"needs-package"}} className="hover:underline">{simpleDuesAttentionCounts(q.data).needsPackage} need a package</Link></>}<span>·</span><Link to="/dues" search={{list:"flagged"}} className="hover:underline">{simpleDuesAttentionCounts(q.data).flagged} flagged</Link></div>
       </>}
     </>}
   </div>;

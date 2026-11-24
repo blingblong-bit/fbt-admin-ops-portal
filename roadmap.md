@@ -1,5 +1,12 @@
 # Roadmap
 
+## One package tracker and compact Dues
+- [x] Replace profile legacy package/payment/check-in controls with simple package summary, history and cutover receipts; contact-only editing
+- [x] Share simple-package existence and dismissal review rules across existing badges and Needs a package
+- [x] Add URL-selected Dues tiles, matching dashboard links and collapsed Setup
+- [x] 780 tests passed (22 new regressions); desktop/390/320px unsaved browser examples verified tile toggles, URL/Back/refresh, week picker, profile summary/history and contact/package forms without saves, overflow or runtime errors. Diff/calculator/webhook/data scope clean; no publication.
+- [ ] Jamie's real signed-in profile and live scheduling verification — this draft has no auth users or app records; no accounts/client/payment data created. UI checks used browser-only examples, not real data.
+
 ## Faster Dues loading
 - [x] Concurrent four-window Square reads, short bookings-only cache, forced Refresh/Retry and parallel independent reads; preserve calculators and mutation invalidation
 - [x] 187 simple-dues tests / 758 full tests passed, including 25 new concurrency/cache/loading regressions; shared query reuse, forced retry and fresh package/payment reads verified with mocks; build/diff clean

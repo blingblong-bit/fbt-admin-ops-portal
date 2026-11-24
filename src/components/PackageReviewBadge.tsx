@@ -1,5 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { packageReviewDismissals, DISMISS_ACTIVITY, UNDISMISS_ACTIVITY } from "@/lib/simple-package-review";
+export { DISMISS_ACTIVITY, UNDISMISS_ACTIVITY } from "@/lib/simple-package-review";
 
 /**
  * "First Visit — No Package Info, Needs Review".
@@ -12,29 +14,21 @@ import { supabase } from "@/integrations/supabase/client";
  * no schema change: the latest of `package_review_dismissed` /
  * `package_review_redo` wins.
  */
-export const DISMISS_ACTIVITY = "package_review_dismissed";
-export const UNDISMISS_ACTIVITY = "package_review_redo";
 
 /** Set of client ids currently dismissed from the package-review group. */
 export function usePackageReviewDismissedIds() {
   return useQuery({
     queryKey: ["package_review_dismissals"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("client_activities")
-        .select("client_id, activity_type, created_at")
-        .in("activity_type", [DISMISS_ACTIVITY, UNDISMISS_ACTIVITY])
-        .order("created_at", { ascending: true });
-      if (error) throw error;
-      const latest = new Map<string, string>();
-      for (const r of data ?? []) {
-        latest.set(r.client_id as string, r.activity_type as string);
+      const rows: { client_id: string; activity_type: string; created_at: string }[] = [];
+      for (let from = 0; ; from += 500) {
+        const result = await supabase.from("client_activities").select("client_id, activity_type, created_at")
+          .in("activity_type", [DISMISS_ACTIVITY, UNDISMISS_ACTIVITY]).order("created_at").order("id").range(from, from + 499);
+        if (result.error) throw result.error;
+        rows.push(...result.data ?? []);
+        if ((result.data?.length ?? 0) < 500) break;
       }
-      const dismissed = new Set<string>();
-      for (const [id, type] of latest) {
-        if (type === DISMISS_ACTIVITY) dismissed.add(id);
-      }
-      return dismissed;
+      return packageReviewDismissals(rows);
     },
     staleTime: 30_000,
   });

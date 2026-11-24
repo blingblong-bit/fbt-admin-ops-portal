@@ -1,6 +1,6 @@
 import { assignSimplePackages, type SimpleBooking, type SimplePackage, type SimpleRow } from "./simple-dues";
 
-export const DUES_LISTS = ["who-owes", "needs-package", "flagged", "check-package-info", "renew-soon", "upcoming-renewals"] as const;
+export const DUES_LISTS = ["who-owes", "needs-package", "flagged", "check-package-info", "renew-soon", "upcoming-renewals", "check-openings"] as const;
 export type DuesList = typeof DUES_LISTS[number];
 export function selectedDuesList(value: string): DuesList | null {
   return DUES_LISTS.find(list => list === value) ?? null;

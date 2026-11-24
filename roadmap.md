@@ -1,5 +1,11 @@
 # Roadmap
 
+## Past Square payments and opening-balance review
+- [x] Separate completed receipt history/last payment from unchanged balance inputs; board history limited to 180 pre-cutover days, full profile history; review-only opening selection
+- [x] Profile history and amount-only confirmed opening edit preserving date/note; Dues row evidence and Check opening balances tile
+- [x] 792 tests passed (12 new regressions); desktop/390/320px unsaved examples verified history 10/all, unchanged $375 balance, review rows and cancelled amount edits; build and scope diff clean, no schema/calculator/webhook/scheduling/data changes or publication
+- [ ] Real signed-in Adalynn receipt and saved opening-correction readback — this draft has no auth users/client records; browser checks used unsaved examples, not a real signed-in account
+
 ## One package tracker and compact Dues
 - [x] Replace profile legacy package/payment/check-in controls with simple package summary, history and cutover receipts; contact-only editing
 - [x] Share simple-package existence and dismissal review rules across existing badges and Needs a package

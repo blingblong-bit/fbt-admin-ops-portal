@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { keepPreviousData, QueryClient } from "@tanstack/react-query";
 import type { SquareBooking } from "./schedule.functions";
 
-const harness = vi.hoisted(() => ({ db: {} as unknown, reader: vi.fn(), started: [] as string[] }));
+const harness = vi.hoisted(() => ({ db: {} as unknown, reader: vi.fn(), rpc:vi.fn(), started: [] as string[] }));
 vi.mock("@tanstack/react-start", () => ({
   createServerFn: () => {
     const chain = {
@@ -15,7 +15,7 @@ vi.mock("@tanstack/react-start", () => ({
 }));
 vi.mock("@/integrations/supabase/auth-middleware", () => ({ requireSupabaseAuth: {} }));
 vi.mock("@/lib/schedule.functions", () => ({ fetchSquareBookings: harness.reader }));
-import { getSimpleDues, simpleDuesQuery } from "./simple-dues.functions";
+import { getSimpleDues, simpleDuesQuery, saveSimpleDues } from "./simple-dues.functions";
 import { invalidateFor } from "./simple-dues-cache";
 
 const clientId = "00000000-0000-4000-8000-000000000001";
@@ -23,13 +23,15 @@ const packageRow = (price = 375) => ({ id: "package-one", client_id: clientId, v
 const rawBooking: SquareBooking = { id: "booking-one", customer_id: "square-one", start_at: "2026-11-24T15:00:00Z", status: "ACCEPTED", appointment_segments: [{ duration_minutes: 45 }] };
 let packages = [packageRow()];
 let receiptCents = 0;
+let historyReceipts: {square_payment_id:string;client_id:string;amount_cents:number;currency:string;status:string;created_at:string;raw_event:null;buyer_email:null}[] = [];
 let dismissals: {client_id:string;activity_type:string;created_at:string}[] = [];
 let dismissalError: unknown = null;
 let settingsGate: Promise<void> = Promise.resolve();
 function db() {
-  return { from: (table: string) => {
+  return { rpc:harness.rpc, from: (table: string) => {
+    let completedOnly=false;
     const query = {
-      select: () => query, eq: () => query, order: () => query, gte: () => query, in: () => query,
+      select: () => query, eq: (key:string,value:unknown) => {if(key==="status"&&value==="COMPLETED")completedOnly=true;return query;}, order: () => query, gte: () => query, in: () => query,
       maybeSingle: () => run(), range: () => run(), then: (resolve: (value: unknown) => unknown) => run().then(resolve),
     };
     async function run() {
@@ -41,7 +43,7 @@ function db() {
         : table === "clients" ? [{ id: clientId, first_name: "Example", last_name: "Client", square_customer_id: "square-one", status: "active", deleted_at: null }]
         : table === "simple_packages" ? packages
         : table === "client_activities" ? dismissals
-        : table === "square_payments" && receiptCents ? [{ square_payment_id: "receipt", client_id: clientId, amount_cents: receiptCents, currency: "USD", status: "COMPLETED", created_at: "2026-11-24T06:00:00Z", raw_event: null, buyer_email: null }]
+        : table === "square_payments" ? [...(completedOnly?historyReceipts:[]),...(receiptCents?[{ square_payment_id: "receipt", client_id: clientId, amount_cents: receiptCents, currency: "USD", status: "COMPLETED", created_at: "2026-11-24T06:00:00Z", raw_event: null, buyer_email: null }]:[])]
         : [];
       return { data, error: null };
     }
@@ -55,8 +57,10 @@ beforeEach(() => {
   vi.stubEnv("SQUARE_PRODUCTION_ACCESS_TOKEN", "test-token");
   harness.started = [];
   harness.reader.mockReset().mockResolvedValue({ bookings: [rawBooking], error: null });
+  harness.rpc.mockReset().mockResolvedValue({data:1,error:null});
   packages = [packageRow()];
   receiptCents = 0;
+  historyReceipts = [];
   dismissals = [];
   dismissalError = null;
   settingsGate = Promise.resolve();
@@ -65,6 +69,20 @@ beforeEach(() => {
 afterEach(() => { vi.useRealTimers(); vi.unstubAllEnvs(); });
 
 describe("simple Dues loading preserves all calculations", () => {
+  it("opening corrections reuse only the opening action and preserve date and the original nullable note", async()=>{
+    await saveSimpleDues({data:{action:"opening",clientId,amount:0,date:"2026-11-24",note:null}});
+    expect(harness.rpc.mock.calls).toEqual([["simple_import_openings",{_rows:[{client_id:clientId,amount:0,note:null}],_as_of:"2026-11-24"}]]);
+    expect(harness.started).toEqual(["user_roles"]);
+  });
+  it("returns the November 16 $375 receipt as history without paying a $375 opening balance", async () => {
+    historyReceipts=[{square_payment_id:"before-cutover",client_id:clientId,amount_cents:37500,currency:"USD",status:"COMPLETED",created_at:"2026-11-16T18:00:00Z",raw_event:null,buyer_email:null}];
+    const result=await getSimpleDues({data:{clientId}});
+    expect(result.payments).toEqual([]);
+    expect(result.paymentHistory).toMatchObject([{id:"before-cutover",date:"2026-11-16",amountCents:37500}]);
+    expect(result.lastPayments[clientId]).toEqual({date:"2026-11-16",amount:375});
+    expect(result.rows[0]?.balance).toBe(375);
+    expect(result.totalOwed).toBe(375);
+  });
   it("a $375 eight-visit simple package with a $375 receipt has zero balance and one tracker", async () => {
     receiptCents = 37500;
     const result = await getSimpleDues({data:{clientId,forceFresh:true}});
@@ -107,7 +125,7 @@ describe("simple Dues loading preserves all calculations", () => {
     expect(deleted.rows[0]?.balance).toBe(-100);
     expect(harness.reader).toHaveBeenCalledTimes(calls);
     expect(harness.started.filter(table => table === "simple_packages")).toHaveLength(3);
-    expect(harness.started.filter(table => table === "square_payments")).toHaveLength(3);
+    expect(harness.started.filter(table => table === "square_payments")).toHaveLength(6);
   });
   it("starts independent reads before settings finish, but receipts wait for cutover", async () => {
     let release: (() => void) | undefined;
@@ -115,7 +133,8 @@ describe("simple Dues loading preserves all calculations", () => {
     const request = getSimpleDues({ data: { forceFresh: true } });
     for (let i = 0; i < 10; i++) await Promise.resolve();
     expect(harness.started).toEqual(expect.arrayContaining(["simple_dues_settings", "clients", "simple_packages", "simple_opening_balances", "simple_price_list"]));
-    expect(harness.started).not.toContain("square_payments");
+    // Display-only historical reads can start immediately; balance receipts still wait.
+    expect(harness.started.filter(table => table === "square_payments")).toHaveLength(1);
     if (!release) throw new Error("Settings gate missing");
     release();
     await request;

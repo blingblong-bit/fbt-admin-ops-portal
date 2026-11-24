@@ -1,0 +1,1 @@
+- Simple payment history, last-payment evidence and opening-balance review are display-only; never feed history into computeSimpleDues or change openings automatically. Keep the original opening date/note when using the existing admin opening action so only the amount is corrected.

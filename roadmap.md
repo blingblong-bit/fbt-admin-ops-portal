@@ -1,5 +1,10 @@
 # Roadmap
 
+## Simple Dues UI cutover
+- [x] Promote simple Dues totals/count; retain only Dues, Not Scheduled and New Clients tiles; remove tile customization
+- [x] Replace retired navigation with Dues; retain admin-only collapsed old-screen links and move profile simple Dues first in Overview and Packages & Payments
+- [x] 649 tests passed; signed-in desktop/mobile totals match ($5,860 / 22), retired links collapsed, profile order and scheduling access verified; build OK. Existing aggregate admin access retained; no scheduling/calculation/data changes or publication.
+
 ## Additive simple dues
 - [x] Opening-package preview/create uses latest uncleared current override and one opening per client; missing info listed, starts on/after candidate cutover held rather than charged. Unlinked receipts shown read-only with buyer/date/amount. 646 tests passed; signed-in create/re-preview and mobile receipt checked; legacy records unchanged and cutover restored unset; build OK, no publication.
 - [x] Add isolated simple tables, audited admin writes and Square payment ingestion

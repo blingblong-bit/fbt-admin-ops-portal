@@ -23,7 +23,7 @@
 - Collections (`collections.ts`) only regroups `computeWeeklyDues` into disjoint groups reconciling to Master Dues; "due now" shown inside This Week, never added — no money computed.
 - Renewal forecast rows only from pure `buildRenewalForecastRows`; Square-started prepared renewal flagged `square_started_ymd` (Attention), never Scheduled.
 - `/renewals` only regroups `getRenewalForecast` via `renewals-view.ts` (disjoint) and mutates only via `PreRenewCard` fns — never decides activation.
-- Admin dashboard money areas use only `computeCollections`/`groupRenewals` (same as pages); other tiles under Admin Tools without dollars.
+- Dashboard Dues uses `simpleDuesQuery` totals unchanged; preserve aggregate admin access and keep legacy calculations off primary tiles.
 - Package edits only via audited `package_overrides` (`set_/clear_package_override`), applied at read time by `applyOverrides` (pass full rows incl. `id`); Hub tracking forced only for explicit admin visit counts or admin-started packages; verified Square 1/N promotes date/financial overrides only via `start_pending_override_from_square` (later payments over `raw_baseline`); raw fields and Square ledger never rewritten.
 - Shared prepared editor uses `preparedEditGuard` on both forecast and fresh server evidence; same-cycle reschedules preserve prepaid and original preparation time, while already-opened/ambiguous prepaid cycles and active pending corrections require audited reconciliation rather than silent reuse.
 - Prepared cancellation uses authenticated `cancel_prepared_renewal` to lock the client, clear raw preparation and prepared override atomically, and audit once; prepaid funds require reconciliation and active packages are never cancelled, preventing resurrection or silent money movement.
@@ -35,7 +35,7 @@
 - Checkout links: amount only from Master Dues effective total (`payment-link.ts`); link payments decided only by `planLinkPayment`/`handleLinkPayment`, env-scoped (sandbox route + `is_test_fixture` clients only; production webhook sees only production rows); stale/second/mismatched payments are held for review, never auto-credited; credit via apply_square_payment. Sandbox-only until approved.
 - Scheduling follow-ups use separate RLS tables and audited RPCs; they never alter classification, hides, Square or financial state. Push claims are unique per task revision/device/Chicago day, rechecked before send, with a private independent cron bearer. The messaging-only worker has no fetch/cache handlers; VAPID private keys are encrypted server-side and never returned to clients.
 
-- Hub navigation uses one shared five-section mapping for mobile tabs and desktop sidebar so preserved detail/task links select the same section.
+- Hub navigation shares primary destinations and section mapping across mobile/sidebar; retired deep links select More and remain admin-listed.
 - Scheduling queue presentation only regroups existing Square/worklist memberships; week-scoped contact markers mean waiting, reminders are optional and retain due priority. Contact undo preserves the activity and original actor as `contacted_undone` so existing active-marker reads stay compatible.
 - Schedule reads derive hide/pin reactivation without deleting stored audit state or writing sync logs; explicit staff actions remain audited writes.
 - Client profile sections preserve mounted state; correction shortcuts open the existing audited package editor rather than introducing another mutation path.

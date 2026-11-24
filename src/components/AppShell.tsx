@@ -1,17 +1,12 @@
 import { Link, useRouterState } from '@tanstack/react-router';
 import { type ReactNode, useState } from 'react';
-import { LayoutDashboard, Users, CalendarDays, MessageSquare, MoreHorizontal, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { LayoutDashboard, Users, CalendarDays, CircleDollarSign, MoreHorizontal, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { useScrollMemory } from '@/hooks/useScrollMemory';
 import { Button } from '@/components/ui/button';
-import { hubSection } from '@/lib/hub-navigation';
+import { hubSection, hubSections } from '@/lib/hub-navigation';
 
-const sections = [
-  { key: 'dash', to: '/', label: 'Dash', icon: LayoutDashboard },
-  { key: 'clients', to: '/clients', label: 'Clients', icon: Users },
-  { key: 'schedule', to: '/schedule-check', label: 'Schedule', icon: CalendarDays },
-  { key: 'messaging', to: '/messaging', label: 'Messaging', icon: MessageSquare },
-  { key: 'more', to: '/more', label: 'More', icon: MoreHorizontal },
-] as const;
+const sectionIcons = { dash: LayoutDashboard, clients: Users, schedule: CalendarDays, dues: CircleDollarSign, more: MoreHorizontal };
+const sections = hubSections.map(section => ({ ...section, icon: sectionIcons[section.key] }));
 
 export function AppShell({ children }: { children: ReactNode }) {
   const path = useRouterState({ select: s => s.location.pathname });

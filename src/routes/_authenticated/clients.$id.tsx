@@ -320,6 +320,7 @@ function ClientDetailPage() {
           <TabsTrigger value="messages" className="min-h-10">Messages</TabsTrigger>
         </TabsList>
         <TabsContent forceMount value="overview" className="space-y-5 data-[state=inactive]:hidden">
+          <SimpleDuesCard clientId={id} />
           <section aria-label="Current package summary" className="border-y py-5">
             <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
               <div>
@@ -358,13 +359,13 @@ function ClientDetailPage() {
             </div>
           </section>
           <NextAppointment clientId={id} onDetails={() => setSection("activity")} />
-          <SimpleDuesCard clientId={id} />
           {c.pending_renewal_start_date && <section className="border-t pt-4" aria-label="Upcoming renewal">
             <div className="mb-2 flex flex-wrap items-center justify-between gap-2"><h2 className="text-lg font-semibold">Upcoming renewal</h2>{isAdminUser && <Button size="sm" variant="outline" onClick={() => openPackage("pending")}>Correct upcoming package</Button>}</div>
             {renewalRow ? <PreRenewCard forecast={renewalRow as unknown as RenewalForecastRow} hideAmount={!isAdminUser} /> : <p className="text-sm text-muted-foreground">Prepared on or after {formatDate(c.pending_renewal_start_date)}. {forecastQ.isError ? "Renewal details could not load." : forecastQ.isFetching ? "Checking Square timing…" : "No verified start shown."}</p>}
           </section>}
         </TabsContent>
         <TabsContent forceMount value="packages" className="space-y-5 data-[state=inactive]:hidden">
+          <SimpleDuesCard clientId={id} />
           {isAdminUser && <EditPackagesCard client={(c as Client & { __raw?: Client }).__raw ?? c} onDone={refresh} editRequest={editRequest} />}
           {isAdminUser && <PaymentAllocationsCard client={c} onDone={refresh} />}
           {isAdminUser && (() => { const raw = (c as Client & { __raw?: Client }).__raw ?? c; return <ClearPrepaidCard clientId={id} paidAhead={Number(raw.pending_renewal_paid ?? 0)} preparedOn={raw.pending_renewal_start_date ?? null} onDone={refresh} />; })()}

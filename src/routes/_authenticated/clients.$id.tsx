@@ -31,10 +31,7 @@ import {
 import {
   getScheduledClientIds,
   getClientAppointments,
-  getUncheckedRecentAppointments,
-  completeVisitForClient,
   getClientVisitTracking,
-  setVisitTrackingMode,
   undoVisitCheckIn,
   type ClientAppointment,
 } from "@/lib/schedule.functions";
@@ -170,10 +167,6 @@ function ClientDetailPage() {
     invalidateFor(qc, ["payment-changed", "renewal-changed", "package-edited", "visit-changed"], { clientId: id });
   };
 
-  const completeVisitFn = useServerFn(completeVisitForClient);
-  const fetchUnchecked = useServerFn(getUncheckedRecentAppointments);
-
-  const [visitPickerOpen, setVisitPickerOpen] = useState(false);
   const fetchTracking = useServerFn(getClientVisitTracking);
   const trackingQ = useQuery({
     queryKey: ["visit-tracking", id],
@@ -182,50 +175,15 @@ function ClientDetailPage() {
   });
   const visitTracking = trackingQ.data?.visit ?? null;
   const squareTracks = !!visitTracking && !visitTracking.manualCheckInNeeded;
-  const setModeFn = useServerFn(setVisitTrackingMode);
   const undoFn = useServerFn(undoVisitCheckIn);
   const refreshVisitData = () => {
     invalidateFor(qc, "visit-changed", { clientId: id });
   };
-  const modeMut = useMutation({
-    mutationFn: (mode: "auto" | "square" | "hub") => setModeFn({ data: { clientId: id, mode } }),
-    onSuccess: () => { toast.success("Visit tracking updated"); refreshVisitData(); },
-    onError: (e: Error) => toast.error(e.message),
-  });
   const undoMut = useMutation({
     mutationFn: (activityId: string) => undoFn({ data: { activityId } }),
     onSuccess: () => { toast.success("Check-in undone"); refreshVisitData(); },
     onError: (e: Error) => toast.error(e.message),
   });
-  const uncheckedQ = useQuery({
-    queryKey: ["unchecked-appointments", id],
-    queryFn: () => fetchUnchecked({ data: { clientId: id } }),
-    enabled: visitPickerOpen,
-  });
-
-  const completeVisit = useMutation({
-    // All visits go through the shared check-in so the duplicate guards and
-    // package/renewal handling are identical everywhere.
-    mutationFn: async (appt?: { bookingId: string; startAt: string }) => {
-      if (!c) return;
-      if (!appt && (c.visits_used ?? 0) >= c.package_total_visits && !c.pending_renewal_start_date) {
-        throw new Error("All visits already used");
-      }
-      await completeVisitFn({
-        data: {
-          clientId: id,
-          ...(appt ? { bookingId: appt.bookingId, appointmentStartAt: appt.startAt } : {}),
-        },
-      });
-    },
-    onSuccess: () => {
-      toast.success("Visit recorded");
-      setVisitPickerOpen(false);
-      refresh();
-    },
-    onError: (e: Error) => toast.error(e.message),
-  });
-
 
   // Scheduling is derived from live Square bookings — no manual toggle.
   const renewalFlagged = useIsRenewalFlagged(id);
@@ -326,7 +284,7 @@ function ClientDetailPage() {
                 <Progress value={pct} className="my-3 h-2" />
                 {visitTracking && <VisitSourceLine visit={visitTracking} compact />}
                 {hubDiffers && <p className="mt-2 text-xs text-muted-foreground">Showing Square appointment notes; Hub stored {c.visits_used ?? "—"}/{c.package_total_visits}. No counts changed.</p>}
-                <Button size="sm" variant="link" className="px-0" onClick={() => setSection("packages")}>Visit source &amp; check-in</Button>
+                <Button size="sm" variant="link" className="px-0" onClick={() => setSection("packages")}>Visit source</Button>
               </div>
               <div className="space-y-2 text-sm">
                 <Row label="Package price" value={formatCurrency(c.package_price)} />
@@ -352,46 +310,12 @@ function ClientDetailPage() {
         <TabsContent forceMount value="packages" className="space-y-5 data-[state=inactive]:hidden">
           {isAdminUser && <EditPackagesCard client={(c as Client & { __raw?: Client }).__raw ?? c} onDone={refresh} editRequest={editRequest} />}
           <section className="border-y py-4" aria-label="Visit controls">
-            <h2 className="mb-3 text-lg font-semibold">Visit source &amp; check-in</h2>
+            <h2 className="mb-3 text-lg font-semibold">Visit source</h2>
             <div className="flex flex-wrap items-center gap-3">
           {visitTracking && <VisitSourceLine visit={visitTracking} />}
-          {c.square_customer_id && (c.package_total_visits ?? 0) > 0 && (
-            <label className="flex items-center gap-2 text-xs text-muted-foreground">
-              Count visits from
-              <select
-                className="rounded-md border bg-background px-2 py-1 text-xs text-foreground"
-                value={(c as Client & { visit_tracking_mode?: string }).visit_tracking_mode ?? "auto"}
-                disabled={modeMut.isPending}
-                onChange={(e) => modeMut.mutate(e.target.value as "auto" | "square" | "hub")}
-              >
-                <option value="auto">Square appointment notes (default)</option>
-                <option value="square">Square appointment notes (pinned)</option>
-                <option value="hub">Use Hub manual check-in</option>
-              </select>
-            </label>
-          )}
-
-
-            {(c.package_total_visits ?? 0) > 0 &&
-              (remaining !== 0 || !!c.pending_renewal_start_date) && (
-              <Button
-                variant={squareTracks ? "ghost" : "default"}
-                size={squareTracks ? "sm" : "default"}
-                onClick={() => setVisitPickerOpen(true)}
-                title={
-                  squareTracks
-                    ? "Square notes track this client's visits — only use for corrections."
-                    : !hasVisitData
-                      ? "Visits unknown — verify before completing."
-                      : undefined
-                }
-              >
-                {squareTracks ? "Manual check-in" : "Complete Visit"}
-              </Button>
-            )}
-
             </div>
-            {(c.package_total_visits ?? 0) > 0 && (!hasVisitData || remaining === 0) && <p className="mt-2 text-sm text-muted-foreground">{!hasVisitData ? "Visits unknown" : "No visits remaining"} — verify in Square before completing.</p>}
+            <p className="mt-2 text-xs text-muted-foreground">Visits are counted from Square appointment notes only.</p>
+            {(c.package_total_visits ?? 0) > 0 && (!hasVisitData || remaining === 0) && <p className="mt-2 text-sm text-muted-foreground">{!hasVisitData ? "Visits unknown" : "No visits remaining"} — verify in Square.</p>}
           </section>
           <section className="space-y-3 border-b pb-4"><h2 className="text-lg font-semibold">Other record actions</h2><div className="flex flex-wrap gap-2">
             <Button variant="outline" onClick={() => setRenewOpen(true)}>
@@ -477,57 +401,6 @@ function ClientDetailPage() {
           </div>
         </DialogContent>
       </Dialog>
-
-      <Dialog open={visitPickerOpen} onOpenChange={(o) => !o && setVisitPickerOpen(false)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Complete Visit</DialogTitle>
-            <DialogDescription>
-              Pick the appointment this visit was for, so it isn't counted twice.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-2">
-            {uncheckedQ.isLoading ? (
-              <p className="text-sm text-slate-500">Looking up recent appointments…</p>
-            ) : (uncheckedQ.data?.appointments.length ?? 0) === 0 ? (
-              <p className="text-sm text-slate-500">
-                No recent appointment without a check-in was found.
-              </p>
-            ) : (
-              (uncheckedQ.data?.appointments ?? []).map((a) => (
-                <Button
-                  key={a.booking_id}
-                  variant="outline"
-                  className="min-h-11 w-full justify-start"
-                  disabled={completeVisit.isPending}
-                  onClick={() =>
-                    completeVisit.mutate({ bookingId: a.booking_id, startAt: a.start_at })
-                  }
-                >
-                  {new Date(a.start_at).toLocaleString("en-US", {
-                    timeZone: "America/Chicago",
-                    weekday: "short",
-                    month: "short",
-                    day: "numeric",
-                    hour: "numeric",
-                    minute: "2-digit",
-                  })}
-                </Button>
-              ))
-            )}
-          </div>
-          <DialogFooter>
-            <Button
-              variant="ghost"
-              disabled={completeVisit.isPending}
-              onClick={() => completeVisit.mutate(undefined)}
-            >
-              No appointment — just record a visit
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
 
       <PaymentDialog
         open={paymentOpen}

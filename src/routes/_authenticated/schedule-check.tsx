@@ -38,8 +38,6 @@ import { PackageReviewBadge, usePackageReviewDismissedIds } from "@/components/P
 
 
 import {
-  completeVisitForClient,
-  getCompletedVisitBookingIds,
   getContactedClientIds,
   getScheduleCheck,
   getUnavailableNextWeekClientIds,
@@ -83,11 +81,8 @@ function ScheduleCheckPage() {
   const { isStaff } = useRole();
   const { view = "appointments" } = Route.useSearch();
   const [date, setDate] = useState<string>(todayYmd());
-  const [checkedIn, setCheckedIn] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState<string>("");
   const fetchSchedule = useServerFn(getScheduleCheck);
-  const completeVisit = useServerFn(completeVisitForClient);
-  const fetchCompletedVisitBookingIds = useServerFn(getCompletedVisitBookingIds);
   const qc = useQueryClient();
 
   const query = useQuery({
@@ -97,29 +92,6 @@ function ScheduleCheckPage() {
       typeof document !== "undefined" && document.visibilityState === "visible" ? 60_000 : false,
     refetchIntervalInBackground: false,
     refetchOnWindowFocus: true,
-  });
-
-  const completeMut = useMutation({
-    mutationFn: (vars: { clientId: string; bookingId: string; startAt?: string }) =>
-      completeVisit({
-        data: {
-          clientId: vars.clientId,
-          bookingId: vars.bookingId,
-          ...(vars.startAt ? { appointmentStartAt: vars.startAt } : {}),
-        },
-      }),
-
-    onSuccess: (_r, vars) => {
-      setCheckedIn((prev) => {
-        const next = new Set(prev);
-        next.add(vars.bookingId);
-        return next;
-      });
-      toast.success("Visit recorded");
-      // A check-in can activate a prepared next package — refreshes dues too.
-      invalidateFor(qc, "visit-changed");
-    },
-    onError: (e: Error) => toast.error(e.message),
   });
 
   const listClientsFn = useServerFn(listLinkableClients);
@@ -192,48 +164,6 @@ function ScheduleCheckPage() {
       unmatched: rawData.unmatched.filter((a) => !resolvedIds.has(a.booking_id)),
     };
   }, [rawData, linkable]);
-
-  // Every booking currently visible across all three views — used to ask the
-  // server which ones already have a completed visit on record, so "Checked
-  // In" reflects real, persisted state instead of resetting to blank every
-  // time this page is left and re-opened.
-  const visitProbes = useMemo(() => {
-    const map = new Map<string, { booking_id: string; client_id: string | null; start_at: string | null }>();
-    for (const a of [
-      ...(data?.selected_day ?? []),
-      ...(data?.this_week ?? []),
-      ...(data?.next_week ?? []),
-    ]) {
-      map.set(a.booking_id, {
-        booking_id: a.booking_id,
-        client_id: a.client?.id ?? null,
-        start_at: a.start_at ?? null,
-      });
-    }
-    return Array.from(map.values()).sort((x, y) => x.booking_id.localeCompare(y.booking_id));
-  }, [data]);
-  const allBookingIds = useMemo(() => visitProbes.map((p) => p.booking_id), [visitProbes]);
-
-  const completedVisitsQuery = useQuery({
-    queryKey: ["completed-visit-bookings", allBookingIds],
-    queryFn: () => fetchCompletedVisitBookingIds({ data: { appointments: visitProbes } }),
-    enabled: allBookingIds.length > 0,
-    staleTime: 30_000,
-  });
-
-
-  // Persisted truth (from the DB) unioned with anything just checked in this
-  // session but not yet reflected in a refetch — avoids a flash back to
-  // "not checked in" immediately after a successful click.
-  const persistedCheckedIn = useMemo(
-    () => new Set(completedVisitsQuery.data ?? []),
-    [completedVisitsQuery.data],
-  );
-  const effectiveCheckedIn = useMemo(() => {
-    const merged = new Set(persistedCheckedIn);
-    for (const id of checkedIn) merged.add(id);
-    return merged;
-  }, [persistedCheckedIn, checkedIn]);
 
   useEffect(() => {
     if (!rawData || !linkable) return;
@@ -349,12 +279,6 @@ function ScheduleCheckPage() {
           description={data ? formatDate(data.selected_date) : ""}
           appointments={data?.selected_day ?? []}
           defaultOpen
-          showCheckIn
-          checkedInIds={effectiveCheckedIn}
-          onCheckIn={(clientId, bookingId, startAt) => completeMut.mutate({ clientId, bookingId, startAt })}
-          completingBookingId={
-            completeMut.isPending ? completeMut.variables?.bookingId ?? null : null
-          }
           groupBy="time"
           filter={q}
           hideOwed={isStaff}
@@ -458,10 +382,6 @@ function ScheduleSection({
   description,
   appointments,
   defaultOpen,
-  showCheckIn = false,
-  checkedInIds,
-  onCheckIn,
-  completingBookingId,
   groupBy = "time",
   filter = "",
   hideOwed = false,
@@ -470,30 +390,13 @@ function ScheduleSection({
   description: string;
   appointments: ScheduleAppointment[];
   defaultOpen: boolean;
-  showCheckIn?: boolean;
-  checkedInIds?: Set<string>;
-  onCheckIn?: (clientId: string, bookingId: string, startAt?: string) => void;
-  completingBookingId?: string | null;
   groupBy?: "time" | "dayTime";
   filter?: string;
   hideOwed?: boolean;
 }) {
-  const checkedSet = checkedInIds ?? new Set<string>();
   const q = filter.trim();
   const filtered = q ? appointments.filter((a) => matchesSearch(a, q)) : appointments;
-  const checkedCount = filtered.reduce(
-    (n, a) => (checkedSet.has(a.booking_id) ? n + 1 : n),
-    0,
-  );
   const flatGroups = groupByTime(filtered);
-  const now = Date.now();
-  const nextGroupKey = showCheckIn
-    ? flatGroups.find(
-        (g) =>
-          new Date(g.key).getTime() >= now &&
-          g.items.some((a) => !checkedSet.has(a.booking_id)),
-      )?.key ?? null
-    : null;
   const dayGroups = groupBy === "dayTime" ? groupByDayThenTime(filtered) : null;
   const isOpen = defaultOpen || (q.length > 0 && filtered.length > 0);
 
@@ -506,7 +409,6 @@ function ScheduleSection({
               {title}{" "}
               <span className="text-sm font-normal text-slate-500">
                 ({filtered.length}
-                {checkedCount > 0 ? ` · ${checkedCount} checked in` : ""}
                 {q && filtered.length !== appointments.length
                   ? ` · filtered from ${appointments.length}`
                   : ""}
@@ -537,11 +439,6 @@ function ScheduleSection({
                         key={g.key}
                         timeLabel={g.label}
                         appointments={g.items}
-                        isNext={false}
-                        showCheckIn={showCheckIn}
-                        onCheckIn={onCheckIn}
-                        completingBookingId={completingBookingId ?? null}
-                        checkedInIds={checkedSet}
                         hideOwed={hideOwed}
                       />
                     ))}
@@ -556,11 +453,6 @@ function ScheduleSection({
                   key={g.key}
                   timeLabel={g.label}
                   appointments={g.items}
-                  isNext={g.key === nextGroupKey}
-                  showCheckIn={showCheckIn}
-                  onCheckIn={onCheckIn}
-                  completingBookingId={completingBookingId ?? null}
-                  checkedInIds={checkedSet}
                   hideOwed={hideOwed}
                 />
               ))}
@@ -575,32 +467,16 @@ function ScheduleSection({
 function TimeGroupBlock({
   timeLabel,
   appointments,
-  isNext,
-  showCheckIn,
-  onCheckIn,
-  completingBookingId,
-  checkedInIds,
   hideOwed = false,
 }: {
   timeLabel: string;
   appointments: ScheduleAppointment[];
-  isNext: boolean;
-  showCheckIn: boolean;
-  onCheckIn?: (clientId: string, bookingId: string, startAt?: string) => void;
-  completingBookingId: string | null;
-  checkedInIds?: Set<string>;
   hideOwed?: boolean;
 }) {
-  const checkedSet = checkedInIds ?? new Set<string>();
   return (
     <div>
       <div className="mb-2 flex items-center gap-2 border-b border-slate-200 pb-1">
         <div className="text-sm font-semibold text-slate-800">{timeLabel}</div>
-        {isNext && (
-          <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-800">
-            Next
-          </span>
-        )}
         <span className="ml-auto text-xs text-slate-500">
           {appointments.length} appt{appointments.length === 1 ? "" : "s"}
         </span>
@@ -612,11 +488,6 @@ function TimeGroupBlock({
           <AppointmentMobileCard
             key={a.booking_id}
             appointment={a}
-            isNext={isNext}
-            showCheckIn={showCheckIn}
-            onCheckIn={onCheckIn}
-            completingBookingId={completingBookingId}
-            isCheckedIn={checkedSet.has(a.booking_id)}
             hideOwed={hideOwed}
           />
         ))}
@@ -639,11 +510,6 @@ function TimeGroupBlock({
               <AppointmentDesktopRow
                 key={a.booking_id}
                 appointment={a}
-                isNext={isNext}
-                showCheckIn={showCheckIn}
-                onCheckIn={onCheckIn}
-                completingBookingId={completingBookingId}
-                isCheckedIn={checkedSet.has(a.booking_id)}
               />
             ))}
           </TableBody>
@@ -673,54 +539,27 @@ function isRenewalStartVisit(
 
 function AppointmentMobileCard({
   appointment: a,
-  isNext,
-  showCheckIn,
-  onCheckIn,
-  completingBookingId,
-  isCheckedIn,
   hideOwed = false,
 }: {
   appointment: ScheduleAppointment;
-  isNext: boolean;
-  showCheckIn: boolean;
-  onCheckIn?: (clientId: string, bookingId: string, startAt?: string) => void;
-  completingBookingId: string | null;
-  isCheckedIn: boolean;
   hideOwed?: boolean;
 }) {
   const total = a.client?.package_total_visits ?? 0;
   const used = a.client?.visits_used ?? 0;
   const hasPackage = !!a.client && total > 0;
   const payPerVisit = a.client?.payment_model === "pay_per_visit";
-  const noPackage = !!a.client && total === 0;
-  const checkedInLabel = payPerVisit
-    ? "✓ Checked In — Pay Per Visit"
-    : noPackage
-      ? "✓ Checked In — No Package Info"
-      : "✓ Checked In";
   const pendingRenewal = !!a.client?.pending_renewal_start_date;
   const renewalStartVisit = isRenewalStartVisit(
     a.client?.pending_renewal_start_date,
     a.start_at,
   );
   const packageComplete = hasPackage && !payPerVisit && used >= total;
-  // A prepared next package activates on this check-in, so don't hide the button.
-  const blockCheckIn = packageComplete && !pendingRenewal;
   const owed = a.client
     ? Math.max(0, Number(a.client.package_price ?? 0) - Number(a.client.amount_paid ?? 0))
     : 0;
-  const busy = completingBookingId === a.booking_id;
 
   return (
-    <div
-      className={`rounded-xl border bg-white p-3 shadow-sm ${
-        isCheckedIn
-          ? "border-emerald-300 bg-emerald-50/40"
-          : isNext
-            ? "border-emerald-400 ring-2 ring-emerald-200"
-            : ""
-      }`}
-    >
+    <div className="rounded-xl border bg-white p-3 shadow-sm">
       <div className="min-w-0">
         <div className="flex items-center gap-2">
           <div className="truncate text-base font-semibold">
@@ -730,11 +569,6 @@ function AppointmentMobileCard({
               <span className="text-amber-800">Unmatched booking</span>
             )}
           </div>
-          {isCheckedIn && (
-            <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-800">
-              {checkedInLabel}
-            </span>
-          )}
         </div>
         <div className="mt-0.5 text-xs text-slate-500">
           {a.service_name ?? (a.duration_minutes ? `${a.duration_minutes} min` : "—")}
@@ -773,36 +607,13 @@ function AppointmentMobileCard({
           )}
         </div>
       )}
-      <div className="mt-3 grid grid-cols-2 gap-2">
+      <div className="mt-3">
         {a.client ? (
-          <>
-            <Button asChild size="lg" variant="outline" className="h-11">
-              <Link to="/clients/$id" params={{ id: a.client.id }}>
-                View
-              </Link>
-            </Button>
-            {showCheckIn && onCheckIn && !blockCheckIn && !isCheckedIn && a.client.visit && !a.client.visit.manualCheckInNeeded ? (
-              <button
-                type="button"
-                className="h-11 text-xs text-slate-500 underline-offset-2 hover:underline"
-                disabled={busy}
-                onClick={() => onCheckIn(a.client!.id, a.booking_id, a.start_at)}
-              >
-                {busy ? "…" : "Manual check-in"}
-              </button>
-            ) : showCheckIn && onCheckIn && !blockCheckIn ? (
-              <Button
-                size="lg"
-                className="h-11"
-                disabled={busy || isCheckedIn}
-                onClick={() => onCheckIn(a.client!.id, a.booking_id, a.start_at)}
-              >
-                {isCheckedIn ? checkedInLabel : busy ? "…" : "✓ Check in"}
-              </Button>
-            ) : (
-              <div />
-            )}
-          </>
+          <Button asChild size="lg" variant="outline" className="h-11 w-full">
+            <Link to="/clients/$id" params={{ id: a.client.id }}>
+              View
+            </Link>
+          </Button>
         ) : (
           <button
             type="button"
@@ -815,7 +626,7 @@ function AppointmentMobileCard({
                 setTimeout(() => el.classList.remove("ring-2", "ring-amber-400"), 1600);
               }
             }}
-            className="col-span-2 rounded-md bg-amber-100 px-3 py-2 text-sm font-semibold text-amber-800"
+            className="w-full rounded-md bg-amber-100 px-3 py-2 text-sm font-semibold text-amber-800"
           >
             Resolve Unmatched ↓
           </button>
@@ -827,63 +638,29 @@ function AppointmentMobileCard({
 
 function AppointmentDesktopRow({
   appointment: a,
-  isNext,
-  showCheckIn,
-  onCheckIn,
-  completingBookingId,
-  isCheckedIn,
 }: {
   appointment: ScheduleAppointment;
-  isNext: boolean;
-  showCheckIn: boolean;
-  onCheckIn?: (clientId: string, bookingId: string, startAt?: string) => void;
-  completingBookingId: string | null;
-  isCheckedIn: boolean;
 }) {
   const total = a.client?.package_total_visits ?? 0;
   const used = a.client?.visits_used ?? 0;
   const hasPackage = !!a.client && total > 0;
   const payPerVisit = a.client?.payment_model === "pay_per_visit";
-  const noPackage = !!a.client && total === 0;
-  const checkedInLabel = payPerVisit
-    ? "✓ Checked In — Pay Per Visit"
-    : noPackage
-      ? "✓ Checked In — No Package Info"
-      : "✓ Checked In";
   const pendingRenewal = !!a.client?.pending_renewal_start_date;
   const renewalStartVisit = isRenewalStartVisit(
     a.client?.pending_renewal_start_date,
     a.start_at,
   );
   const packageComplete = hasPackage && !payPerVisit && used >= total;
-  // A prepared next package activates on this check-in, so don't hide the button.
-  const blockCheckIn = packageComplete && !pendingRenewal;
   const owed = a.client
     ? Math.max(0, Number(a.client.package_price ?? 0) - Number(a.client.amount_paid ?? 0))
     : 0;
-  const busy = completingBookingId === a.booking_id;
 
   return (
-    <TableRow
-      className={
-        isCheckedIn ? "bg-emerald-50/40" : isNext ? "bg-emerald-50/60" : undefined
-      }
-    >
+    <TableRow>
       <TableCell className="text-sm">
         {a.client ? (
           <div>
             <div className="font-medium whitespace-nowrap">
-              {isCheckedIn ? (
-                <span className="mr-2 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold uppercase text-emerald-800">
-                  {checkedInLabel}
-                </span>
-              ) : (
-                isNext && (
-                  <span className="mr-2 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold uppercase text-emerald-800">
-                    Next
-                  </span>
-                )
-              )}
               {a.client.first_name} {a.client.last_name}
               {owed > 0 && (
                 <span className="ml-2 rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-red-800">
@@ -924,11 +701,7 @@ function AppointmentDesktopRow({
         {a.team_member_name ?? <span className="text-slate-400">—</span>}
       </TableCell>
       <TableCell className="text-xs whitespace-nowrap">
-        {isCheckedIn ? (
-          <span className="font-semibold text-emerald-700">Checked In</span>
-        ) : (
-          a.status
-        )}
+        {a.status}
       </TableCell>
       <TableCell className="text-right whitespace-nowrap">
         {a.client ? (
@@ -939,33 +712,15 @@ function AppointmentDesktopRow({
                   View Client
                 </Link>
               </Button>
-              {showCheckIn && onCheckIn && !blockCheckIn && !isCheckedIn && a.client.visit && !a.client.visit.manualCheckInNeeded ? (
-                <button
-                  type="button"
-                  className="self-center text-xs text-slate-500 hover:underline"
-                  disabled={busy}
-                  onClick={() => onCheckIn(a.client!.id, a.booking_id, a.start_at)}
-                >
-                  {busy ? "Recording…" : "Manual check-in"}
-                </button>
-              ) : showCheckIn && onCheckIn && !blockCheckIn && (
-                <Button
-                  size="sm"
-                  disabled={busy || isCheckedIn}
-                  onClick={() => onCheckIn(a.client!.id, a.booking_id, a.start_at)}
-                >
-                  {isCheckedIn ? checkedInLabel : busy ? "Recording…" : "Check In"}
-                </Button>
-              )}
             </div>
             {pendingRenewal && (
               <span className="text-[11px] font-medium text-emerald-700">
-                Pre-Renewed — next package starts at this check-in
+                Pre-Renewed — next package starts at this visit
               </span>
             )}
             {packageComplete && !renewalStartVisit && (
               <span className="text-[11px] text-amber-700">
-                ⚠ Package complete — verify before recording another visit.
+                ⚠ Package complete — verify in Square before booking another visit.
               </span>
             )}
           </div>
@@ -1445,308 +1200,6 @@ function EmptyState({ text }: { text: string }) {
     <div className="rounded-md border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500">
       {text}
     </div>
-  );
-}
-
-function AppointmentsCard({
-  title,
-  description,
-  appointments,
-  showCompleteVisit = false,
-  onCompleteVisit,
-  completing,
-}: {
-  title: string;
-  description: string;
-  appointments: ScheduleAppointment[];
-  showCompleteVisit?: boolean;
-  onCompleteVisit?: (clientId: string) => void;
-  completing?: string | null;
-}) {
-  const renewalFlags = useRenewalFlaggedClientIds().data;
-  const packageReviewDismissed = usePackageReviewDismissedIds().data ?? null;
-
-  return (
-
-    <Card>
-      <CardHeader>
-        <CardTitle>{title}</CardTitle>
-        <CardDescription>{description}</CardDescription>
-      </CardHeader>
-      <CardContent>
-        {appointments.length === 0 ? (
-          <EmptyState text="No appointments." />
-        ) : (
-          <>
-            {/* Mobile card list */}
-            <div className="space-y-2 md:hidden">
-              {(() => {
-                const now = Date.now();
-                const nextIdx = showCompleteVisit
-                  ? appointments.findIndex((a) => new Date(a.start_at).getTime() >= now)
-                  : -1;
-                return appointments.map((a, i) => {
-                  const remaining = a.client ? visitsRemaining(a.client) : 0;
-                  const hasPackage = !!a.client && (a.client.package_total_visits ?? 0) > 0;
-                  const visitsUnknown = hasPackage && remaining === null;
-                  const visitsZero = hasPackage && remaining === 0;
-                  const pendingRenewal = !!a.client?.pending_renewal_start_date;
-                  const renewalStartVisit = isRenewalStartVisit(
-                    a.client?.pending_renewal_start_date,
-                    a.start_at,
-                  );
-                  const blockVisit = visitsZero && !pendingRenewal;
-                  const owed = a.client
-                    ? Math.max(
-                        0,
-                        Number(a.client.package_price ?? 0) - Number(a.client.amount_paid ?? 0),
-                      )
-                    : 0;
-                  const isCurrent = i === nextIdx;
-                  return (
-                    <div
-                      key={a.booking_id}
-                      className={`rounded-xl border bg-white p-3 shadow-sm ${
-                        isCurrent ? "border-emerald-400 ring-2 ring-emerald-200" : ""
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0 flex-1">
-                          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                            {isCurrent && (
-                              <span className="mr-1 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-800">
-                                NEXT
-                              </span>
-                            )}
-                            {formatDateTimeLocal(a.start_at)}
-                          </div>
-                          <div className="mt-1 truncate text-base font-semibold">
-                            {a.client ? (
-                              `${a.client.first_name} ${a.client.last_name}`
-                            ) : (
-                              <span className="text-amber-800">Unmatched booking</span>
-                            )}
-                          </div>
-                          <div className="mt-0.5 text-xs text-slate-500">
-                            {a.service_name ??
-                              (a.duration_minutes ? `${a.duration_minutes} min` : "—")}
-                            {" · "}
-                            {a.status}
-                          </div>
-                        </div>
-                      </div>
-                      {a.client && (
-                        <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px] font-medium">
-                          {renewalFlags?.has(a.client.id) && <RenewalFlagBadge />}
-                          {needsPackageReview(a.client, packageReviewDismissed, a.client.id) && (
-                            <PackageReviewBadge priceNeeded={packagePriceNeeded(a.client)} />
-                          )}
-
-                          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-slate-700">
-
-                            {remaining === null
-                              ? "Visits unknown"
-                              : `${remaining}/${a.client.package_total_visits ?? 0} visits`}
-                          </span>
-                          {owed > 0 && (
-                            <span className="rounded-full bg-red-100 px-2 py-0.5 text-red-800">
-                              Owes {formatCurrency(owed)}
-                            </span>
-                          )}
-                          {pendingRenewal && (
-                            <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-emerald-800">
-                              Next Package Ready
-                            </span>
-                          )}
-                          {visitsZero && !renewalStartVisit && (
-                            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-amber-900">
-                              Package complete
-                            </span>
-                          )}
-                          {visitsUnknown && (
-                            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-amber-900">
-                              ⚠ Verify visits
-                            </span>
-                          )}
-                        </div>
-                      )}
-                      <div className="mt-3 grid grid-cols-2 gap-2">
-                        {a.client ? (
-                          <>
-                            <Button asChild size="lg" variant="outline" className="h-11">
-                              <Link to="/clients/$id" params={{ id: a.client.id }}>
-                                View
-                              </Link>
-                            </Button>
-                            {showCompleteVisit && onCompleteVisit && !blockVisit ? (
-                              <Button
-                                size="lg"
-                                className="h-11"
-                                disabled={completing === a.client.id}
-                                onClick={() => onCompleteVisit(a.client!.id)}
-                              >
-                                {completing === a.client.id ? "…" : "✓ Check in"}
-                              </Button>
-                            ) : (
-                              <div />
-                            )}
-                          </>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const key = a.square_customer_id ?? a.booking_id;
-                              const el = document.getElementById(`unmatched-${key}`);
-                              if (el) {
-                                el.scrollIntoView({ behavior: "smooth", block: "start" });
-                                el.classList.add("ring-2", "ring-amber-400");
-                                setTimeout(
-                                  () => el.classList.remove("ring-2", "ring-amber-400"),
-                                  1600,
-                                );
-                              }
-                            }}
-                            className="col-span-2 rounded-md bg-amber-100 px-3 py-2 text-sm font-semibold text-amber-800"
-                          >
-                            Resolve Unmatched ↓
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  );
-                });
-              })()}
-            </div>
-
-            {/* Desktop table */}
-            <div className="-mx-6 hidden overflow-x-auto px-6 md:block">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>When</TableHead>
-                  <TableHead>Client</TableHead>
-                  <TableHead>Service</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {appointments.map((a) => {
-                  const remaining = a.client ? visitsRemaining(a.client) : 0;
-                  const hasPackage = !!a.client && (a.client.package_total_visits ?? 0) > 0;
-                  const visitsUnknown = hasPackage && remaining === null;
-                  const visitsZero = hasPackage && remaining === 0;
-                  const pendingRenewal = !!a.client?.pending_renewal_start_date;
-                  const renewalStartVisit = isRenewalStartVisit(
-                    a.client?.pending_renewal_start_date,
-                    a.start_at,
-                  );
-                  const blockVisit = visitsZero && !pendingRenewal;
-                  return (
-                    <TableRow key={a.booking_id}>
-                      <TableCell className="whitespace-nowrap text-sm">
-                        {formatDateTimeLocal(a.start_at)}
-                      </TableCell>
-                      <TableCell className="text-sm">
-                        {a.client ? (
-                          <div>
-                            <div className="font-medium whitespace-nowrap">
-                              {a.client.first_name} {a.client.last_name}
-                            </div>
-                            {renewalFlags?.has(a.client.id) && (
-                              <div className="mt-0.5">
-                                <RenewalFlagBadge />
-                              </div>
-                            )}
-                            <div className="text-xs text-slate-500">
-                              {remaining === null ? "Visits unknown" : `${remaining} visits left`}
-                            </div>
-                          </div>
-
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const key = a.square_customer_id ?? a.booking_id;
-                              const el = document.getElementById(`unmatched-${key}`);
-                              if (el) {
-                                el.scrollIntoView({ behavior: "smooth", block: "start" });
-                                el.classList.add("ring-2", "ring-amber-400");
-                                setTimeout(
-                                  () => el.classList.remove("ring-2", "ring-amber-400"),
-                                  1600,
-                                );
-                              }
-                            }}
-                            className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800 underline-offset-2 hover:bg-amber-200 hover:underline"
-                            title="Jump to Unmatched Appointments"
-                          >
-                            Unmatched ↓
-                          </button>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-sm whitespace-nowrap">
-                        {a.service_name ?? (a.duration_minutes ? `${a.duration_minutes} min` : "—")}
-                      </TableCell>
-                      <TableCell className="text-xs whitespace-nowrap">{a.status}</TableCell>
-                      <TableCell className="text-right whitespace-nowrap">
-                        {a.client ? (
-                          <div className="inline-flex flex-col items-end gap-1">
-                            <div className="inline-flex gap-2">
-                              <Button asChild size="sm" variant="outline">
-                                <Link to="/clients/$id" params={{ id: a.client.id }}>
-                                  View Client
-                                </Link>
-                              </Button>
-                              {showCompleteVisit && onCompleteVisit && !blockVisit && (
-                                <Button
-                                  size="sm"
-                                  disabled={completing === a.client.id}
-                                  onClick={() => onCompleteVisit(a.client!.id)}
-                                  title={
-                                    visitsUnknown
-                                      ? "Visits unknown — verify before completing."
-                                      : undefined
-                                  }
-                                >
-                                  {completing === a.client.id ? "Recording…" : "Complete Visit"}
-                                </Button>
-                              )}
-                            </div>
-                            {visitsUnknown && (
-                              <span className="text-[11px] text-amber-700">
-                                ⚠ Visits unknown — verify before completing.
-                              </span>
-                            )}
-                            {pendingRenewal && (
-                              <span className="text-[11px] font-medium text-emerald-700">
-                                Pre-Renewed — next package starts at this check-in
-                              </span>
-                            )}
-                            {visitsZero && !renewalStartVisit && (
-                              <span className="text-[11px] text-amber-700">
-                                ⚠ Visits show 0 — verify in Square before completing.
-                              </span>
-                            )}
-                          </div>
-                        ) : (
-                          <span className="text-xs text-slate-400">—</span>
-                        )}
-                      </TableCell>
-
-                    </TableRow>
-                  );
-                })}
-
-              </TableBody>
-            </Table>
-            </div>
-          </>
-        )}
-      </CardContent>
-
-    </Card>
-
   );
 }
 

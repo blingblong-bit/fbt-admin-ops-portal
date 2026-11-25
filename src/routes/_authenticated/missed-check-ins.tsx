@@ -12,7 +12,6 @@ import {
   getDayReview,
   getMissedCheckInSummary,
   getClinicToday,
-  completeVisitForClient,
   dismissMissedCheckIn,
 
   type DayReviewRow,
@@ -25,12 +24,12 @@ export const Route = createFileRoute("/_authenticated/missed-check-ins")({
       { title: "Missed Check-Ins — FIT Beyond Therapy" },
       {
         name: "description",
-        content: "Review scheduled appointments by day and record any check-ins that were missed.",
+        content: "Review scheduled appointments by day; visit counts come from Square appointment notes.",
       },
       { property: "og:title", content: "Missed Check-Ins — FIT Beyond Therapy" },
       {
         property: "og:description",
-        content: "Review scheduled appointments by day and record any check-ins that were missed.",
+        content: "Review scheduled appointments by day; visit counts come from Square appointment notes.",
       },
     ],
   }),
@@ -95,7 +94,6 @@ function MissedCheckInsPage() {
   const fetchToday = useServerFn(getClinicToday);
   const fetchDay = useServerFn(getDayReview);
   const fetchSummary = useServerFn(getMissedCheckInSummary);
-  const completeVisit = useServerFn(completeVisitForClient);
   const dismissMissed = useServerFn(dismissMissedCheckIn);
 
 
@@ -117,29 +115,6 @@ function MissedCheckInsPage() {
   const summaryQ = useQuery({
     queryKey: ["missed-check-ins"],
     queryFn: () => fetchSummary({}),
-  });
-
-  const checkIn = useMutation({
-    mutationFn: (vars: { clientId: string; bookingId: string; startAt: string }) =>
-      completeVisit({
-        data: {
-          clientId: vars.clientId,
-          bookingId: vars.bookingId,
-          appointmentStartAt: vars.startAt,
-        },
-      }),
-    onSuccess: (res) => {
-      const r = res as { visits_used?: number | null; activated_renewal?: boolean };
-      toast.success(
-        r?.activated_renewal
-          ? `Checked in — new package activated (visit ${r.visits_used})`
-          : r?.visits_used != null
-            ? `Checked in — visit ${r.visits_used} recorded`
-            : "Checked in",
-      );
-      invalidateFor(qc, "visit-changed");
-    },
-    onError: (e: Error) => toast.error(e.message || "Check in failed"),
   });
 
   const dismiss = useMutation({
@@ -275,8 +250,6 @@ function MissedCheckInsPage() {
                       ? "Pay per visit"
                       : "No Package Info"
                     : "—";
-              const busy =
-                checkIn.isPending && checkIn.variables?.bookingId === r.booking_id;
               return (
                 <Card key={r.booking_id}>
                   <CardContent className="space-y-2 p-3">
@@ -314,22 +287,6 @@ function MissedCheckInsPage() {
                         {meta.label}
                       </span>
                     </div>
-
-                    {r.check_state === "missed" && c ? (
-                      <Button
-                        className="min-h-11 w-full"
-                        disabled={busy}
-                        onClick={() =>
-                          checkIn.mutate({
-                            clientId: c.id,
-                            bookingId: r.booking_id,
-                            startAt: r.start_at,
-                          })
-                        }
-                      >
-                        {busy ? "Checking in…" : "Check In"}
-                      </Button>
-                    ) : null}
 
                     {r.check_state === "missed" && c ? (
                       <Button

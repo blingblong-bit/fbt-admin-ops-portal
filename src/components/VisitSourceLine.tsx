@@ -38,7 +38,7 @@ export function VisitSourceLine({ visit, compact = false }: { visit: VisitTracki
         </div>
       ) : (
         <div className="text-muted-foreground">
-          {visit.mode === "held" ? "Review needed — Hub check-in available." : "Square visit notes unavailable."}
+          {visit.mode === "held" ? "Review needed — verify visit numbers in Square." : "Square visit notes unavailable."}
         </div>
       )}
     </div>

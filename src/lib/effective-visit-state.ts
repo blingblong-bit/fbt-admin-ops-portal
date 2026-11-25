@@ -64,7 +64,8 @@ export type EffectiveVisitState = {
 export type HubVisitClient = {
   visits_used: number | null;
   package_total_visits: number | null;
-  /** Staff override: "auto" (default), "square" (trust Square notes), "hub" (manual check-ins). */
+  /** "auto"/"square" (default): Square notes track visits. "hub" is set only by audited
+   *  admin package overrides with explicit visit counts — staff can no longer pick it. */
   visit_tracking_mode?: string | null;
 };
 
@@ -143,8 +144,10 @@ export function resolveEffectiveVisitState(
   };
 
   const override = client.visit_tracking_mode ?? "auto";
-  if (override === "hub") return hubState("hub_fallback", "Staff chose Hub manual check-ins for this client");
-  // Square appointment notes are the default tracker; only "hub" opts out.
+  // "hub" survives only as the marker an audited admin override sets when staff
+  // explicitly correct visit counts; it is no longer a staff-selectable mode.
+  if (override === "hub") return hubState("hub_fallback", "Admin override set explicit Hub visit counts for this client");
+  // Square appointment notes are the only tracker.
   const forceSquare = true;
 
   if (currentPositionUnreadable(seq, issues)) {

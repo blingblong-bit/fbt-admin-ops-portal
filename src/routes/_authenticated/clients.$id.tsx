@@ -364,8 +364,8 @@ function ClientDetailPage() {
                 disabled={modeMut.isPending}
                 onChange={(e) => modeMut.mutate(e.target.value as "auto" | "square" | "hub")}
               >
-                <option value="auto">Automatic</option>
-                <option value="square">Use Square appointment notes</option>
+                <option value="auto">Square appointment notes (default)</option>
+                <option value="square">Square appointment notes (pinned)</option>
                 <option value="hub">Use Hub manual check-in</option>
               </select>
             </label>

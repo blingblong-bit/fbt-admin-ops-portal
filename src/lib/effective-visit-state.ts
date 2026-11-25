@@ -144,7 +144,8 @@ export function resolveEffectiveVisitState(
 
   const override = client.visit_tracking_mode ?? "auto";
   if (override === "hub") return hubState("hub_fallback", "Staff chose Hub manual check-ins for this client");
-  const forceSquare = override === "square";
+  // Square appointment notes are the default tracker; only "hub" opts out.
+  const forceSquare = true;
 
   if (currentPositionUnreadable(seq, issues)) {
     return hubState("hub_fallback", `Current Square position unreadable — ${issues.map((i) => i.reason).join("; ")}`, false);

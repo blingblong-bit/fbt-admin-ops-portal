@@ -46,3 +46,15 @@ describe("Charles Parish: two cancellations rebooked in order", () => {
     expect(s.visitsUsed).toBe(6); expect(s.remainingVisits).toBe(2); expect(s.source).toMatch(/square/);
   });
 });
+
+describe("Square notes are the default tracker", () => {
+  it("a lone Square note drives the count in default mode instead of Hub", () => {
+    const s = resolveEffectiveVisitState({ visits_used: 1, package_total_visits: 8 }, [b("1", "2026-09-24", "5/8")], NOW);
+    expect([s.source, s.visitsUsed]).not.toEqual(["hub_fallback", 1]);
+    expect(s.visitsUsed).toBe(5);
+  });
+  it("Hub manual mode still opts out", () => {
+    const s = resolveEffectiveVisitState({ visits_used: 1, package_total_visits: 8, visit_tracking_mode: "hub" }, [b("1", "2026-09-24", "5/8")], NOW);
+    expect(s.visitsUsed).toBe(1);
+  });
+});
